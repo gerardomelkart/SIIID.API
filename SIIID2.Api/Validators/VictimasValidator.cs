@@ -104,6 +104,10 @@ public class VictimasValidator : IArchivoCargaValidator
             {
                 ValidarPersonaMoral(fila, errores);
             }
+            else if (idTv == 3 || idTv == 4)
+            {
+                ValidarVictimaOtroONoIdentificado(fila, errores);
+            }
             else
             {
                 AgregarError(
@@ -112,7 +116,7 @@ public class VictimasValidator : IArchivoCargaValidator
                     "id_tv",
                     "VICTIMAS_ID_TV_NO_VALIDO",
                     "Tipo de víctima no válido",
-                    "El campo id_tv solo puede ser 1 Persona Física o 2 Persona Moral.");
+                    "El campo id_tv debe existir en el catálogo de tipo de víctima.");
             }
         }
 
@@ -253,9 +257,7 @@ public class VictimasValidator : IArchivoCargaValidator
             "Edad con formato incorrecto");
     }
 
-    private void ValidarPersonaMoral(
-        ArchivoFila fila,
-        List<CargaValidacionError> errores)
+    private void ValidarPersonaMoral(ArchivoFila fila, List<CargaValidacionError> errores)
     {
         // Para persona moral, ID_TPM sí es obligatorio.
         ValidarEnteroObligatorio(
@@ -318,6 +320,66 @@ public class VictimasValidator : IArchivoCargaValidator
             errores,
             "VICTIMAS_MORAL_DISC_NO_APLICA_INVALIDO",
             "Persona moral con discapacidad distinta a No aplica");
+    }
+
+    private void ValidarVictimaOtroONoIdentificado(
+    ArchivoFila fila,
+    List<CargaValidacionError> errores)
+    {
+        // Para tipo de víctima 3 = Otro y 4 = No identificado,
+        // no aplicamos las reglas estrictas de persona física o persona moral.
+        // Solo validamos formato en los campos que vengan llenos.
+
+        ValidarCampoVacio(
+            fila,
+            "id_tpm",
+            errores,
+            "VICTIMAS_OTRO_ID_TPM_CON_INFORMACION",
+            "Tipo de víctima no física/no moral con tipo de persona moral");
+
+        ValidarEnteroOpcional(
+            fila,
+            "sexo",
+            errores,
+            "VICTIMAS_SEXO_FORMATO_INCORRECTO",
+            "Sexo con formato incorrecto");
+
+        ValidarEnteroOpcional(
+            fila,
+            "genero",
+            errores,
+            "VICTIMAS_GENERO_FORMATO_INCORRECTO",
+            "Género con formato incorrecto");
+
+        ValidarEnteroOpcional(
+            fila,
+            "pob",
+            errores,
+            "VICTIMAS_POB_FORMATO_INCORRECTO",
+            "Población indígena con formato incorrecto");
+
+        ValidarEnteroOpcional(
+            fila,
+            "disc",
+            errores,
+            "VICTIMAS_DISC_FORMATO_INCORRECTO",
+            "Discapacidad con formato incorrecto");
+
+        ValidarEnteroOpcional(
+            fila,
+            "nacional",
+            errores,
+            "VICTIMAS_NACIONAL_FORMATO_INCORRECTO",
+            "Nacionalidad con formato incorrecto");
+
+        ValidarFechaOpcional(fila, "fha_nac", errores);
+
+        ValidarEnteroOpcional(
+            fila,
+            "edad",
+            errores,
+            "VICTIMAS_EDAD_FORMATO_INCORRECTO",
+            "Edad con formato incorrecto");
     }
 
     private void ValidarTextoObligatorio(

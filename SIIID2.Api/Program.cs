@@ -29,10 +29,11 @@ builder.Services.AddSwaggerGen();
 // Cuando alguien pida IArchivoReader, ASP.NET entregará ArchivoReader.
 builder.Services.AddScoped<IArchivoReader, ArchivoReader>();
 
-// Registro de validadores específicos por archivo.
+// Registro de validadores específicos por archivo y ya como tal la validacion cruzada.
 builder.Services.AddScoped<CarpetasValidator>();
 builder.Services.AddScoped<DelitosValidator>();
 builder.Services.AddScoped<VictimasValidator>();
+builder.Services.AddScoped<CargaIntegridadValidator>();
 
 // Registro del servicio principal de carga.
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.

@@ -14,6 +14,7 @@ public class CargaArchivosService : ICargaArchivosService
     private readonly CarpetasValidator _carpetasValidator;
     private readonly DelitosValidator _delitosValidator;
     private readonly VictimasValidator _victimasValidator;
+    private readonly CargaIntegridadValidator _cargaIntegridadValidator;
 
     // Extensiones permitidas para los archivos de carga.
     private readonly string[] _extensionesPermitidas =
@@ -29,12 +30,14 @@ public class CargaArchivosService : ICargaArchivosService
         IArchivoReader archivoReader,
         CarpetasValidator carpetasValidator,
         DelitosValidator delitosValidator,
-        VictimasValidator victimasValidator)
+        VictimasValidator victimasValidator,
+        CargaIntegridadValidator cargaIntegridadValidator)
     {
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
         _victimasValidator = victimasValidator;
+        _cargaIntegridadValidator = cargaIntegridadValidator;
     }
 
     public async Task<CargaValidacionResponse> ValidarArchivosAsync(IFormFileCollection archivos)
@@ -103,6 +106,17 @@ public class CargaArchivosService : ICargaArchivosService
         response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas));
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
         response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
+
+        // Las validaciones cruzadas se ejecutan solo si las validaciones internas pasaron.
+        // Esto evita errores repetidos o confusos cuando falta estructura básica.
+        if (response.Errores.Count == 0)
+        {
+            response.Errores.AddRange(_cargaIntegridadValidator.Validar(
+                filasCarpetas,
+                filasDelitos,
+                filasVictimas));
+        }
+
 
         // Construimos resumen y mensaje final.
         FinalizarRespuesta(

@@ -173,29 +173,25 @@ public class DelitosValidator : IArchivoCargaValidator
             ValidarCodigoPostalOpcional(fila, "cp", errores);
 
             // Coordenadas obligatorias dentro de los límites de México.
-            ValidarCoordenadaObligatoria(
+            ValidarCoordenadaOpcional(
                 fila,
                 "coord_x",
                 errores,
                 minimo: -118,
                 maximo: -86,
-                codigoVacio: "DELITOS_COORD_X_SIN_INFORMACION",
                 codigoFormato: "DELITOS_COORD_X_FORMATO_INCORRECTO",
                 codigoRango: "DELITOS_COORD_X_FUERA_RANGO",
-                descripcionVacio: "Coordenada X sin información",
                 descripcionFormato: "Formato coordenada X incorrecto",
                 descripcionRango: "Coordenada X fuera de rango");
 
-            ValidarCoordenadaObligatoria(
+            ValidarCoordenadaOpcional(
                 fila,
                 "coord_y",
                 errores,
                 minimo: 13,
                 maximo: 34,
-                codigoVacio: "DELITOS_COORD_Y_SIN_INFORMACION",
                 codigoFormato: "DELITOS_COORD_Y_FORMATO_INCORRECTO",
                 codigoRango: "DELITOS_COORD_Y_FUERA_RANGO",
-                descripcionVacio: "Coordenada Y sin información",
                 descripcionFormato: "Formato coordenada Y incorrecto",
                 descripcionRango: "Coordenada Y fuera de rango");
 
@@ -456,33 +452,28 @@ public class DelitosValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarCoordenadaObligatoria(
+    private void ValidarCoordenadaOpcional(
         ArchivoFila fila,
         string columna,
         List<CargaValidacionError> errores,
         decimal minimo,
         decimal maximo,
-        string codigoVacio,
         string codigoFormato,
         string codigoRango,
-        string descripcionVacio,
         string descripcionFormato,
         string descripcionRango)
     {
         var valor = ObtenerValor(fila, columna);
 
+        // La coordenada puede venir vacía.
         if (string.IsNullOrWhiteSpace(valor))
-        {
-            AgregarError(
-                errores,
-                fila,
-                columna,
-                codigoVacio,
-                descripcionVacio,
-                $"El campo {columna} es obligatorio.");
-
             return;
-        }
+
+        valor = valor.Trim();
+
+        // Si viene solo en ceros, lo tratamos como "sin información".
+        if (valor.All(c => c == '0' || c == '.' || c == ',' || c == '-'))
+            return;
 
         if (!IntentarConvertirDecimal(valor, out var coordenada))
         {
