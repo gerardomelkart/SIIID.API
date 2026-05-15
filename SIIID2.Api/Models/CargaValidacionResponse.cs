@@ -4,12 +4,16 @@
 // Si Errores está vacío, la carga se considera válida.
 public class CargaValidacionResponse
 {
-    // Lista acumulada de errores detectados en todos los archivos.
-    public List<CargaValidacionError> Errores { get; set; } = new();
-    // Propiedad calculada: true cuando no hay errores.
+    // La validación es correcta si no hay errores.
     public bool EsValido => Errores.Count == 0;
-    // Propiedad calculada para facilitar la lectura desde front o Postman.
+    // Código generado para identificar este intento de carga.
+    public string CodigoReferencia { get; set; } = string.Empty;
+    // Total de errores encontrados.
     public int TotalErrores => Errores.Count;
-    // Mensaje general de la validación.
+    // Mensaje general del resultado de la validación.
     public string Mensaje { get; set; } = string.Empty;
+    // Resumen agrupado por tipo de validación.
+    public List<CargaValidacionResumenItem> ResumenValidacion { get; set; } = new();
+    // Lista detallada de errores por fila, columna y valor.
+    public List<CargaValidacionError> Errores { get; set; } = new();
 }

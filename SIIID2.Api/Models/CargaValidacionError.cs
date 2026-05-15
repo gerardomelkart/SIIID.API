@@ -1,19 +1,22 @@
 ﻿namespace SIIID2.Api.Models;
-
 // Modelo estándar para devolver errores de validación al cliente.
 // La idea es que el usuario sepa archivo, fila, columna, valor y motivo del error.
 public class CargaValidacionError
 {
-    // Archivo lógico donde ocurrió el error: carpetas, delitos, victimas o general.
+    // Archivo donde ocurrió el error: carpetas, delitos, víctimas o general.
     public string Archivo { get; set; } = string.Empty;
-    // Fila donde ocurrió el error. Puede ser null si el error es general del archivo.
+    // Número de fila donde ocurrió el error. Puede ser null si es un error general.
     public int? Fila { get; set; }
-    // Nombre de la columna involucrada.
+    // Nombre de la columna donde ocurrió el error.
     public string Columna { get; set; } = string.Empty;
-    // Campo que se está validando. Por ahora suele coincidir con Columna.
+    // Campo lógico que se está validando. Normalmente coincide con la columna.
     public string Campo { get; set; } = string.Empty;
-    // Valor recibido en el archivo. Puede ser null si la columna/campo no existe.
+    // Valor original recibido en el archivo.
     public string? Valor { get; set; }
-    // Mensaje legible para indicar qué debe corregirse.
+    // Código interno del error. Sirve para agrupar errores en el resumen.
+    public string Codigo { get; set; } = string.Empty;
+    // Descripción corta para mostrar en la tabla resumen.
+    public string DescripcionResumen { get; set; } = string.Empty;
+    // Mensaje detallado del error.
     public string Mensaje { get; set; } = string.Empty;
 }
