@@ -46,9 +46,10 @@ public class ArchivoReader : IArchivoReader
         // Cada registro del CSV se transforma a ArchivoFila.
         while (await csv.ReadAsync())
         {
+            var numeroFila = csv.Context?.Parser?.Row ?? 0;
             var fila = new ArchivoFila
             {
-                NumeroFila = csv.Context?.Parser?.Row
+                NumeroFila = numeroFila
             };
             for (var i = 0; i < encabezados.Count; i++)
             {
