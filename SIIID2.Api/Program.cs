@@ -2,13 +2,11 @@ using Microsoft.AspNetCore.Http.Features;
 using SIIID2.Api.Readers;
 using SIIID2.Api.Services;
 using SIIID2.Api.Validators;
-
-//public static string connectionString = "Server=127.0.0.1;Port=3306;Database=prueba;Uid=backupSIIID;Pwd=Pwd$2026;";
-
+using SIIID2.Api.Data;
+using SIIID2.Api.Repositories;
 
 // Punto de arranque de la API.
 // Aquí se registran servicios, controladores, Swagger y configuración general.
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Habilita controladores MVC/API.
@@ -28,6 +26,12 @@ builder.Services.AddSwaggerGen();
 // Registro del lector de archivos.
 // Cuando alguien pida IArchivoReader, ASP.NET entregará ArchivoReader.
 builder.Services.AddScoped<IArchivoReader, ArchivoReader>();
+
+// Registro de conexión a base de datos.
+builder.Services.AddScoped<IDbConnectionFactory, MySqlConnectionFactory>();
+
+// Registro de repositorios.
+builder.Services.AddScoped<ICatalogoRepository, CatalogoRepository>();
 
 // Registro de validadores específicos por archivo y ya como tal la validacion cruzada.
 builder.Services.AddScoped<CarpetasValidator>();
