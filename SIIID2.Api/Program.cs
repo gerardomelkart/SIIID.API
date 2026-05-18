@@ -38,6 +38,7 @@ builder.Services.AddScoped<CarpetasValidator>();
 builder.Services.AddScoped<DelitosValidator>();
 builder.Services.AddScoped<VictimasValidator>();
 builder.Services.AddScoped<CargaIntegridadValidator>();
+builder.Services.AddScoped<CatalogosValidator>();
 
 // Registro del servicio principal de carga.
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.

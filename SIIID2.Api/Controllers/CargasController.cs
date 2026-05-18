@@ -1,10 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SIIID2.Api.Models;
 using SIIID2.Api.Services;
-using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Controllers;
-
 
 // Controlador del módulo de cargas.
 // Aquí se reciben las peticiones HTTP, pero la lógica de validación vive en el servicio.
@@ -56,24 +54,5 @@ public class CargasController : ControllerBase
         }
         // Si no hay errores, se devuelve 200.
         return Ok(resultado);
-    }
-
-
-    [HttpGet("probar-bd")]
-    public async Task<IActionResult> ProbarBd(
-        [FromServices] ICatalogoRepository catalogoRepository)
-    {
-        var existe = await catalogoRepository.ExisteClaveNumericaAsync(
-            "catalogo_tipo_victima",
-            "clave",
-            1);
-
-        return Ok(new
-        {
-            conexion = "ok",
-            catalogo = "catalogo_tipo_victima",
-            clave = 1,
-            existe
-        });
     }
 }

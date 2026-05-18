@@ -23,13 +23,9 @@ public class CargaIntegridadValidator
         public string? IdVicf { get; set; }
     }
 
-    public List<CargaValidacionError> Validar(
-        List<ArchivoFila> filasCarpetas,
-        List<ArchivoFila> filasDelitos,
-        List<ArchivoFila> filasVictimas)
+    public List<CargaValidacionError> Validar(List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
     {
         var errores = new List<CargaValidacionError>();
-
         // Construimos índice de carpetas por ID_CI.
         var carpetasPorIdCi = filasCarpetas
             .Select(f => new CarpetaIntegridad
@@ -94,54 +90,26 @@ public class CargaIntegridadValidator
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Regla: la cantidad de delitos no debe ser mayor que la cantidad de víctimas.
-        ValidarConteoDelitosVictimas(
-            filasDelitos,
-            filasVictimas,
-            errores);
-
+        ValidarConteoDelitosVictimas(filasDelitos, filasVictimas, errores);
         // Regla: cada carpeta debe tener al menos un delito y una víctima.
-        ValidarCarpetasConDelitosYVictimas(
-            filasCarpetas,
-            idsCiDelitos,
-            idsCiVictimas,
-            errores);
-
+        ValidarCarpetasConDelitosYVictimas(filasCarpetas, idsCiDelitos, idsCiVictimas, errores);
         // Regla: cada delito debe pertenecer a una carpeta existente.
-        ValidarDelitosContraCarpetas(
-            delitosPorIdCi,
-            idsCarpetas,
-            errores);
-
+        ValidarDelitosContraCarpetas(delitosPorIdCi, idsCarpetas, errores);
         // Regla: cada delito debe tener al menos una víctima asociada.
-        ValidarDelitosConVictimas(
-            delitosPorIdCi,
-            llavesVictimas,
-            errores);
-
+        ValidarDelitosConVictimas(delitosPorIdCi, llavesVictimas, errores);
         // Regla: cada víctima debe apuntar a una carpeta y a un delito existentes.
-        ValidarVictimasContraCarpetasYDelitos(
-            victimasPorIdCi,
-            idsCarpetas,
-            llavesDelitos,
-            errores);
-
+        ValidarVictimasContraCarpetasYDelitos(victimasPorIdCi, idsCarpetas, llavesDelitos, errores);
         // Regla: fecha de hechos no puede ser mayor que fecha de inicio.
-        ValidarFechasHechosContraFechaInicio(
-            delitosPorIdCi,
-            carpetasPorIdCi,
-            errores);
-
+        ValidarFechasHechosContraFechaInicio(delitosPorIdCi, carpetasPorIdCi, errores);
         return errores;
     }
 
-    private void ValidarConteoDelitosVictimas(
-        List<ArchivoFila> filasDelitos,
-        List<ArchivoFila> filasVictimas,
-        List<CargaValidacionError> errores)
+    private void ValidarConteoDelitosVictimas(List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas, List<CargaValidacionError> errores)
     {
         if (filasDelitos.Count <= filasVictimas.Count)
-            return;
-
+        { 
+            return; 
+        }
         errores.Add(new CargaValidacionError
         {
             Archivo = "general",
@@ -155,18 +123,16 @@ public class CargaIntegridadValidator
         });
     }
 
-    private void ValidarCarpetasConDelitosYVictimas(
-        List<ArchivoFila> filasCarpetas,
-        HashSet<string> idsCiDelitos,
-        HashSet<string> idsCiVictimas,
-        List<CargaValidacionError> errores)
+    private void ValidarCarpetasConDelitosYVictimas(List<ArchivoFila> filasCarpetas, HashSet<string> idsCiDelitos,  HashSet<string> idsCiVictimas, List<CargaValidacionError> errores)
     {
         foreach (var fila in filasCarpetas)
         {
             var idCi = ObtenerValor(fila, "id_ci")?.Trim();
 
             if (string.IsNullOrWhiteSpace(idCi))
+            {
                 continue;
+            }    
 
             if (!idsCiDelitos.Contains(idCi))
             {
@@ -194,18 +160,17 @@ public class CargaIntegridadValidator
         }
     }
 
-    private void ValidarDelitosContraCarpetas(
-        List<RegistroIntegridad> delitosPorIdCi,
-        HashSet<string> idsCarpetas,
-        List<CargaValidacionError> errores)
+    private void ValidarDelitosContraCarpetas(List<RegistroIntegridad> delitosPorIdCi, HashSet<string> idsCarpetas, List<CargaValidacionError> errores)
     {
         foreach (var delito in delitosPorIdCi)
         {
             var idCi = delito.IdCi;
 
             if (string.IsNullOrWhiteSpace(idCi))
+            {
                 continue;
-
+            }
+                
             if (!idsCarpetas.Contains(idCi))
             {
                 AgregarError(
@@ -220,19 +185,18 @@ public class CargaIntegridadValidator
         }
     }
 
-    private void ValidarDelitosConVictimas(
-        List<RegistroIntegridad> delitosPorIdCi,
-        HashSet<string> llavesVictimas,
-        List<CargaValidacionError> errores)
+    private void ValidarDelitosConVictimas(List<RegistroIntegridad> delitosPorIdCi, HashSet<string> llavesVictimas, List<CargaValidacionError> errores)
     {
         foreach (var delito in delitosPorIdCi)
         {
             var idCi = delito.IdCi;
             var idDelito = delito.IdDelito;
 
-            if (string.IsNullOrWhiteSpace(idCi) || string.IsNullOrWhiteSpace(idDelito))
+            if (string.IsNullOrWhiteSpace(idCi) || string.IsNullOrWhiteSpace(idDelito)) 
+            {
                 continue;
-
+            }
+                
             var llaveDelito = CrearLlaveDelito(idCi, idDelito);
 
             if (!llavesVictimas.Contains(llaveDelito))
@@ -249,11 +213,7 @@ public class CargaIntegridadValidator
         }
     }
 
-    private void ValidarVictimasContraCarpetasYDelitos(
-        List<RegistroIntegridad> victimasPorIdCi,
-        HashSet<string> idsCarpetas,
-        HashSet<string> llavesDelitos,
-        List<CargaValidacionError> errores)
+    private void ValidarVictimasContraCarpetasYDelitos(List<RegistroIntegridad> victimasPorIdCi, HashSet<string> idsCarpetas, HashSet<string> llavesDelitos, List<CargaValidacionError> errores)
     {
         foreach (var victima in victimasPorIdCi)
         {
@@ -272,11 +232,11 @@ public class CargaIntegridadValidator
                     $"La víctima apunta al ID_CI \"{idCi}\", pero ese ID_CI no existe en el archivo de carpetas.");
             }
 
-            if (string.IsNullOrWhiteSpace(idCi) || string.IsNullOrWhiteSpace(idDelito))
+            if (string.IsNullOrWhiteSpace(idCi) || string.IsNullOrWhiteSpace(idDelito)) 
+            {
                 continue;
-
+            }
             var llaveDelito = CrearLlaveDelito(idCi, idDelito);
-
             if (!llavesDelitos.Contains(llaveDelito))
             {
                 AgregarError(
@@ -291,29 +251,34 @@ public class CargaIntegridadValidator
         }
     }
 
-    private void ValidarFechasHechosContraFechaInicio(
-        List<RegistroIntegridad> delitosPorIdCi,
-        Dictionary<string, CarpetaIntegridad> carpetasPorIdCi,
-        List<CargaValidacionError> errores)
+    private void ValidarFechasHechosContraFechaInicio(List<RegistroIntegridad> delitosPorIdCi, Dictionary<string, CarpetaIntegridad> carpetasPorIdCi, List<CargaValidacionError> errores)
     {
         foreach (var delito in delitosPorIdCi)
         {
             var idCi = delito.IdCi;
             var fechaHechosValor = delito.FechaHechos;
 
-            if (string.IsNullOrWhiteSpace(idCi))
+            if (string.IsNullOrWhiteSpace(idCi)) 
+            {
                 continue;
+            }
 
-            if (!carpetasPorIdCi.TryGetValue(idCi, out var carpeta))
+            if (!carpetasPorIdCi.TryGetValue(idCi, out var carpeta)) 
+            {
                 continue;
-
+            }
+                
             var fechaInicioValor = carpeta.FechaInicio;
 
             if (!IntentarConvertirFecha(fechaHechosValor, out var fechaHechos))
+            {
                 continue;
+            }
 
             if (!IntentarConvertirFecha(fechaInicioValor, out var fechaInicio))
+            {
                 continue;
+            } 
 
             if (fechaHechos > fechaInicio)
             {
@@ -373,31 +338,18 @@ public class CargaIntegridadValidator
 
         foreach (var formato in formatos)
         {
-            if (DateTime.TryParseExact(
-                    valor,
-                    formato,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out var fechaParseada))
+            if (DateTime.TryParseExact(valor, formato, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fechaParseada))
             {
                 posiblesFechas.Add(fechaParseada.Date);
             }
         }
 
-        if (DateTime.TryParse(
-                valor,
-                new CultureInfo("es-MX"),
-                DateTimeStyles.None,
-                out var fechaMx))
+        if (DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out var fechaMx))
         {
             posiblesFechas.Add(fechaMx.Date);
         }
 
-        if (DateTime.TryParse(
-                valor,
-                new CultureInfo("en-US"),
-                DateTimeStyles.None,
-                out var fechaUs))
+        if (DateTime.TryParse(valor, new CultureInfo("en-US"), DateTimeStyles.None, out var fechaUs))
         {
             posiblesFechas.Add(fechaUs.Date);
         }
@@ -432,18 +384,16 @@ public class CargaIntegridadValidator
             }
         }
 
-        posiblesFechas = posiblesFechas
-            .Distinct()
-            .ToList();
+        posiblesFechas = posiblesFechas.Distinct().ToList();
 
         if (posiblesFechas.Count == 0)
+        {
             return false;
+        } 
 
         // Si hay fechas ambiguas, se prefiere la que cae en el mes inmediato anterior.
         // Esto evita interpretar 01/04/2026 como enero 4 cuando realmente es abril 1.
-        var fechaMesAnterior = posiblesFechas.FirstOrDefault(f =>
-            f.Year == mesInmediatoAnterior.Year &&
-            f.Month == mesInmediatoAnterior.Month);
+        var fechaMesAnterior = posiblesFechas.FirstOrDefault(f => f.Year == mesInmediatoAnterior.Year && f.Month == mesInmediatoAnterior.Month);
 
         if (fechaMesAnterior != default)
         {
@@ -456,17 +406,9 @@ public class CargaIntegridadValidator
         return true;
     }
 
-    private static void AgregarError(
-        List<CargaValidacionError> errores,
-        string archivo,
-        ArchivoFila fila,
-        string columna,
-        string codigo,
-        string descripcionResumen,
-        string mensaje)
+    private static void AgregarError(List<CargaValidacionError> errores, string archivo, ArchivoFila fila, string columna, string codigo, string descripcionResumen, string mensaje)
     {
         fila.Columnas.TryGetValue(columna, out var valor);
-
         errores.Add(new CargaValidacionError
         {
             Archivo = archivo,

@@ -208,9 +208,7 @@ public class DelitosValidator : IArchivoCargaValidator
         return errores;
     }
 
-    private void ValidarColumnasObligatorias(
-        List<ArchivoFila> filas,
-        List<CargaValidacionError> errores)
+    private void ValidarColumnasObligatorias(List<ArchivoFila> filas, List<CargaValidacionError> errores)
     {
         // Obtenemos todas las columnas que llegaron en el archivo.
         var columnasArchivo = filas
@@ -237,9 +235,7 @@ public class DelitosValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarDuplicidadCompuesta(
-        List<ArchivoFila> filas,
-        List<CargaValidacionError> errores)
+    private void ValidarDuplicidadCompuesta(List<ArchivoFila> filas, List<CargaValidacionError> errores)
     {
         // Regla del sistema anterior:
         // ID_CI + ID_DELITO + MODA_DTO + FORMA_ACC + GRDO_CONS + CLASF_DE_DTO
@@ -285,13 +281,7 @@ public class DelitosValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarTextoObligatorio(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores,
-        int longitudMaxima,
-        string codigo,
-        string descripcionResumen)
+    private void ValidarTextoObligatorio(ArchivoFila fila, string columna, List<CargaValidacionError> errores, int longitudMaxima, string codigo, string descripcionResumen)
     {
         var valor = ObtenerValor(fila, columna);
 
@@ -320,10 +310,7 @@ public class DelitosValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarTextoOpcional(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores)
+    private void ValidarTextoOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
 
@@ -333,12 +320,7 @@ public class DelitosValidator : IArchivoCargaValidator
         // Campo opcional. Por ahora no se valida longitud.
     }
 
-    private void ValidarEnteroObligatorio(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores,
-        string codigoVacio,
-        string descripcionVacio)
+    private void ValidarEnteroObligatorio(ArchivoFila fila, string columna, List<CargaValidacionError> errores, string codigoVacio, string descripcionVacio)
     {
         var valor = ObtenerValor(fila, columna);
 
@@ -367,43 +349,43 @@ public class DelitosValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarCodigoPostalOpcional(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores)
+    private void ValidarCodigoPostalOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
 
         // El CP puede venir vacío.
         if (string.IsNullOrWhiteSpace(valor))
+        {
             return;
+        }    
 
         valor = valor.Trim();
 
         // Algunas entidades mandan 0, 00, 00000, etc.
         // Como CP no es obligatorio, se trata como "sin información".
         if (valor.All(c => c == '0'))
+        {
             return;
+        }
 
         // Si no tiene 5 dígitos, se ignora por ahora.
         // Después, al mapear a base, se podrá tratar como NULL.
         if (valor.Length != 5)
+        {
             return;
+        }
 
         // Si trae letras u otros caracteres, se ignora por ahora.
         if (!valor.All(char.IsDigit))
+        {
             return;
-
+        } 
         // Si llegó aquí, el CP tiene 5 dígitos y es utilizable.
     }
 
-    private void ValidarFechaHechosObligatoria(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores)
+    private void ValidarFechaHechosObligatoria(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
-
         if (string.IsNullOrWhiteSpace(valor))
         {
             AgregarError(
@@ -429,16 +411,15 @@ public class DelitosValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarHoraOpcional(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores)
+    private void ValidarHoraOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
 
         // La hora puede venir vacía.
         if (string.IsNullOrWhiteSpace(valor))
+        {
             return;
+        }    
 
         if (!IntentarConvertirHora(valor, out _))
         {
@@ -452,28 +433,22 @@ public class DelitosValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarCoordenadaOpcional(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores,
-        decimal minimo,
-        decimal maximo,
-        string codigoFormato,
-        string codigoRango,
-        string descripcionFormato,
-        string descripcionRango)
+    private void ValidarCoordenadaOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores, decimal minimo, decimal maximo, string codigoFormato, string codigoRango, string descripcionFormato, string descripcionRango)
     {
         var valor = ObtenerValor(fila, columna);
-
         // La coordenada puede venir vacía.
         if (string.IsNullOrWhiteSpace(valor))
+        {
             return;
+        } 
 
         valor = valor.Trim();
 
         // Si viene solo en ceros, lo tratamos como "sin información".
         if (valor.All(c => c == '0' || c == '.' || c == ',' || c == '-'))
+        {
             return;
+        } 
 
         if (!IntentarConvertirDecimal(valor, out var coordenada))
         {
@@ -525,33 +500,20 @@ public class DelitosValidator : IArchivoCargaValidator
 
         foreach (var formato in formatos)
         {
-            if (DateTime.TryParseExact(
-                    valor,
-                    formato,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out var fechaParseada))
+            if (DateTime.TryParseExact(valor, formato, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fechaParseada))
             {
                 fecha = fechaParseada.Date;
                 return true;
             }
         }
 
-        if (DateTime.TryParse(
-                valor,
-                new CultureInfo("es-MX"),
-                DateTimeStyles.None,
-                out var fechaMx))
+        if (DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out var fechaMx))
         {
             fecha = fechaMx.Date;
             return true;
         }
 
-        if (DateTime.TryParse(
-                valor,
-                new CultureInfo("en-US"),
-                DateTimeStyles.None,
-                out var fechaUs))
+        if (DateTime.TryParse(valor, new CultureInfo("en-US"), DateTimeStyles.None, out var fechaUs))
         {
             fecha = fechaUs.Date;
             return true;
@@ -613,11 +575,7 @@ public class DelitosValidator : IArchivoCargaValidator
 
         foreach (var formato in formatos)
         {
-            if (TimeSpan.TryParseExact(
-                    valor,
-                    formato,
-                    CultureInfo.InvariantCulture,
-                    out var horaParseada))
+            if (TimeSpan.TryParseExact(valor, formato, CultureInfo.InvariantCulture, out var horaParseada))
             {
                 hora = horaParseada;
                 return true;

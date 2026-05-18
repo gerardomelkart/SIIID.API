@@ -98,9 +98,11 @@ public class VictimasValidator : IArchivoCargaValidator
                 "Tipo de víctima sin información",
                 out var idTv);
 
-            if (!idTvValido)
+            if (!idTvValido) 
+            {
                 continue;
-
+            }
+            
             if (idTv == 1)
             {
                 ValidarPersonaFisica(fila, errores);
@@ -128,9 +130,7 @@ public class VictimasValidator : IArchivoCargaValidator
         return errores;
     }
 
-    private void ValidarColumnasObligatorias(
-        List<ArchivoFila> filas,
-        List<CargaValidacionError> errores)
+    private void ValidarColumnasObligatorias(List<ArchivoFila> filas, List<CargaValidacionError> errores)
     {
         // Obtenemos todas las columnas que llegaron en el archivo.
         var columnasArchivo = filas
@@ -157,9 +157,7 @@ public class VictimasValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarDuplicidadVictima(
-        List<ArchivoFila> filas,
-        List<CargaValidacionError> errores)
+    private void ValidarDuplicidadVictima(List<ArchivoFila> filas, List<CargaValidacionError> errores)
     {
         // Regla base: no duplicar la misma víctima bajo el mismo delito.
         var gruposDuplicados = filas
@@ -197,9 +195,7 @@ public class VictimasValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarPersonaFisica(
-        ArchivoFila fila,
-        List<CargaValidacionError> errores)
+    private void ValidarPersonaFisica(ArchivoFila fila, List<CargaValidacionError> errores)
     {
         // Para persona física, ID_TPM puede venir vacío, 0 o 6 No identificada.
         ValidarIdTpmParaPersonaFisica(fila, errores);
@@ -259,9 +255,7 @@ public class VictimasValidator : IArchivoCargaValidator
             "Edad con formato incorrecto");
     }
 
-    private void ValidarIdTpmParaPersonaFisica(
-        ArchivoFila fila,
-        List<CargaValidacionError> errores)
+    private void ValidarIdTpmParaPersonaFisica(ArchivoFila fila, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, "id_tpm");
 
@@ -296,9 +290,7 @@ public class VictimasValidator : IArchivoCargaValidator
             "Para persona física, id_tpm debe venir vacío, 0 o 6 No identificada.");
     }
 
-    private void ValidarPersonaMoral(
-        ArchivoFila fila,
-        List<CargaValidacionError> errores)
+    private void ValidarPersonaMoral(ArchivoFila fila, List<CargaValidacionError> errores)
     {
         // Para persona moral, ID_TPM sí es obligatorio.
         // Catálogo actual de persona moral:
@@ -371,9 +363,7 @@ public class VictimasValidator : IArchivoCargaValidator
             "Persona moral con discapacidad distinta a No aplica");
     }
 
-    private void ValidarVictimaOtroONoIdentificado(
-        ArchivoFila fila,
-        List<CargaValidacionError> errores)
+    private void ValidarVictimaOtroONoIdentificado(ArchivoFila fila, List<CargaValidacionError> errores)
     {
         // Para ID_TV = 3 Otro o ID_TV = 4 No identificado,
         // no aplicamos reglas estrictas de persona física ni persona moral.
@@ -427,15 +417,15 @@ public class VictimasValidator : IArchivoCargaValidator
             "Edad con formato incorrecto");
     }
 
-    private void ValidarIdTpmParaOtroONoIdentificado(
-        ArchivoFila fila,
-        List<CargaValidacionError> errores)
+    private void ValidarIdTpmParaOtroONoIdentificado(ArchivoFila fila, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, "id_tpm");
 
         // Vacío o 0 se acepta como sin información.
         if (EsValorVacioOCero(valor))
+        {
             return;
+        }   
 
         if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idTpm))
         {
@@ -453,7 +443,10 @@ public class VictimasValidator : IArchivoCargaValidator
         // 6 = No identificada.
         // Para tipo de víctima Otro o No identificado, permitimos ID_TPM = 6.
         if (idTpm == 6)
+        {
             return;
+
+        }   
 
         AgregarError(
             errores,
@@ -464,13 +457,7 @@ public class VictimasValidator : IArchivoCargaValidator
             "Para tipo de víctima Otro o No identificado, id_tpm debe venir vacío, 0 o 6 No identificada.");
     }
 
-    private void ValidarTextoObligatorio(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores,
-        int longitudMaxima,
-        string codigo,
-        string descripcionResumen)
+    private void ValidarTextoObligatorio(ArchivoFila fila, string columna, List<CargaValidacionError> errores, int longitudMaxima, string codigo, string descripcionResumen)
     {
         var valor = ObtenerValor(fila, columna);
 
@@ -499,13 +486,7 @@ public class VictimasValidator : IArchivoCargaValidator
         }
     }
 
-    private bool ValidarEnteroObligatorio(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores,
-        string codigoVacio,
-        string descripcionVacio,
-        out int numero)
+    private bool ValidarEnteroObligatorio(ArchivoFila fila, string columna, List<CargaValidacionError> errores, string codigoVacio, string descripcionVacio, out int numero)
     {
         numero = default;
 
@@ -540,12 +521,7 @@ public class VictimasValidator : IArchivoCargaValidator
         return true;
     }
 
-    private void ValidarEnteroOpcional(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores,
-        string codigoFormato,
-        string descripcionResumen)
+    private void ValidarEnteroOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores, string codigoFormato, string descripcionResumen)
     {
         var valor = ObtenerValor(fila, columna);
 
@@ -565,13 +541,7 @@ public class VictimasValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarEnteroIgualA(
-        ArchivoFila fila,
-        string columna,
-        int esperado,
-        List<CargaValidacionError> errores,
-        string codigo,
-        string descripcionResumen)
+    private void ValidarEnteroIgualA(ArchivoFila fila, string columna, int esperado, List<CargaValidacionError> errores, string codigo, string descripcionResumen)
     {
         var valor = ObtenerValor(fila, columna);
 
@@ -644,7 +614,9 @@ public class VictimasValidator : IArchivoCargaValidator
 
         // Vacío o 0 se acepta como sin información.
         if (EsValorVacioOCero(valor))
+        {
             return;
+        }   
 
         if (!IntentarConvertirFecha(valor, out _))
         {
@@ -661,7 +633,9 @@ public class VictimasValidator : IArchivoCargaValidator
     private bool EsValorVacioOCero(string? valor)
     {
         if (string.IsNullOrWhiteSpace(valor))
+        {
             return true;
+        }   
 
         valor = valor.Trim();
 
@@ -694,33 +668,20 @@ public class VictimasValidator : IArchivoCargaValidator
 
         foreach (var formato in formatos)
         {
-            if (DateTime.TryParseExact(
-                    valor,
-                    formato,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out var fechaParseada))
+            if (DateTime.TryParseExact(valor, formato, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fechaParseada))
             {
                 fecha = fechaParseada.Date;
                 return true;
             }
         }
 
-        if (DateTime.TryParse(
-                valor,
-                new CultureInfo("es-MX"),
-                DateTimeStyles.None,
-                out var fechaMx))
+        if (DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out var fechaMx))
         {
             fecha = fechaMx.Date;
             return true;
         }
 
-        if (DateTime.TryParse(
-                valor,
-                new CultureInfo("en-US"),
-                DateTimeStyles.None,
-                out var fechaUs))
+        if (DateTime.TryParse(valor, new CultureInfo("en-US"), DateTimeStyles.None, out var fechaUs))
         {
             fecha = fechaUs.Date;
             return true;
@@ -767,13 +728,7 @@ public class VictimasValidator : IArchivoCargaValidator
         return valor;
     }
 
-    private void AgregarError(
-        List<CargaValidacionError> errores,
-        ArchivoFila fila,
-        string columna,
-        string codigo,
-        string descripcionResumen,
-        string mensaje)
+    private void AgregarError(List<CargaValidacionError> errores, ArchivoFila fila, string columna, string codigo, string descripcionResumen, string mensaje)
     {
         fila.Columnas.TryGetValue(columna, out var valor);
 

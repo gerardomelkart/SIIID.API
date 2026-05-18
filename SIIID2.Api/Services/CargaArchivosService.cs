@@ -15,6 +15,7 @@ public class CargaArchivosService : ICargaArchivosService
     private readonly DelitosValidator _delitosValidator;
     private readonly VictimasValidator _victimasValidator;
     private readonly CargaIntegridadValidator _cargaIntegridadValidator;
+    private readonly CatalogosValidator _catalogosValidator;
 
     // Extensiones permitidas para los archivos de carga.
     private readonly string[] _extensionesPermitidas =
@@ -26,18 +27,14 @@ public class CargaArchivosService : ICargaArchivosService
     // Tamaño máximo permitido por archivo: 50 MB.
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public CargaArchivosService(
-        IArchivoReader archivoReader,
-        CarpetasValidator carpetasValidator,
-        DelitosValidator delitosValidator,
-        VictimasValidator victimasValidator,
-        CargaIntegridadValidator cargaIntegridadValidator)
+    public CargaArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator,  DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator)
     {
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
         _victimasValidator = victimasValidator;
         _cargaIntegridadValidator = cargaIntegridadValidator;
+        _catalogosValidator = catalogosValidator;
     }
 
     public async Task<CargaValidacionResponse> ValidarArchivosAsync(IFormFileCollection archivos)
@@ -107,9 +104,12 @@ public class CargaArchivosService : ICargaArchivosService
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
         response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
 
+        // Guardamos si las validaciones internas pasaron limpias.
+        var sinErroresInternos = response.Errores.Count == 0;
+
         // Las validaciones cruzadas se ejecutan solo si las validaciones internas pasaron.
         // Esto evita errores repetidos o confusos cuando falta estructura básica.
-        if (response.Errores.Count == 0)
+        if (sinErroresInternos)
         {
             response.Errores.AddRange(_cargaIntegridadValidator.Validar(
                 filasCarpetas,
@@ -117,6 +117,12 @@ public class CargaArchivosService : ICargaArchivosService
                 filasVictimas));
         }
 
+        // Las validaciones contra catálogos sí pueden ejecutarse aunque existan errores internos.
+        // La primera se reporta como formato incorrecto; la segunda se reporta como clave inexistente.
+        response.Errores.AddRange(await _catalogosValidator.ValidarAsync(
+            filasCarpetas,
+            filasDelitos,
+            filasVictimas));
 
         // Construimos resumen y mensaje final.
         FinalizarRespuesta(
@@ -128,9 +134,7 @@ public class CargaArchivosService : ICargaArchivosService
         return response;
     }
 
-    private void ValidarArchivoBase(
-        IFormFile archivo,
-        List<CargaValidacionError> errores)
+    private void ValidarArchivoBase(IFormFile archivo, List<CargaValidacionError> errores)
     {
         // Archivo vacío.
         if (archivo.Length == 0)
@@ -171,9 +175,7 @@ public class CargaArchivosService : ICargaArchivosService
         }
     }
 
-    private IFormFile? BuscarArchivoPorNombre(
-        List<IFormFile> archivos,
-        string palabraEsperada)
+    private IFormFile? BuscarArchivoPorNombre(List<IFormFile> archivos, string palabraEsperada)
     {
         var palabraNormalizada = NormalizarTexto(palabraEsperada);
 
@@ -186,15 +188,13 @@ public class CargaArchivosService : ICargaArchivosService
         });
     }
 
-    private void ValidarArchivoEsperado(
-        IFormFile? archivo,
-        string tipoArchivo,
-        string palabraEsperada,
-        List<CargaValidacionError> errores)
+    private void ValidarArchivoEsperado(IFormFile? archivo, string tipoArchivo, string palabraEsperada, List<CargaValidacionError> errores)
     {
-        if (archivo != null)
+        if (archivo != null) 
+        {
             return;
-
+        }
+            
         errores.Add(new CargaValidacionError
         {
             Archivo = tipoArchivo,
@@ -204,14 +204,9 @@ public class CargaArchivosService : ICargaArchivosService
         });
     }
 
-    private void ValidarDuplicadosPorTipo(
-        List<IFormFile> archivos,
-        string palabraEsperada,
-        string tipoArchivo,
-        List<CargaValidacionError> errores)
+    private void ValidarDuplicadosPorTipo(List<IFormFile> archivos, string palabraEsperada, string tipoArchivo, List<CargaValidacionError> errores)
     {
         var palabraNormalizada = NormalizarTexto(palabraEsperada);
-
         var coincidencias = archivos
             .Where(archivo =>
             {
@@ -222,9 +217,11 @@ public class CargaArchivosService : ICargaArchivosService
             })
             .ToList();
 
-        if (coincidencias.Count <= 1)
+        if (coincidencias.Count <= 1) 
+        {
             return;
-
+        }
+            
         errores.Add(new CargaValidacionError
         {
             Archivo = tipoArchivo,
@@ -234,29 +231,16 @@ public class CargaArchivosService : ICargaArchivosService
         });
     }
 
-    private void FinalizarRespuesta(
-        CargaValidacionResponse response,
-        int totalCarpetas,
-        int totalDelitos,
-        int totalVictimas)
+    private void FinalizarRespuesta(CargaValidacionResponse response, int totalCarpetas, int totalDelitos, int totalVictimas)
     {
         // Armamos el resumen que puede alimentar una vista tipo tabla.
-        response.ResumenValidacion = ConstruirResumenValidacion(
-            response.Errores,
-            totalCarpetas,
-            totalDelitos,
-            totalVictimas);
-
+        response.ResumenValidacion = ConstruirResumenValidacion(response.Errores, totalCarpetas, totalDelitos, totalVictimas);
         response.Mensaje = response.EsValido
             ? "La información fue validada correctamente. Puede continuar con el acuse previo."
             : "La información contiene errores de validación.";
     }
 
-    private List<CargaValidacionResumenItem> ConstruirResumenValidacion(
-        List<CargaValidacionError> errores,
-        int totalCarpetas,
-        int totalDelitos,
-        int totalVictimas)
+    private List<CargaValidacionResumenItem> ConstruirResumenValidacion(List<CargaValidacionError> errores, int totalCarpetas, int totalDelitos, int totalVictimas)
     {
         // Totales principales de los tres archivos.
         var resumen = new List<CargaValidacionResumenItem>

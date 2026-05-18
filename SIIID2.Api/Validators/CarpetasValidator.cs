@@ -83,9 +83,7 @@ public class CarpetasValidator : IArchivoCargaValidator
         return errores;
     }
 
-    private void ValidarColumnasObligatorias(
-        List<ArchivoFila> filas,
-        List<CargaValidacionError> errores)
+    private void ValidarColumnasObligatorias(List<ArchivoFila> filas, List<CargaValidacionError> errores)
     {
         // Obtenemos todas las columnas que llegaron en el archivo.
         var columnasArchivo = filas
@@ -112,9 +110,7 @@ public class CarpetasValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarDuplicidadIdCi(
-        List<ArchivoFila> filas,
-        List<CargaValidacionError> errores)
+    private void ValidarDuplicidadIdCi(List<ArchivoFila> filas, List<CargaValidacionError> errores)
     {
         // Agrupamos por ID_CI para encontrar carpetas repetidas.
         var gruposDuplicados = filas
@@ -144,16 +140,9 @@ public class CarpetasValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarTextoObligatorio(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores,
-        int longitudMaxima,
-        string codigo,
-        string descripcionResumen)
+    private void ValidarTextoObligatorio(ArchivoFila fila, string columna, List<CargaValidacionError> errores, int longitudMaxima, string codigo, string descripcionResumen)
     {
         var valor = ObtenerValor(fila, columna);
-
         // Rechaza valores vacíos o en blanco.
         if (string.IsNullOrWhiteSpace(valor))
         {
@@ -181,27 +170,21 @@ public class CarpetasValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarTextoOpcional(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores)
+    private void ValidarTextoOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
 
         if (string.IsNullOrWhiteSpace(valor))
+        {
             return;
-
+        }  
         // RMEN_DE_HCHOS puede venir lleno o vacío.
         // No se valida longitud porque en la tabla destino será TEXT.
     }
 
-    private void ValidarFechaInicioObligatoria(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores)
+    private void ValidarFechaInicioObligatoria(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
-
         // La fecha de inicio sí es obligatoria.
         if (string.IsNullOrWhiteSpace(valor))
         {
@@ -234,11 +217,7 @@ public class CarpetasValidator : IArchivoCargaValidator
         ValidarMesInmediatoAnterior(fila, columna, fechaInicio, errores);
     }
 
-    private void ValidarMesInmediatoAnterior(
-        ArchivoFila fila,
-        string columna,
-        DateTime fechaInicio,
-        List<CargaValidacionError> errores)
+    private void ValidarMesInmediatoAnterior(ArchivoFila fila, string columna, DateTime fechaInicio, List<CargaValidacionError> errores)
     {
         var fechaCarga = DateTime.Today;
         var mesInmediatoAnterior = fechaCarga.AddMonths(-1);
@@ -260,10 +239,7 @@ public class CarpetasValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarHoraOpcional(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores)
+    private void ValidarHoraOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
 
@@ -471,16 +447,9 @@ public class CarpetasValidator : IArchivoCargaValidator
         return valor;
     }
 
-    private void AgregarError(
-        List<CargaValidacionError> errores,
-        ArchivoFila fila,
-        string columna,
-        string codigo,
-        string descripcionResumen,
-        string mensaje)
+    private void AgregarError(List<CargaValidacionError> errores, ArchivoFila fila, string columna, string codigo, string descripcionResumen, string mensaje)
     {
         fila.Columnas.TryGetValue(columna, out var valor);
-
         errores.Add(new CargaValidacionError
         {
             Archivo = NombreArchivo,
