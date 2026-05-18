@@ -349,22 +349,27 @@ public class CargaIntegridadValidator
 
         valor = valor.Trim();
 
+        var fechaCarga = DateTime.Today;
+        var mesInmediatoAnterior = fechaCarga.AddMonths(-1);
+
         var formatos = new[]
         {
-            "yyyy-MM-dd",
-            "yyyy/MM/dd",
-            "yyyyMMdd",
+        "yyyy-MM-dd",
+        "yyyy/MM/dd",
+        "yyyyMMdd",
 
-            "dd/MM/yyyy",
-            "d/M/yyyy",
-            "dd-MM-yyyy",
-            "d-M-yyyy",
+        "dd/MM/yyyy",
+        "d/M/yyyy",
+        "dd-MM-yyyy",
+        "d-M-yyyy",
 
-            "MM/dd/yyyy",
-            "M/d/yyyy",
-            "MM-dd-yyyy",
-            "M-d-yyyy"
-        };
+        "MM/dd/yyyy",
+        "M/d/yyyy",
+        "MM-dd-yyyy",
+        "M-d-yyyy"
+    };
+
+        var posiblesFechas = new List<DateTime>();
 
         foreach (var formato in formatos)
         {
@@ -375,8 +380,7 @@ public class CargaIntegridadValidator
                     DateTimeStyles.None,
                     out var fechaParseada))
             {
-                fecha = fechaParseada.Date;
-                return true;
+                posiblesFechas.Add(fechaParseada.Date);
             }
         }
 
@@ -386,8 +390,7 @@ public class CargaIntegridadValidator
                 DateTimeStyles.None,
                 out var fechaMx))
         {
-            fecha = fechaMx.Date;
-            return true;
+            posiblesFechas.Add(fechaMx.Date);
         }
 
         if (DateTime.TryParse(
@@ -396,8 +399,7 @@ public class CargaIntegridadValidator
                 DateTimeStyles.None,
                 out var fechaUs))
         {
-            fecha = fechaUs.Date;
-            return true;
+            posiblesFechas.Add(fechaUs.Date);
         }
 
         if (double.TryParse(valor, NumberStyles.Any, CultureInfo.InvariantCulture, out var numeroExcel))
@@ -406,8 +408,7 @@ public class CargaIntegridadValidator
             {
                 try
                 {
-                    fecha = DateTime.FromOADate(numeroExcel).Date;
-                    return true;
+                    posiblesFechas.Add(DateTime.FromOADate(numeroExcel).Date);
                 }
                 catch
                 {
@@ -422,8 +423,7 @@ public class CargaIntegridadValidator
             {
                 try
                 {
-                    fecha = DateTime.FromOADate(numeroExcelMx).Date;
-                    return true;
+                    posiblesFechas.Add(DateTime.FromOADate(numeroExcelMx).Date);
                 }
                 catch
                 {
@@ -432,7 +432,28 @@ public class CargaIntegridadValidator
             }
         }
 
-        return false;
+        posiblesFechas = posiblesFechas
+            .Distinct()
+            .ToList();
+
+        if (posiblesFechas.Count == 0)
+            return false;
+
+        // Si hay fechas ambiguas, se prefiere la que cae en el mes inmediato anterior.
+        // Esto evita interpretar 01/04/2026 como enero 4 cuando realmente es abril 1.
+        var fechaMesAnterior = posiblesFechas.FirstOrDefault(f =>
+            f.Year == mesInmediatoAnterior.Year &&
+            f.Month == mesInmediatoAnterior.Month);
+
+        if (fechaMesAnterior != default)
+        {
+            fecha = fechaMesAnterior;
+            return true;
+        }
+
+        // Si no hay coincidencia con el mes esperado, se toma la primera fecha parseada.
+        fecha = posiblesFechas.First();
+        return true;
     }
 
     private static void AgregarError(

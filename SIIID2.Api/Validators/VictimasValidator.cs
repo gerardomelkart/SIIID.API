@@ -84,7 +84,12 @@ public class VictimasValidator : IArchivoCargaValidator
                 "VICTIMAS_ID_VICF_SIN_INFORMACION",
                 "\"ID_VICF\" sin información");
 
-            // ID_TV define si es persona física o moral.
+            // ID_TV define el tipo de víctima.
+            // Catálogo actual:
+            // 1 = Persona Física
+            // 2 = Persona Moral
+            // 3 = Otro
+            // 4 = No identificado
             var idTvValido = ValidarEnteroObligatorio(
                 fila,
                 "id_tv",
@@ -196,15 +201,12 @@ public class VictimasValidator : IArchivoCargaValidator
         ArchivoFila fila,
         List<CargaValidacionError> errores)
     {
-        // Para persona física, ID_TPM no aplica.
-        ValidarCampoVacio(
-            fila,
-            "id_tpm",
-            errores,
-            "VICTIMAS_FISICA_ID_TPM_CON_INFORMACION",
-            "Persona física con tipo de persona moral");
+        // Para persona física, ID_TPM puede venir vacío, 0 o 6 No identificada.
+        ValidarIdTpmParaPersonaFisica(fila, errores);
 
         // Catálogos de persona física.
+        // Por ahora solo validamos que sean enteros.
+        // La existencia real contra catálogo se validará después con base de datos.
         ValidarEnteroObligatorio(
             fila,
             "sexo",
@@ -257,9 +259,55 @@ public class VictimasValidator : IArchivoCargaValidator
             "Edad con formato incorrecto");
     }
 
-    private void ValidarPersonaMoral(ArchivoFila fila, List<CargaValidacionError> errores)
+    private void ValidarIdTpmParaPersonaFisica(
+        ArchivoFila fila,
+        List<CargaValidacionError> errores)
+    {
+        var valor = ObtenerValor(fila, "id_tpm");
+
+        // Vacío o 0 se acepta como sin información.
+        if (EsValorVacioOCero(valor))
+            return;
+
+        if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idTpm))
+        {
+            AgregarError(
+                errores,
+                fila,
+                "id_tpm",
+                "VICTIMAS_FISICA_ID_TPM_FORMATO_INCORRECTO",
+                "Persona física con tipo de persona moral inválido",
+                "El campo id_tpm debe ser un número entero.");
+
+            return;
+        }
+
+        // 6 = No identificada.
+        // Para persona física también se acepta.
+        if (idTpm == 6)
+            return;
+
+        AgregarError(
+            errores,
+            fila,
+            "id_tpm",
+            "VICTIMAS_FISICA_ID_TPM_CON_INFORMACION",
+            "Persona física con tipo de persona moral",
+            "Para persona física, id_tpm debe venir vacío, 0 o 6 No identificada.");
+    }
+
+    private void ValidarPersonaMoral(
+        ArchivoFila fila,
+        List<CargaValidacionError> errores)
     {
         // Para persona moral, ID_TPM sí es obligatorio.
+        // Catálogo actual de persona moral:
+        // 1 = Sociedad mercantil
+        // 2 = Sociedad civil
+        // 3 = Asociación civil
+        // 4 = Institución gubernamental
+        // 5 = Otra
+        // 6 = No identificada
         ValidarEnteroObligatorio(
             fila,
             "id_tpm",
@@ -269,6 +317,7 @@ public class VictimasValidator : IArchivoCargaValidator
             out _);
 
         // Persona moral no debe traer datos demográficos de persona física.
+        // Vacío o 0 se acepta como sin información.
         ValidarCampoVacio(
             fila,
             "sexo",
@@ -323,19 +372,15 @@ public class VictimasValidator : IArchivoCargaValidator
     }
 
     private void ValidarVictimaOtroONoIdentificado(
-    ArchivoFila fila,
-    List<CargaValidacionError> errores)
+        ArchivoFila fila,
+        List<CargaValidacionError> errores)
     {
-        // Para tipo de víctima 3 = Otro y 4 = No identificado,
-        // no aplicamos las reglas estrictas de persona física o persona moral.
-        // Solo validamos formato en los campos que vengan llenos.
+        // Para ID_TV = 3 Otro o ID_TV = 4 No identificado,
+        // no aplicamos reglas estrictas de persona física ni persona moral.
+        // Solo validamos formato si algunos campos vienen llenos.
 
-        ValidarCampoVacio(
-            fila,
-            "id_tpm",
-            errores,
-            "VICTIMAS_OTRO_ID_TPM_CON_INFORMACION",
-            "Tipo de víctima no física/no moral con tipo de persona moral");
+        // ID_TPM puede venir vacío, 0 o 6 No identificada.
+        ValidarIdTpmParaOtroONoIdentificado(fila, errores);
 
         ValidarEnteroOpcional(
             fila,
@@ -380,6 +425,43 @@ public class VictimasValidator : IArchivoCargaValidator
             errores,
             "VICTIMAS_EDAD_FORMATO_INCORRECTO",
             "Edad con formato incorrecto");
+    }
+
+    private void ValidarIdTpmParaOtroONoIdentificado(
+        ArchivoFila fila,
+        List<CargaValidacionError> errores)
+    {
+        var valor = ObtenerValor(fila, "id_tpm");
+
+        // Vacío o 0 se acepta como sin información.
+        if (EsValorVacioOCero(valor))
+            return;
+
+        if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idTpm))
+        {
+            AgregarError(
+                errores,
+                fila,
+                "id_tpm",
+                "VICTIMAS_ID_TPM_FORMATO_INCORRECTO",
+                "Tipo de persona moral con formato incorrecto",
+                "El campo id_tpm debe ser un número entero.");
+
+            return;
+        }
+
+        // 6 = No identificada.
+        // Para tipo de víctima Otro o No identificado, permitimos ID_TPM = 6.
+        if (idTpm == 6)
+            return;
+
+        AgregarError(
+            errores,
+            fila,
+            "id_tpm",
+            "VICTIMAS_ID_TPM_NO_APLICA",
+            "Tipo de persona moral no aplica para este tipo de víctima",
+            "Para tipo de víctima Otro o No identificado, id_tpm debe venir vacío, 0 o 6 No identificada.");
     }
 
     private void ValidarTextoObligatorio(
@@ -467,7 +549,8 @@ public class VictimasValidator : IArchivoCargaValidator
     {
         var valor = ObtenerValor(fila, columna);
 
-        if (string.IsNullOrWhiteSpace(valor))
+        // Vacío o 0 se acepta como sin información en campos opcionales.
+        if (EsValorVacioOCero(valor))
             return;
 
         if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
@@ -539,7 +622,8 @@ public class VictimasValidator : IArchivoCargaValidator
     {
         var valor = ObtenerValor(fila, columna);
 
-        if (string.IsNullOrWhiteSpace(valor))
+        // Vacío o 0 se toma como sin información.
+        if (EsValorVacioOCero(valor))
             return;
 
         AgregarError(
@@ -548,7 +632,7 @@ public class VictimasValidator : IArchivoCargaValidator
             columna,
             codigo,
             descripcionResumen,
-            $"El campo {columna} debe venir vacío para este tipo de víctima.");
+            $"El campo {columna} debe venir vacío o en 0 para este tipo de víctima.");
     }
 
     private void ValidarFechaOpcional(
@@ -558,7 +642,8 @@ public class VictimasValidator : IArchivoCargaValidator
     {
         var valor = ObtenerValor(fila, columna);
 
-        if (string.IsNullOrWhiteSpace(valor))
+        // Vacío o 0 se acepta como sin información.
+        if (EsValorVacioOCero(valor))
             return;
 
         if (!IntentarConvertirFecha(valor, out _))
@@ -571,6 +656,17 @@ public class VictimasValidator : IArchivoCargaValidator
                 "Fecha de nacimiento con formato incorrecto",
                 $"El campo {columna} no pudo interpretarse como una fecha válida.");
         }
+    }
+
+    private bool EsValorVacioOCero(string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor))
+            return true;
+
+        valor = valor.Trim();
+
+        // Acepta 0, 00, 000, etc. como sin información.
+        return valor.All(c => c == '0');
     }
 
     private bool IntentarConvertirFecha(string valor, out DateTime fecha)
