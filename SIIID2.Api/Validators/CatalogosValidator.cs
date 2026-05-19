@@ -40,7 +40,7 @@ public class CatalogosValidator
 
         var discapacidades = await _catalogoRepository.ObtenerClavesNumericasActivasAsync("catalogo_presenta_discapacidad", "clave");
 
-        var nacionalidades = await _catalogoRepository.ObtenerClavesNumericasActivasAsync("catalogo_nacionalidad", "clave");
+        var nacionalidades = await _catalogoRepository.ObtenerClavesTextoActivasAsync("catalogo_nacionalidad", "clave");
 
         foreach (var fila in filasVictimas)
         {
@@ -91,14 +91,15 @@ public class CatalogosValidator
                 "Discapacidad no válida según el catálogo",
                 "La clave de discapacidad no existe o no está activa en el catálogo.");
 
-            ValidarClaveCatalogoOpcional(
+            ValidarClaveCatalogoTextoOpcional(
                 fila,
                 "nacional",
                 nacionalidades,
                 errores,
                 "VICTIMAS_NACIONAL_NO_EXISTE_CATALOGO",
                 "Nacionalidad no válida según el catálogo",
-                "La nacionalidad no existe o no está activa en el catálogo.");
+                "La nacionalidad no existe o no está activa en el catálogo.",
+                "victimas");
         }
     }
 
@@ -157,7 +158,8 @@ public class CatalogosValidator
                 errores,
                 "DELITOS_CLASF_DE_DTO_NO_EXISTE_CATALOGO",
                 "Clave de modalidad del delito no válida según el catálogo",
-                "La clave de modalidad del delito no existe o no está activa en el catálogo.");
+                "La clave de modalidad del delito no existe o no está activa en el catálogo.",
+                "delitos");
 
             ValidarEntidadFederativa(
                 fila,
@@ -290,8 +292,8 @@ public class CatalogosValidator
 
         AgregarError(errores, "delitos", fila, columna, codigo, descripcionResumen, mensaje);
     }
-    
-    private void ValidarClaveCatalogoTextoOpcional(ArchivoFila fila, string columna, HashSet<string> catalogo, List<CargaValidacionError> errores, string codigo, string descripcionResumen, string mensaje)
+
+    private void ValidarClaveCatalogoTextoOpcional(ArchivoFila fila, string columna, HashSet<string> catalogo, List<CargaValidacionError> errores, string codigo, string descripcionResumen, string mensaje, string archivo)
     {
         var valor = ObtenerValor(fila, columna);
 
@@ -309,7 +311,7 @@ public class CatalogosValidator
             return;
         }
 
-        AgregarError(errores, "delitos", fila, columna, codigo, descripcionResumen, mensaje);
+        AgregarError(errores, archivo, fila, columna, codigo, descripcionResumen, mensaje);
     }
 
     private void ValidarCodigoPostalContraCatalogo(ArchivoFila fila, HashSet<string> codigosPostales, List<CargaValidacionError> errores)
