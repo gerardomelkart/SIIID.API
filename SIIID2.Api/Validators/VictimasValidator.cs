@@ -583,18 +583,16 @@ public class VictimasValidator : IArchivoCargaValidator
         }
     }
 
-    private void ValidarCampoVacio(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores,
-        string codigo,
-        string descripcionResumen)
+    private void ValidarCampoVacio(ArchivoFila fila, string columna, List<CargaValidacionError> errores, string codigo, string descripcionResumen)
     {
         var valor = ObtenerValor(fila, columna);
 
         // Vacío o 0 se toma como sin información.
         if (EsValorVacioOCero(valor))
+        {
             return;
+        }
+            
 
         AgregarError(
             errores,
@@ -605,10 +603,7 @@ public class VictimasValidator : IArchivoCargaValidator
             $"El campo {columna} debe venir vacío o en 0 para este tipo de víctima.");
     }
 
-    private void ValidarFechaOpcional(
-        ArchivoFila fila,
-        string columna,
-        List<CargaValidacionError> errores)
+    private void ValidarFechaOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
 

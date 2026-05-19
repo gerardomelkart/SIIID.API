@@ -5,11 +5,38 @@ namespace SIIID2.Api.Repositories;
 
 public class CatalogoRepository : ICatalogoRepository
 {
+    private class MunicipioCatalogo
+    {
+        public int IdEntidadFederativa { get; set; }
+        public string ClaveMunicipio { get; set; } = string.Empty;
+    }
+
     private readonly IDbConnectionFactory _dbConnectionFactory;
 
     public CatalogoRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
+    }
+    public async Task<HashSet<string>> ObtenerMunicipiosPorEntidadActivosAsync()
+    {
+        // El municipio se valida por combinación:
+        // id_entidad_federativa + clave del municipio.
+        var sql = @"
+        SELECT
+            id_entidad_federativa AS IdEntidadFederativa,
+            clave AS ClaveMunicipio
+        FROM catalogo_municipio
+        WHERE activo = 1;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var municipios = await connection.QueryAsync<MunicipioCatalogo>(sql);
+
+        return municipios
+            .Where(x => !string.IsNullOrWhiteSpace(x.ClaveMunicipio))
+            .Select(x => $"{x.IdEntidadFederativa}|{NormalizarClaveMunicipio(x.ClaveMunicipio)}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     public async Task<bool> ExisteClaveNumericaAsync(string tabla, string columnaClave, int clave)
@@ -73,5 +100,16 @@ public class CatalogoRepository : ICatalogoRepository
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(x => x.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+    private static string NormalizarClaveMunicipio(string clave)
+    {
+        clave = clave.Trim();
+
+        if (int.TryParse(clave, out var numero))
+        {
+            return numero.ToString("000");
+        }
+
+        return clave;
     }
 }
