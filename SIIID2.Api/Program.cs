@@ -66,13 +66,55 @@ builder.Services
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {
+            // Valida que el token haya sido emitido por esta API.
             ValidateIssuer = true,
+
+            // Valida que el token sea para los clientes esperados.
             ValidateAudience = true,
+
+            // Valida que el token no esté expirado.
             ValidateLifetime = true,
+
+            // Valida la firma del token.
             ValidateIssuerSigningKey = true,
+
             ValidIssuer = jwtIssuer,
             ValidAudience = jwtAudience,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey))
+
+            // Llave secreta para validar la firma.
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSecretKey))
+        };
+
+        // Personaliza la respuesta cuando el token falta, está mal formado,
+        // está vencido o no pasa la validación.
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                // Evita que ASP.NET mande la respuesta 401 default vacía.
+                context.HandleResponse();
+
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+
+                var mensaje = "No autorizado. Debe enviar un Bearer Token válido.";
+
+                // Si el token expiró, damos un mensaje más específico.
+                if (context.AuthenticateFailure is SecurityTokenExpiredException)
+                {
+                    mensaje = "El token expiró. Debe generar uno nuevo.";
+                }
+
+                var response = new
+                {
+                    esValido = false,
+                    codigo = "GENERAL_TOKEN_INVALIDO",
+                    mensaje
+                };
+
+                await context.Response.WriteAsJsonAsync(response);
+            }
         };
     });
 
