@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SIIID2.Api.Models;
 using SIIID2.Api.Services;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 
 namespace SIIID2.Api.Controllers;
 
@@ -18,41 +20,56 @@ public class CargasController : ControllerBase
     }
     // Endpoint para validar los archivos antes de insertar información en base de datos.
     // Ejemplo: POST /api/cargas/validar
+    [Authorize]
     [HttpPost("validar")]
+    [Consumes("multipart/form-data")]
     public async Task<IActionResult> ValidarArchivos()
     {
-        // Evita errores 500 cuando el cliente manda body vacío, binary, raw, etc.
-        // Para cargar archivos debe usarse multipart/form-data.
+        // La petición debe venir como form-data porque incluye archivos.
         if (!Request.HasFormContentType)
         {
             return BadRequest(new CargaValidacionResponse
             {
                 Mensaje = "La petición debe enviarse como multipart/form-data.",
                 Errores = new List<CargaValidacionError>
+            {
+                new CargaValidacionError
                 {
-                    new CargaValidacionError
-                    {
-                        Archivo = "general",
-                        Fila = null,
-                        Columna = "",
-                        Campo = "",
-                        Valor = null,
-                        Mensaje = "Debe enviar los archivos en Body > form-data."
-                    }
+                    Archivo = "general",
+                    Fila = null,
+                    Columna = "",
+                    Campo = "",
+                    Valor = null,
+                    Codigo = "GENERAL_CONTENT_TYPE_INVALIDO",
+                    DescripcionResumen = "Tipo de petición inválido",
+                    Mensaje = "La petición debe enviarse como multipart/form-data."
                 }
+            }
             });
         }
 
-        // Request.Form.Files contiene todos los archivos enviados en el form-data.
-        // No dependemos del nombre de la llave; el servicio identifica cada archivo por su FileName.
-        var archivos = Request.Form.Files;
-        var resultado = await _cargaArchivosService.ValidarArchivosAsync(archivos);
-        // Si hay errores de validación, se devuelve 400 con el detalle.
+        // El usuario se obtiene del Bearer Token.
+        // No se debe confiar en un id enviado por form-data.
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioCarga))
+        {
+            return Unauthorized(new
+            {
+                mensaje = "El token no contiene un id de usuario válido."
+            });
+        }
+
+        // El service recibe el form completo y el usuario autenticado.
+        var resultado = await _cargaArchivosService.ValidarArchivosAsync(
+            Request.Form,
+            idUsuarioCarga);
+
         if (!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
-        // Si no hay errores, se devuelve 200.
+
         return Ok(resultado);
     }
 }

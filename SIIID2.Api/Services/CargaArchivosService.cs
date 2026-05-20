@@ -3,6 +3,7 @@ using System.Text;
 using SIIID2.Api.Models;
 using SIIID2.Api.Readers;
 using SIIID2.Api.Validators;
+using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Services;
 
@@ -16,6 +17,8 @@ public class CargaArchivosService : ICargaArchivosService
     private readonly VictimasValidator _victimasValidator;
     private readonly CargaIntegridadValidator _cargaIntegridadValidator;
     private readonly CatalogosValidator _catalogosValidator;
+    private readonly ICargaRepository _cargaRepository;
+    private readonly IUsuarioRepository _usuarioRepository;
 
     // Extensiones permitidas para los archivos de carga.
     private readonly string[] _extensionesPermitidas =
@@ -27,7 +30,7 @@ public class CargaArchivosService : ICargaArchivosService
     // Tamaño máximo permitido por archivo: 50 MB.
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public CargaArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator,  DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator)
+    public CargaArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IUsuarioRepository usuarioRepository)
     {
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
@@ -35,10 +38,67 @@ public class CargaArchivosService : ICargaArchivosService
         _victimasValidator = victimasValidator;
         _cargaIntegridadValidator = cargaIntegridadValidator;
         _catalogosValidator = catalogosValidator;
+        _cargaRepository = cargaRepository;
+        _usuarioRepository = usuarioRepository;
     }
 
-    public async Task<CargaValidacionResponse> ValidarArchivosAsync(IFormFileCollection archivos)
+    public async Task<CargaValidacionResponse> ValidarArchivosAsync(IFormCollection form, int idUsuarioCarga)
     {
+        // Los archivos vienen dentro del form-data.
+        var archivos = form.Files;
+
+        // El usuario viene del token.
+        // Aquí se consulta base para validar que exista, esté activo, tenga rol activo y permisos.
+        var usuarioCarga = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioCarga);
+
+        if (usuarioCarga == null)
+        {
+            var responseUsuario = new CargaValidacionResponse
+            {
+                CodigoReferencia = GenerarCodigoReferencia()
+            };
+
+            responseUsuario.Errores.Add(new CargaValidacionError
+            {
+                Archivo = "general",
+                Fila = null,
+                Columna = "idUsuarioCarga",
+                Campo = "idUsuarioCarga",
+                Valor = idUsuarioCarga.ToString(),
+                Codigo = "GENERAL_USUARIO_CARGA_NO_EXISTE",
+                DescripcionResumen = "Usuario de carga no existe",
+                Mensaje = "El usuario autenticado no existe o no está activo."
+            });
+
+            FinalizarRespuesta(responseUsuario, 0, 0, 0);
+            return responseUsuario;
+        }
+
+        // El usuario debe tener habilitada la carga.
+        // Esto se controla desde habilita_carga_modificacion.
+        if (!usuarioCarga.HabilitaCarga)
+        {
+            var responseUsuario = new CargaValidacionResponse
+            {
+                CodigoReferencia = GenerarCodigoReferencia()
+            };
+
+            responseUsuario.Errores.Add(new CargaValidacionError
+            {
+                Archivo = "general",
+                Fila = null,
+                Columna = "habilita_carga",
+                Campo = "habilita_carga",
+                Valor = usuarioCarga.HabilitaCarga.ToString(),
+                Codigo = "GENERAL_USUARIO_SIN_PERMISO_CARGA",
+                DescripcionResumen = "Usuario sin permiso de carga",
+                Mensaje = "El usuario autenticado no tiene habilitada la carga de información."
+            });
+
+            FinalizarRespuesta(responseUsuario, 0, 0, 0);
+            return responseUsuario;
+        }
+
         // Se genera un código por cada intento de carga.
         var response = new CargaValidacionResponse
         {
@@ -104,6 +164,9 @@ public class CargaArchivosService : ICargaArchivosService
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
         response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
 
+        // Validamos que el usuario solo cargue información de su entidad.
+        response.Errores.AddRange(ValidarEntidadUsuarioCarga(usuarioCarga, filasDelitos));
+
         // Guardamos si las validaciones internas pasaron limpias.
         var sinErroresInternos = response.Errores.Count == 0;
 
@@ -131,7 +194,107 @@ public class CargaArchivosService : ICargaArchivosService
             filasDelitos.Count,
             filasVictimas.Count);
 
+        // Determinamos el estado inicial del intento de carga.
+        var estadoCarga = response.EsValido
+            ? "VALIDADO_PENDIENTE"
+            : "RECHAZADO_VALIDACION";
+
+        // Si hubo errores, guardamos solo mensaje general.
+        // El detalle completo se devuelve en la respuesta de la API.
+        var mensajeError = response.EsValido
+            ? null
+            : $"La información contiene errores de validación. Total de errores: {response.Errores.Count}.";
+
+        // El mes y año corte se obtienen desde la fecha de inicio de carpetas.
+        var mesCorte = ObtenerMesCorteDesdeCarpetas(filasCarpetas);
+        var anioCorte = ObtenerAnioCorteDesdeCarpetas(filasCarpetas);
+
+        // Se crea el registro principal del intento de carga.
+        var idCarga = await _cargaRepository.CrearCargaAsync(
+            idUsuarioCarga,
+            response.CodigoReferencia,
+            mesCorte,
+            anioCorte,
+            filasCarpetas.Count,
+            filasDelitos.Count,
+            filasVictimas.Count,
+            estadoCarga,
+            mensajeError);
+
+        // Se guarda staging para poder confirmar o rechazar después.
+        await _cargaRepository.GuardarTmpCarpetasAsync(idCarga, filasCarpetas);
+        await _cargaRepository.GuardarTmpDelitosAsync(idCarga, filasDelitos);
+        await _cargaRepository.GuardarTmpVictimasAsync(idCarga, filasVictimas);
+
         return response;
+    }
+
+    private List<CargaValidacionError> ValidarEntidadUsuarioCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos)
+    {
+        var errores = new List<CargaValidacionError>();
+
+        // El SUPER_USUARIO puede cargar información de cualquier entidad.
+        if (usuarioCarga.EsSuperUsuario)
+        {
+            return errores;
+        }
+
+        // Los usuarios normales deben tener entidad asignada.
+        if (!usuarioCarga.IdEntidadFederativa.HasValue)
+        {
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "general",
+                Fila = null,
+                Columna = "id_ent_hchos",
+                Campo = "id_ent_hchos",
+                Valor = null,
+                Codigo = "GENERAL_USUARIO_SIN_ENTIDAD",
+                DescripcionResumen = "Usuario sin entidad federativa asignada",
+                Mensaje = "El usuario no tiene una entidad federativa asignada y no puede realizar cargas."
+            });
+
+            return errores;
+        }
+
+        foreach (var fila in filasDelitos)
+        {
+            fila.Columnas.TryGetValue("id_ent_hchos", out var valorEntidad);
+
+            // Si viene vacío, lo reporta el DelitosValidator.
+            if (string.IsNullOrWhiteSpace(valorEntidad))
+            {
+                continue;
+            }
+
+            valorEntidad = valorEntidad.Trim();
+
+            // Si no se puede convertir, lo reportan otras validaciones.
+            if (!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidadExcel))
+            {
+                continue;
+            }
+
+            // Acepta valores como 9 y 09 porque ambos se convierten a 9.
+            if (idEntidadExcel == usuarioCarga.IdEntidadFederativa.Value)
+            {
+                continue;
+            }
+
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "delitos",
+                Fila = fila.NumeroFila,
+                Columna = "id_ent_hchos",
+                Campo = "id_ent_hchos",
+                Valor = valorEntidad,
+                Codigo = "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO",
+                DescripcionResumen = "Entidad federativa no corresponde al usuario",
+                Mensaje = $"La entidad del delito ({valorEntidad}) no corresponde con la entidad asignada al usuario ({usuarioCarga.IdEntidadFederativa.Value})."
+            });
+        }
+
+        return errores;
     }
 
     private void ValidarArchivoBase(IFormFile archivo, List<CargaValidacionError> errores)
@@ -297,6 +460,59 @@ public class CargaArchivosService : ICargaArchivosService
         resumen.AddRange(resumenErrores);
 
         return resumen;
+    }
+
+    private int ObtenerMesCorteDesdeCarpetas(List<ArchivoFila> filasCarpetas)
+    {
+        var fecha = ObtenerPrimeraFechaInicioValida(filasCarpetas);
+
+        if (fecha.HasValue)
+        {
+            return fecha.Value.Month;
+        }
+
+        // Si no hay fecha válida, usamos mes inmediato anterior.
+        return DateTime.Today.AddMonths(-1).Month;
+    }
+
+    private int ObtenerAnioCorteDesdeCarpetas(List<ArchivoFila> filasCarpetas)
+    {
+        var fecha = ObtenerPrimeraFechaInicioValida(filasCarpetas);
+
+        if (fecha.HasValue)
+        {
+            return fecha.Value.Year;
+        }
+
+        // Si no hay fecha válida, usamos el año del mes inmediato anterior.
+        return DateTime.Today.AddMonths(-1).Year;
+    }
+
+    private DateTime? ObtenerPrimeraFechaInicioValida(List<ArchivoFila> filasCarpetas)
+    {
+        foreach (var fila in filasCarpetas)
+        {
+            fila.Columnas.TryGetValue("fha_de_ini", out var valor);
+
+            if (string.IsNullOrWhiteSpace(valor))
+            {
+                continue;
+            }
+
+            // Primero intentamos con cultura mexicana.
+            if (DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out var fecha))
+            {
+                return fecha.Date;
+            }
+
+            // Si no se puede, intentamos con cultura invariante.
+            if (DateTime.TryParse(valor, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fechaInvariant))
+            {
+                return fechaInvariant.Date;
+            }
+        }
+
+        return null;
     }
 
     private static string GenerarCodigoReferencia()

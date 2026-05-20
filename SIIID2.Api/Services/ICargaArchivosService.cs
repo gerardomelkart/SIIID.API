@@ -6,6 +6,7 @@ namespace SIIID2.Api.Services;
 // El controller depende de esta interfaz, no de la clase concreta.
 public interface ICargaArchivosService
 {
-    // Valida los archivos recibidos y devuelve todos los errores encontrados.
-    Task<CargaValidacionResponse> ValidarArchivosAsync(IFormFileCollection archivos);
+    // Valida los archivos recibidos y registra el intento de carga.
+    // El idUsuarioCarga viene del Bearer Token, no del form-data.
+    Task<CargaValidacionResponse> ValidarArchivosAsync(IFormCollection form, int idUsuarioCarga);
 }

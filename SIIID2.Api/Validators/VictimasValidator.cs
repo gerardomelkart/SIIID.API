@@ -247,12 +247,7 @@ public class VictimasValidator : IArchivoCargaValidator
         ValidarFechaOpcional(fila, "fha_nac", errores);
 
         // Edad opcional.
-        ValidarEnteroOpcional(
-            fila,
-            "edad",
-            errores,
-            "VICTIMAS_EDAD_FORMATO_INCORRECTO",
-            "Edad con formato incorrecto");
+        ValidarEdadOpcional(fila, errores);
     }
 
     private void ValidarIdTpmParaPersonaFisica(ArchivoFila fila, List<CargaValidacionError> errores)
@@ -738,5 +733,46 @@ public class VictimasValidator : IArchivoCargaValidator
             DescripcionResumen = descripcionResumen,
             Mensaje = mensaje
         });
+    }
+
+    private void ValidarEdadOpcional(ArchivoFila fila, List<CargaValidacionError> errores)
+    {
+        var valor = ObtenerValor(fila, "edad");
+
+        // Vacío o 0 se toma como sin información.
+        if (EsValorVacioOCero(valor))
+        {
+            return;
+        }
+
+        if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var edad))
+        {
+            AgregarError(
+                errores,
+                fila,
+                "edad",
+                "VICTIMAS_EDAD_FORMATO_INCORRECTO",
+                "Edad con formato incorrecto",
+                "El campo edad debe ser un número entero.");
+
+            return;
+        }
+
+        // 999 se acepta como No identificado.
+        if (edad == 999)
+        {
+            return;
+        }
+
+        if (edad < 0 || edad > 120)
+        {
+            AgregarError(
+                errores,
+                fila,
+                "edad",
+                "VICTIMAS_EDAD_FUERA_RANGO",
+                "Edad fuera de rango",
+                "El campo edad debe estar entre 0 y 120, o venir como 999 para No identificado.");
+        }
     }
 }

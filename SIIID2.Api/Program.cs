@@ -4,6 +4,9 @@ using SIIID2.Api.Services;
 using SIIID2.Api.Validators;
 using SIIID2.Api.Data;
 using SIIID2.Api.Repositories;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 
 // Punto de arranque de la API.
 // Aquí se registran servicios, controladores, Swagger y configuración general.
@@ -39,10 +42,41 @@ builder.Services.AddScoped<DelitosValidator>();
 builder.Services.AddScoped<VictimasValidator>();
 builder.Services.AddScoped<CargaIntegridadValidator>();
 builder.Services.AddScoped<CatalogosValidator>();
+builder.Services.AddScoped<ICatalogoRepository, CatalogoRepository>();
+builder.Services.AddScoped<ICargaRepository, CargaRepository>();
+builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 
 // Registro del servicio principal de carga.
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.
 builder.Services.AddScoped<ICargaArchivosService, CargaArchivosService>();
+
+//para que jale el token
+var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]
+    ?? throw new InvalidOperationException("No se encontró Jwt:SecretKey.");
+
+var jwtIssuer = builder.Configuration["Jwt:Issuer"]
+    ?? throw new InvalidOperationException("No se encontró Jwt:Issuer.");
+
+var jwtAudience = builder.Configuration["Jwt:Audience"]
+    ?? throw new InvalidOperationException("No se encontró Jwt:Audience.");
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey))
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
@@ -55,6 +89,10 @@ if (app.Environment.IsDevelopment())
 
 // Redirige peticiones HTTP a HTTPS.
 app.UseHttpsRedirection();
+
+//igual para los tokens
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Mapea los controllers, por ejemplo: /api/cargas/validar.
 app.MapControllers();
