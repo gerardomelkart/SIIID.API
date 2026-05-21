@@ -463,6 +463,51 @@ public class CargaRepository : ICargaRepository
         return resumen.ToList();
     }
 
+    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idCarga)
+    {
+        // El acuse confirmado parte de catalogo_delito_sabana para que salgan registros en cero.
+        // Pero los conteos ya se toman de tablas finales: delito y victima.
+        var sql = @"
+        SELECT
+            s.clave2_sabana AS ClaveDelito,
+            s.delito_sabana AS TipoDelito,
+            s.clave3_sabana AS ClaveSubtipo,
+            s.subtipo_delito_sabana AS SubtipoDelito,
+            COUNT(DISTINCT d.id_delito) AS TotalDelitos,
+            COUNT(DISTINCT v.id_victima) AS TotalVictimas,
+            MIN(s.id_delito_sabana) AS Orden
+        FROM catalogo_delito_sabana s
+        LEFT JOIN delito d
+            ON d.id_carga = @IdCarga
+           AND d.id_modalidad_delito = s.id_modalidad_delito
+           AND d.id_grado_consumacion = s.id_grado_consumacion
+           AND d.id_instrumento_comision = s.id_instrumento_comision
+           AND d.id_forma_accion = s.id_forma_accion
+           AND d.activo = 1
+        LEFT JOIN victima v
+            ON v.id_carga = d.id_carga
+           AND v.id_delito = d.id_delito
+           AND v.activo = 1
+        WHERE s.activo = 1
+        GROUP BY
+            s.clave2_sabana,
+            s.delito_sabana,
+            s.clave3_sabana,
+            s.subtipo_delito_sabana
+        ORDER BY
+            Orden;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var resumen = await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
+        {
+            IdCarga = idCarga
+        });
+
+        return resumen.ToList();
+    }
+
     public async Task<ConfirmarCargaResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion)
     {
         // Confirma o rechaza una carga validada.
@@ -1014,5 +1059,31 @@ public class CargaRepository : ICargaRepository
                 IdUsuarioConfirmacion = idUsuarioConfirmacion
             },
             transaction);
+    }
+
+    public async Task<string?> ObtenerCodigoCargaPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
+    {
+        // Revisa si ya existe una carga validada pendiente de confirmar
+        // para la misma entidad y periodo.
+        // Esto evita generar múltiples cargas pendientes del mismo corte.
+        var sql = @"
+        SELECT TOP 1 codigo_referencia
+        FROM carga
+        WHERE id_entidad_federativa = @IdEntidadFederativa
+          AND mes_corte = @MesCorte
+          AND anio_corte = @AnioCorte
+          AND estado = 'VALIDADO_PENDIENTE'
+          AND activo = 1
+        ORDER BY fecha_validacion DESC;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.QueryFirstOrDefaultAsync<string?>(sql, new
+        {
+            IdEntidadFederativa = idEntidadFederativa,
+            MesCorte = mesCorte,
+            AnioCorte = anioCorte
+        });
     }
 }

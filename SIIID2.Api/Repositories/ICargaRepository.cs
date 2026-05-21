@@ -21,6 +21,9 @@ public interface ICargaRepository
     // Obtiene el resumen por delito/subtipo usando catalogo_delito_sabana.
     Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idCarga);
 
+    // Obtiene el resumen por delito/subtipo desde tablas finales.
+    Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idCarga);
+
     // Actualiza el estado del intento de carga.
     Task ActualizarEstadoCargaAsync(long idCarga, string estado, string? mensajeError);
 
@@ -28,4 +31,7 @@ public interface ICargaRepository
     // Si acepta, mueve staging a tablas finales.
     // Si rechaza, solo actualiza estados.
     Task<ConfirmarCargaResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion);
+    // Obtiene el código de una carga pendiente para la misma entidad y periodo.
+    // Si regresa null, no existe pendiente.
+    Task<string?> ObtenerCodigoCargaPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
 }

@@ -4,4 +4,7 @@ public interface IAcusePdfService
 {
     // Genera el PDF del acuse previo.
     Task<byte[]> GenerarAcusePrevioAsync(string codigoReferencia, int idUsuarioConsulta);
+
+    // Genera el PDF del acuse confirmado.
+    Task<byte[]> GenerarAcuseConfirmadoAsync(string codigoReferencia, int idUsuarioConsulta);
 }

@@ -59,10 +59,52 @@ public class AcusePdfService : IAcusePdfService
 
         var resumen = await _cargaRepository.ObtenerResumenAcuseAsync(carga.IdCarga);
 
-        return GenerarPdf(carga, resumen);
+        return GenerarPdf(carga, resumen, "ACUSE PREVIO", mostrarMarcaPrevio: true);
     }
 
-    private byte[] GenerarPdf(CargaAcuseInfo carga, List<CargaAcuseResumenItem> resumen)
+    public async Task<byte[]> GenerarAcuseConfirmadoAsync(string codigoReferencia, int idUsuarioConsulta)
+    {
+        // QuestPDF requiere declarar licencia.
+        QuestPDF.Settings.License = LicenseType.Community;
+
+        var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuarioConsulta == null)
+        {
+            throw new UnauthorizedAccessException("El usuario autenticado no existe o no está activo.");
+        }
+
+        var carga = await _cargaRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
+
+        if (carga == null)
+        {
+            throw new InvalidOperationException("No se encontró la carga solicitada.");
+        }
+
+        // El acuse confirmado solo aplica para cargas confirmadas.
+        if (!string.Equals(carga.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("El acuse confirmado solo puede generarse para cargas en estado CONFIRMADO.");
+        }
+
+        // Usuario normal solo puede consultar acuses de su entidad.
+        if (!usuarioConsulta.EsSuperUsuario &&
+            usuarioConsulta.IdEntidadFederativa.HasValue &&
+            carga.IdEntidadFederativa.HasValue &&
+            usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa.Value)
+        {
+            throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
+        }
+
+        var resumen = await _cargaRepository.ObtenerResumenAcuseConfirmadoAsync(carga.IdCarga);
+
+        return GenerarPdf(
+            carga,
+            resumen,
+            "ACUSE DE CARGA",
+            mostrarMarcaPrevio: false);
+    }
+    private byte[] GenerarPdf(CargaAcuseInfo carga, List<CargaAcuseResumenItem> resumen, string titulo, bool mostrarMarcaPrevio)
     {
         var totalDelitos = resumen.Sum(x => x.TotalDelitos);
         var totalVictimas = resumen.Sum(x => x.TotalVictimas);
@@ -82,7 +124,10 @@ public class AcusePdfService : IAcusePdfService
                 page.DefaultTextStyle(x => x.FontSize(8).FontFamily("Arial"));
 
                 // Marca de agua en todas las páginas.
-                page.Background().Element(contenedor => ConstruirMarcaAgua(contenedor));
+                if (mostrarMarcaPrevio)
+                {
+                    page.Background().Element(contenedor => ConstruirMarcaAgua(contenedor));
+                }
 
                 page.Header().Element(header => ConstruirEncabezado(header));
 
@@ -93,7 +138,7 @@ public class AcusePdfService : IAcusePdfService
                     column.Item()
                         .PaddingTop(4)
                         .AlignCenter()
-                        .Text("ACUSE PREVIO")
+                        .Text(titulo)
                         .FontSize(17)
                         .Bold();
 
@@ -180,8 +225,9 @@ public class AcusePdfService : IAcusePdfService
                 .Text(text =>
                 {
                     text.DefaultTextStyle(x => x.FontSize(7.5f));
-                    text.Span("Código de referencia: ").Bold();
-                    text.Span(carga.CodigoReferencia);
+                    text.Span("\n").Bold();
+                    //text.Span("Código de referencia: ").Bold();
+                    //text.Span(carga.CodigoReferencia);
                 });
 
             column.Item()

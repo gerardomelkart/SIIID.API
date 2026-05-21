@@ -199,8 +199,8 @@ public class CargaArchivosService : ICargaArchivosService
             filasDelitos,
             response.Errores);
 
-        // Si no hay errores hasta este punto y ya existe carga confirmada,
-        // esta carga nueva no debe continuar. Debe ir por actualización.
+        // Si no hay errores hasta este punto, revisamos si ya existe una carga
+        // confirmada o pendiente para la misma entidad y periodo.
         if (idEntidadFederativaCarga.HasValue && response.Errores.Count == 0)
         {
             var existeCargaConfirmada = await _cargaRepository.ExisteCargaConfirmadaAsync(
@@ -222,6 +222,28 @@ public class CargaArchivosService : ICargaArchivosService
                     Mensaje = $"Ya existe información confirmada para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte:00}/{anioCorte}. Para continuar debe usar el flujo de actualización."
                 });
             }
+            else
+            {
+                var codigoCargaPendiente = await _cargaRepository.ObtenerCodigoCargaPendienteAsync(
+                    idEntidadFederativaCarga.Value,
+                    mesCorte,
+                    anioCorte);
+
+                if (!string.IsNullOrWhiteSpace(codigoCargaPendiente))
+                {
+                    response.Errores.Add(new CargaValidacionError
+                    {
+                        Archivo = "general",
+                        Fila = null,
+                        Columna = "",
+                        Campo = "",
+                        Valor = codigoCargaPendiente,
+                        Codigo = "CARGA_PENDIENTE_EXISTENTE",
+                        DescripcionResumen = "Ya existe carga pendiente",
+                        Mensaje = $"Ya existe una carga validada pendiente de confirmar para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {codigoCargaPendiente}. Debe confirmar o rechazar esa carga antes de enviar una nueva."
+                    });
+                }
+            }
         }
 
         // Construimos resumen y mensaje final.
@@ -231,10 +253,11 @@ public class CargaArchivosService : ICargaArchivosService
             filasDelitos.Count,
             filasVictimas.Count);
 
-        // Si ya existe carga confirmada para ese periodo,
+        // Si ya existe carga confirmada o pendiente para ese periodo,
         // no guardamos staging como carga nueva.
-        // El usuario debe usar el flujo de actualización.
-        if (response.Errores.Any(x => x.Codigo == "CARGA_PERIODO_YA_CONFIRMADO"))
+        // Confirmada: debe ir a flujo de actualización.
+        // Pendiente: debe confirmar o rechazar la carga anterior.
+        if (response.Errores.Any(x => x.Codigo == "CARGA_PERIODO_YA_CONFIRMADO" || x.Codigo == "CARGA_PENDIENTE_EXISTENTE"))
         {
             return response;
         }

@@ -16,13 +16,15 @@ public class CargasController : ControllerBase
     private readonly ICargaArchivosService _cargaArchivosService;
     private readonly IAcusePdfService _acusePdfService;
     private readonly ICargaRepository _cargaRepository;
+    private readonly ILogger<CargasController> _logger;
 
     // ASP.NET inyecta aquí las implementaciones registradas en Program.cs.
-    public CargasController(ICargaArchivosService cargaArchivosService, IAcusePdfService acusePdfService, ICargaRepository cargaRepository)
+    public CargasController(ICargaArchivosService cargaArchivosService, IAcusePdfService acusePdfService, ICargaRepository cargaRepository, ILogger<CargasController> logger)
     {
         _cargaArchivosService = cargaArchivosService;
         _acusePdfService = acusePdfService;
         _cargaRepository = cargaRepository;
+        _logger = logger;
     }
 
     // Endpoint para validar los archivos antes de insertar información en base de datos.
@@ -66,6 +68,8 @@ public class CargasController : ControllerBase
                 mensaje = "El token no contiene un id de usuario válido."
             });
         }
+        //prueba de logs
+        //_logger.LogInformation("Inicia validación de carga. Usuario: {IdUsuario}", idUsuarioCarga);
 
         // El service recibe el form completo y el usuario autenticado.
         var resultado = await _cargaArchivosService.ValidarArchivosAsync(
@@ -169,7 +173,53 @@ public class CargasController : ControllerBase
         return Ok(resultado);
     }
 
+    // Endpoint para descargar el acuse de carga confirmada en PDF.
+    // Ejemplo: GET /api/cargas/abc123/acuse-confirmado
+    [Authorize]
+    [HttpGet("{codigoReferencia}/acuse-confirmado")]
+    public async Task<IActionResult> DescargarAcuseConfirmado(string codigoReferencia)
+    {
+        // El usuario se obtiene del Bearer Token.
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                mensaje = "El token no contiene un id de usuario válido."
+            });
+        }
+
+        try
+        {
+            var pdf = await _acusePdfService.GenerarAcuseConfirmadoAsync(
+                codigoReferencia,
+                idUsuarioConsulta);
+
+            return File(
+                pdf,
+                "application/pdf",
+                $"ACUSE_CARGA_{codigoReferencia}.pdf");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "ACUSE_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "ACUSE_NO_DISPONIBLE",
+                mensaje = ex.Message
+            });
+        }
+    }
 
 
     // solo es prueba.

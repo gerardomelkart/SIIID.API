@@ -7,6 +7,8 @@ using SIIID2.Api.Repositories;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using SIIID2.Api.Middleware;
+using Serilog;
 
 // Punto de arranque de la API.
 // Aquí se registran servicios, controladores, Swagger y configuración general.
@@ -121,7 +123,26 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+//para los logs
+var rutaLogs = Path.Combine(builder.Environment.ContentRootPath, "logs", "siiid-api-.log");
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.Console()
+    .WriteTo.File(
+        rutaLogs,
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30)
+    .CreateLogger();
+
+builder.Host.UseSerilog();
+
 var app = builder.Build();
+
+
+
+// Manejo global de errores no controlados.
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // Swagger solo se habilita en ambiente de desarrollo.
 if (app.Environment.IsDevelopment())
