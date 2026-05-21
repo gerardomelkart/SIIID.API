@@ -4,17 +4,16 @@ namespace SIIID2.Api.Repositories;
 
 public interface ICargaRepository
 {
-    // Crea el registro principal del intento de carga.
-    Task<long> CrearCargaAsync(int idUsuarioCarga, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError);
+    // Guarda el intento completo de carga:
+    // 1. Inserta el registro principal en carga.
+    // 2. Guarda carpetas en staging.
+    // 3. Guarda delitos en staging.
+    // 4. Guarda víctimas en staging.
+    // Todo se ejecuta dentro de una transacción.
+    Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas);
 
-    // Guarda las filas leídas de carpetas en staging.
-    Task GuardarTmpCarpetasAsync(long idCarga, List<ArchivoFila> filasCarpetas);
-
-    // Guarda las filas leídas de delitos en staging.
-    Task GuardarTmpDelitosAsync(long idCarga, List<ArchivoFila> filasDelitos);
-
-    // Guarda las filas leídas de víctimas en staging.
-    Task GuardarTmpVictimasAsync(long idCarga, List<ArchivoFila> filasVictimas);
+    // Valida si ya existe una carga confirmada para la misma entidad y periodo.
+    Task<bool> ExisteCargaConfirmadaAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
 
     // Actualiza el estado del intento de carga.
     Task ActualizarEstadoCargaAsync(long idCarga, string estado, string? mensajeError);

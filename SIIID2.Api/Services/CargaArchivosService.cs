@@ -187,12 +187,57 @@ public class CargaArchivosService : ICargaArchivosService
             filasDelitos,
             filasVictimas));
 
+        // El mes y año corte se obtienen desde la fecha de inicio de carpetas.
+        var mesCorte = ObtenerMesCorteDesdeCarpetas(filasCarpetas);
+        var anioCorte = ObtenerAnioCorteDesdeCarpetas(filasCarpetas);
+
+        // Obtenemos la entidad real de la carga.
+        // Para usuario normal viene de su usuario.
+        // Para SUPER_USUARIO se toma del Excel de delitos.
+        var idEntidadFederativaCarga = ObtenerEntidadFederativaCarga(
+            usuarioCarga,
+            filasDelitos,
+            response.Errores);
+
+        // Si no hay errores hasta este punto y ya existe carga confirmada,
+        // esta carga nueva no debe continuar. Debe ir por actualización.
+        if (idEntidadFederativaCarga.HasValue && response.Errores.Count == 0)
+        {
+            var existeCargaConfirmada = await _cargaRepository.ExisteCargaConfirmadaAsync(
+                idEntidadFederativaCarga.Value,
+                mesCorte,
+                anioCorte);
+
+            if (existeCargaConfirmada)
+            {
+                response.Errores.Add(new CargaValidacionError
+                {
+                    Archivo = "general",
+                    Fila = null,
+                    Columna = "",
+                    Campo = "",
+                    Valor = null,
+                    Codigo = "CARGA_PERIODO_YA_CONFIRMADO",
+                    DescripcionResumen = "Ya existe carga confirmada",
+                    Mensaje = $"Ya existe información confirmada para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte:00}/{anioCorte}. Para continuar debe usar el flujo de actualización."
+                });
+            }
+        }
+
         // Construimos resumen y mensaje final.
         FinalizarRespuesta(
             response,
             filasCarpetas.Count,
             filasDelitos.Count,
             filasVictimas.Count);
+
+        // Si ya existe carga confirmada para ese periodo,
+        // no guardamos staging como carga nueva.
+        // El usuario debe usar el flujo de actualización.
+        if (response.Errores.Any(x => x.Codigo == "CARGA_PERIODO_YA_CONFIRMADO"))
+        {
+            return response;
+        }
 
         // Determinamos el estado inicial del intento de carga.
         var estadoCarga = response.EsValido
@@ -205,13 +250,12 @@ public class CargaArchivosService : ICargaArchivosService
             ? null
             : $"La información contiene errores de validación. Total de errores: {response.Errores.Count}.";
 
-        // El mes y año corte se obtienen desde la fecha de inicio de carpetas.
-        var mesCorte = ObtenerMesCorteDesdeCarpetas(filasCarpetas);
-        var anioCorte = ObtenerAnioCorteDesdeCarpetas(filasCarpetas);
-
-        // Se crea el registro principal del intento de carga.
-        var idCarga = await _cargaRepository.CrearCargaAsync(
+        // Se guarda el intento completo de carga.
+        // Incluye registro en carga y staging de los tres archivos.
+        // Todo se ejecuta dentro de una transacción en el repository.
+        var idCarga = await _cargaRepository.GuardarIntentoCargaAsync(
             idUsuarioCarga,
+            idEntidadFederativaCarga,
             response.CodigoReferencia,
             mesCorte,
             anioCorte,
@@ -219,14 +263,78 @@ public class CargaArchivosService : ICargaArchivosService
             filasDelitos.Count,
             filasVictimas.Count,
             estadoCarga,
-            mensajeError);
-
-        // Se guarda staging para poder confirmar o rechazar después.
-        await _cargaRepository.GuardarTmpCarpetasAsync(idCarga, filasCarpetas);
-        await _cargaRepository.GuardarTmpDelitosAsync(idCarga, filasDelitos);
-        await _cargaRepository.GuardarTmpVictimasAsync(idCarga, filasVictimas);
+            mensajeError,
+            filasCarpetas,
+            filasDelitos,
+            filasVictimas);
 
         return response;
+    }
+
+    private int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    {
+        // Para usuarios normales, la entidad de la carga es la entidad asignada al usuario.
+        if (!usuarioCarga.EsSuperUsuario)
+        {
+            return usuarioCarga.IdEntidadFederativa;
+        }
+
+        var entidades = new HashSet<int>();
+
+        foreach (var fila in filasDelitos)
+        {
+            fila.Columnas.TryGetValue("id_ent_hchos", out var valorEntidad);
+
+            if (string.IsNullOrWhiteSpace(valorEntidad))
+            {
+                continue;
+            }
+
+            valorEntidad = valorEntidad.Trim();
+
+            if (!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidad))
+            {
+                continue;
+            }
+
+            entidades.Add(idEntidad);
+        }
+
+        if (entidades.Count == 0)
+        {
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "delitos",
+                Fila = null,
+                Columna = "id_ent_hchos",
+                Campo = "id_ent_hchos",
+                Valor = null,
+                Codigo = "DELITOS_ENTIDAD_CARGA_NO_DETECTADA",
+                DescripcionResumen = "No se pudo determinar la entidad de la carga",
+                Mensaje = "No se pudo determinar la entidad de la carga a partir del archivo de delitos."
+            });
+
+            return null;
+        }
+
+        if (entidades.Count > 1)
+        {
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "delitos",
+                Fila = null,
+                Columna = "id_ent_hchos",
+                Campo = "id_ent_hchos",
+                Valor = string.Join(", ", entidades.OrderBy(x => x)),
+                Codigo = "DELITOS_ENTIDADES_MULTIPLES_CARGA",
+                DescripcionResumen = "La carga contiene múltiples entidades",
+                Mensaje = "La carga contiene delitos de más de una entidad federativa. Una carga solo puede corresponder a una entidad."
+            });
+
+            return null;
+        }
+
+        return entidades.First();
     }
 
     private List<CargaValidacionError> ValidarEntidadUsuarioCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos)
@@ -353,11 +461,11 @@ public class CargaArchivosService : ICargaArchivosService
 
     private void ValidarArchivoEsperado(IFormFile? archivo, string tipoArchivo, string palabraEsperada, List<CargaValidacionError> errores)
     {
-        if (archivo != null) 
+        if (archivo != null)
         {
             return;
         }
-            
+
         errores.Add(new CargaValidacionError
         {
             Archivo = tipoArchivo,
@@ -370,6 +478,7 @@ public class CargaArchivosService : ICargaArchivosService
     private void ValidarDuplicadosPorTipo(List<IFormFile> archivos, string palabraEsperada, string tipoArchivo, List<CargaValidacionError> errores)
     {
         var palabraNormalizada = NormalizarTexto(palabraEsperada);
+
         var coincidencias = archivos
             .Where(archivo =>
             {
@@ -380,11 +489,11 @@ public class CargaArchivosService : ICargaArchivosService
             })
             .ToList();
 
-        if (coincidencias.Count <= 1) 
+        if (coincidencias.Count <= 1)
         {
             return;
         }
-            
+
         errores.Add(new CargaValidacionError
         {
             Archivo = tipoArchivo,
@@ -398,6 +507,7 @@ public class CargaArchivosService : ICargaArchivosService
     {
         // Armamos el resumen que puede alimentar una vista tipo tabla.
         response.ResumenValidacion = ConstruirResumenValidacion(response.Errores, totalCarpetas, totalDelitos, totalVictimas);
+
         response.Mensaje = response.EsValido
             ? "La información fue validada correctamente. Puede continuar con el acuse previo."
             : "La información contiene errores de validación.";

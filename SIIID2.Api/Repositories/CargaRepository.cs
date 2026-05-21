@@ -15,13 +15,69 @@ public class CargaRepository : ICargaRepository
         _dbConnectionFactory = dbConnectionFactory;
     }
 
-    public async Task<long> CrearCargaAsync(int idUsuarioCarga, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError)
+    public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    {
+        // Este método guarda todo el intento de carga en una sola transacción.
+        // Si falla cualquier parte, se revierte carga y staging.
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+
+        await connection.OpenAsync();
+
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var idCarga = await CrearCargaAsync(
+                connection,
+                transaction,
+                idUsuarioCarga,
+                idEntidadFederativa,
+                codigoReferencia,
+                mesCorte,
+                anioCorte,
+                totalCarpetas,
+                totalDelitos,
+                totalVictimas,
+                estado,
+                mensajeError);
+
+            await GuardarTmpCarpetasAsync(
+                connection,
+                transaction,
+                idCarga,
+                filasCarpetas);
+
+            await GuardarTmpDelitosAsync(
+                connection,
+                transaction,
+                idCarga,
+                filasDelitos);
+
+            await GuardarTmpVictimasAsync(
+                connection,
+                transaction,
+                idCarga,
+                filasVictimas);
+
+            await transaction.CommitAsync();
+
+            return idCarga;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    private async Task<long> CrearCargaAsync(SqlConnection connection, SqlTransaction transaction, int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError)
     {
         // Crea el intento de carga.
         // OUTPUT INSERTED.id_carga devuelve el ID generado por SQL Server.
         var sql = @"
-            INSERT INTO carga (
+                INSERT INTO carga (
                 id_usuario_carga,
+                id_entidad_federativa,
                 codigo_referencia,
                 mes_corte,
                 anio_corte,
@@ -35,8 +91,9 @@ public class CargaRepository : ICargaRepository
                 activo
             )
             OUTPUT INSERTED.id_carga
-            VALUES (
+                VALUES (
                 @IdUsuarioCarga,
+                @IdEntidadFederativa,
                 @CodigoReferencia,
                 @MesCorte,
                 @AnioCorte,
@@ -51,25 +108,53 @@ public class CargaRepository : ICargaRepository
             );
         ";
 
-        using var connection = _dbConnectionFactory.CrearConexion();
-
-        var idCarga = await connection.ExecuteScalarAsync<long>(sql, new
-        {
-            IdUsuarioCarga = idUsuarioCarga,
-            CodigoReferencia = codigoReferencia,
-            MesCorte = mesCorte,
-            AnioCorte = anioCorte,
-            TotalCarpetas = totalCarpetas,
-            TotalDelitos = totalDelitos,
-            TotalVictimas = totalVictimas,
-            Estado = estado,
-            MensajeError = mensajeError
-        });
+        var idCarga = await connection.ExecuteScalarAsync<long>(
+            sql,
+            new
+            {
+                IdUsuarioCarga = idUsuarioCarga,
+                IdEntidadFederativa = idEntidadFederativa,
+                CodigoReferencia = codigoReferencia,
+                MesCorte = mesCorte,
+                AnioCorte = anioCorte,
+                TotalCarpetas = totalCarpetas,
+                TotalDelitos = totalDelitos,
+                TotalVictimas = totalVictimas,
+                Estado = estado,
+                MensajeError = mensajeError
+            },
+            transaction);
 
         return idCarga;
     }
 
-    public async Task GuardarTmpCarpetasAsync(long idCarga, List<ArchivoFila> filasCarpetas)
+    public async Task<bool> ExisteCargaConfirmadaAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
+    {
+        // Revisa si ya existe información confirmada para la entidad y periodo.
+        // Si existe, la carga nueva no debe continuar; debe ir por flujo de actualización.
+        var sql = @"
+        SELECT COUNT(1)
+        FROM carga
+        WHERE id_entidad_federativa = @IdEntidadFederativa
+          AND mes_corte = @MesCorte
+          AND anio_corte = @AnioCorte
+          AND estado = 'CONFIRMADO'
+          AND activo = 1;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var total = await connection.ExecuteScalarAsync<int>(sql, new
+        {
+            IdEntidadFederativa = idEntidadFederativa,
+            MesCorte = mesCorte,
+            AnioCorte = anioCorte
+        });
+
+        return total > 0;
+    }
+
+    private async Task GuardarTmpCarpetasAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, List<ArchivoFila> filasCarpetas)
     {
         // Guarda las carpetas leídas en staging usando carga masiva.
         // SqlBulkCopy evita insertar fila por fila.
@@ -99,11 +184,7 @@ public class CargaRepository : ICargaRepository
                 true);
         }
 
-        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
-
-        await connection.OpenAsync();
-
-        using var bulkCopy = new SqlBulkCopy(connection)
+        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
         {
             DestinationTableName = "carga_tmp_carpeta"
         };
@@ -123,7 +204,7 @@ public class CargaRepository : ICargaRepository
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
-    public async Task GuardarTmpDelitosAsync(long idCarga, List<ArchivoFila> filasDelitos)
+    private async Task GuardarTmpDelitosAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, List<ArchivoFila> filasDelitos)
     {
         // Guarda los delitos leídos en staging usando carga masiva.
         // Esta parte era la más pesada cuando se insertaba registro por registro.
@@ -183,11 +264,7 @@ public class CargaRepository : ICargaRepository
                 true);
         }
 
-        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
-
-        await connection.OpenAsync();
-
-        using var bulkCopy = new SqlBulkCopy(connection)
+        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
         {
             DestinationTableName = "carga_tmp_delito"
         };
@@ -222,7 +299,7 @@ public class CargaRepository : ICargaRepository
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
-    public async Task GuardarTmpVictimasAsync(long idCarga, List<ArchivoFila> filasVictimas)
+    private async Task GuardarTmpVictimasAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, List<ArchivoFila> filasVictimas)
     {
         // Guarda las víctimas leídas en staging usando carga masiva.
         // Se conserva el valor crudo del Excel para confirmar o auditar después.
@@ -266,11 +343,7 @@ public class CargaRepository : ICargaRepository
                 true);
         }
 
-        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
-
-        await connection.OpenAsync();
-
-        using var bulkCopy = new SqlBulkCopy(connection)
+        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
         {
             DestinationTableName = "carga_tmp_victima"
         };
