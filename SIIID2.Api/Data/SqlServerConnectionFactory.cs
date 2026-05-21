@@ -1,20 +1,21 @@
 ﻿using System.Data;
-using Microsoft.Extensions.Configuration;
-using MySqlConnector;
+using Microsoft.Data.SqlClient;
 
 namespace SIIID2.Api.Data;
 
-public class MySqlConnectionFactory : IDbConnectionFactory
+public class SqlServerConnectionFactory : IDbConnectionFactory
 {
     private readonly string _connectionString;
-    public MySqlConnectionFactory(IConfiguration configuration)
+
+    public SqlServerConnectionFactory(IConfiguration configuration)
     {
         // Lee la cadena de conexión desde appsettings.json.
         _connectionString = configuration.GetConnectionString("SiiidDb") ?? throw new InvalidOperationException("No se encontró la cadena de conexión SiiidDb.");
     }
+
     public IDbConnection CrearConexion()
     {
-        // Crea una conexión MySQL nueva.
-        return new MySqlConnection(_connectionString);
+        // Crea una conexión nueva a SQL Server.
+        return new SqlConnection(_connectionString);
     }
 }

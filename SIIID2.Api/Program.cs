@@ -31,7 +31,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IArchivoReader, ArchivoReader>();
 
 // Registro de conexión a base de datos.
-builder.Services.AddScoped<IDbConnectionFactory, MySqlConnectionFactory>();
+builder.Services.AddScoped<IDbConnectionFactory, SqlServerConnectionFactory>();
 
 // Registro de repositorios.
 builder.Services.AddScoped<ICatalogoRepository, CatalogoRepository>();
@@ -42,7 +42,6 @@ builder.Services.AddScoped<DelitosValidator>();
 builder.Services.AddScoped<VictimasValidator>();
 builder.Services.AddScoped<CargaIntegridadValidator>();
 builder.Services.AddScoped<CatalogosValidator>();
-builder.Services.AddScoped<ICatalogoRepository, CatalogoRepository>();
 builder.Services.AddScoped<ICargaRepository, CargaRepository>();
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 
