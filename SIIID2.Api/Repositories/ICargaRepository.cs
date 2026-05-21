@@ -15,6 +15,12 @@ public interface ICargaRepository
     // Valida si ya existe una carga confirmada para la misma entidad y periodo.
     Task<bool> ExisteCargaConfirmadaAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
 
+    // Obtiene los datos principales de la carga para generar el acuse previo.
+    Task<CargaAcuseInfo?> ObtenerCargaParaAcuseAsync(string codigoReferencia);
+
+    // Obtiene el resumen por delito/subtipo usando catalogo_delito_sabana.
+    Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idCarga);
+
     // Actualiza el estado del intento de carga.
     Task ActualizarEstadoCargaAsync(long idCarga, string estado, string? mensajeError);
 }

@@ -48,6 +48,8 @@ builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 // Registro del servicio principal de carga.
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.
 builder.Services.AddScoped<ICargaArchivosService, CargaArchivosService>();
+//para que jale el pdf
+builder.Services.AddScoped<IAcusePdfService, AcusePdfService>();
 
 //para que jale el token
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]

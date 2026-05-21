@@ -13,11 +13,15 @@ namespace SIIID2.Api.Controllers;
 public class CargasController : ControllerBase
 {
     private readonly ICargaArchivosService _cargaArchivosService;
-    // ASP.NET inyecta aquí la implementación registrada en Program.cs.
-    public CargasController(ICargaArchivosService cargaArchivosService)
+    private readonly IAcusePdfService _acusePdfService;
+
+    // ASP.NET inyecta aquí las implementaciones registradas en Program.cs.
+    public CargasController(ICargaArchivosService cargaArchivosService, IAcusePdfService acusePdfService)
     {
         _cargaArchivosService = cargaArchivosService;
+        _acusePdfService = acusePdfService;
     }
+
     // Endpoint para validar los archivos antes de insertar información en base de datos.
     // Ejemplo: POST /api/cargas/validar
     [Authorize]
@@ -32,19 +36,19 @@ public class CargasController : ControllerBase
             {
                 Mensaje = "La petición debe enviarse como multipart/form-data.",
                 Errores = new List<CargaValidacionError>
-            {
-                new CargaValidacionError
                 {
-                    Archivo = "general",
-                    Fila = null,
-                    Columna = "",
-                    Campo = "",
-                    Valor = null,
-                    Codigo = "GENERAL_CONTENT_TYPE_INVALIDO",
-                    DescripcionResumen = "Tipo de petición inválido",
-                    Mensaje = "La petición debe enviarse como multipart/form-data."
+                    new CargaValidacionError
+                    {
+                        Archivo = "general",
+                        Fila = null,
+                        Columna = "",
+                        Campo = "",
+                        Valor = null,
+                        Codigo = "GENERAL_CONTENT_TYPE_INVALIDO",
+                        DescripcionResumen = "Tipo de petición inválido",
+                        Mensaje = "La petición debe enviarse como multipart/form-data."
+                    }
                 }
-            }
             });
         }
 
@@ -72,4 +76,90 @@ public class CargasController : ControllerBase
 
         return Ok(resultado);
     }
+
+    // Endpoint para descargar el acuse previo en PDF.
+    // Ejemplo: GET /api/cargas/abc123/acuse
+    [Authorize]
+    [HttpGet("{codigoReferencia}/acuse")]
+    public async Task<IActionResult> DescargarAcuse(string codigoReferencia)
+    {
+        // El usuario se obtiene del Bearer Token.
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                mensaje = "El token no contiene un id de usuario válido."
+            });
+        }
+
+        try
+        {
+            var pdf = await _acusePdfService.GenerarAcusePrevioAsync(
+                codigoReferencia,
+                idUsuarioConsulta);
+
+            return File(
+                pdf,
+                "application/pdf",
+                $"ACUSE_PREVIO_{codigoReferencia}.pdf");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "ACUSE_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "ACUSE_NO_DISPONIBLE",
+                mensaje = ex.Message
+            });
+        }
+    }
+
+
+    // solo es prueba.
+    //[HttpGet("{codigoReferencia}/acusenoseguro")]
+    //public async Task<IActionResult> DescargarAcusenoseguro(string codigoReferencia)
+    //{
+    //    try
+    //    {
+    //        var pdf = await _acusePdfService.GenerarAcusePrevioAsync(
+    //            codigoReferencia,
+    //            1);   //harcodeamos el usuario super admin
+
+    //        return File(
+    //            pdf,
+    //            "application/pdf",
+    //            $"ACUSE_PREVIO_{codigoReferencia}.pdf");
+    //    }
+    //    catch (UnauthorizedAccessException ex)
+    //    {
+    //        return StatusCode(StatusCodes.Status403Forbidden, new
+    //        {
+    //            esValido = false,
+    //            codigo = "ACUSE_SIN_PERMISO",
+    //            mensaje = ex.Message
+    //        });
+    //    }
+    //    catch (InvalidOperationException ex)
+    //    {
+    //        return BadRequest(new
+    //        {
+    //            esValido = false,
+    //            codigo = "ACUSE_NO_DISPONIBLE",
+    //            mensaje = ex.Message
+    //        });
+    //    }
+    //}
+
+
 }

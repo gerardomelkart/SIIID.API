@@ -370,6 +370,88 @@ public class CargaRepository : ICargaRepository
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
+    public async Task<CargaAcuseInfo?> ObtenerCargaParaAcuseAsync(string codigoReferencia)
+    {
+        // Obtiene datos generales de la carga para el acuse previo.
+        var sql = @"
+        SELECT
+            c.id_carga AS IdCarga,
+            c.codigo_referencia AS CodigoReferencia,
+            c.id_entidad_federativa AS IdEntidadFederativa,
+            ISNULL(e.nombre, '') AS EntidadFederativa,
+            c.mes_corte AS MesCorte,
+            c.anio_corte AS AnioCorte,
+            c.total_carpetas_investigacion AS TotalCarpetasInvestigacion,
+            c.total_delitos AS TotalDelitos,
+            c.total_victimas AS TotalVictimas,
+            c.estado AS Estado,
+            c.fecha_validacion AS FechaValidacion,
+            c.id_usuario_carga AS IdUsuarioCarga,
+            u.usuario AS UsuarioCarga
+        FROM carga c
+        INNER JOIN usuario u
+            ON u.id_usuario = c.id_usuario_carga
+        LEFT JOIN catalogo_entidad_federativa e
+            ON e.id_entidad_federativa = c.id_entidad_federativa
+        WHERE c.codigo_referencia = @CodigoReferencia
+          AND c.activo = 1;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.QueryFirstOrDefaultAsync<CargaAcuseInfo>(sql, new
+        {
+            CodigoReferencia = codigoReferencia
+        });
+    }
+
+    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idCarga)
+    {
+        // El acuse parte de catalogo_delito_sabana para que salgan también registros en cero.
+        // La relación se hace contra modalidad, grado, instrumento y forma de acción.
+        var sql = @"
+        SELECT
+            s.clave2_sabana AS ClaveDelito,
+            s.delito_sabana AS TipoDelito,
+            s.clave3_sabana AS ClaveSubtipo,
+            s.subtipo_delito_sabana AS SubtipoDelito,
+            COUNT(DISTINCT d.id_carga_tmp_delito) AS TotalDelitos,
+            COUNT(DISTINCT v.id_carga_tmp_victima) AS TotalVictimas,
+            MIN(s.id_delito_sabana) AS Orden
+        FROM catalogo_delito_sabana s
+        LEFT JOIN catalogo_modalidad_delito m
+            ON m.id_modalidad_delito = s.id_modalidad_delito
+        LEFT JOIN carga_tmp_delito d
+            ON d.id_carga = @IdCarga
+           AND d.clasf_de_dto = m.clave4
+           AND TRY_CONVERT(INT, d.grdo_cons) = s.id_grado_consumacion
+           AND TRY_CONVERT(INT, d.emto_com_dto) = s.id_instrumento_comision
+           AND TRY_CONVERT(INT, d.forma_acc) = s.id_forma_accion
+           AND d.activo = 1
+        LEFT JOIN carga_tmp_victima v
+            ON v.id_carga = d.id_carga
+           AND v.id_ci = d.id_ci
+           AND v.id_delito = d.id_delito
+           AND v.activo = 1
+        GROUP BY
+            s.clave2_sabana,
+            s.delito_sabana,
+            s.clave3_sabana,
+            s.subtipo_delito_sabana
+        ORDER BY
+            Orden;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var resumen = await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
+        {
+            IdCarga = idCarga
+        });
+
+        return resumen.ToList();
+    }
+
     public async Task ActualizarEstadoCargaAsync(long idCarga, string estado, string? mensajeError)
     {
         // Actualiza el estado del intento de carga.
