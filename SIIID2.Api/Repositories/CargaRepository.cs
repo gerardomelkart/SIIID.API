@@ -1,6 +1,6 @@
 ﻿using System.Data;
 using Dapper;
-using MySqlConnector;
+using Microsoft.Data.SqlClient;
 using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
@@ -18,6 +18,7 @@ public class CargaRepository : ICargaRepository
     public async Task<long> CrearCargaAsync(int idUsuarioCarga, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError)
     {
         // Crea el intento de carga.
+        // OUTPUT INSERTED.id_carga devuelve el ID generado por SQL Server.
         var sql = @"
             INSERT INTO carga (
                 id_usuario_carga,
@@ -33,6 +34,7 @@ public class CargaRepository : ICargaRepository
                 mensaje_error,
                 activo
             )
+            OUTPUT INSERTED.id_carga
             VALUES (
                 @IdUsuarioCarga,
                 @CodigoReferencia,
@@ -42,13 +44,11 @@ public class CargaRepository : ICargaRepository
                 @TotalDelitos,
                 @TotalVictimas,
                 @Estado,
-                CURRENT_TIMESTAMP,
-                DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 48 HOUR),
+                SYSDATETIME(),
+                DATEADD(HOUR, 48, SYSDATETIME()),
                 @MensajeError,
                 1
             );
-
-            SELECT LAST_INSERT_ID();
         ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
@@ -72,7 +72,7 @@ public class CargaRepository : ICargaRepository
     public async Task GuardarTmpCarpetasAsync(long idCarga, List<ArchivoFila> filasCarpetas)
     {
         // Guarda las carpetas leídas en staging usando carga masiva.
-        // Esto evita insertar fila por fila.
+        // SqlBulkCopy evita insertar fila por fila.
         var tabla = new DataTable();
 
         tabla.Columns.Add("id_carga", typeof(long));
@@ -99,26 +99,26 @@ public class CargaRepository : ICargaRepository
                 true);
         }
 
-        using var connection = (MySqlConnection)_dbConnectionFactory.CrearConexion();
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
 
         await connection.OpenAsync();
 
-        var bulkCopy = new MySqlBulkCopy(connection)
+        using var bulkCopy = new SqlBulkCopy(connection)
         {
             DestinationTableName = "carga_tmp_carpeta"
         };
 
         // El primer valor es el índice de la columna en el DataTable.
-        // El segundo valor es el nombre de la columna destino en MySQL.
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(0, "id_carga"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(1, "numero_fila"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(2, "id_ci"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(3, "ntra_ci"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(4, "fha_de_ini"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(5, "hra_de_ini"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(6, "rmen_de_hchos"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(7, "estado"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(8, "activo"));
+        // El segundo valor es el nombre de la columna destino en SQL Server.
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(0, "id_carga"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(1, "numero_fila"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(2, "id_ci"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(3, "ntra_ci"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(4, "fha_de_ini"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(5, "hra_de_ini"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(6, "rmen_de_hchos"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(7, "estado"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(8, "activo"));
 
         await bulkCopy.WriteToServerAsync(tabla);
     }
@@ -183,41 +183,41 @@ public class CargaRepository : ICargaRepository
                 true);
         }
 
-        using var connection = (MySqlConnection)_dbConnectionFactory.CrearConexion();
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
 
         await connection.OpenAsync();
 
-        var bulkCopy = new MySqlBulkCopy(connection)
+        using var bulkCopy = new SqlBulkCopy(connection)
         {
             DestinationTableName = "carga_tmp_delito"
         };
 
         // El primer valor es el índice de la columna en el DataTable.
-        // El segundo valor es el nombre de la columna destino en MySQL.
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(0, "id_carga"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(1, "numero_fila"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(2, "id_ci"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(3, "id_delito"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(4, "dto"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(5, "moda_dto"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(6, "forma_acc"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(7, "fha_de_hchos"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(8, "hra_de_hchos"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(9, "emto_com_dto"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(10, "grdo_cons"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(11, "clasf_de_dto"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(12, "id_ent_hchos"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(13, "id_mun_hchos"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(14, "id_loc_hchos"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(15, "nom_loc_hchos"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(16, "id_col_hchos"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(17, "nom_col_hchos"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(18, "cp"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(19, "coord_x"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(20, "coord_y"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(21, "dom_hchos"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(22, "estado"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(23, "activo"));
+        // El segundo valor es el nombre de la columna destino en SQL Server.
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(0, "id_carga"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(1, "numero_fila"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(2, "id_ci"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(3, "id_delito"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(4, "dto"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(5, "moda_dto"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(6, "forma_acc"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(7, "fha_de_hchos"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(8, "hra_de_hchos"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(9, "emto_com_dto"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(10, "grdo_cons"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(11, "clasf_de_dto"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(12, "id_ent_hchos"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(13, "id_mun_hchos"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(14, "id_loc_hchos"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(15, "nom_loc_hchos"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(16, "id_col_hchos"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(17, "nom_col_hchos"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(18, "cp"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(19, "coord_x"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(20, "coord_y"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(21, "dom_hchos"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(22, "estado"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(23, "activo"));
 
         await bulkCopy.WriteToServerAsync(tabla);
     }
@@ -266,33 +266,33 @@ public class CargaRepository : ICargaRepository
                 true);
         }
 
-        using var connection = (MySqlConnection)_dbConnectionFactory.CrearConexion();
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
 
         await connection.OpenAsync();
 
-        var bulkCopy = new MySqlBulkCopy(connection)
+        using var bulkCopy = new SqlBulkCopy(connection)
         {
             DestinationTableName = "carga_tmp_victima"
         };
 
         // El primer valor es el índice de la columna en el DataTable.
-        // El segundo valor es el nombre de la columna destino en MySQL.
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(0, "id_carga"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(1, "numero_fila"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(2, "id_ci"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(3, "id_delito"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(4, "id_vicf"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(5, "id_tv"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(6, "id_tpm"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(7, "sexo"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(8, "genero"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(9, "pob"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(10, "disc"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(11, "fha_nac"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(12, "edad"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(13, "nacional"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(14, "estado"));
-        bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(15, "activo"));
+        // El segundo valor es el nombre de la columna destino en SQL Server.
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(0, "id_carga"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(1, "numero_fila"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(2, "id_ci"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(3, "id_delito"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(4, "id_vicf"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(5, "id_tv"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(6, "id_tpm"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(7, "sexo"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(8, "genero"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(9, "pob"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(10, "disc"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(11, "fha_nac"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(12, "edad"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(13, "nacional"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(14, "estado"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(15, "activo"));
 
         await bulkCopy.WriteToServerAsync(tabla);
     }
