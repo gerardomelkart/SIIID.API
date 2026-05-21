@@ -3,6 +3,7 @@ using SIIID2.Api.Models;
 using SIIID2.Api.Services;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Controllers;
 
@@ -14,12 +15,14 @@ public class CargasController : ControllerBase
 {
     private readonly ICargaArchivosService _cargaArchivosService;
     private readonly IAcusePdfService _acusePdfService;
+    private readonly ICargaRepository _cargaRepository;
 
     // ASP.NET inyecta aquí las implementaciones registradas en Program.cs.
-    public CargasController(ICargaArchivosService cargaArchivosService, IAcusePdfService acusePdfService)
+    public CargasController(ICargaArchivosService cargaArchivosService, IAcusePdfService acusePdfService, ICargaRepository cargaRepository)
     {
         _cargaArchivosService = cargaArchivosService;
         _acusePdfService = acusePdfService;
+        _cargaRepository = cargaRepository;
     }
 
     // Endpoint para validar los archivos antes de insertar información en base de datos.
@@ -77,6 +80,7 @@ public class CargasController : ControllerBase
         return Ok(resultado);
     }
 
+
     // Endpoint para descargar el acuse previo en PDF.
     // Ejemplo: GET /api/cargas/abc123/acuse
     [Authorize]
@@ -124,6 +128,48 @@ public class CargasController : ControllerBase
             });
         }
     }
+
+
+    // Endpoint para confirmar o rechazar una carga previamente validada.
+    // Ejemplo: POST /api/cargas/confirmar
+    [Authorize]
+    [HttpPost("confirmar")]
+    public async Task<IActionResult> ConfirmarCarga([FromBody] ConfirmarCargaRequest request)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConfirmacion))
+        {
+            return Unauthorized(new
+            {
+                mensaje = "El token no contiene un id de usuario válido."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CodigoReferencia))
+        {
+            return BadRequest(new ConfirmarCargaResponse
+            {
+                EsValido = false,
+                Estado = "SOLICITUD_INVALIDA",
+                Mensaje = "Debe enviar el código de referencia."
+            });
+        }
+
+        var resultado = await _cargaRepository.ConfirmarCargaAsync(
+            request.CodigoReferencia,
+            request.Aceptar,
+            idUsuarioConfirmacion);
+
+        if (!resultado.EsValido)
+        {
+            return BadRequest(resultado);
+        }
+
+        return Ok(resultado);
+    }
+
+
 
 
     // solo es prueba.

@@ -23,4 +23,9 @@ public interface ICargaRepository
 
     // Actualiza el estado del intento de carga.
     Task ActualizarEstadoCargaAsync(long idCarga, string estado, string? mensajeError);
+
+    // Confirma o rechaza una carga validada.
+    // Si acepta, mueve staging a tablas finales.
+    // Si rechaza, solo actualiza estados.
+    Task<ConfirmarCargaResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion);
 }

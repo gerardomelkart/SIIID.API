@@ -8,8 +8,19 @@ namespace SIIID2.Api.Repositories;
 
 public class CargaRepository : ICargaRepository
 {
-    private readonly IDbConnectionFactory _dbConnectionFactory;
+    private class CargaConfirmacionInfo
+    {
+        public long IdCarga { get; set; }
+        public string CodigoReferencia { get; set; } = string.Empty;
+        public string Estado { get; set; } = string.Empty;
+        public DateTime? FechaExpiracion { get; set; }
+        public int? IdEntidadFederativaCarga { get; set; }
+        public int? IdEntidadFederativaUsuario { get; set; }
+        public bool EsSuperUsuario { get; set; }
+        public bool HabilitaCarga { get; set; }
+    }
 
+    private readonly IDbConnectionFactory _dbConnectionFactory;
     public CargaRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
@@ -452,6 +463,262 @@ public class CargaRepository : ICargaRepository
         return resumen.ToList();
     }
 
+    public async Task<ConfirmarCargaResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion)
+    {
+        // Confirma o rechaza una carga validada.
+        // Todo se ejecuta en transacción para evitar cargas parciales.
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+
+        await connection.OpenAsync();
+
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var carga = await ObtenerCargaConfirmacionAsync(
+                connection,
+                transaction,
+                codigoReferencia,
+                idUsuarioConfirmacion);
+
+            if (carga == null)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = "NO_ENCONTRADA",
+                    Mensaje = "No se encontró una carga válida para confirmar."
+                };
+            }
+
+            if (!string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase))
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje = "La carga no se encuentra en estado VALIDADO_PENDIENTE."
+                };
+            }
+
+            if (carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
+            {
+                await ActualizarCargaExpiradaAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga);
+
+                await transaction.CommitAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = "EXPIRADO",
+                    Mensaje = "La carga ya expiró. Debe validar nuevamente los archivos."
+                };
+            }
+
+            if (!carga.HabilitaCarga)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje = "El usuario no tiene habilitada la carga de información."
+                };
+            }
+
+            if (!carga.EsSuperUsuario &&
+                carga.IdEntidadFederativaUsuario.HasValue &&
+                carga.IdEntidadFederativaCarga.HasValue &&
+                carga.IdEntidadFederativaUsuario.Value != carga.IdEntidadFederativaCarga.Value)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje = "El usuario no puede confirmar cargas de otra entidad federativa."
+                };
+            }
+
+            if (!aceptar)
+            {
+                await RechazarCargaAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga,
+                    idUsuarioConfirmacion);
+
+                await transaction.CommitAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = true,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = "RECHAZADO_USUARIO",
+                    Mensaje = "La carga fue rechazada por el usuario."
+                };
+            }
+
+            await InsertarCarpetasFinalesAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                idUsuarioConfirmacion);
+
+            await InsertarDelitosFinalesAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                idUsuarioConfirmacion);
+
+            await InsertarVictimasFinalesAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                idUsuarioConfirmacion);
+
+            await ConfirmarCargaFinalAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                idUsuarioConfirmacion);
+
+            await transaction.CommitAsync();
+
+            return new ConfirmarCargaResponse
+            {
+                EsValido = true,
+                CodigoReferencia = codigoReferencia,
+                Estado = "CONFIRMADO",
+                Mensaje = "La carga fue confirmada correctamente."
+            };
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    private async Task<CargaConfirmacionInfo?> ObtenerCargaConfirmacionAsync(SqlConnection connection, SqlTransaction transaction, string codigoReferencia, int idUsuarioConfirmacion)
+    {
+        // Obtiene datos de carga y permisos del usuario que confirma.
+        var sql = @"
+        SELECT
+            c.id_carga AS IdCarga,
+            c.codigo_referencia AS CodigoReferencia,
+            c.estado AS Estado,
+            c.fecha_expiracion AS FechaExpiracion,
+            c.id_entidad_federativa AS IdEntidadFederativaCarga,
+            u.id_entidad_federativa AS IdEntidadFederativaUsuario,
+            CASE WHEN r.rol = 'SUPER_USUARIO' THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS EsSuperUsuario,
+            ISNULL(h.habilita_carga, 0) AS HabilitaCarga
+        FROM carga c
+        INNER JOIN usuario u
+            ON u.id_usuario = @IdUsuarioConfirmacion
+           AND u.activo = 1
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+           AND r.activo = 1
+        LEFT JOIN habilita_carga_modificacion h
+            ON h.id_usuario = u.id_usuario
+           AND h.activo = 1
+        WHERE c.codigo_referencia = @CodigoReferencia
+          AND c.activo = 1;
+    ";
+
+        return await connection.QueryFirstOrDefaultAsync<CargaConfirmacionInfo>(
+            sql,
+            new
+            {
+                CodigoReferencia = codigoReferencia,
+                IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
+    }
+
+    private async Task ActualizarCargaExpiradaAsync(SqlConnection connection, SqlTransaction transaction, long idCarga)
+    {
+        var sql = @"
+        UPDATE carga
+        SET estado = 'EXPIRADO',
+            mensaje_error = 'La carga expiró antes de ser confirmada.'
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_carpeta
+        SET estado = 'EXPIRADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_delito
+        SET estado = 'EXPIRADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_victima
+        SET estado = 'EXPIRADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga
+            },
+            transaction);
+    }
+
+    private async Task RechazarCargaAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
+    {
+        var sql = @"
+        UPDATE carga
+        SET estado = 'RECHAZADO_USUARIO',
+            fecha_confirmacion = SYSDATETIME(),
+            id_usuario_confirmacion = @IdUsuarioConfirmacion
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_carpeta
+        SET estado = 'RECHAZADO_USUARIO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_delito
+        SET estado = 'RECHAZADO_USUARIO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_victima
+        SET estado = 'RECHAZADO_USUARIO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga,
+                IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
+    }
+
     public async Task ActualizarEstadoCargaAsync(long idCarga, string estado, string? mensajeError)
     {
         // Actualiza el estado del intento de carga.
@@ -476,5 +743,276 @@ public class CargaRepository : ICargaRepository
     {
         fila.Columnas.TryGetValue(columna, out var valor);
         return valor;
+    }
+
+    private async Task InsertarCarpetasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioRegistro)
+    {
+        // Inserta carpetas desde staging a tabla final.
+        var sql = @"
+        INSERT INTO carpeta_investigacion (
+            identificador_carpeta_fiscalia,
+            nomenclatura_carpeta_fiscalia,
+            fecha_inicio,
+            resumen_hechos,
+            id_usuario_registro,
+            fecha_registro,
+            id_carga,
+            activo
+        )
+        SELECT
+            c.id_ci,
+            c.ntra_ci,
+            COALESCE(
+                TRY_CONVERT(datetime2, c.fha_de_ini, 103),
+                TRY_CONVERT(datetime2, c.fha_de_ini)
+            ),
+            c.rmen_de_hchos,
+            @IdUsuarioRegistro,
+            SYSDATETIME(),
+            @IdCarga,
+            1
+        FROM carga_tmp_carpeta c
+        WHERE c.id_carga = @IdCarga
+          AND c.activo = 1;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga,
+                IdUsuarioRegistro = idUsuarioRegistro
+            },
+            transaction);
+    }
+
+    private async Task InsertarDelitosFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioRegistro)
+    {
+        // Inserta delitos desde staging a tabla final.
+        // Los ids de catálogos se resuelven aquí desde las claves recibidas en Excel.
+        var sql = @"
+        INSERT INTO delito (
+            id_carpeta_investigacion,
+            identificador_delito_fiscalia,
+            delito_fiscalia,
+            modalidad_delito_fiscalia,
+            id_forma_accion,
+            fecha_hechos,
+            id_instrumento_comision,
+            id_grado_consumacion,
+            id_modalidad_delito,
+            id_entidad_federativa,
+            id_municipio,
+            id_localidad_fiscalia,
+            localidad_fiscalia_nombre,
+            id_colonia_fiscalia,
+            colonia_fiscalia_nombre,
+            id_codigo_postal,
+            coordenada_x,
+            coordenada_y,
+            domicilio_hechos,
+            id_usuario_registro,
+            fecha_registro,
+            id_carga,
+            activo
+        )
+        SELECT
+            ci.id_carpeta_investigacion,
+            d.id_delito,
+            d.dto,
+            d.moda_dto,
+            fa.id_forma_accion,
+            COALESCE(
+                TRY_CONVERT(datetime2, CONCAT(d.fha_de_hchos, ' ', NULLIF(d.hra_de_hchos, '')), 103),
+                TRY_CONVERT(datetime2, d.fha_de_hchos, 103),
+                TRY_CONVERT(datetime2, d.fha_de_hchos)
+            ),
+            ic.id_instrumento_comision,
+            gc.id_grado_consumacion,
+            md.id_modalidad_delito,
+            ef.id_entidad_federativa,
+            mun.id_municipio,
+            d.id_loc_hchos,
+            d.nom_loc_hchos,
+            d.id_col_hchos,
+            d.nom_col_hchos,
+            cp.id_codigo_postal,
+            TRY_CONVERT(decimal(10,6), NULLIF(d.coord_x, '')),
+            TRY_CONVERT(decimal(10,6), NULLIF(d.coord_y, '')),
+            d.dom_hchos,
+            @IdUsuarioRegistro,
+            SYSDATETIME(),
+            @IdCarga,
+            1
+        FROM carga_tmp_delito d
+        INNER JOIN carpeta_investigacion ci
+            ON ci.id_carga = d.id_carga
+           AND ci.identificador_carpeta_fiscalia = d.id_ci
+           AND ci.activo = 1
+        INNER JOIN catalogo_modalidad_delito md
+            ON md.clave4 = d.clasf_de_dto
+           AND md.activo = 1
+        INNER JOIN catalogo_forma_accion fa
+            ON fa.clave = TRY_CONVERT(tinyint, d.forma_acc)
+           AND fa.activo = 1
+        INNER JOIN catalogo_instrumento_comision ic
+            ON ic.clave = TRY_CONVERT(tinyint, d.emto_com_dto)
+           AND ic.activo = 1
+        INNER JOIN catalogo_grado_consumacion gc
+            ON gc.clave = TRY_CONVERT(tinyint, d.grdo_cons)
+           AND gc.activo = 1
+        INNER JOIN catalogo_entidad_federativa ef
+            ON ef.id_entidad_federativa = TRY_CONVERT(tinyint, d.id_ent_hchos)
+           AND ef.activo = 1
+        INNER JOIN catalogo_municipio mun
+            ON mun.id_entidad_federativa = ef.id_entidad_federativa
+           AND TRY_CONVERT(int, mun.clave) = TRY_CONVERT(int, d.id_mun_hchos)
+           AND mun.activo = 1
+        OUTER APPLY (
+            SELECT TOP 1
+                ccp.id_codigo_postal
+            FROM catalogo_codigo_postal ccp
+            WHERE ccp.codigo_postal = RIGHT('00000' + LTRIM(RTRIM(d.cp)), 5)
+              AND ccp.id_municipio = mun.id_municipio
+              AND ccp.activo = 1
+            ORDER BY ccp.id_codigo_postal
+        ) cp
+        WHERE d.id_carga = @IdCarga
+          AND d.activo = 1;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga,
+                IdUsuarioRegistro = idUsuarioRegistro
+            },
+            transaction);
+    }
+
+    private async Task InsertarVictimasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioRegistro)
+    {
+        // Inserta víctimas desde staging a tabla final.
+        // Los datos opcionales se insertan como NULL cuando vienen vacíos.
+        var sql = @"
+        INSERT INTO victima (
+            id_delito,
+            identificador_victima_fiscalia,
+            id_tipo_victima,
+            id_tipo_victima_moral,
+            id_sexo,
+            id_genero,
+            id_nacionalidad,
+            id_pertenece_poblacion_indigena,
+            id_presenta_discapacidad,
+            fecha_nacimiento,
+            edad,
+            id_usuario_registro,
+            fecha_registro,
+            id_carga,
+            activo
+        )
+        SELECT
+            de.id_delito,
+            v.id_vicf,
+            tv.id_tipo_victima,
+            tvm.id_tipo_victima_moral,
+            sx.id_sexo,
+            gen.id_genero,
+            nac.id_nacionalidad,
+            pob.id_pertenece_poblacion_indigena,
+            disc.id_presenta_discapacidad,
+            COALESCE(
+                TRY_CONVERT(date, NULLIF(v.fha_nac, ''), 103),
+                TRY_CONVERT(date, NULLIF(v.fha_nac, ''))
+            ),
+            CASE
+                WHEN TRY_CONVERT(int, NULLIF(v.edad, '')) = 999 THEN NULL
+                ELSE TRY_CONVERT(tinyint, NULLIF(v.edad, ''))
+            END,
+            @IdUsuarioRegistro,
+            SYSDATETIME(),
+            @IdCarga,
+            1
+        FROM carga_tmp_victima v
+        INNER JOIN carpeta_investigacion ci
+            ON ci.id_carga = v.id_carga
+           AND ci.identificador_carpeta_fiscalia = v.id_ci
+           AND ci.activo = 1
+        INNER JOIN delito de
+            ON de.id_carga = v.id_carga
+           AND de.id_carpeta_investigacion = ci.id_carpeta_investigacion
+           AND de.identificador_delito_fiscalia = v.id_delito
+           AND de.activo = 1
+        INNER JOIN catalogo_tipo_victima tv
+            ON tv.clave = TRY_CONVERT(tinyint, v.id_tv)
+           AND tv.activo = 1
+        LEFT JOIN catalogo_tipo_victima_moral tvm
+            ON tvm.clave = TRY_CONVERT(tinyint, NULLIF(v.id_tpm, ''))
+           AND tvm.activo = 1
+        LEFT JOIN catalogo_sexo sx
+            ON sx.clave = TRY_CONVERT(tinyint, NULLIF(v.sexo, ''))
+           AND sx.activo = 1
+        LEFT JOIN catalogo_genero gen
+            ON gen.clave = TRY_CONVERT(tinyint, NULLIF(v.genero, ''))
+           AND gen.activo = 1
+        LEFT JOIN catalogo_nacionalidad nac
+            ON nac.clave = NULLIF(v.nacional, '')
+           AND nac.activo = 1
+        LEFT JOIN catalogo_pertenece_poblacion_indigena pob
+            ON pob.clave = TRY_CONVERT(tinyint, NULLIF(v.pob, ''))
+           AND pob.activo = 1
+        LEFT JOIN catalogo_presenta_discapacidad disc
+            ON disc.clave = TRY_CONVERT(tinyint, NULLIF(v.disc, ''))
+           AND disc.activo = 1
+        WHERE v.id_carga = @IdCarga
+          AND v.activo = 1;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga,
+                IdUsuarioRegistro = idUsuarioRegistro
+            },
+            transaction);
+    }
+
+    private async Task ConfirmarCargaFinalAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
+    {
+        var sql = @"
+        UPDATE carga
+        SET estado = 'CONFIRMADO',
+            fecha_confirmacion = SYSDATETIME(),
+            id_usuario_confirmacion = @IdUsuarioConfirmacion,
+            mensaje_error = NULL
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_carpeta
+        SET estado = 'PROCESADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_delito
+        SET estado = 'PROCESADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_victima
+        SET estado = 'PROCESADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga,
+                IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
     }
 }
