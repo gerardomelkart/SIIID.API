@@ -445,46 +445,51 @@ public class UsuarioService : IUsuarioService
         };
     }
 
-    public async Task<int> ActualizarPermisosGlobalesAsync(bool habilitaCarga, bool habilitaModificacion)
+    public async Task<UsuarioOperacionResponse> ActualizarPermisosGlobalesAsync(PermisosGlobalesUsuariosRequest request, int idUsuarioModificacion)
     {
-        // Aplica permisos de carga/modificación a usuarios activos,
-        // excepto usuarios de CONSULTA.
-        // CONSULTA nunca debe poder cargar ni modificar, aunque se active globalmente.
-        var sql = @"
-        UPDATE h
-        SET h.habilita_carga = @HabilitaCarga,
-            h.habilita_modificacion = @HabilitaModificacion
-        FROM habilita_carga_modificacion h
-        INNER JOIN usuario u
-            ON u.id_usuario = h.id_usuario
-        INNER JOIN roles r
-            ON r.id_rol = u.id_rol
-        WHERE h.activo = 1
-          AND u.activo = 1
-          AND r.activo = 1
-          AND r.rol <> 'CONSULTA';
+        // Se valida que el usuario que ejecuta el cambio exista y esté activo.
+        var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
 
-        UPDATE h
-        SET h.habilita_carga = 0,
-            h.habilita_modificacion = 0
-        FROM habilita_carga_modificacion h
-        INNER JOIN usuario u
-            ON u.id_usuario = h.id_usuario
-        INNER JOIN roles r
-            ON r.id_rol = u.id_rol
-        WHERE h.activo = 1
-          AND u.activo = 1
-          AND r.activo = 1
-          AND r.rol = 'CONSULTA';
-    ";
-
-        using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.ExecuteAsync(sql, new
+        if (usuarioModificacion == null)
         {
-            HabilitaCarga = habilitaCarga,
-            HabilitaModificacion = habilitaModificacion
-        });
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_MODIFICACION_NO_VALIDO",
+                Mensaje = "El usuario autenticado no existe o no está activo."
+            };
+        }
+
+        // Por ahora solo SUPER_USUARIO puede activar/desactivar permisos globales.
+        if (!usuarioModificacion.EsSuperUsuario)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_PERMISOS_GLOBALES_SIN_PERMISO",
+                Mensaje = "Solo un SUPER_USUARIO puede actualizar permisos globales."
+            };
+        }
+
+        // El repository actualiza los permisos en base.
+        // CONSULTA queda protegido desde el SQL del repository.
+        var totalActualizados = await _usuarioRepository.ActualizarPermisosGlobalesAsync(
+            request.HabilitaCarga,
+            request.HabilitaModificacion);
+
+        _logger.LogInformation(
+            "Permisos globales actualizados. HabilitaCarga: {HabilitaCarga}, HabilitaModificacion: {HabilitaModificacion}, Total: {Total}, UsuarioModificacion: {IdUsuarioModificacion}",
+            request.HabilitaCarga,
+            request.HabilitaModificacion,
+            totalActualizados,
+            idUsuarioModificacion);
+
+        return new UsuarioOperacionResponse
+        {
+            EsValido = true,
+            Codigo = "USUARIOS_PERMISOS_GLOBALES_ACTUALIZADOS",
+            Mensaje = $"Permisos globales actualizados correctamente. Usuarios afectados: {totalActualizados}."
+        };
     }
 
     public async Task<UsuarioOperacionResponse> ReactivarUsuarioAsync(int idUsuario, ReactivarUsuarioRequest request, int idUsuarioModificacion)

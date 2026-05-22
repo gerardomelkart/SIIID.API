@@ -616,22 +616,36 @@ public class UsuarioRepository : IUsuarioRepository
 
     public async Task<int> ActualizarPermisosGlobalesAsync(bool habilitaCarga, bool habilitaModificacion)
     {
-        // Aplica permisos de carga/modificación a todos los usuarios activos
-        // que tengan registro en habilita_carga_modificacion.
+        // Aplica permisos de carga/modificación a usuarios activos,
+        // excepto usuarios de CONSULTA.
+        // CONSULTA nunca debe poder cargar ni modificar, aunque se active globalmente.
         var sql = @"
-            UPDATE h
-            SET h.habilita_carga = @HabilitaCarga,
-                h.habilita_modificacion = @HabilitaModificacion
-            FROM habilita_carga_modificacion h
-            INNER JOIN usuario u
-                ON u.id_usuario = h.id_usuario
-            INNER JOIN roles r
-                ON r.id_rol = u.id_rol
-            WHERE h.activo = 1
-              AND u.activo = 1
-              AND r.activo = 1
-              AND r.rol <> 'CONSULTA';
-        ";
+        UPDATE h
+        SET h.habilita_carga = @HabilitaCarga,
+            h.habilita_modificacion = @HabilitaModificacion
+        FROM habilita_carga_modificacion h
+        INNER JOIN usuario u
+            ON u.id_usuario = h.id_usuario
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+        WHERE h.activo = 1
+          AND u.activo = 1
+          AND r.activo = 1
+          AND r.rol <> 'CONSULTA';
+
+        UPDATE h
+        SET h.habilita_carga = 0,
+            h.habilita_modificacion = 0
+        FROM habilita_carga_modificacion h
+        INNER JOIN usuario u
+            ON u.id_usuario = h.id_usuario
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+        WHERE h.activo = 1
+          AND u.activo = 1
+          AND r.activo = 1
+          AND r.rol = 'CONSULTA';
+    ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
