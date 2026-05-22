@@ -54,7 +54,8 @@ builder.Services.AddScoped<ICargaArchivosService, CargaArchivosService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 //para que jale el pdf
 builder.Services.AddScoped<IAcusePdfService, AcusePdfService>();
-
+//creacion de usuarios
+builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 //para que jale el token
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]
     ?? throw new InvalidOperationException("No se encontró Jwt:SecretKey.");
