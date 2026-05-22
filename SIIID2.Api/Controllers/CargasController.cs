@@ -65,7 +65,10 @@ public class CargasController : ControllerBase
         {
             return Unauthorized(new
             {
-                mensaje = "El token no contiene un id de usuario válido."
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
             });
         }
         //prueba de logs
@@ -98,7 +101,10 @@ public class CargasController : ControllerBase
         {
             return Unauthorized(new
             {
-                mensaje = "El token no contiene un id de usuario válido."
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
             });
         }
 
@@ -146,7 +152,10 @@ public class CargasController : ControllerBase
         {
             return Unauthorized(new
             {
-                mensaje = "El token no contiene un id de usuario válido."
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
             });
         }
 
@@ -186,7 +195,10 @@ public class CargasController : ControllerBase
         {
             return Unauthorized(new
             {
-                mensaje = "El token no contiene un id de usuario válido."
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
             });
         }
 
@@ -220,42 +232,4 @@ public class CargasController : ControllerBase
             });
         }
     }
-
-
-    // solo es prueba.
-    //[HttpGet("{codigoReferencia}/acusenoseguro")]
-    //public async Task<IActionResult> DescargarAcusenoseguro(string codigoReferencia)
-    //{
-    //    try
-    //    {
-    //        var pdf = await _acusePdfService.GenerarAcusePrevioAsync(
-    //            codigoReferencia,
-    //            1);   //harcodeamos el usuario super admin
-
-    //        return File(
-    //            pdf,
-    //            "application/pdf",
-    //            $"ACUSE_PREVIO_{codigoReferencia}.pdf");
-    //    }
-    //    catch (UnauthorizedAccessException ex)
-    //    {
-    //        return StatusCode(StatusCodes.Status403Forbidden, new
-    //        {
-    //            esValido = false,
-    //            codigo = "ACUSE_SIN_PERMISO",
-    //            mensaje = ex.Message
-    //        });
-    //    }
-    //    catch (InvalidOperationException ex)
-    //    {
-    //        return BadRequest(new
-    //        {
-    //            esValido = false,
-    //            codigo = "ACUSE_NO_DISPONIBLE",
-    //            mensaje = ex.Message
-    //        });
-    //    }
-    //}
-
-
 }
