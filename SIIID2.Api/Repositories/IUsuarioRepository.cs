@@ -11,7 +11,7 @@ public interface IUsuarioRepository
     Task<UsuarioAuthInfo?> ObtenerUsuarioAuthAsync(string usuario);
 
     // Revisa si ya existe usuario, correo, RFC o CURP.
-    Task<string?> ObtenerDuplicadoUsuarioAsync(string usuario, string correoElectronico, string rfc, string curp);
+    Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioAsync(string usuario, string correoElectronico, string rfc, string curp);
 
     // Obtiene el id del rol por nombre.
     Task<int?> ObtenerIdRolActivoAsync(string rol);
@@ -21,4 +21,9 @@ public interface IUsuarioRepository
 
     // Registra usuario y sus permisos de carga/modificación.
     Task<int> CrearUsuarioAsync(CrearUsuarioRequest request, int idRol, string passwordHash, int idUsuarioAlta);
+    // Lista usuarios para la tabla administrativa.
+    Task<List<UsuarioListadoItem>> ObtenerUsuariosAsync(bool incluirInactivos);
+
+    // Obtiene detalle completo de un usuario para edición.
+    Task<UsuarioDetalle?> ObtenerUsuarioDetalleAsync(int idUsuario);
 }

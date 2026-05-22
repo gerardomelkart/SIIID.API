@@ -17,6 +17,39 @@ public class UsuariosController : ControllerBase
         _usuarioService = usuarioService;
     }
 
+    // Lista usuarios para la tabla administrativa.
+    // Ejemplo: GET /api/usuarios
+    // Ejemplo: GET /api/usuarios?incluirInactivos=true
+    [Authorize]
+    [HttpGet]
+    public async Task<IActionResult> ObtenerUsuarios([FromQuery] bool incluirInactivos = false)
+    {
+        var usuarios = await _usuarioService.ObtenerUsuariosAsync(incluirInactivos);
+
+        return Ok(new
+        {
+            esValido = true,
+            total = usuarios.Count,
+            usuarios
+        });
+    }
+
+    // Obtiene el detalle de un usuario para edición.
+    // Ejemplo: GET /api/usuarios/3
+    [Authorize]
+    [HttpGet("{idUsuario:int}")]
+    public async Task<IActionResult> ObtenerUsuarioDetalle(int idUsuario)
+    {
+        var resultado = await _usuarioService.ObtenerUsuarioDetalleAsync(idUsuario);
+
+        if (!resultado.EsValido)
+        {
+            return NotFound(resultado);
+        }
+
+        return Ok(resultado);
+    }
+
     // Registra un usuario nuevo.
     // Por ahora solo SUPER_USUARIO puede registrar usuarios.
     [Authorize]

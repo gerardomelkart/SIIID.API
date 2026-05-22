@@ -8,6 +8,7 @@ public class UsuarioService : IUsuarioService
     private readonly IUsuarioRepository _usuarioRepository;
     private readonly ILogger<UsuarioService> _logger;
 
+
     public UsuarioService(IUsuarioRepository usuarioRepository, ILogger<UsuarioService> logger)
     {
         _usuarioRepository = usuarioRepository;
@@ -90,19 +91,20 @@ public class UsuarioService : IUsuarioService
             request.HabilitaModificacion = false;
         }
 
-        var duplicado = await _usuarioRepository.ObtenerDuplicadoUsuarioAsync(
+        var duplicados = await _usuarioRepository.ObtenerDuplicadosUsuarioAsync(
             request.Usuario,
             request.CorreoElectronico,
             request.Rfc,
             request.Curp);
 
-        if (!string.IsNullOrWhiteSpace(duplicado))
+        if (duplicados.Count > 0)
         {
             return new CrearUsuarioResponse
             {
                 EsValido = false,
-                Codigo = $"USUARIO_{duplicado}_DUPLICADO",
-                Mensaje = $"Ya existe un usuario registrado con ese dato: {duplicado}."
+                Codigo = "USUARIO_DATOS_DUPLICADOS",
+                Mensaje = "Existen datos duplicados. Revise los campos marcados.",
+                Errores = duplicados
             };
         }
 
@@ -192,6 +194,35 @@ public class UsuarioService : IUsuarioService
             EsValido = false,
             Codigo = codigo,
             Mensaje = mensaje
+        };
+    }
+
+    public async Task<List<UsuarioListadoItem>> ObtenerUsuariosAsync(bool incluirInactivos)
+    {
+        return await _usuarioRepository.ObtenerUsuariosAsync(incluirInactivos);
+    }
+
+    public async Task<UsuarioDetalleResponse> ObtenerUsuarioDetalleAsync(int idUsuario)
+    {
+        var usuario = await _usuarioRepository.ObtenerUsuarioDetalleAsync(idUsuario);
+
+        if (usuario == null)
+        {
+            return new UsuarioDetalleResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_EXISTE",
+                Mensaje = "El usuario solicitado no existe.",
+                Usuario = null
+            };
+        }
+
+        return new UsuarioDetalleResponse
+        {
+            EsValido = true,
+            Codigo = "USUARIO_ENCONTRADO",
+            Mensaje = "Usuario encontrado.",
+            Usuario = usuario
         };
     }
 }

@@ -57,14 +57,9 @@ builder.Services.AddScoped<IAcusePdfService, AcusePdfService>();
 //creacion de usuarios
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 //para que jale el token
-var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]
-    ?? throw new InvalidOperationException("No se encontró Jwt:SecretKey.");
-
-var jwtIssuer = builder.Configuration["Jwt:Issuer"]
-    ?? throw new InvalidOperationException("No se encontró Jwt:Issuer.");
-
-var jwtAudience = builder.Configuration["Jwt:Audience"]
-    ?? throw new InvalidOperationException("No se encontró Jwt:Audience.");
+var jwtSecretKey = builder.Configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("No se encontró Jwt:SecretKey.");
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("No se encontró Jwt:Issuer.");
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("No se encontró Jwt:Audience.");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -74,22 +69,16 @@ builder.Services
         {
             // Valida que el token haya sido emitido por esta API.
             ValidateIssuer = true,
-
             // Valida que el token sea para los clientes esperados.
             ValidateAudience = true,
-
             // Valida que el token no esté expirado.
             ValidateLifetime = true,
-
             // Valida la firma del token.
             ValidateIssuerSigningKey = true,
-
             ValidIssuer = jwtIssuer,
             ValidAudience = jwtAudience,
-
             // Llave secreta para validar la firma.
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtSecretKey))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey))
         };
 
         // Personaliza la respuesta cuando el token falta, está mal formado,

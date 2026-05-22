@@ -6,4 +6,6 @@ public class CrearUsuarioResponse
     public string Codigo { get; set; } = string.Empty;
     public string Mensaje { get; set; } = string.Empty;
     public int? IdUsuario { get; set; }
+
+    public List<UsuarioValidacionError> Errores { get; set; } = new();
 }

@@ -83,31 +83,158 @@ public class UsuarioRepository : IUsuarioRepository
         });
     }
 
-    public async Task<string?> ObtenerDuplicadoUsuarioAsync(string usuario, string correoElectronico, string rfc, string curp)
+    public async Task<List<UsuarioListadoItem>> ObtenerUsuariosAsync(bool incluirInactivos)
     {
-        // Regresa el primer campo duplicado encontrado.
+        // Lista usuarios para la tabla administrativa.
+        // Por defecto se muestran solo activos, pero el front puede pedir incluir inactivos.
         var sql = @"
-            IF EXISTS (SELECT 1 FROM usuario WHERE usuario = @Usuario)
-                SELECT 'USUARIO' AS Duplicado;
-            ELSE IF EXISTS (SELECT 1 FROM usuario WHERE correo_electronico = @CorreoElectronico)
-                SELECT 'CORREO' AS Duplicado;
-            ELSE IF EXISTS (SELECT 1 FROM usuario WHERE rfc = @Rfc)
-                SELECT 'RFC' AS Duplicado;
-            ELSE IF EXISTS (SELECT 1 FROM usuario WHERE curp = @Curp)
-                SELECT 'CURP' AS Duplicado;
-            ELSE
-                SELECT NULL AS Duplicado;
-        ";
+        SELECT
+            u.id_usuario AS IdUsuario,
+            u.usuario AS Usuario,
+            LTRIM(RTRIM(CONCAT(
+                u.nombre,
+                ' ',
+                u.primer_apellido,
+                ' ',
+                ISNULL(u.segundo_apellido, '')
+            ))) AS NombreCompleto,
+            u.correo_electronico AS CorreoElectronico,
+            r.rol AS Rol,
+            u.id_entidad_federativa AS IdEntidadFederativa,
+            ef.nombre AS EntidadFederativa,
+            COALESCE(h.habilita_carga, 0) AS HabilitaCarga,
+            COALESCE(h.habilita_modificacion, 0) AS HabilitaModificacion,
+            u.activo AS Activo
+        FROM usuario u
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+        LEFT JOIN catalogo_entidad_federativa ef
+            ON ef.id_entidad_federativa = u.id_entidad_federativa
+        LEFT JOIN habilita_carga_modificacion h
+            ON h.id_usuario = u.id_usuario
+        WHERE (@IncluirInactivos = 1 OR u.activo = 1)
+        ORDER BY
+            u.activo DESC,
+            r.rol,
+            ef.nombre,
+            u.usuario;
+    ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return await connection.QueryFirstOrDefaultAsync<string?>(sql, new
+        var usuarios = await connection.QueryAsync<UsuarioListadoItem>(sql, new
+        {
+            IncluirInactivos = incluirInactivos
+        });
+
+        return usuarios.ToList();
+    }
+
+    public async Task<UsuarioDetalle?> ObtenerUsuarioDetalleAsync(int idUsuario)
+    {
+        // Obtiene detalle completo de un usuario.
+        // Este resultado sirve para llenar el formulario de edición.
+        var sql = @"
+        SELECT
+            u.id_usuario AS IdUsuario,
+            u.usuario AS Usuario,
+            u.nombre AS Nombre,
+            u.primer_apellido AS PrimerApellido,
+            u.segundo_apellido AS SegundoApellido,
+            u.correo_electronico AS CorreoElectronico,
+            u.rfc AS Rfc,
+            u.curp AS Curp,
+            u.telefono_contacto AS TelefonoContacto,
+            u.id_entidad_federativa AS IdEntidadFederativa,
+            ef.nombre AS EntidadFederativa,
+            u.id_rol AS IdRol,
+            r.rol AS Rol,
+            COALESCE(h.habilita_carga, 0) AS HabilitaCarga,
+            COALESCE(h.habilita_modificacion, 0) AS HabilitaModificacion,
+            u.fecha_alta AS FechaAlta,
+            u.fecha_modificacion AS FechaModificacion,
+            u.activo AS Activo
+        FROM usuario u
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+        LEFT JOIN catalogo_entidad_federativa ef
+            ON ef.id_entidad_federativa = u.id_entidad_federativa
+        LEFT JOIN habilita_carga_modificacion h
+            ON h.id_usuario = u.id_usuario
+        WHERE u.id_usuario = @IdUsuario;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.QueryFirstOrDefaultAsync<UsuarioDetalle>(sql, new
+        {
+            IdUsuario = idUsuario
+        });
+    }
+
+    public async Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioAsync(string usuario, string correoElectronico, string rfc, string curp)
+    {
+        // Regresa todos los campos duplicados encontrados.
+        // Esto permite informar al front todos los problemas en una sola respuesta.
+        var sql = @"
+        SELECT
+            'usuario' AS Campo,
+            'USUARIO_USUARIO_DUPLICADO' AS Codigo,
+            'Ya existe un usuario registrado con ese nombre de usuario.' AS Mensaje
+        WHERE EXISTS (
+            SELECT 1
+            FROM usuario
+            WHERE usuario = @Usuario
+        )
+
+        UNION ALL
+
+        SELECT
+            'correoElectronico' AS Campo,
+            'USUARIO_CORREO_DUPLICADO' AS Codigo,
+            'Ya existe un usuario registrado con ese correo electrónico.' AS Mensaje
+        WHERE EXISTS (
+            SELECT 1
+            FROM usuario
+            WHERE correo_electronico = @CorreoElectronico
+        )
+
+        UNION ALL
+
+        SELECT
+            'rfc' AS Campo,
+            'USUARIO_RFC_DUPLICADO' AS Codigo,
+            'Ya existe un usuario registrado con ese RFC.' AS Mensaje
+        WHERE EXISTS (
+            SELECT 1
+            FROM usuario
+            WHERE rfc = @Rfc
+        )
+
+        UNION ALL
+
+        SELECT
+            'curp' AS Campo,
+            'USUARIO_CURP_DUPLICADO' AS Codigo,
+            'Ya existe un usuario registrado con esa CURP.' AS Mensaje
+        WHERE EXISTS (
+            SELECT 1
+            FROM usuario
+            WHERE curp = @Curp
+        );
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var errores = await connection.QueryAsync<UsuarioValidacionError>(sql, new
         {
             Usuario = usuario.Trim(),
             CorreoElectronico = correoElectronico.Trim(),
             Rfc = rfc.Trim().ToUpperInvariant(),
             Curp = curp.Trim().ToUpperInvariant()
         });
+
+        return errores.ToList();
     }
 
     public async Task<int?> ObtenerIdRolActivoAsync(string rol)
