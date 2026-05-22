@@ -62,7 +62,10 @@ public class UsuariosController : ControllerBase
         {
             return Unauthorized(new
             {
-                mensaje = "El token no contiene un id de usuario válido."
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
             });
         }
 
@@ -91,7 +94,10 @@ public class UsuariosController : ControllerBase
         {
             return Unauthorized(new
             {
-                mensaje = "El token no contiene un id de usuario válido."
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
             });
         }
 
@@ -121,7 +127,10 @@ public class UsuariosController : ControllerBase
         {
             return Unauthorized(new
             {
-                mensaje = "El token no contiene un id de usuario válido."
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
             });
         }
 
@@ -149,7 +158,10 @@ public class UsuariosController : ControllerBase
         {
             return Unauthorized(new
             {
-                mensaje = "El token no contiene un id de usuario válido."
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
             });
         }
 
@@ -178,7 +190,10 @@ public class UsuariosController : ControllerBase
         {
             return Unauthorized(new
             {
-                mensaje = "El token no contiene un id de usuario válido."
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
             });
         }
 
