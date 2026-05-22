@@ -71,8 +71,6 @@ public class CargasController : ControllerBase
                 traceId = HttpContext.TraceIdentifier
             });
         }
-        //prueba de logs
-        //_logger.LogInformation("Inicia validación de carga. Usuario: {IdUsuario}", idUsuarioCarga);
 
         // El service recibe el form completo y el usuario autenticado.
         var resultado = await _cargaArchivosService.ValidarArchivosAsync(
