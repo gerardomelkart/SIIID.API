@@ -619,15 +619,19 @@ public class UsuarioRepository : IUsuarioRepository
         // Aplica permisos de carga/modificación a todos los usuarios activos
         // que tengan registro en habilita_carga_modificacion.
         var sql = @"
-        UPDATE h
-        SET h.habilita_carga = @HabilitaCarga,
-            h.habilita_modificacion = @HabilitaModificacion
-        FROM habilita_carga_modificacion h
-        INNER JOIN usuario u
-            ON u.id_usuario = h.id_usuario
-        WHERE h.activo = 1
-          AND u.activo = 1;
-    ";
+            UPDATE h
+            SET h.habilita_carga = @HabilitaCarga,
+                h.habilita_modificacion = @HabilitaModificacion
+            FROM habilita_carga_modificacion h
+            INNER JOIN usuario u
+                ON u.id_usuario = h.id_usuario
+            INNER JOIN roles r
+                ON r.id_rol = u.id_rol
+            WHERE h.activo = 1
+              AND u.activo = 1
+              AND r.activo = 1
+              AND r.rol <> 'CONSULTA';
+        ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 

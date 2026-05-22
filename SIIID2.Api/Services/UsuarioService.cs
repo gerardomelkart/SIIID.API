@@ -1,6 +1,6 @@
-﻿using System.Text.RegularExpressions;
-using SIIID2.Api.Models;
+﻿using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
+using System.Text.RegularExpressions;
 
 namespace SIIID2.Api.Services;
 
@@ -26,6 +26,38 @@ public class UsuarioService : IUsuarioService
     {
         _usuarioRepository = usuarioRepository;
         _logger = logger;
+    }
+
+    public async Task<List<UsuarioListadoItem>> ObtenerUsuariosAsync(bool incluirInactivos)
+    {
+        // Regresa usuarios para la tabla administrativa.
+        // incluirInactivos permite mostrar también usuarios dados de baja lógicamente.
+        return await _usuarioRepository.ObtenerUsuariosAsync(incluirInactivos);
+    }
+
+    public async Task<UsuarioDetalleResponse> ObtenerUsuarioDetalleAsync(int idUsuario)
+    {
+        // Obtiene la información completa de un usuario para llenar el formulario de edición.
+        var usuario = await _usuarioRepository.ObtenerUsuarioDetalleAsync(idUsuario);
+
+        if (usuario == null)
+        {
+            return new UsuarioDetalleResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_EXISTE",
+                Mensaje = "El usuario solicitado no existe.",
+                Usuario = null
+            };
+        }
+
+        return new UsuarioDetalleResponse
+        {
+            EsValido = true,
+            Codigo = "USUARIO_ENCONTRADO",
+            Mensaje = "Usuario encontrado.",
+            Usuario = usuario
+        };
     }
 
     public async Task<CrearUsuarioResponse> CrearUsuarioAsync(CrearUsuarioRequest request, int idUsuarioAlta)
@@ -62,14 +94,20 @@ public class UsuarioService : IUsuarioService
         var errores = ValidarCamposCrearUsuario(request, rol);
 
         // Se valida que el rol exista y esté activo en la tabla roles.
-        var idRol = await _usuarioRepository.ObtenerIdRolActivoAsync(rol);
+        // Solo consultamos base si el rol trae algún valor para evitar mensajes redundantes.
+        int? idRol = null;
 
-        if (!idRol.HasValue)
+        if (!string.IsNullOrWhiteSpace(rol))
         {
-            errores.Add(ErrorUsuario(
-                "rol",
-                "USUARIO_ROL_INVALIDO",
-                $"El rol {rol} no existe o no está activo."));
+            idRol = await _usuarioRepository.ObtenerIdRolActivoAsync(rol);
+
+            if (!idRol.HasValue)
+            {
+                errores.Add(ErrorUsuario(
+                    "rol",
+                    "USUARIO_ROL_INVALIDO",
+                    $"El rol {rol} no existe o no está activo."));
+            }
         }
 
         // Todos los roles excepto SUPER_USUARIO deben estar ligados a una entidad federativa.
@@ -157,38 +195,6 @@ public class UsuarioService : IUsuarioService
             Codigo = "USUARIO_REGISTRADO",
             Mensaje = "Usuario registrado correctamente.",
             IdUsuario = idUsuario
-        };
-    }
-
-    public async Task<List<UsuarioListadoItem>> ObtenerUsuariosAsync(bool incluirInactivos)
-    {
-        // Regresa usuarios para la tabla administrativa.
-        // incluirInactivos permite mostrar también usuarios dados de baja lógicamente.
-        return await _usuarioRepository.ObtenerUsuariosAsync(incluirInactivos);
-    }
-
-    public async Task<UsuarioDetalleResponse> ObtenerUsuarioDetalleAsync(int idUsuario)
-    {
-        // Obtiene la información completa de un usuario para llenar el formulario de edición.
-        var usuario = await _usuarioRepository.ObtenerUsuarioDetalleAsync(idUsuario);
-
-        if (usuario == null)
-        {
-            return new UsuarioDetalleResponse
-            {
-                EsValido = false,
-                Codigo = "USUARIO_NO_EXISTE",
-                Mensaje = "El usuario solicitado no existe.",
-                Usuario = null
-            };
-        }
-
-        return new UsuarioDetalleResponse
-        {
-            EsValido = true,
-            Codigo = "USUARIO_ENCONTRADO",
-            Mensaje = "Usuario encontrado.",
-            Usuario = usuario
         };
     }
 
@@ -280,16 +286,22 @@ public class UsuarioService : IUsuarioService
         }
 
         // Se valida que el rol exista en base.
-        var idRol = await _usuarioRepository.ObtenerIdRolActivoAsync(rol);
+        // Solo consultamos base si el rol trae algún valor para evitar mensajes redundantes.
+        int? idRol = null;
 
-        if (!idRol.HasValue)
+        if (!string.IsNullOrWhiteSpace(rol))
         {
-            errores.Add(new UsuarioValidacionError
+            idRol = await _usuarioRepository.ObtenerIdRolActivoAsync(rol);
+
+            if (!idRol.HasValue)
             {
-                Campo = "rol",
-                Codigo = "USUARIO_ROL_INVALIDO",
-                Mensaje = $"El rol {rol} no existe o no está activo."
-            });
+                errores.Add(new UsuarioValidacionError
+                {
+                    Campo = "rol",
+                    Codigo = "USUARIO_ROL_INVALIDO",
+                    Mensaje = $"El rol {rol} no existe o no está activo."
+                });
+            }
         }
 
         // Se validan duplicados excluyendo al propio usuario editado.
@@ -433,6 +445,48 @@ public class UsuarioService : IUsuarioService
         };
     }
 
+    public async Task<int> ActualizarPermisosGlobalesAsync(bool habilitaCarga, bool habilitaModificacion)
+    {
+        // Aplica permisos de carga/modificación a usuarios activos,
+        // excepto usuarios de CONSULTA.
+        // CONSULTA nunca debe poder cargar ni modificar, aunque se active globalmente.
+        var sql = @"
+        UPDATE h
+        SET h.habilita_carga = @HabilitaCarga,
+            h.habilita_modificacion = @HabilitaModificacion
+        FROM habilita_carga_modificacion h
+        INNER JOIN usuario u
+            ON u.id_usuario = h.id_usuario
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+        WHERE h.activo = 1
+          AND u.activo = 1
+          AND r.activo = 1
+          AND r.rol <> 'CONSULTA';
+
+        UPDATE h
+        SET h.habilita_carga = 0,
+            h.habilita_modificacion = 0
+        FROM habilita_carga_modificacion h
+        INNER JOIN usuario u
+            ON u.id_usuario = h.id_usuario
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+        WHERE h.activo = 1
+          AND u.activo = 1
+          AND r.activo = 1
+          AND r.rol = 'CONSULTA';
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.ExecuteAsync(sql, new
+        {
+            HabilitaCarga = habilitaCarga,
+            HabilitaModificacion = habilitaModificacion
+        });
+    }
+
     public async Task<UsuarioOperacionResponse> ReactivarUsuarioAsync(int idUsuario, ReactivarUsuarioRequest request, int idUsuarioModificacion)
     {
         // Se valida que el usuario que solicita la reactivación exista y esté activo.
@@ -506,52 +560,6 @@ public class UsuarioService : IUsuarioService
             Codigo = "USUARIO_REACTIVADO",
             Mensaje = "Usuario reactivado correctamente.",
             IdUsuario = idUsuario
-        };
-    }
-
-    public async Task<UsuarioOperacionResponse> ActualizarPermisosGlobalesAsync(PermisosGlobalesUsuariosRequest request, int idUsuarioModificacion)
-    {
-        // Se valida que el usuario que ejecuta el cambio exista y esté activo.
-        var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
-
-        if (usuarioModificacion == null)
-        {
-            return new UsuarioOperacionResponse
-            {
-                EsValido = false,
-                Codigo = "USUARIO_MODIFICACION_NO_VALIDO",
-                Mensaje = "El usuario autenticado no existe o no está activo."
-            };
-        }
-
-        // Por ahora solo SUPER_USUARIO puede activar/desactivar permisos globales.
-        if (!usuarioModificacion.EsSuperUsuario)
-        {
-            return new UsuarioOperacionResponse
-            {
-                EsValido = false,
-                Codigo = "USUARIO_PERMISOS_GLOBALES_SIN_PERMISO",
-                Mensaje = "Solo un SUPER_USUARIO puede actualizar permisos globales."
-            };
-        }
-
-        // Actualiza permisos de carga/modificación a todos los usuarios activos con registro de permisos.
-        var totalActualizados = await _usuarioRepository.ActualizarPermisosGlobalesAsync(
-            request.HabilitaCarga,
-            request.HabilitaModificacion);
-
-        _logger.LogInformation(
-            "Permisos globales actualizados. HabilitaCarga: {HabilitaCarga}, HabilitaModificacion: {HabilitaModificacion}, Total: {Total}, UsuarioModificacion: {IdUsuarioModificacion}",
-            request.HabilitaCarga,
-            request.HabilitaModificacion,
-            totalActualizados,
-            idUsuarioModificacion);
-
-        return new UsuarioOperacionResponse
-        {
-            EsValido = true,
-            Codigo = "USUARIOS_PERMISOS_GLOBALES_ACTUALIZADOS",
-            Mensaje = $"Permisos globales actualizados correctamente. Usuarios afectados: {totalActualizados}."
         };
     }
 
