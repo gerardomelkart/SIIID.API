@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using SIIID2.Api.Middleware;
 using Serilog;
+using Microsoft.AspNetCore.Mvc;
+using SIIID2.Api.Models;
 
 // Punto de arranque de la API.
 // Aquí se registran servicios, controladores, Swagger y configuración general.
@@ -16,6 +18,36 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Habilita controladores MVC/API.
 builder.Services.AddControllers();
+
+//errores personalizados
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var errores = context.ModelState
+            .Where(x => x.Value?.Errors.Count > 0)
+            .Where(x => !string.Equals(x.Key, "request", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(x => x.Value!.Errors.Select(error => new
+            {
+                campo = LimpiarNombreCampoModelo(x.Key),
+                mensaje = string.IsNullOrWhiteSpace(error.ErrorMessage)
+                    ? "El valor enviado no es válido."
+                    : error.ErrorMessage
+            }))
+            .ToList();
+
+        var response = new
+        {
+            esValido = false,
+            codigo = "GENERAL_MODELO_INVALIDO",
+            mensaje = "La solicitud contiene campos inválidos.",
+            errores,
+            traceId = context.HttpContext.TraceIdentifier
+        };
+
+        return new BadRequestObjectResult(response);
+    };
+});
 
 // Aumenta el límite permitido para peticiones multipart/form-data.
 // Por ahora se permiten hasta 150 MB en total por petición.
@@ -129,12 +161,39 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
+static string LimpiarNombreCampoModelo(string campo)
+{
+    if (string.IsNullOrWhiteSpace(campo))
+    {
+        return string.Empty;
+    }
+
+    // ASP.NET puede mandar campos tipo "$.nuevaPassword".
+    // Para el front es más claro regresar solo "nuevaPassword".
+    if (campo.StartsWith("$."))
+    {
+        return campo[2..];
+    }
+
+    // Por si llega algo como "$".
+    if (campo == "$")
+    {
+        return "body";
+    }
+
+    return campo;
+}
+
 var app = builder.Build();
 
 
 
 // Manejo global de errores no controlados.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<ApiErrorResponseMiddleware>();
+
+// Manejo global de status codes sin excepción: 404, 405, 415, etc.
+app.UseCustomStatusCodeResponses();
 
 // Swagger solo se habilita en ambiente de desarrollo.
 if (app.Environment.IsDevelopment())

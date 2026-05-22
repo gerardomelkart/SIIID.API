@@ -17,6 +17,7 @@ public class CatalogoRepository : ICatalogoRepository
     {
         _dbConnectionFactory = dbConnectionFactory;
     }
+    
     public async Task<HashSet<string>> ObtenerMunicipiosPorEntidadActivosAsync()
     {
         // El municipio se valida por combinación:
@@ -101,6 +102,7 @@ public class CatalogoRepository : ICatalogoRepository
             .Select(x => x.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
+    
     private static string NormalizarClaveMunicipio(string clave)
     {
         clave = clave.Trim();

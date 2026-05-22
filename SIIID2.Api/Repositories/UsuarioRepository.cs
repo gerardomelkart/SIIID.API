@@ -378,4 +378,360 @@ public class UsuarioRepository : IUsuarioRepository
             throw;
         }
     }
+
+    public async Task<bool> ExisteUsuarioActivoAsync(int idUsuario)
+    {
+        var sql = @"
+        SELECT COUNT(1)
+        FROM usuario
+        WHERE id_usuario = @IdUsuario
+          AND activo = 1;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var total = await connection.ExecuteScalarAsync<int>(sql, new
+        {
+            IdUsuario = idUsuario
+        });
+
+        return total > 0;
+    }
+
+    public async Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioEdicionAsync(int idUsuario, string usuario, string correoElectronico, string rfc, string curp)
+    {
+        // Regresa todos los duplicados encontrados,
+        // excluyendo al propio usuario que se está editando.
+        var sql = @"
+        SELECT
+            'usuario' AS Campo,
+            'USUARIO_USUARIO_DUPLICADO' AS Codigo,
+            'Ya existe otro usuario registrado con ese nombre de usuario.' AS Mensaje
+        WHERE EXISTS (
+            SELECT 1
+            FROM usuario
+            WHERE usuario = @Usuario
+              AND id_usuario <> @IdUsuario
+        )
+
+        UNION ALL
+
+        SELECT
+            'correoElectronico' AS Campo,
+            'USUARIO_CORREO_DUPLICADO' AS Codigo,
+            'Ya existe otro usuario registrado con ese correo electrónico.' AS Mensaje
+        WHERE EXISTS (
+            SELECT 1
+            FROM usuario
+            WHERE correo_electronico = @CorreoElectronico
+              AND id_usuario <> @IdUsuario
+        )
+
+        UNION ALL
+
+        SELECT
+            'rfc' AS Campo,
+            'USUARIO_RFC_DUPLICADO' AS Codigo,
+            'Ya existe otro usuario registrado con ese RFC.' AS Mensaje
+        WHERE EXISTS (
+            SELECT 1
+            FROM usuario
+            WHERE rfc = @Rfc
+              AND id_usuario <> @IdUsuario
+        )
+
+        UNION ALL
+
+        SELECT
+            'curp' AS Campo,
+            'USUARIO_CURP_DUPLICADO' AS Codigo,
+            'Ya existe otro usuario registrado con esa CURP.' AS Mensaje
+        WHERE EXISTS (
+            SELECT 1
+            FROM usuario
+            WHERE curp = @Curp
+              AND id_usuario <> @IdUsuario
+        );
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var errores = await connection.QueryAsync<UsuarioValidacionError>(sql, new
+        {
+            IdUsuario = idUsuario,
+            Usuario = usuario.Trim(),
+            CorreoElectronico = correoElectronico.Trim(),
+            Rfc = rfc.Trim().ToUpperInvariant(),
+            Curp = curp.Trim().ToUpperInvariant()
+        });
+
+        return errores.ToList();
+    }
+
+    public async Task EditarUsuarioAsync(int idUsuario, EditarUsuarioRequest request, int idRol, string? passwordHash, int idUsuarioModificacion)
+    {
+        // Edita usuario y permisos en una sola transacción.
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+
+        await connection.OpenAsync();
+
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var sqlUsuario = @"
+            UPDATE usuario
+            SET usuario = @Usuario,
+                nombre = @Nombre,
+                primer_apellido = @PrimerApellido,
+                segundo_apellido = @SegundoApellido,
+                correo_electronico = @CorreoElectronico,
+                rfc = @Rfc,
+                curp = @Curp,
+                telefono_contacto = @TelefonoContacto,
+                id_entidad_federativa = @IdEntidadFederativa,
+                id_rol = @IdRol,
+                fecha_modificacion = SYSDATETIME(),
+                id_usuario_modificacion = @IdUsuarioModificacion,
+                password = CASE
+                    WHEN @PasswordHash IS NULL THEN password
+                    ELSE @PasswordHash
+                END
+            WHERE id_usuario = @IdUsuario
+              AND activo = 1;
+        ";
+
+            await connection.ExecuteAsync(
+                sqlUsuario,
+                new
+                {
+                    IdUsuario = idUsuario,
+                    Usuario = request.Usuario.Trim(),
+                    Nombre = request.Nombre.Trim(),
+                    PrimerApellido = request.PrimerApellido.Trim(),
+                    SegundoApellido = string.IsNullOrWhiteSpace(request.SegundoApellido) ? null : request.SegundoApellido.Trim(),
+                    CorreoElectronico = request.CorreoElectronico.Trim(),
+                    Rfc = request.Rfc.Trim().ToUpperInvariant(),
+                    Curp = request.Curp.Trim().ToUpperInvariant(),
+                    TelefonoContacto = string.IsNullOrWhiteSpace(request.TelefonoContacto) ? null : request.TelefonoContacto.Trim(),
+                    IdEntidadFederativa = request.IdEntidadFederativa,
+                    IdRol = idRol,
+                    IdUsuarioModificacion = idUsuarioModificacion,
+                    PasswordHash = passwordHash
+                },
+                transaction);
+
+            var sqlPermisos = @"
+            IF EXISTS (
+                SELECT 1
+                FROM habilita_carga_modificacion
+                WHERE id_usuario = @IdUsuario
+            )
+            BEGIN
+                UPDATE habilita_carga_modificacion
+                SET habilita_carga = @HabilitaCarga,
+                    habilita_modificacion = @HabilitaModificacion,
+                    activo = 1
+                WHERE id_usuario = @IdUsuario;
+            END
+            ELSE
+            BEGIN
+                INSERT INTO habilita_carga_modificacion (
+                    habilita_carga,
+                    habilita_modificacion,
+                    id_usuario,
+                    activo
+                )
+                VALUES (
+                    @HabilitaCarga,
+                    @HabilitaModificacion,
+                    @IdUsuario,
+                    1
+                );
+            END
+        ";
+
+            await connection.ExecuteAsync(
+                sqlPermisos,
+                new
+                {
+                    IdUsuario = idUsuario,
+                    request.HabilitaCarga,
+                    request.HabilitaModificacion
+                },
+                transaction);
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task DesactivarUsuarioAsync(int idUsuario, int idUsuarioModificacion)
+    {
+        // Baja lógica. No se elimina físicamente para conservar auditoría.
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+
+        await connection.OpenAsync();
+
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var sql = @"
+            UPDATE usuario
+            SET activo = 0,
+                fecha_modificacion = SYSDATETIME(),
+                id_usuario_modificacion = @IdUsuarioModificacion
+            WHERE id_usuario = @IdUsuario
+              AND activo = 1;
+
+            UPDATE habilita_carga_modificacion
+            SET habilita_carga = 0,
+                habilita_modificacion = 0,
+                activo = 0
+            WHERE id_usuario = @IdUsuario;
+        ";
+
+            await connection.ExecuteAsync(
+                sql,
+                new
+                {
+                    IdUsuario = idUsuario,
+                    IdUsuarioModificacion = idUsuarioModificacion
+                },
+                transaction);
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<int> ActualizarPermisosGlobalesAsync(bool habilitaCarga, bool habilitaModificacion)
+    {
+        // Aplica permisos de carga/modificación a todos los usuarios activos
+        // que tengan registro en habilita_carga_modificacion.
+        var sql = @"
+        UPDATE h
+        SET h.habilita_carga = @HabilitaCarga,
+            h.habilita_modificacion = @HabilitaModificacion
+        FROM habilita_carga_modificacion h
+        INNER JOIN usuario u
+            ON u.id_usuario = h.id_usuario
+        WHERE h.activo = 1
+          AND u.activo = 1;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.ExecuteAsync(sql, new
+        {
+            HabilitaCarga = habilitaCarga,
+            HabilitaModificacion = habilitaModificacion
+        });
+    }
+
+    public async Task<bool> ExisteUsuarioAsync(int idUsuario)
+    {
+        // Valida existencia del usuario sin importar si está activo o inactivo.
+        var sql = @"
+        SELECT COUNT(1)
+        FROM usuario
+        WHERE id_usuario = @IdUsuario;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var total = await connection.ExecuteScalarAsync<int>(sql, new
+        {
+            IdUsuario = idUsuario
+        });
+
+        return total > 0;
+    }
+
+    public async Task ReactivarUsuarioAsync(int idUsuario, ReactivarUsuarioRequest request, int idUsuarioModificacion)
+    {
+        // Reactiva usuario y permisos en una sola transacción.
+        // No cambia contraseña, rol, entidad ni datos personales.
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+
+        await connection.OpenAsync();
+
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var sqlUsuario = @"
+            UPDATE usuario
+            SET activo = 1,
+                fecha_modificacion = SYSDATETIME(),
+                id_usuario_modificacion = @IdUsuarioModificacion
+            WHERE id_usuario = @IdUsuario;
+        ";
+
+            await connection.ExecuteAsync(
+                sqlUsuario,
+                new
+                {
+                    IdUsuario = idUsuario,
+                    IdUsuarioModificacion = idUsuarioModificacion
+                },
+                transaction);
+
+            var sqlPermisos = @"
+            IF EXISTS (
+                SELECT 1
+                FROM habilita_carga_modificacion
+                WHERE id_usuario = @IdUsuario
+            )
+            BEGIN
+                UPDATE habilita_carga_modificacion
+                SET habilita_carga = @HabilitaCarga,
+                    habilita_modificacion = @HabilitaModificacion,
+                    activo = 1
+                WHERE id_usuario = @IdUsuario;
+            END
+            ELSE
+            BEGIN
+                INSERT INTO habilita_carga_modificacion (
+                    habilita_carga,
+                    habilita_modificacion,
+                    id_usuario,
+                    activo
+                )
+                VALUES (
+                    @HabilitaCarga,
+                    @HabilitaModificacion,
+                    @IdUsuario,
+                    1
+                );
+            END
+        ";
+
+            await connection.ExecuteAsync(
+                sqlPermisos,
+                new
+                {
+                    IdUsuario = idUsuario,
+                    request.HabilitaCarga,
+                    request.HabilitaModificacion
+                },
+                transaction);
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
 }

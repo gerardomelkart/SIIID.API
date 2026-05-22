@@ -77,4 +77,121 @@ public class UsuariosController : ControllerBase
 
         return Ok(resultado);
     }
+
+    // Edita un usuario existente.
+    // Si nuevaPassword viene vacía o null, conserva la contraseña actual.
+    // Ejemplo: PUT /api/usuarios/3
+    [Authorize]
+    [HttpPut("{idUsuario:int}")]
+    public async Task<IActionResult> EditarUsuario(int idUsuario, [FromBody] EditarUsuarioRequest request)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        {
+            return Unauthorized(new
+            {
+                mensaje = "El token no contiene un id de usuario válido."
+            });
+        }
+
+        var resultado = await _usuarioService.EditarUsuarioAsync(
+            idUsuario,
+            request,
+            idUsuarioModificacion);
+
+        if (!resultado.EsValido)
+        {
+            return BadRequest(resultado);
+        }
+
+        return Ok(resultado);
+    }
+
+    // Baja lógica de usuario.
+    // No elimina físicamente para conservar auditoría.
+    // Ejemplo: DELETE /api/usuarios/3
+    [Authorize]
+    [HttpDelete("{idUsuario:int}")]
+    public async Task<IActionResult> DesactivarUsuario(int idUsuario)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        {
+            return Unauthorized(new
+            {
+                mensaje = "El token no contiene un id de usuario válido."
+            });
+        }
+
+        var resultado = await _usuarioService.DesactivarUsuarioAsync(
+            idUsuario,
+            idUsuarioModificacion);
+
+        if (!resultado.EsValido)
+        {
+            return BadRequest(resultado);
+        }
+
+        return Ok(resultado);
+    }
+
+    // Activa/desactiva carga y modificación para todos los usuarios activos.
+    // Ejemplo: PUT /api/usuarios/permisos-globales
+    [Authorize]
+    [HttpPut("permisos-globales")]
+    public async Task<IActionResult> ActualizarPermisosGlobales([FromBody] PermisosGlobalesUsuariosRequest request)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        {
+            return Unauthorized(new
+            {
+                mensaje = "El token no contiene un id de usuario válido."
+            });
+        }
+
+        var resultado = await _usuarioService.ActualizarPermisosGlobalesAsync(
+            request,
+            idUsuarioModificacion);
+
+        if (!resultado.EsValido)
+        {
+            return BadRequest(resultado);
+        }
+
+        return Ok(resultado);
+    }
+
+    // Reactiva un usuario dado de baja lógicamente.
+    // No cambia contraseña, rol, entidad ni datos personales.
+    // Ejemplo: PUT /api/usuarios/3/reactivar
+    [Authorize]
+    [HttpPut("{idUsuario:int}/reactivar")]
+    public async Task<IActionResult> ReactivarUsuario(int idUsuario, [FromBody] ReactivarUsuarioRequest request)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        {
+            return Unauthorized(new
+            {
+                mensaje = "El token no contiene un id de usuario válido."
+            });
+        }
+
+        var resultado = await _usuarioService.ReactivarUsuarioAsync(
+            idUsuario,
+            request,
+            idUsuarioModificacion);
+
+        if (!resultado.EsValido)
+        {
+            return BadRequest(resultado);
+        }
+
+        return Ok(resultado);
+    }
 }
