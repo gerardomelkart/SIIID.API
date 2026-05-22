@@ -1,13 +1,26 @@
-﻿using SIIID2.Api.Models;
+﻿using System.Text.RegularExpressions;
+using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Services;
 
 public class UsuarioService : IUsuarioService
 {
+    // Expresión regular básica para validar formato de correo electrónico.
+    // No valida existencia del dominio; solo estructura general.
+    private const string RegexCorreoElectronico = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
+
+    // RFC persona física o moral con homoclave.
+    // Persona física: 4 letras + fecha + homoclave = 13 caracteres.
+    // Persona moral: 3 letras + fecha + homoclave = 12 caracteres.
+    private const string RegexRfc = @"^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$";
+
+    // CURP estándar de 18 caracteres.
+    // Posteriormente esta validación se podrá complementar con un servicio externo.
+    private const string RegexCurp = @"^[A-Z][AEIOUX][A-Z]{2}\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[HM](AS|BC|BS|CC|CL|CM|CS|CH|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]\d$";
+
     private readonly IUsuarioRepository _usuarioRepository;
     private readonly ILogger<UsuarioService> _logger;
-
 
     public UsuarioService(IUsuarioRepository usuarioRepository, ILogger<UsuarioService> logger)
     {
@@ -17,6 +30,7 @@ public class UsuarioService : IUsuarioService
 
     public async Task<CrearUsuarioResponse> CrearUsuarioAsync(CrearUsuarioRequest request, int idUsuarioAlta)
     {
+        // Se valida que el usuario autenticado exista y esté activo.
         var usuarioAlta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioAlta);
 
         if (usuarioAlta == null)
@@ -29,6 +43,7 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        // Por ahora solo SUPER_USUARIO puede crear usuarios.
         if (!usuarioAlta.EsSuperUsuario)
         {
             return new CrearUsuarioResponse
@@ -39,80 +54,93 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        // Se normaliza el rol a mayúsculas para evitar errores por escritura.
         var rol = request.Rol.Trim().ToUpperInvariant();
 
-        var errorCampos = ValidarCamposObligatorios(request, rol);
+        // Se validan campos obligatorios y formatos.
+        // Esta validación acumula todos los errores encontrados.
+        var errores = ValidarCamposCrearUsuario(request, rol);
 
-        if (errorCampos != null)
-        {
-            return errorCampos;
-        }
-
+        // Se valida que el rol exista y esté activo en la tabla roles.
         var idRol = await _usuarioRepository.ObtenerIdRolActivoAsync(rol);
 
         if (!idRol.HasValue)
         {
-            return new CrearUsuarioResponse
-            {
-                EsValido = false,
-                Codigo = "USUARIO_ROL_INVALIDO",
-                Mensaje = $"El rol {rol} no existe o no está activo."
-            };
+            errores.Add(ErrorUsuario(
+                "rol",
+                "USUARIO_ROL_INVALIDO",
+                $"El rol {rol} no existe o no está activo."));
         }
 
+        // Todos los roles excepto SUPER_USUARIO deben estar ligados a una entidad federativa.
         if (rol != "SUPER_USUARIO")
         {
             if (!request.IdEntidadFederativa.HasValue)
             {
-                return new CrearUsuarioResponse
-                {
-                    EsValido = false,
-                    Codigo = "USUARIO_ENTIDAD_OBLIGATORIA",
-                    Mensaje = "El usuario debe tener entidad federativa para el rol seleccionado."
-                };
+                errores.Add(ErrorUsuario(
+                    "idEntidadFederativa",
+                    "USUARIO_ENTIDAD_OBLIGATORIA",
+                    "El usuario debe tener entidad federativa para el rol seleccionado."));
             }
-
-            var existeEntidad = await _usuarioRepository.ExisteEntidadActivaAsync(request.IdEntidadFederativa.Value);
-
-            if (!existeEntidad)
+            else
             {
-                return new CrearUsuarioResponse
+                // Si se envió entidad, se valida que exista y esté activa.
+                var existeEntidad = await _usuarioRepository.ExisteEntidadActivaAsync(request.IdEntidadFederativa.Value);
+
+                if (!existeEntidad)
                 {
-                    EsValido = false,
-                    Codigo = "USUARIO_ENTIDAD_INVALIDA",
-                    Mensaje = "La entidad federativa indicada no existe o no está activa."
-                };
+                    errores.Add(ErrorUsuario(
+                        "idEntidadFederativa",
+                        "USUARIO_ENTIDAD_INVALIDA",
+                        "La entidad federativa indicada no existe o no está activa."));
+                }
             }
         }
+        else
+        {
+            // SUPER_USUARIO puede no tener entidad federativa.
+            request.IdEntidadFederativa = null;
+        }
 
+        // El rol CONSULTA no debe poder cargar ni modificar información.
+        // Aunque el front mande true, aquí se fuerza a false.
         if (rol == "CONSULTA")
         {
             request.HabilitaCarga = false;
             request.HabilitaModificacion = false;
         }
 
+        // Se validan duplicados de usuario, correo, RFC y CURP.
+        // Este método regresa todos los duplicados encontrados, no solo el primero.
         var duplicados = await _usuarioRepository.ObtenerDuplicadosUsuarioAsync(
             request.Usuario,
             request.CorreoElectronico,
             request.Rfc,
             request.Curp);
 
-        if (duplicados.Count > 0)
+        errores.AddRange(duplicados);
+
+        // Si hubo cualquier error, se regresa una sola respuesta con todos los errores.
+        if (errores.Count > 0)
         {
             return new CrearUsuarioResponse
             {
                 EsValido = false,
-                Codigo = "USUARIO_DATOS_DUPLICADOS",
-                Mensaje = "Existen datos duplicados. Revise los campos marcados.",
-                Errores = duplicados
+                Codigo = "USUARIO_DATOS_INVALIDOS",
+                Mensaje = "Existen errores en los datos del usuario.",
+                Errores = errores
             };
         }
 
+        // La contraseña nunca se guarda plana.
+        // Se genera hash BCrypt antes de insertar.
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, workFactor: 12);
 
+        // Se inserta usuario y permisos en base.
+        // El repository lo hace dentro de una transacción.
         var idUsuario = await _usuarioRepository.CrearUsuarioAsync(
             request,
-            idRol.Value,
+            idRol!.Value,
             passwordHash,
             idUsuarioAlta);
 
@@ -132,78 +160,16 @@ public class UsuarioService : IUsuarioService
         };
     }
 
-    private static CrearUsuarioResponse? ValidarCamposObligatorios(CrearUsuarioRequest request, string rol)
-    {
-        if (string.IsNullOrWhiteSpace(request.Usuario))
-        {
-            return Error("USUARIO_CAMPO_OBLIGATORIO", "Debe enviar el usuario.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Password))
-        {
-            return Error("USUARIO_PASSWORD_OBLIGATORIO", "Debe enviar la contraseña.");
-        }
-
-        if (request.Password.Length < 8)
-        {
-            return Error("USUARIO_PASSWORD_CORTO", "La contraseña debe tener al menos 8 caracteres.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Nombre))
-        {
-            return Error("USUARIO_NOMBRE_OBLIGATORIO", "Debe enviar el nombre.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.PrimerApellido))
-        {
-            return Error("USUARIO_PRIMER_APELLIDO_OBLIGATORIO", "Debe enviar el primer apellido.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.CorreoElectronico))
-        {
-            return Error("USUARIO_CORREO_OBLIGATORIO", "Debe enviar el correo electrónico.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Rfc))
-        {
-            return Error("USUARIO_RFC_OBLIGATORIO", "Debe enviar el RFC.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Curp))
-        {
-            return Error("USUARIO_CURP_OBLIGATORIO", "Debe enviar la CURP.");
-        }
-
-        if (string.IsNullOrWhiteSpace(rol))
-        {
-            return Error("USUARIO_ROL_OBLIGATORIO", "Debe enviar el rol.");
-        }
-
-        if (rol != "SUPER_USUARIO" && rol != "ENLACE_ESTATAL" && rol != "CONSULTA")
-        {
-            return Error("USUARIO_ROL_NO_PERMITIDO", "El rol permitido debe ser SUPER_USUARIO, ENLACE_ESTATAL o CONSULTA.");
-        }
-
-        return null;
-    }
-
-    private static CrearUsuarioResponse Error(string codigo, string mensaje)
-    {
-        return new CrearUsuarioResponse
-        {
-            EsValido = false,
-            Codigo = codigo,
-            Mensaje = mensaje
-        };
-    }
-
     public async Task<List<UsuarioListadoItem>> ObtenerUsuariosAsync(bool incluirInactivos)
     {
+        // Regresa usuarios para la tabla administrativa.
+        // incluirInactivos permite mostrar también usuarios dados de baja lógicamente.
         return await _usuarioRepository.ObtenerUsuariosAsync(incluirInactivos);
     }
 
     public async Task<UsuarioDetalleResponse> ObtenerUsuarioDetalleAsync(int idUsuario)
     {
+        // Obtiene la información completa de un usuario para llenar el formulario de edición.
         var usuario = await _usuarioRepository.ObtenerUsuarioDetalleAsync(idUsuario);
 
         if (usuario == null)
@@ -228,6 +194,7 @@ public class UsuarioService : IUsuarioService
 
     public async Task<UsuarioOperacionResponse> EditarUsuarioAsync(int idUsuario, EditarUsuarioRequest request, int idUsuarioModificacion)
     {
+        // Se valida que el usuario que modifica exista y esté activo.
         var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
 
         if (usuarioModificacion == null)
@@ -241,6 +208,7 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        // Por ahora solo SUPER_USUARIO puede editar usuarios.
         if (!usuarioModificacion.EsSuperUsuario)
         {
             return new UsuarioOperacionResponse
@@ -252,6 +220,7 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        // La edición solo aplica sobre usuarios activos.
         var existeUsuario = await _usuarioRepository.ExisteUsuarioActivoAsync(idUsuario);
 
         if (!existeUsuario)
@@ -267,8 +236,10 @@ public class UsuarioService : IUsuarioService
 
         var rol = request.Rol.Trim().ToUpperInvariant();
 
+        // Se validan campos obligatorios y formatos.
         var errores = ValidarCamposObligatoriosEdicion(request, rol);
 
+        // Todos los roles excepto SUPER_USUARIO requieren entidad.
         if (rol != "SUPER_USUARIO")
         {
             if (!request.IdEntidadFederativa.HasValue)
@@ -297,15 +268,18 @@ public class UsuarioService : IUsuarioService
         }
         else
         {
+            // SUPER_USUARIO puede no tener entidad federativa.
             request.IdEntidadFederativa = null;
         }
 
+        // El rol CONSULTA no puede cargar ni modificar.
         if (rol == "CONSULTA")
         {
             request.HabilitaCarga = false;
             request.HabilitaModificacion = false;
         }
 
+        // Se valida que el rol exista en base.
         var idRol = await _usuarioRepository.ObtenerIdRolActivoAsync(rol);
 
         if (!idRol.HasValue)
@@ -318,6 +292,7 @@ public class UsuarioService : IUsuarioService
             });
         }
 
+        // Se validan duplicados excluyendo al propio usuario editado.
         var duplicados = await _usuarioRepository.ObtenerDuplicadosUsuarioEdicionAsync(
             idUsuario,
             request.Usuario,
@@ -329,6 +304,8 @@ public class UsuarioService : IUsuarioService
 
         string? passwordHash = null;
 
+        // Si nuevaPassword viene vacía o null, no se cambia la contraseña.
+        // Si viene con valor, se valida y se hashea.
         if (!string.IsNullOrWhiteSpace(request.NuevaPassword))
         {
             if (request.NuevaPassword.Length < 8)
@@ -346,6 +323,7 @@ public class UsuarioService : IUsuarioService
             }
         }
 
+        // Si hay errores, se regresa todo junto.
         if (errores.Count > 0)
         {
             return new UsuarioOperacionResponse
@@ -358,6 +336,8 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        // Se actualiza usuario y permisos.
+        // El repository lo ejecuta dentro de una transacción.
         await _usuarioRepository.EditarUsuarioAsync(
             idUsuario,
             request,
@@ -381,6 +361,7 @@ public class UsuarioService : IUsuarioService
 
     public async Task<UsuarioOperacionResponse> DesactivarUsuarioAsync(int idUsuario, int idUsuarioModificacion)
     {
+        // Se valida que el usuario que solicita la baja exista y esté activo.
         var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
 
         if (usuarioModificacion == null)
@@ -394,6 +375,7 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        // Por ahora solo SUPER_USUARIO puede dar de baja usuarios.
         if (!usuarioModificacion.EsSuperUsuario)
         {
             return new UsuarioOperacionResponse
@@ -405,6 +387,7 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        // Evita que el usuario autenticado se elimine a sí mismo.
         if (idUsuario == idUsuarioModificacion)
         {
             return new UsuarioOperacionResponse
@@ -416,6 +399,7 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        // La baja lógica solo aplica si el usuario sigue activo.
         var existeUsuario = await _usuarioRepository.ExisteUsuarioActivoAsync(idUsuario);
 
         if (!existeUsuario)
@@ -429,6 +413,8 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        // No elimina físicamente.
+        // Solo marca usuario y permisos como inactivos.
         await _usuarioRepository.DesactivarUsuarioAsync(
             idUsuario,
             idUsuarioModificacion);
@@ -447,8 +433,85 @@ public class UsuarioService : IUsuarioService
         };
     }
 
+    public async Task<UsuarioOperacionResponse> ReactivarUsuarioAsync(int idUsuario, ReactivarUsuarioRequest request, int idUsuarioModificacion)
+    {
+        // Se valida que el usuario que solicita la reactivación exista y esté activo.
+        var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
+
+        if (usuarioModificacion == null)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_MODIFICACION_NO_VALIDO",
+                Mensaje = "El usuario autenticado no existe o no está activo.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        // Por ahora solo SUPER_USUARIO puede reactivar usuarios.
+        if (!usuarioModificacion.EsSuperUsuario)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_REACTIVACION_SIN_PERMISO",
+                Mensaje = "Solo un SUPER_USUARIO puede reactivar usuarios.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        // Evita una operación innecesaria sobre el propio usuario autenticado.
+        if (idUsuario == idUsuarioModificacion)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_PUEDE_REACTIVARSE_A_SI_MISMO",
+                Mensaje = "No es necesario reactivar su propio usuario autenticado.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        // Aquí se valida existencia sin importar si está activo o inactivo.
+        var existeUsuario = await _usuarioRepository.ExisteUsuarioAsync(idUsuario);
+
+        if (!existeUsuario)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_EXISTE",
+                Mensaje = "El usuario que intenta reactivar no existe.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        // Reactiva usuario y define permisos de carga/modificación.
+        await _usuarioRepository.ReactivarUsuarioAsync(
+            idUsuario,
+            request,
+            idUsuarioModificacion);
+
+        _logger.LogInformation(
+            "Usuario reactivado correctamente. IdUsuario: {IdUsuario}, HabilitaCarga: {HabilitaCarga}, HabilitaModificacion: {HabilitaModificacion}, UsuarioModificacion: {IdUsuarioModificacion}",
+            idUsuario,
+            request.HabilitaCarga,
+            request.HabilitaModificacion,
+            idUsuarioModificacion);
+
+        return new UsuarioOperacionResponse
+        {
+            EsValido = true,
+            Codigo = "USUARIO_REACTIVADO",
+            Mensaje = "Usuario reactivado correctamente.",
+            IdUsuario = idUsuario
+        };
+    }
+
     public async Task<UsuarioOperacionResponse> ActualizarPermisosGlobalesAsync(PermisosGlobalesUsuariosRequest request, int idUsuarioModificacion)
     {
+        // Se valida que el usuario que ejecuta el cambio exista y esté activo.
         var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
 
         if (usuarioModificacion == null)
@@ -461,6 +524,7 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        // Por ahora solo SUPER_USUARIO puede activar/desactivar permisos globales.
         if (!usuarioModificacion.EsSuperUsuario)
         {
             return new UsuarioOperacionResponse
@@ -471,6 +535,7 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        // Actualiza permisos de carga/modificación a todos los usuarios activos con registro de permisos.
         var totalActualizados = await _usuarioRepository.ActualizarPermisosGlobalesAsync(
             request.HabilitaCarga,
             request.HabilitaModificacion);
@@ -490,15 +555,27 @@ public class UsuarioService : IUsuarioService
         };
     }
 
-    private static List<UsuarioValidacionError> ValidarCamposObligatoriosEdicion(EditarUsuarioRequest request, string rol)
+    private static List<UsuarioValidacionError> ValidarCamposCrearUsuario(CrearUsuarioRequest request, string rol)
     {
         var errores = new List<UsuarioValidacionError>();
 
+        // Usuario de acceso al sistema.
         if (string.IsNullOrWhiteSpace(request.Usuario))
         {
             errores.Add(ErrorUsuario("usuario", "USUARIO_CAMPO_OBLIGATORIO", "Debe enviar el usuario."));
         }
 
+        // Contraseña inicial.
+        if (string.IsNullOrWhiteSpace(request.Password))
+        {
+            errores.Add(ErrorUsuario("password", "USUARIO_PASSWORD_OBLIGATORIO", "Debe enviar la contraseña."));
+        }
+        else if (request.Password.Length < 8)
+        {
+            errores.Add(ErrorUsuario("password", "USUARIO_PASSWORD_CORTO", "La contraseña debe tener al menos 8 caracteres."));
+        }
+
+        // Datos personales mínimos.
         if (string.IsNullOrWhiteSpace(request.Nombre))
         {
             errores.Add(ErrorUsuario("nombre", "USUARIO_NOMBRE_OBLIGATORIO", "Debe enviar el nombre."));
@@ -509,21 +586,101 @@ public class UsuarioService : IUsuarioService
             errores.Add(ErrorUsuario("primerApellido", "USUARIO_PRIMER_APELLIDO_OBLIGATORIO", "Debe enviar el primer apellido."));
         }
 
+        // Correo electrónico.
         if (string.IsNullOrWhiteSpace(request.CorreoElectronico))
         {
             errores.Add(ErrorUsuario("correoElectronico", "USUARIO_CORREO_OBLIGATORIO", "Debe enviar el correo electrónico."));
         }
+        else if (!Regex.IsMatch(request.CorreoElectronico.Trim(), RegexCorreoElectronico, RegexOptions.IgnoreCase))
+        {
+            errores.Add(ErrorUsuario("correoElectronico", "USUARIO_CORREO_FORMATO_INVALIDO", "El correo electrónico no tiene un formato válido."));
+        }
 
+        // RFC.
         if (string.IsNullOrWhiteSpace(request.Rfc))
         {
             errores.Add(ErrorUsuario("rfc", "USUARIO_RFC_OBLIGATORIO", "Debe enviar el RFC."));
         }
+        else if (!Regex.IsMatch(request.Rfc.Trim().ToUpperInvariant(), RegexRfc))
+        {
+            errores.Add(ErrorUsuario("rfc", "USUARIO_RFC_FORMATO_INVALIDO", "El RFC no tiene un formato válido."));
+        }
 
+        // CURP.
         if (string.IsNullOrWhiteSpace(request.Curp))
         {
             errores.Add(ErrorUsuario("curp", "USUARIO_CURP_OBLIGATORIO", "Debe enviar la CURP."));
         }
+        else if (!Regex.IsMatch(request.Curp.Trim().ToUpperInvariant(), RegexCurp))
+        {
+            errores.Add(ErrorUsuario("curp", "USUARIO_CURP_FORMATO_INVALIDO", "La CURP no tiene un formato válido."));
+        }
 
+        // Rol.
+        if (string.IsNullOrWhiteSpace(rol))
+        {
+            errores.Add(ErrorUsuario("rol", "USUARIO_ROL_OBLIGATORIO", "Debe enviar el rol."));
+        }
+        else if (rol != "SUPER_USUARIO" && rol != "ENLACE_ESTATAL" && rol != "CONSULTA")
+        {
+            errores.Add(ErrorUsuario("rol", "USUARIO_ROL_NO_PERMITIDO", "El rol permitido debe ser SUPER_USUARIO, ENLACE_ESTATAL o CONSULTA."));
+        }
+
+        return errores;
+    }
+
+    private static List<UsuarioValidacionError> ValidarCamposObligatoriosEdicion(EditarUsuarioRequest request, string rol)
+    {
+        var errores = new List<UsuarioValidacionError>();
+
+        // Usuario de acceso.
+        if (string.IsNullOrWhiteSpace(request.Usuario))
+        {
+            errores.Add(ErrorUsuario("usuario", "USUARIO_CAMPO_OBLIGATORIO", "Debe enviar el usuario."));
+        }
+
+        // Datos personales mínimos.
+        if (string.IsNullOrWhiteSpace(request.Nombre))
+        {
+            errores.Add(ErrorUsuario("nombre", "USUARIO_NOMBRE_OBLIGATORIO", "Debe enviar el nombre."));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PrimerApellido))
+        {
+            errores.Add(ErrorUsuario("primerApellido", "USUARIO_PRIMER_APELLIDO_OBLIGATORIO", "Debe enviar el primer apellido."));
+        }
+
+        // Correo electrónico.
+        if (string.IsNullOrWhiteSpace(request.CorreoElectronico))
+        {
+            errores.Add(ErrorUsuario("correoElectronico", "USUARIO_CORREO_OBLIGATORIO", "Debe enviar el correo electrónico."));
+        }
+        else if (!Regex.IsMatch(request.CorreoElectronico.Trim(), RegexCorreoElectronico, RegexOptions.IgnoreCase))
+        {
+            errores.Add(ErrorUsuario("correoElectronico", "USUARIO_CORREO_FORMATO_INVALIDO", "El correo electrónico no tiene un formato válido."));
+        }
+
+        // RFC.
+        if (string.IsNullOrWhiteSpace(request.Rfc))
+        {
+            errores.Add(ErrorUsuario("rfc", "USUARIO_RFC_OBLIGATORIO", "Debe enviar el RFC."));
+        }
+        else if (!Regex.IsMatch(request.Rfc.Trim().ToUpperInvariant(), RegexRfc))
+        {
+            errores.Add(ErrorUsuario("rfc", "USUARIO_RFC_FORMATO_INVALIDO", "El RFC no tiene un formato válido."));
+        }
+
+        // CURP.
+        if (string.IsNullOrWhiteSpace(request.Curp))
+        {
+            errores.Add(ErrorUsuario("curp", "USUARIO_CURP_OBLIGATORIO", "Debe enviar la CURP."));
+        }
+        else if (!Regex.IsMatch(request.Curp.Trim().ToUpperInvariant(), RegexCurp))
+        {
+            errores.Add(ErrorUsuario("curp", "USUARIO_CURP_FORMATO_INVALIDO", "La CURP no tiene un formato válido."));
+        }
+
+        // Rol.
         if (string.IsNullOrWhiteSpace(rol))
         {
             errores.Add(ErrorUsuario("rol", "USUARIO_ROL_OBLIGATORIO", "Debe enviar el rol."));
@@ -543,77 +700,6 @@ public class UsuarioService : IUsuarioService
             Campo = campo,
             Codigo = codigo,
             Mensaje = mensaje
-        };
-    }
-
-    public async Task<UsuarioOperacionResponse> ReactivarUsuarioAsync(int idUsuario, ReactivarUsuarioRequest request, int idUsuarioModificacion)
-    {
-        var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
-
-        if (usuarioModificacion == null)
-        {
-            return new UsuarioOperacionResponse
-            {
-                EsValido = false,
-                Codigo = "USUARIO_MODIFICACION_NO_VALIDO",
-                Mensaje = "El usuario autenticado no existe o no está activo.",
-                IdUsuario = idUsuario
-            };
-        }
-
-        if (!usuarioModificacion.EsSuperUsuario)
-        {
-            return new UsuarioOperacionResponse
-            {
-                EsValido = false,
-                Codigo = "USUARIO_REACTIVACION_SIN_PERMISO",
-                Mensaje = "Solo un SUPER_USUARIO puede reactivar usuarios.",
-                IdUsuario = idUsuario
-            };
-        }
-
-        if (idUsuario == idUsuarioModificacion)
-        {
-            return new UsuarioOperacionResponse
-            {
-                EsValido = false,
-                Codigo = "USUARIO_NO_PUEDE_REACTIVARSE_A_SI_MISMO",
-                Mensaje = "No es necesario reactivar su propio usuario autenticado.",
-                IdUsuario = idUsuario
-            };
-        }
-
-        var existeUsuario = await _usuarioRepository.ExisteUsuarioAsync(idUsuario);
-
-        if (!existeUsuario)
-        {
-            return new UsuarioOperacionResponse
-            {
-                EsValido = false,
-                Codigo = "USUARIO_NO_EXISTE",
-                Mensaje = "El usuario que intenta reactivar no existe.",
-                IdUsuario = idUsuario
-            };
-        }
-
-        await _usuarioRepository.ReactivarUsuarioAsync(
-            idUsuario,
-            request,
-            idUsuarioModificacion);
-
-        _logger.LogInformation(
-            "Usuario reactivado correctamente. IdUsuario: {IdUsuario}, HabilitaCarga: {HabilitaCarga}, HabilitaModificacion: {HabilitaModificacion}, UsuarioModificacion: {IdUsuarioModificacion}",
-            idUsuario,
-            request.HabilitaCarga,
-            request.HabilitaModificacion,
-            idUsuarioModificacion);
-
-        return new UsuarioOperacionResponse
-        {
-            EsValido = true,
-            Codigo = "USUARIO_REACTIVADO",
-            Mensaje = "Usuario reactivado correctamente.",
-            IdUsuario = idUsuario
         };
     }
 }
