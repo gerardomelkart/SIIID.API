@@ -24,6 +24,26 @@ public class UsuariosController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> ObtenerUsuarios([FromQuery] bool incluirInactivos = false)
     {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        var resultadoPermiso = await _usuarioService.ValidarSuperUsuarioAsync(idUsuarioConsulta);
+
+        if (!resultadoPermiso.EsValido)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, resultadoPermiso);
+        }
+
         var usuarios = await _usuarioService.ObtenerUsuariosAsync(incluirInactivos);
 
         return Ok(new
@@ -40,6 +60,26 @@ public class UsuariosController : ControllerBase
     [HttpGet("{idUsuario:int}")]
     public async Task<IActionResult> ObtenerUsuarioDetalle(int idUsuario)
     {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        var resultadoPermiso = await _usuarioService.ValidarSuperUsuarioAsync(idUsuarioConsulta);
+
+        if (!resultadoPermiso.EsValido)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, resultadoPermiso);
+        }
+
         var resultado = await _usuarioService.ObtenerUsuarioDetalleAsync(idUsuario);
 
         if (!resultado.EsValido)

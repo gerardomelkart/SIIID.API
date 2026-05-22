@@ -715,4 +715,39 @@ public class UsuarioService : IUsuarioService
             Mensaje = mensaje
         };
     }
+
+    public async Task<UsuarioOperacionResponse> ValidarSuperUsuarioAsync(int idUsuario)
+    {
+        var usuario = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuario);
+
+        if (usuario == null)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_AUTENTICADO_NO_VALIDO",
+                Mensaje = "El usuario autenticado no existe o no está activo.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        if (!usuario.EsSuperUsuario)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_SIN_PERMISO_ADMINISTRACION",
+                Mensaje = "Solo un SUPER_USUARIO puede consultar la administración de usuarios.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        return new UsuarioOperacionResponse
+        {
+            EsValido = true,
+            Codigo = "USUARIO_AUTORIZADO",
+            Mensaje = "Usuario autorizado.",
+            IdUsuario = idUsuario
+        };
+    }
 }
