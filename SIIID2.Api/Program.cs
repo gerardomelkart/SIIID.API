@@ -186,14 +186,9 @@ static string LimpiarNombreCampoModelo(string campo)
 
 var app = builder.Build();
 
-
-
 // Manejo global de errores no controlados.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseMiddleware<ApiErrorResponseMiddleware>();
-
-// Manejo global de status codes sin excepción: 404, 405, 415, etc.
-app.UseCustomStatusCodeResponses();
 
 // Swagger solo se habilita en ambiente de desarrollo.
 if (app.Environment.IsDevelopment())
