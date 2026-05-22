@@ -50,6 +50,8 @@ builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 // Registro del servicio principal de carga.
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.
 builder.Services.AddScoped<ICargaArchivosService, CargaArchivosService>();
+//para el login
+builder.Services.AddScoped<IAuthService, AuthService>();
 //para que jale el pdf
 builder.Services.AddScoped<IAcusePdfService, AcusePdfService>();
 
