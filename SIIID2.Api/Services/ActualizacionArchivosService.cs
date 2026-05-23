@@ -75,6 +75,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             return responseUsuario;
         }
 
+        // Para actualización se revisa habilita_modificacion.
+        // No se usa habilita_carga.
         if (!usuarioCarga.HabilitaModificacion)
         {
             var responseUsuario = new CargaValidacionResponse
@@ -230,6 +232,15 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             filasDelitos.Count,
             filasVictimas.Count);
 
+        // Estos errores bloquean el intento de actualización.
+        // No se guarda fila en carga ni staging para evitar ensuciar la base.
+        if (response.Errores.Any(x =>
+                x.Codigo == "ACTUALIZACION_SIN_CARGA_CONFIRMADA" ||
+                x.Codigo == "ACTUALIZACION_PENDIENTE_EXISTENTE"))
+        {
+            return response;
+        }
+
         var estadoCarga = response.EsValido
             ? "VALIDADO_PENDIENTE_ACTUALIZACION"
             : "RECHAZADO_VALIDACION_ACTUALIZACION";
@@ -256,7 +267,10 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         return response;
     }
 
-    private int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    private int? ObtenerEntidadFederativaCarga(
+        UsuarioCargaInfo usuarioCarga,
+        List<ArchivoFila> filasDelitos,
+        List<CargaValidacionError> errores)
     {
         if (!usuarioCarga.EsSuperUsuario)
         {
@@ -321,7 +335,9 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         return entidades.First();
     }
 
-    private List<CargaValidacionError> ValidarEntidadUsuarioCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos)
+    private List<CargaValidacionError> ValidarEntidadUsuarioCarga(
+        UsuarioCargaInfo usuarioCarga,
+        List<ArchivoFila> filasDelitos)
     {
         var errores = new List<CargaValidacionError>();
 
@@ -435,7 +451,11 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         });
     }
 
-    private void ValidarArchivoEsperado(IFormFile? archivo, string tipoArchivo, string palabraEsperada, List<CargaValidacionError> errores)
+    private void ValidarArchivoEsperado(
+        IFormFile? archivo,
+        string tipoArchivo,
+        string palabraEsperada,
+        List<CargaValidacionError> errores)
     {
         if (archivo != null)
         {
@@ -451,7 +471,11 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         });
     }
 
-    private void ValidarDuplicadosPorTipo(List<IFormFile> archivos, string palabraEsperada, string tipoArchivo, List<CargaValidacionError> errores)
+    private void ValidarDuplicadosPorTipo(
+        List<IFormFile> archivos,
+        string palabraEsperada,
+        string tipoArchivo,
+        List<CargaValidacionError> errores)
     {
         var palabraNormalizada = NormalizarTexto(palabraEsperada);
 
@@ -528,7 +552,11 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         return builder.ToString().Normalize(NormalizationForm.FormC);
     }
 
-    private void FinalizarRespuesta(CargaValidacionResponse response, int totalCarpetas, int totalDelitos, int totalVictimas)
+    private void FinalizarRespuesta(
+        CargaValidacionResponse response,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas)
     {
         response.Mensaje = response.EsValido
             ? "Actualización validada correctamente. Puede generar el acuse previo y confirmar la actualización."
