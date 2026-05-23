@@ -145,14 +145,15 @@ public class CargaRepository : ICargaRepository
 
     public async Task<bool> ExisteCargaConfirmadaAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
     {
-        // Revisa si ya existe información confirmada para la entidad y periodo.
-        // Si existe, la carga nueva no debe continuar; debe ir por flujo de actualización.
+        // Revisa si ya existe una carga inicial confirmada para la entidad y periodo.
+        // Esto se usa para saber si una actualización tiene una base confirmada previa.
         var sql = @"
         SELECT COUNT(1)
         FROM carga
         WHERE id_entidad_federativa = @IdEntidadFederativa
           AND mes_corte = @MesCorte
           AND anio_corte = @AnioCorte
+          AND tipo_carga = 'CARGA_INICIAL'
           AND estado = 'CONFIRMADO'
           AND activo = 1;
     ";
