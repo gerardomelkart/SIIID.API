@@ -530,14 +530,50 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
     private void FinalizarRespuesta(CargaValidacionResponse response, int totalCarpetas, int totalDelitos, int totalVictimas)
     {
-        response.TotalCarpetas = totalCarpetas;
-        response.TotalDelitos = totalDelitos;
-        response.TotalVictimas = totalVictimas;
-        response.EsValido = response.Errores.Count == 0;
-
         response.Mensaje = response.EsValido
             ? "Actualización validada correctamente. Puede generar el acuse previo y confirmar la actualización."
             : "La actualización contiene errores de validación.";
+
+        response.ResumenValidacion = new List<CargaValidacionResumenItem>
+        {
+            new CargaValidacionResumenItem
+            {
+                Archivo = "carpetas",
+                Codigo = "TOTAL_CARPETAS",
+                Descripcion = "Total de registros recibidos en el archivo de carpetas.",
+                TotalRegistros = totalCarpetas,
+                EsError = false
+            },
+            new CargaValidacionResumenItem
+            {
+                Archivo = "delitos",
+                Codigo = "TOTAL_DELITOS",
+                Descripcion = "Total de registros recibidos en el archivo de delitos.",
+                TotalRegistros = totalDelitos,
+                EsError = false
+            },
+            new CargaValidacionResumenItem
+            {
+                Archivo = "victimas",
+                Codigo = "TOTAL_VICTIMAS",
+                Descripcion = "Total de registros recibidos en el archivo de víctimas.",
+                TotalRegistros = totalVictimas,
+                EsError = false
+            }
+        };
+
+        var erroresPorArchivo = response.Errores
+            .GroupBy(e => string.IsNullOrWhiteSpace(e.Archivo) ? "general" : e.Archivo)
+            .Select(g => new CargaValidacionResumenItem
+            {
+                Archivo = g.Key,
+                Codigo = "TOTAL_ERRORES",
+                Descripcion = $"Total de errores encontrados en {g.Key}.",
+                TotalRegistros = g.Count(),
+                EsError = true
+            });
+
+        response.ResumenValidacion.AddRange(erroresPorArchivo);
     }
 
     private static string GenerarCodigoReferencia()
