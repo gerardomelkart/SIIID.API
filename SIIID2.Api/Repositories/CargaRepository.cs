@@ -44,6 +44,7 @@ public class CargaRepository : ICargaRepository
                 idUsuarioCarga,
                 idEntidadFederativa,
                 codigoReferencia,
+                tipoCarga: "CARGA_INICIAL",
                 mesCorte,
                 anioCorte,
                 totalCarpetas,
@@ -81,15 +82,16 @@ public class CargaRepository : ICargaRepository
         }
     }
 
-    private async Task<long> CrearCargaAsync(SqlConnection connection, SqlTransaction transaction, int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError)
+    private async Task<long> CrearCargaAsync(SqlConnection connection, SqlTransaction transaction, int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, string tipoCarga, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError)
     {
         // Crea el intento de carga.
         // OUTPUT INSERTED.id_carga devuelve el ID generado por SQL Server.
         var sql = @"
-                INSERT INTO carga (
+            INSERT INTO carga (
                 id_usuario_carga,
                 id_entidad_federativa,
                 codigo_referencia,
+                tipo_carga,
                 mes_corte,
                 anio_corte,
                 total_carpetas_investigacion,
@@ -102,10 +104,11 @@ public class CargaRepository : ICargaRepository
                 activo
             )
             OUTPUT INSERTED.id_carga
-                VALUES (
+            VALUES (
                 @IdUsuarioCarga,
                 @IdEntidadFederativa,
                 @CodigoReferencia,
+                @TipoCarga,
                 @MesCorte,
                 @AnioCorte,
                 @TotalCarpetas,
@@ -126,6 +129,7 @@ public class CargaRepository : ICargaRepository
                 IdUsuarioCarga = idUsuarioCarga,
                 IdEntidadFederativa = idEntidadFederativa,
                 CodigoReferencia = codigoReferencia,
+                TipoCarga = tipoCarga,
                 MesCorte = mesCorte,
                 AnioCorte = anioCorte,
                 TotalCarpetas = totalCarpetas,
@@ -1085,5 +1089,88 @@ public class CargaRepository : ICargaRepository
             MesCorte = mesCorte,
             AnioCorte = anioCorte
         });
+    }
+
+    public async Task<string?> ObtenerCodigoActualizacionPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
+    {
+        // Revisa si ya existe una actualización validada pendiente de confirmar
+        // para la misma entidad y periodo.
+        var sql = @"
+        SELECT TOP 1 codigo_referencia
+        FROM carga
+        WHERE id_entidad_federativa = @IdEntidadFederativa
+          AND mes_corte = @MesCorte
+          AND anio_corte = @AnioCorte
+          AND tipo_carga = 'ACTUALIZACION'
+          AND estado = 'VALIDADO_PENDIENTE_ACTUALIZACION'
+          AND activo = 1
+        ORDER BY fecha_validacion DESC;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.QueryFirstOrDefaultAsync<string?>(sql, new
+        {
+            IdEntidadFederativa = idEntidadFederativa,
+            MesCorte = mesCorte,
+            AnioCorte = anioCorte
+        });
+    }
+
+    public async Task<long> GuardarIntentoActualizacionAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError,  List<ArchivoFila> filasCarpetas,  List<ArchivoFila> filasDelitos,  List<ArchivoFila> filasVictimas)
+    {
+        // Guarda la actualización igual que una carga:
+        // registro en carga + staging de carpetas/delitos/víctimas.
+        // La diferencia es tipo_carga = ACTUALIZACION.
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+
+        await connection.OpenAsync();
+
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var idCarga = await CrearCargaAsync(
+                connection,
+                transaction,
+                idUsuarioCarga,
+                idEntidadFederativa,
+                codigoReferencia,
+                tipoCarga: "ACTUALIZACION",
+                mesCorte,
+                anioCorte,
+                totalCarpetas,
+                totalDelitos,
+                totalVictimas,
+                estado,
+                mensajeError);
+
+            await GuardarTmpCarpetasAsync(
+                connection,
+                transaction,
+                idCarga,
+                filasCarpetas);
+
+            await GuardarTmpDelitosAsync(
+                connection,
+                transaction,
+                idCarga,
+                filasDelitos);
+
+            await GuardarTmpVictimasAsync(
+                connection,
+                transaction,
+                idCarga,
+                filasVictimas);
+
+            await transaction.CommitAsync();
+
+            return idCarga;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 }
