@@ -22,6 +22,11 @@ public class CarpetasValidator : IArchivoCargaValidator
 
     public List<CargaValidacionError> Validar(List<ArchivoFila> filas)
     {
+        return Validar(filas, validarMesInmediatoAnterior: true);
+    }
+
+    public List<CargaValidacionError> Validar(List<ArchivoFila> filas, bool validarMesInmediatoAnterior)
+    {
         var errores = new List<CargaValidacionError>();
 
         // Si no hay filas, el archivo no tiene registros útiles.
@@ -71,7 +76,7 @@ public class CarpetasValidator : IArchivoCargaValidator
                 "CARPETAS_NTRA_CI_SIN_INFORMACION",
                 "Falta la nomenclatura del expediente");
 
-            ValidarFechaInicioObligatoria(fila, "fha_de_ini", errores);
+            ValidarFechaInicioObligatoria(fila, "fha_de_ini", errores, validarMesInmediatoAnterior);
 
             // La hora puede venir vacía, pero si viene debe ser válida.
             ValidarHoraOpcional(fila, "hra_de_ini", errores);
@@ -182,7 +187,7 @@ public class CarpetasValidator : IArchivoCargaValidator
         // No se valida longitud porque en la tabla destino será TEXT.
     }
 
-    private void ValidarFechaInicioObligatoria(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
+    private void ValidarFechaInicioObligatoria(ArchivoFila fila, string columna, List<CargaValidacionError> errores, bool validarMesInmediatoAnterior)
     {
         var valor = ObtenerValor(fila, columna);
         // La fecha de inicio sí es obligatoria.
@@ -213,8 +218,12 @@ public class CarpetasValidator : IArchivoCargaValidator
             return;
         }
 
-        // Para carga nueva debe pertenecer al mes inmediato anterior.
-        ValidarMesInmediatoAnterior(fila, columna, fechaInicio, errores);
+        // Esta regla solo aplica para carga normal.
+        // En actualización, el usuario puede seleccionar un corte anterior.
+        if (validarMesInmediatoAnterior)
+        {
+            ValidarMesInmediatoAnterior(fila, columna, fechaInicio, errores);
+        }
     }
 
     private void ValidarMesInmediatoAnterior(ArchivoFila fila, string columna, DateTime fechaInicio, List<CargaValidacionError> errores)

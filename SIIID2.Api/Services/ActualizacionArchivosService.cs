@@ -185,7 +185,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         var filasVictimas = await _archivoReader.LeerAsync(archivoVictimas!);
 
         // Validaciones individuales por archivo.
-        response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas));
+        response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas, validarMesInmediatoAnterior: false));
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
         response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
 
@@ -238,10 +238,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
         // Si no hay errores y ya tenemos entidad/periodo,
         // revisamos que exista una carga inicial confirmada para ese corte.
-        if (idEntidadFederativaCarga.HasValue &&
-            mesCorte.HasValue &&
-            anioCorte.HasValue &&
-            response.Errores.Count == 0)
+        if (idEntidadFederativaCarga.HasValue && mesCorte.HasValue && anioCorte.HasValue)
         {
             var existeCargaConfirmada = await _cargaRepository.ExisteCargaConfirmadaAsync(
                 idEntidadFederativaCarga.Value,
@@ -264,7 +261,6 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             }
             else
             {
-                // Evita múltiples actualizaciones pendientes del mismo corte.
                 var codigoActualizacionPendiente = await _cargaRepository.ObtenerCodigoActualizacionPendienteAsync(
                     idEntidadFederativaCarga.Value,
                     mesCorte.Value,
