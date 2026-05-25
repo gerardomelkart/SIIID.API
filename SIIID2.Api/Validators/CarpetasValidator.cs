@@ -266,28 +266,21 @@ public class CarpetasValidator : IArchivoCargaValidator
 
         valor = valor.Trim();
 
-        var fechaCarga = DateTime.Today;
-        var mesInmediatoAnterior = fechaCarga.AddMonths(-1);
-
-        // Formatos comunes que pueden venir desde CSV o Excel.
+        // En los archivos de fiscalías, las fechas textuales se interpretan en formato mexicano.
+        // Ejemplo:
+        // 01/04/2026 = 1 de abril de 2026
+        //
+        // No usamos formatos MM/dd/yyyy para evitar interpretar mal fechas ambiguas.
         var formatos = new[]
         {
-            "yyyy-MM-dd",
-            "yyyy/MM/dd",
-            "yyyyMMdd",
-
-            "dd/MM/yyyy",
-            "d/M/yyyy",
-            "dd-MM-yyyy",
-            "d-M-yyyy",
-
-            "MM/dd/yyyy",
-            "M/d/yyyy",
-            "MM-dd-yyyy",
-            "M-d-yyyy"
-        };
-
-        var posiblesFechas = new List<DateTime>();
+        "dd/MM/yyyy",
+        "d/M/yyyy",
+        "dd-MM-yyyy",
+        "d-M-yyyy",
+        "yyyy-MM-dd",
+        "yyyy/MM/dd",
+        "yyyyMMdd"
+    };
 
         foreach (var formato in formatos)
         {
@@ -298,42 +291,36 @@ public class CarpetasValidator : IArchivoCargaValidator
                     DateTimeStyles.None,
                     out var fechaParseada))
             {
-                posiblesFechas.Add(fechaParseada.Date);
+                fecha = fechaParseada.Date;
+                return true;
             }
         }
 
-        // Intenta interpretar como fecha con cultura mexicana.
+        // Intento general con cultura mexicana.
         if (DateTime.TryParse(
                 valor,
                 new CultureInfo("es-MX"),
                 DateTimeStyles.None,
                 out var fechaMx))
         {
-            posiblesFechas.Add(fechaMx.Date);
-        }
-
-        // Intenta interpretar como fecha en formato estadounidense.
-        if (DateTime.TryParse(
-                valor,
-                new CultureInfo("en-US"),
-                DateTimeStyles.None,
-                out var fechaUs))
-        {
-            posiblesFechas.Add(fechaUs.Date);
+            fecha = fechaMx.Date;
+            return true;
         }
 
         // Soporte para fechas como número serial de Excel.
+        // Ejemplo: 45300, 45678, etc.
         if (double.TryParse(valor, NumberStyles.Any, CultureInfo.InvariantCulture, out var numeroExcel))
         {
             if (numeroExcel > 0 && numeroExcel < 60000)
             {
                 try
                 {
-                    posiblesFechas.Add(DateTime.FromOADate(numeroExcel).Date);
+                    fecha = DateTime.FromOADate(numeroExcel).Date;
+                    return true;
                 }
                 catch
                 {
-                    // Si no se puede convertir, se ignora.
+                    // Si no se puede convertir, se ignora y se continúa.
                 }
             }
         }
@@ -345,7 +332,8 @@ public class CarpetasValidator : IArchivoCargaValidator
             {
                 try
                 {
-                    posiblesFechas.Add(DateTime.FromOADate(numeroExcelMx).Date);
+                    fecha = DateTime.FromOADate(numeroExcelMx).Date;
+                    return true;
                 }
                 catch
                 {
@@ -354,28 +342,7 @@ public class CarpetasValidator : IArchivoCargaValidator
             }
         }
 
-        posiblesFechas = posiblesFechas
-            .Distinct()
-            .ToList();
-
-        if (posiblesFechas.Count == 0)
-            return false;
-
-        // Si hay ambigüedad, se prefiere la fecha que cae en el mes esperado.
-        var fechaMesAnterior = posiblesFechas.FirstOrDefault(f =>
-            f.Year == mesInmediatoAnterior.Year &&
-            f.Month == mesInmediatoAnterior.Month);
-
-        if (fechaMesAnterior != default)
-        {
-            fecha = fechaMesAnterior;
-            return true;
-        }
-
-        // Si ninguna cae en el mes esperado, regresamos la primera.
-        // La validación de rango se encargará de marcar error.
-        fecha = posiblesFechas.First();
-        return true;
+        return false;
     }
 
     private bool IntentarConvertirHora(string valor, out TimeSpan hora)

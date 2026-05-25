@@ -22,6 +22,7 @@ public class ArchivoReader : IArchivoReader
             _ => throw new ArgumentException($"La extensión {extension} no es compatible para lectura.")
         };
     }
+
     private async Task<List<ArchivoFila>> LeerCsvAsync(IFormFile archivo)
     {
         var filas = new List<ArchivoFila>();
@@ -66,6 +67,7 @@ public class ArchivoReader : IArchivoReader
         }
         return filas;
     }
+
     private async Task<List<ArchivoFila>> LeerExcelAsync(IFormFile archivo)
     {
         var filas = new List<ArchivoFila>();
@@ -117,12 +119,15 @@ public class ArchivoReader : IArchivoReader
                 }
                 // GetFormattedString respeta lo que Excel muestra al usuario.
                 // Esto ayuda con fechas/horas que Excel guarda internamente como números.
-                var valor = worksheet.Cell(row, col).GetFormattedString();
-                if (!string.IsNullOrWhiteSpace(valor)) 
+                var celda = worksheet.Cell(row, col);
+                var valor = ObtenerValorCeldaExcel(celda);
+
+                if (!string.IsNullOrWhiteSpace(valor))
                 {
                     filaVacia = false;
                 }
-                fila.Columnas[columna] = string.IsNullOrWhiteSpace(valor) ? null:valor.Trim();
+
+                fila.Columnas[columna] = string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
             }
             // No se agregan filas completamente vacías.
             if (!filaVacia) 
@@ -132,6 +137,82 @@ public class ArchivoReader : IArchivoReader
         }
         return filas;
     }
+
+    private static string? ObtenerValorCeldaExcel(IXLCell celda)
+    {
+        // Si la celda está vacía, no regresamos texto.
+        if (celda.IsEmpty())
+        {
+            return null;
+        }
+
+        // Si Excel reconoce la celda como fecha/hora real,
+        // la convertimos nosotros a formato mexicano estable.
+        //
+        // Esto evita que ClosedXML entregue fechas como "4/1/2026"
+        // cuando el archivo muestra "01/04/2026".
+        if (celda.DataType == XLDataType.DateTime)
+        {
+            var fecha = celda.GetDateTime();
+
+            // Si trae hora diferente de 00:00:00, conservamos fecha y hora.
+            if (fecha.TimeOfDay != TimeSpan.Zero)
+            {
+                return fecha.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+            }
+
+            return fecha.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+        }
+
+        // Si la celda es numérica pero Excel le aplicó formato de fecha,
+        // también intentamos convertirla como fecha serial.
+        //
+        // Esto cubre casos donde ClosedXML no marca DataType como DateTime,
+        // pero el valor sigue siendo una fecha de Excel.
+        if (celda.DataType == XLDataType.Number && EsFormatoFechaExcel(celda))
+        {
+            var numero = celda.GetDouble();
+
+            try
+            {
+                var fecha = DateTime.FromOADate(numero);
+
+                if (fecha.TimeOfDay != TimeSpan.Zero)
+                {
+                    return fecha.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+                }
+
+                return fecha.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                // Si no se puede convertir como fecha, cae al formato normal.
+            }
+        }
+
+        // Para todo lo demás usamos el texto formateado.
+        // Esto mantiene ceros, descripciones y textos tal como vienen en Excel.
+        return celda.GetFormattedString();
+    }
+
+    private static bool EsFormatoFechaExcel(IXLCell celda)
+    {
+        var formato = celda.Style.DateFormat.Format;
+
+        if (string.IsNullOrWhiteSpace(formato))
+        {
+            return false;
+        }
+
+        formato = formato.ToLowerInvariant();
+
+        // Detecta formatos de fecha comunes en Excel.
+        return formato.Contains("d") ||
+               formato.Contains("m") ||
+               formato.Contains("y") ||
+               formato.Contains("a");
+    }
+
     private static string NormalizarNombreColumna(string columna)
     {
         if (string.IsNullOrWhiteSpace(columna))

@@ -481,44 +481,49 @@ public class DelitosValidator : IArchivoCargaValidator
 
         valor = valor.Trim();
 
+        // Las fechas textuales de los archivos se interpretan en formato mexicano.
+        // Ejemplo:
+        // 04/02/2026 = 4 de febrero de 2026
+        //
+        // No usamos formatos MM/dd/yyyy ni cultura en-US para evitar que fechas
+        // ambiguas se interpreten como mes/día/año.
         var formatos = new[]
         {
-            "yyyy-MM-dd",
-            "yyyy/MM/dd",
-            "yyyyMMdd",
-
-            "dd/MM/yyyy",
-            "d/M/yyyy",
-            "dd-MM-yyyy",
-            "d-M-yyyy",
-
-            "MM/dd/yyyy",
-            "M/d/yyyy",
-            "MM-dd-yyyy",
-            "M-d-yyyy"
-        };
+        "dd/MM/yyyy",
+        "d/M/yyyy",
+        "dd-MM-yyyy",
+        "d-M-yyyy",
+        "yyyy-MM-dd",
+        "yyyy/MM/dd",
+        "yyyyMMdd"
+    };
 
         foreach (var formato in formatos)
         {
-            if (DateTime.TryParseExact(valor, formato, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fechaParseada))
+            if (DateTime.TryParseExact(
+                    valor,
+                    formato,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var fechaParseada))
             {
                 fecha = fechaParseada.Date;
                 return true;
             }
         }
 
-        if (DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out var fechaMx))
+        // Intento general con cultura mexicana.
+        if (DateTime.TryParse(
+                valor,
+                new CultureInfo("es-MX"),
+                DateTimeStyles.None,
+                out var fechaMx))
         {
             fecha = fechaMx.Date;
             return true;
         }
 
-        if (DateTime.TryParse(valor, new CultureInfo("en-US"), DateTimeStyles.None, out var fechaUs))
-        {
-            fecha = fechaUs.Date;
-            return true;
-        }
-
+        // Soporte para fechas como número serial de Excel.
         if (double.TryParse(valor, NumberStyles.Any, CultureInfo.InvariantCulture, out var numeroExcel))
         {
             if (numeroExcel > 0 && numeroExcel < 60000)
@@ -535,6 +540,7 @@ public class DelitosValidator : IArchivoCargaValidator
             }
         }
 
+        // Soporte para número serial de Excel con cultura mexicana.
         if (double.TryParse(valor, NumberStyles.Any, new CultureInfo("es-MX"), out var numeroExcelMx))
         {
             if (numeroExcelMx > 0 && numeroExcelMx < 60000)
@@ -630,13 +636,7 @@ public class DelitosValidator : IArchivoCargaValidator
         return valor;
     }
 
-    private void AgregarError(
-        List<CargaValidacionError> errores,
-        ArchivoFila fila,
-        string columna,
-        string codigo,
-        string descripcionResumen,
-        string mensaje)
+    private void AgregarError(List<CargaValidacionError> errores, ArchivoFila fila, string columna, string codigo, string descripcionResumen, string mensaje)
     {
         fila.Columnas.TryGetValue(columna, out var valor);
 
