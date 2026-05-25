@@ -120,8 +120,6 @@ public class CatalogosValidator
 
         var municipiosPorEntidad = await _catalogoRepository.ObtenerMunicipiosPorEntidadActivosAsync();
 
-        var codigosPostales = await _catalogoRepository.ObtenerClavesTextoActivasAsync("catalogo_codigo_postal", "codigo_postal");
-
         foreach (var fila in filasDelitos)
         {
             ValidarClaveCatalogoNumericaOpcional(
@@ -172,11 +170,6 @@ public class CatalogosValidator
                 idsEntidadesFederativas,
                 clavesEntidadesFederativas,
                 municipiosPorEntidad,
-                errores);
-
-            ValidarCodigoPostalContraCatalogo(
-                fila,
-                codigosPostales,
                 errores);
         }
     }
