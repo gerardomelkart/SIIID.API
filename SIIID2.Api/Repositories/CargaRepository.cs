@@ -2795,6 +2795,7 @@ public class CargaRepository : ICargaRepository
         WHERE id_carga = @IdCarga;
     ";
 
+
         await connection.ExecuteAsync(
             sql,
             new
