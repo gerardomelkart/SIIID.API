@@ -439,9 +439,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // mesCorte = 5, anioCorte = 2026
         // Corte: mayo 2026
         // Información esperada en el Excel: abril 2026.
-        var periodoInformacion = ObtenerPeriodoInformacionDesdePeriodoCorte(
-            mesCorte,
-            anioCorte);
+        var periodoInformacion = ObtenerPeriodoInformacionDesdeCorte(mesCorte, anioCorte);
 
         foreach (var fila in filasCarpetas)
         {
@@ -459,8 +457,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 continue;
             }
 
-            if (fecha.Month == periodoInformacion.MesInformacion &&
-                fecha.Year == periodoInformacion.AnioInformacion)
+            if (fecha.Month == periodoInformacion.Mes && fecha.Year == periodoInformacion.Anio)
             {
                 continue;
             }
@@ -474,7 +471,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 Valor = valorFecha,
                 Codigo = "CARPETAS_FECHA_FUERA_PERIODO_ACTUALIZACION",
                 DescripcionResumen = "Fecha fuera del periodo de información",
-                Mensaje = $"La fecha de inicio de la carpeta ({valorFecha}) no corresponde al periodo de información esperado {periodoInformacion.MesInformacion:00}/{periodoInformacion.AnioInformacion} para el corte {mesCorte:00}/{anioCorte}."
+                Mensaje = $"La fecha de inicio de la carpeta ({valorFecha}) no corresponde al periodo de información esperado {periodoInformacion.Mes:00}/{periodoInformacion.Anio} para el corte {mesCorte:00}/{anioCorte}."
             });
         }
 
@@ -791,8 +788,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     {
         return Guid.NewGuid().ToString("N")[..12];
     }
-
-    private static (int MesInformacion, int AnioInformacion) ObtenerPeriodoInformacionDesdePeriodoCorte(int mesCorte, int anioCorte)
+    private static (int Mes, int Anio) ObtenerPeriodoInformacionDesdeCorte(int mesCorte, int anioCorte)
     {
         // Corte enero 2026 => información diciembre 2025.
         if (mesCorte == 1)
