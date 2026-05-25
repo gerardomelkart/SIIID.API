@@ -20,7 +20,19 @@ public class CargaRepository : ICargaRepository
         public bool HabilitaCarga { get; set; }
     }
 
+    private class ActualizacionDiferenciaRow
+    {
+        public string Seccion { get; set; } = string.Empty;
+        public string TipoMovimiento { get; set; } = string.Empty;
+        public string CampoIdentificador { get; set; } = string.Empty;
+        public string IdentificadorFiscalia { get; set; } = string.Empty;
+        public string? Campo { get; set; }
+        public string? ValorAnterior { get; set; }
+        public string? ValorNuevo { get; set; }
+    }
+
     private readonly IDbConnectionFactory _dbConnectionFactory;
+
     public CargaRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
@@ -1531,5 +1543,192 @@ public class CargaRepository : ICargaRepository
         }
 
         return resumen;
+    }
+
+    public async Task<ActualizacionDiferenciasResponse?> ObtenerDetalleDiferenciasActualizacionAsync(string codigoReferencia, int? idEntidadFederativaUsuario, bool esSuperUsuario)
+    {
+        // Devuelve el detalle de diferencias de una actualización pendiente.
+        // Por ahora se detalla carpetas.
+        // Después se agregan delitos y víctimas con la misma estructura.
+
+        var sql = @"
+        ;WITH carga_actualizacion AS (
+            SELECT TOP 1
+                id_carga,
+                codigo_referencia,
+                id_entidad_federativa,
+                mes_corte,
+                anio_corte
+            FROM carga
+            WHERE codigo_referencia = @CodigoReferencia
+              AND tipo_carga = 'ACTUALIZACION'
+              AND estado = 'VALIDADO_PENDIENTE_ACTUALIZACION'
+              AND activo = 1
+              AND (
+                    @EsSuperUsuario = 1
+                    OR id_entidad_federativa = @IdEntidadFederativaUsuario
+                  )
+        ),
+        cargas_base AS (
+            SELECT c.id_carga
+            FROM carga c
+            INNER JOIN carga_actualizacion ca
+                ON ca.id_entidad_federativa = c.id_entidad_federativa
+               AND ca.mes_corte = c.mes_corte
+               AND ca.anio_corte = c.anio_corte
+            WHERE c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+              AND c.activo = 1
+        ),
+        carpetas_actuales AS (
+            SELECT
+                ci.identificador_carpeta_fiscalia,
+                ci.nomenclatura_carpeta_fiscalia,
+                ci.fecha_inicio,
+                ci.resumen_hechos
+            FROM carpeta_investigacion ci
+            INNER JOIN cargas_base cb
+                ON cb.id_carga = ci.id_carga
+            WHERE ci.activo = 1
+        ),
+        carpetas_tmp AS (
+            SELECT
+                c.id_ci,
+                c.ntra_ci,
+                COALESCE(
+                    TRY_CONVERT(datetime2, c.fha_de_ini, 103),
+                    TRY_CONVERT(datetime2, c.fha_de_ini)
+                ) AS fecha_inicio,
+                c.rmen_de_hchos
+            FROM carga_tmp_carpeta c
+            INNER JOIN carga_actualizacion ca
+                ON ca.id_carga = c.id_carga
+            WHERE c.activo = 1
+        )
+        SELECT
+            'carpetas' AS Seccion,
+            'NUEVO' AS TipoMovimiento,
+            'id_ci' AS CampoIdentificador,
+            ct.id_ci AS IdentificadorFiscalia,
+            NULL AS Campo,
+            NULL AS ValorAnterior,
+            NULL AS ValorNuevo
+        FROM carpetas_tmp ct
+        LEFT JOIN carpetas_actuales ca
+            ON ca.identificador_carpeta_fiscalia = ct.id_ci
+        WHERE ca.identificador_carpeta_fiscalia IS NULL
+
+        UNION ALL
+
+        SELECT
+            'carpetas' AS Seccion,
+            'ELIMINADO' AS TipoMovimiento,
+            'id_ci' AS CampoIdentificador,
+            ca.identificador_carpeta_fiscalia AS IdentificadorFiscalia,
+            NULL AS Campo,
+            NULL AS ValorAnterior,
+            NULL AS ValorNuevo
+        FROM carpetas_actuales ca
+        LEFT JOIN carpetas_tmp ct
+            ON ct.id_ci = ca.identificador_carpeta_fiscalia
+        WHERE ct.id_ci IS NULL
+
+        UNION ALL
+
+        SELECT
+            'carpetas' AS Seccion,
+            'MODIFICADO' AS TipoMovimiento,
+            'id_ci' AS CampoIdentificador,
+            ct.id_ci AS IdentificadorFiscalia,
+            'nomenclatura_carpeta_fiscalia' AS Campo,
+            ca.nomenclatura_carpeta_fiscalia AS ValorAnterior,
+            ct.ntra_ci AS ValorNuevo
+        FROM carpetas_tmp ct
+        INNER JOIN carpetas_actuales ca
+            ON ca.identificador_carpeta_fiscalia = ct.id_ci
+        WHERE ISNULL(ca.nomenclatura_carpeta_fiscalia, '') <> ISNULL(ct.ntra_ci, '')
+
+        UNION ALL
+
+        SELECT
+            'carpetas' AS Seccion,
+            'MODIFICADO' AS TipoMovimiento,
+            'id_ci' AS CampoIdentificador,
+            ct.id_ci AS IdentificadorFiscalia,
+            'fecha_inicio' AS Campo,
+            CONVERT(varchar(10), ca.fecha_inicio, 103) AS ValorAnterior,
+            CONVERT(varchar(10), ct.fecha_inicio, 103) AS ValorNuevo
+        FROM carpetas_tmp ct
+        INNER JOIN carpetas_actuales ca
+            ON ca.identificador_carpeta_fiscalia = ct.id_ci
+        WHERE ISNULL(CONVERT(varchar(19), ca.fecha_inicio, 120), '') <> ISNULL(CONVERT(varchar(19), ct.fecha_inicio, 120), '')
+
+        UNION ALL
+
+        SELECT
+            'carpetas' AS Seccion,
+            'MODIFICADO' AS TipoMovimiento,
+            'id_ci' AS CampoIdentificador,
+            ct.id_ci AS IdentificadorFiscalia,
+            'resumen_hechos' AS Campo,
+            ca.resumen_hechos AS ValorAnterior,
+            ct.rmen_de_hchos AS ValorNuevo
+        FROM carpetas_tmp ct
+        INNER JOIN carpetas_actuales ca
+            ON ca.identificador_carpeta_fiscalia = ct.id_ci
+        WHERE ISNULL(ca.resumen_hechos, '') <> ISNULL(ct.rmen_de_hchos, '');
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var filas = (await connection.QueryAsync<ActualizacionDiferenciaRow>(
+            sql,
+            new
+            {
+                CodigoReferencia = codigoReferencia,
+                IdEntidadFederativaUsuario = idEntidadFederativaUsuario,
+                EsSuperUsuario = esSuperUsuario
+            })).ToList();
+
+        var response = new ActualizacionDiferenciasResponse
+        {
+            EsValido = true,
+            CodigoReferencia = codigoReferencia,
+            Mensaje = filas.Count == 0
+                ? "No se encontraron diferencias detalladas para la actualización."
+                : "Detalle de diferencias obtenido correctamente."
+        };
+
+        var carpetas = filas
+            .Where(x => x.Seccion == "carpetas")
+            .GroupBy(x => new
+            {
+                x.TipoMovimiento,
+                x.CampoIdentificador,
+                x.IdentificadorFiscalia
+            });
+
+        foreach (var grupo in carpetas)
+        {
+            var registro = new ActualizacionDiferenciaRegistro
+            {
+                TipoMovimiento = grupo.Key.TipoMovimiento,
+                CampoIdentificador = grupo.Key.CampoIdentificador,
+                IdentificadorFiscalia = grupo.Key.IdentificadorFiscalia
+            };
+
+            foreach (var campo in grupo.Where(x => !string.IsNullOrWhiteSpace(x.Campo)))
+            {
+                registro.CamposModificados.Add(new ActualizacionCampoDiferencia
+                {
+                    Campo = campo.Campo!,
+                    ValorAnterior = campo.ValorAnterior,
+                    ValorNuevo = campo.ValorNuevo
+                });
+            }
+
+            response.Carpetas.Add(registro);
+        }
+
+        return response;
     }
 }

@@ -793,6 +793,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     {
         return Guid.NewGuid().ToString("N")[..12];
     }
+
     private static (int Mes, int Anio) ObtenerPeriodoInformacionDesdeCorte(int mesCorte, int anioCorte)
     {
         // Corte enero 2026 => información diciembre 2025.
@@ -803,5 +804,37 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
         // Corte mayo 2026 => información abril 2026.
         return (mesCorte - 1, anioCorte);
+    }
+
+    public async Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta)
+    {
+        var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuarioConsulta == null)
+        {
+            return new ActualizacionDiferenciasResponse
+            {
+                EsValido = false,
+                CodigoReferencia = codigoReferencia,
+                Mensaje = "El usuario autenticado no existe o no está activo."
+            };
+        }
+
+        var detalle = await _cargaRepository.ObtenerDetalleDiferenciasActualizacionAsync(
+            codigoReferencia,
+            usuarioConsulta.IdEntidadFederativa,
+            usuarioConsulta.EsSuperUsuario);
+
+        if (detalle == null)
+        {
+            return new ActualizacionDiferenciasResponse
+            {
+                EsValido = false,
+                CodigoReferencia = codigoReferencia,
+                Mensaje = "No se encontró una actualización pendiente válida para el código de referencia indicado."
+            };
+        }
+
+        return detalle;
     }
 }

@@ -70,4 +70,33 @@ public class ActualizacionesController : ControllerBase
 
         return Ok(resultado);
     }
+
+    [Authorize]
+    [HttpGet("diferencias/{codigoReferencia}")]
+    public async Task<IActionResult> ObtenerDiferencias(string codigoReferencia)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        var resultado = await _actualizacionArchivosService.ObtenerDetalleDiferenciasAsync(
+            codigoReferencia,
+            idUsuarioConsulta);
+
+        if (!resultado.EsValido)
+        {
+            return BadRequest(resultado);
+        }
+
+        return Ok(resultado);
+    }
 }
