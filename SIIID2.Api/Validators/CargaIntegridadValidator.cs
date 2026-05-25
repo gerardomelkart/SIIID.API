@@ -314,53 +314,58 @@ public class CargaIntegridadValidator
 
         valor = valor.Trim();
 
-        var fechaCarga = DateTime.Today;
-        var mesInmediatoAnterior = fechaCarga.AddMonths(-1);
-
+        // Las fechas textuales de los archivos se interpretan en formato mexicano.
+        // Ejemplo:
+        // 01/04/2026 = 1 de abril de 2026
+        // 04/02/2026 = 4 de febrero de 2026
+        //
+        // No usamos MM/dd/yyyy ni cultura en-US para evitar que fechas ambiguas
+        // se interpreten como mes/día/año.
         var formatos = new[]
         {
-        "yyyy-MM-dd",
-        "yyyy/MM/dd",
-        "yyyyMMdd",
-
         "dd/MM/yyyy",
         "d/M/yyyy",
         "dd-MM-yyyy",
         "d-M-yyyy",
-
-        "MM/dd/yyyy",
-        "M/d/yyyy",
-        "MM-dd-yyyy",
-        "M-d-yyyy"
+        "yyyy-MM-dd",
+        "yyyy/MM/dd",
+        "yyyyMMdd"
     };
-
-        var posiblesFechas = new List<DateTime>();
 
         foreach (var formato in formatos)
         {
-            if (DateTime.TryParseExact(valor, formato, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fechaParseada))
+            if (DateTime.TryParseExact(
+                    valor,
+                    formato,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var fechaParseada))
             {
-                posiblesFechas.Add(fechaParseada.Date);
+                fecha = fechaParseada.Date;
+                return true;
             }
         }
 
-        if (DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out var fechaMx))
+        // Intento general con cultura mexicana.
+        if (DateTime.TryParse(
+                valor,
+                new CultureInfo("es-MX"),
+                DateTimeStyles.None,
+                out var fechaMx))
         {
-            posiblesFechas.Add(fechaMx.Date);
+            fecha = fechaMx.Date;
+            return true;
         }
 
-        if (DateTime.TryParse(valor, new CultureInfo("en-US"), DateTimeStyles.None, out var fechaUs))
-        {
-            posiblesFechas.Add(fechaUs.Date);
-        }
-
+        // Soporte para fechas como número serial de Excel.
         if (double.TryParse(valor, NumberStyles.Any, CultureInfo.InvariantCulture, out var numeroExcel))
         {
             if (numeroExcel > 0 && numeroExcel < 60000)
             {
                 try
                 {
-                    posiblesFechas.Add(DateTime.FromOADate(numeroExcel).Date);
+                    fecha = DateTime.FromOADate(numeroExcel).Date;
+                    return true;
                 }
                 catch
                 {
@@ -369,13 +374,15 @@ public class CargaIntegridadValidator
             }
         }
 
+        // Soporte para número serial de Excel con cultura mexicana.
         if (double.TryParse(valor, NumberStyles.Any, new CultureInfo("es-MX"), out var numeroExcelMx))
         {
             if (numeroExcelMx > 0 && numeroExcelMx < 60000)
             {
                 try
                 {
-                    posiblesFechas.Add(DateTime.FromOADate(numeroExcelMx).Date);
+                    fecha = DateTime.FromOADate(numeroExcelMx).Date;
+                    return true;
                 }
                 catch
                 {
@@ -384,26 +391,7 @@ public class CargaIntegridadValidator
             }
         }
 
-        posiblesFechas = posiblesFechas.Distinct().ToList();
-
-        if (posiblesFechas.Count == 0)
-        {
-            return false;
-        } 
-
-        // Si hay fechas ambiguas, se prefiere la que cae en el mes inmediato anterior.
-        // Esto evita interpretar 01/04/2026 como enero 4 cuando realmente es abril 1.
-        var fechaMesAnterior = posiblesFechas.FirstOrDefault(f => f.Year == mesInmediatoAnterior.Year && f.Month == mesInmediatoAnterior.Month);
-
-        if (fechaMesAnterior != default)
-        {
-            fecha = fechaMesAnterior;
-            return true;
-        }
-
-        // Si no hay coincidencia con el mes esperado, se toma la primera fecha parseada.
-        fecha = posiblesFechas.First();
-        return true;
+        return false;
     }
 
     private static void AgregarError(List<CargaValidacionError> errores, string archivo, ArchivoFila fila, string columna, string codigo, string descripcionResumen, string mensaje)

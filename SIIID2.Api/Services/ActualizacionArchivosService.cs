@@ -432,14 +432,16 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     {
         var errores = new List<CargaValidacionError>();
 
-        // El usuario selecciona el mes/año de corte.
+        // En actualización, el usuario selecciona el mes/año de corte.
         // Pero los archivos contienen información del mes inmediato anterior.
         //
         // Ejemplo:
         // mesCorte = 5, anioCorte = 2026
         // Corte: mayo 2026
-        // Información esperada en Excel: abril 2026
-        var periodoInformacion = ObtenerPeriodoInformacionDesdeCorte(mesCorte, anioCorte);
+        // Información esperada en el Excel: abril 2026.
+        var periodoInformacion = ObtenerPeriodoInformacionDesdePeriodoCorte(
+            mesCorte,
+            anioCorte);
 
         foreach (var fila in filasCarpetas)
         {
@@ -451,13 +453,14 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 continue;
             }
 
-            // Si viene en formato inválido, lo reporta CarpetasValidator.
-            if (!DateTime.TryParse(valorFecha, out var fecha))
+            // Si viene con formato inválido, lo reporta CarpetasValidator.
+            if (!DateTime.TryParse(valorFecha, new CultureInfo("es-MX"), DateTimeStyles.None, out var fecha))
             {
                 continue;
             }
 
-            if (fecha.Month == periodoInformacion.Mes && fecha.Year == periodoInformacion.Anio)
+            if (fecha.Month == periodoInformacion.MesInformacion &&
+                fecha.Year == periodoInformacion.AnioInformacion)
             {
                 continue;
             }
@@ -471,7 +474,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 Valor = valorFecha,
                 Codigo = "CARPETAS_FECHA_FUERA_PERIODO_ACTUALIZACION",
                 DescripcionResumen = "Fecha fuera del periodo de información",
-                Mensaje = $"La fecha de inicio de la carpeta ({valorFecha}) no corresponde al periodo de información esperado {periodoInformacion.Mes:00}/{periodoInformacion.Anio} para el corte {mesCorte:00}/{anioCorte}."
+                Mensaje = $"La fecha de inicio de la carpeta ({valorFecha}) no corresponde al periodo de información esperado {periodoInformacion.MesInformacion:00}/{periodoInformacion.AnioInformacion} para el corte {mesCorte:00}/{anioCorte}."
             });
         }
 
@@ -789,15 +792,15 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         return Guid.NewGuid().ToString("N")[..12];
     }
 
-    private static (int Mes, int Anio) ObtenerPeriodoInformacionDesdeCorte(int mesCorte, int anioCorte)
+    private static (int MesInformacion, int AnioInformacion) ObtenerPeriodoInformacionDesdePeriodoCorte(int mesCorte, int anioCorte)
     {
-        // Para el corte de enero, la información corresponde a diciembre del año anterior.
+        // Corte enero 2026 => información diciembre 2025.
         if (mesCorte == 1)
         {
             return (12, anioCorte - 1);
         }
 
-        // Para cualquier otro corte, la información corresponde al mes anterior del mismo año.
+        // Corte mayo 2026 => información abril 2026.
         return (mesCorte - 1, anioCorte);
     }
 }
