@@ -99,7 +99,8 @@ public class CatalogosValidator
                 "VICTIMAS_NACIONAL_NO_EXISTE_CATALOGO",
                 "Nacionalidad no válida según el catálogo",
                 "La nacionalidad no existe o no está activa en el catálogo.",
-                "victimas");
+                "victimas",
+                compararComoNumero: true);
         }
     }
 
@@ -286,7 +287,7 @@ public class CatalogosValidator
         AgregarError(errores, "delitos", fila, columna, codigo, descripcionResumen, mensaje);
     }
 
-    private void ValidarClaveCatalogoTextoOpcional(ArchivoFila fila, string columna, HashSet<string> catalogo, List<CargaValidacionError> errores, string codigo, string descripcionResumen, string mensaje, string archivo)
+    private void ValidarClaveCatalogoTextoOpcional(ArchivoFila fila, string columna, HashSet<string> catalogo, List<CargaValidacionError> errores, string codigo, string descripcionResumen, string mensaje, string archivo, bool compararComoNumero = false)
     {
         var valor = ObtenerValor(fila, columna);
 
@@ -304,57 +305,23 @@ public class CatalogosValidator
             return;
         }
 
+        // Algunos catálogos tienen claves numéricas guardadas como texto con ceros a la izquierda.
+        // Ejemplo:
+        // Excel puede traer 9 y el catálogo tener 09.
+        // También debe respetar 174 como 174.
+        if (compararComoNumero && int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var valorNumerico))
+        {
+            var existeEquivalenteNumerico = catalogo.Any(claveCatalogo =>
+                int.TryParse(claveCatalogo, NumberStyles.Integer, CultureInfo.InvariantCulture, out var claveNumerica) &&
+                claveNumerica == valorNumerico);
+
+            if (existeEquivalenteNumerico)
+            {
+                return;
+            }
+        }
+
         AgregarError(errores, archivo, fila, columna, codigo, descripcionResumen, mensaje);
-    }
-
-    private void ValidarCodigoPostalContraCatalogo(ArchivoFila fila, HashSet<string> codigosPostales, List<CargaValidacionError> errores)
-    {
-        var valor = ObtenerValor(fila, "cp");
-
-        // CP no es obligatorio.
-        if (string.IsNullOrWhiteSpace(valor))
-        {
-            return;
-        }
-
-        valor = valor.Trim();
-
-        // Si viene en ceros, se toma como sin información.
-        if (valor.All(c => c == '0'))
-        {
-            return;
-        }
-
-        // Si no es numérico, no se valida contra catálogo.
-        // El CP no debe bloquear la carga por formato.
-        if (!valor.All(char.IsDigit))
-        {
-            return;
-        }
-
-        // Excel puede quitar ceros a la izquierda.
-        // Ejemplo: 01234 puede llegar como 1234.
-        var codigoPostalNormalizado = valor.PadLeft(5, '0');
-
-        // Si después de normalizar supera 5 dígitos, no es un CP utilizable.
-        if (codigoPostalNormalizado.Length > 5)
-        {
-            return;
-        }
-
-        if (codigosPostales.Contains(codigoPostalNormalizado))
-        {
-            return;
-        }
-
-        AgregarError(
-            errores,
-            "delitos",
-            fila,
-            "cp",
-            "DELITOS_CP_NO_EXISTE_CATALOGO",
-            "Código postal no válido según el catálogo",
-            "El código postal no existe o no está activo en el catálogo.");
     }
 
     private void ValidarEntidadFederativa(ArchivoFila fila, HashSet<int> idsEntidadesFederativas, HashSet<string> clavesEntidadesFederativas, List<CargaValidacionError> errores)
