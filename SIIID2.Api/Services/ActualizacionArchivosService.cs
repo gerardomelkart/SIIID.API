@@ -838,4 +838,23 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
         return detalle;
     }
+
+    public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(ConfirmarCargaRequest request, int idUsuarioConfirmacion)
+    {
+        if (string.IsNullOrWhiteSpace(request.CodigoReferencia))
+        {
+            return new ConfirmarCargaResponse
+            {
+                EsValido = false,
+                CodigoReferencia = request.CodigoReferencia,
+                Estado = "",
+                Mensaje = "Debe enviar el código de referencia de la actualización."
+            };
+        }
+
+        return await _cargaRepository.ConfirmarActualizacionAsync(
+            request.CodigoReferencia,
+            request.Aceptar,
+            idUsuarioConfirmacion);
+    }
 }

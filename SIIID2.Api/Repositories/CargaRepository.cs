@@ -31,6 +31,18 @@ public class CargaRepository : ICargaRepository
         public string? ValorNuevo { get; set; }
     }
 
+    private class ActualizacionConfirmacionInfo
+    {
+        public long IdCarga { get; set; }
+        public string CodigoReferencia { get; set; } = string.Empty;
+        public string Estado { get; set; } = string.Empty;
+        public DateTime? FechaExpiracion { get; set; }
+        public int? IdEntidadFederativaCarga { get; set; }
+        public int? IdEntidadFederativaUsuario { get; set; }
+        public bool EsSuperUsuario { get; set; }
+        public bool HabilitaModificacion { get; set; }
+    }
+
     private readonly IDbConnectionFactory _dbConnectionFactory;
 
     public CargaRepository(IDbConnectionFactory dbConnectionFactory)
@@ -2135,4 +2147,662 @@ public class CargaRepository : ICargaRepository
             destino.Add(registro);
         }
     }
+
+    public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion)
+    {
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+
+        await connection.OpenAsync();
+
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var carga = await ObtenerActualizacionConfirmacionAsync(
+                connection,
+                transaction,
+                codigoReferencia,
+                idUsuarioConfirmacion);
+
+            if (carga == null)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = "NO_ENCONTRADA",
+                    Mensaje = "No se encontró una actualización válida para confirmar."
+                };
+            }
+
+            if (!string.Equals(carga.Estado, "VALIDADO_PENDIENTE_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje = "La actualización no se encuentra en estado VALIDADO_PENDIENTE_ACTUALIZACION."
+                };
+            }
+
+            if (carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
+            {
+                await ActualizarActualizacionExpiradaAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga);
+
+                await transaction.CommitAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = "EXPIRADO_ACTUALIZACION",
+                    Mensaje = "La actualización ya expiró. Debe validar nuevamente los archivos."
+                };
+            }
+
+            if (!carga.HabilitaModificacion)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje = "El usuario no tiene habilitada la modificación de información."
+                };
+            }
+
+            if (!carga.EsSuperUsuario &&
+                carga.IdEntidadFederativaUsuario.HasValue &&
+                carga.IdEntidadFederativaCarga.HasValue &&
+                carga.IdEntidadFederativaUsuario.Value != carga.IdEntidadFederativaCarga.Value)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje = "El usuario no puede confirmar actualizaciones de otra entidad federativa."
+                };
+            }
+
+            if (!aceptar)
+            {
+                await RechazarActualizacionAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga,
+                    idUsuarioConfirmacion);
+
+                await transaction.CommitAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = true,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = "RECHAZADO_USUARIO_ACTUALIZACION",
+                    Mensaje = "La actualización fue rechazada por el usuario."
+                };
+            }
+
+            await AplicarActualizacionCarpetasAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                idUsuarioConfirmacion);
+
+            await ConfirmarActualizacionFinalAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                idUsuarioConfirmacion);
+
+            await transaction.CommitAsync();
+
+            return new ConfirmarCargaResponse
+            {
+                EsValido = true,
+                CodigoReferencia = codigoReferencia,
+                Estado = "CONFIRMADO_ACTUALIZACION",
+                Mensaje = "La actualización fue confirmada correctamente."
+            };
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    private async Task<ActualizacionConfirmacionInfo?> ObtenerActualizacionConfirmacionAsync(SqlConnection connection, SqlTransaction transaction, string codigoReferencia, int idUsuarioConfirmacion)
+    {
+        var sql = @"
+        SELECT
+            c.id_carga AS IdCarga,
+            c.codigo_referencia AS CodigoReferencia,
+            c.estado AS Estado,
+            c.fecha_expiracion AS FechaExpiracion,
+            c.id_entidad_federativa AS IdEntidadFederativaCarga,
+            u.id_entidad_federativa AS IdEntidadFederativaUsuario,
+            CASE WHEN r.rol = 'SUPER_USUARIO' THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS EsSuperUsuario,
+            ISNULL(h.habilita_modificacion, 0) AS HabilitaModificacion
+        FROM carga c
+        INNER JOIN usuario u
+            ON u.id_usuario = @IdUsuarioConfirmacion
+           AND u.activo = 1
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+           AND r.activo = 1
+        LEFT JOIN habilita_carga_modificacion h
+            ON h.id_usuario = u.id_usuario
+           AND h.activo = 1
+        WHERE c.codigo_referencia = @CodigoReferencia
+          AND c.tipo_carga = 'ACTUALIZACION'
+          AND c.activo = 1;
+    ";
+
+        return await connection.QueryFirstOrDefaultAsync<ActualizacionConfirmacionInfo>(
+            sql,
+            new
+            {
+                CodigoReferencia = codigoReferencia,
+                IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
+    }
+
+    private async Task RechazarActualizacionAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
+    {
+        var sql = @"
+        UPDATE carga
+        SET estado = 'RECHAZADO_USUARIO_ACTUALIZACION',
+            fecha_confirmacion = SYSDATETIME(),
+            id_usuario_confirmacion = @IdUsuarioConfirmacion
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_carpeta
+        SET estado = 'RECHAZADO_USUARIO_ACTUALIZACION',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_delito
+        SET estado = 'RECHAZADO_USUARIO_ACTUALIZACION',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_victima
+        SET estado = 'RECHAZADO_USUARIO_ACTUALIZACION',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga,
+                IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
+    }
+
+    private async Task ActualizarActualizacionExpiradaAsync(SqlConnection connection, SqlTransaction transaction, long idCarga)
+    {
+        var sql = @"
+        UPDATE carga
+        SET estado = 'EXPIRADO_ACTUALIZACION',
+            mensaje_error = 'La actualización expiró antes de ser confirmada.'
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_carpeta
+        SET estado = 'EXPIRADO_ACTUALIZACION',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_delito
+        SET estado = 'EXPIRADO_ACTUALIZACION',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_victima
+        SET estado = 'EXPIRADO_ACTUALIZACION',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga
+            },
+            transaction);
+    }
+
+    private async Task AplicarActualizacionCarpetasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
+    {
+        await InsertarHistoricoCarpetasModificadasAsync(
+            connection,
+            transaction,
+            idCargaActualizacion,
+            idUsuarioConfirmacion);
+
+        await ActualizarCarpetasModificadasAsync(
+            connection,
+            transaction,
+            idCargaActualizacion);
+
+        await InsertarCarpetasNuevasActualizacionAsync(
+            connection,
+            transaction,
+            idCargaActualizacion,
+            idUsuarioConfirmacion);
+
+        await InsertarHistoricoCarpetasEliminadasAsync(
+            connection,
+            transaction,
+            idCargaActualizacion,
+            idUsuarioConfirmacion);
+
+        await DesactivarCarpetasEliminadasAsync(
+            connection,
+            transaction,
+            idCargaActualizacion);
+    }
+
+    private async Task InsertarHistoricoCarpetasModificadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
+    {
+        var sql = @"
+        ;WITH carga_actualizacion AS (
+            SELECT id_carga, id_entidad_federativa, mes_corte, anio_corte
+            FROM carga
+            WHERE id_carga = @IdCargaActualizacion
+        ),
+        cargas_periodo AS (
+            SELECT c.id_carga, c.fecha_confirmacion
+            FROM carga c
+            INNER JOIN carga_actualizacion ca
+                ON ca.id_entidad_federativa = c.id_entidad_federativa
+               AND ca.mes_corte = c.mes_corte
+               AND ca.anio_corte = c.anio_corte
+            WHERE c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+              AND c.activo = 1
+        ),
+        carpetas_actuales AS (
+            SELECT
+                ci.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, ci.id_carga DESC, ci.id_carpeta_investigacion DESC
+                ) AS rn
+            FROM carpeta_investigacion ci
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = ci.id_carga
+            WHERE ci.activo = 1
+        ),
+        carpetas_modificadas AS (
+            SELECT ca.*
+            FROM carpetas_actuales ca
+            INNER JOIN carga_tmp_carpeta ct
+                ON ct.id_ci = ca.identificador_carpeta_fiscalia
+               AND ct.id_carga = @IdCargaActualizacion
+               AND ct.activo = 1
+            WHERE ca.rn = 1
+              AND (
+                    ISNULL(ca.nomenclatura_carpeta_fiscalia, '') <> ISNULL(ct.ntra_ci, '')
+                    OR ISNULL(CONVERT(varchar(19), ca.fecha_inicio, 120), '') <> ISNULL(CONVERT(varchar(19), COALESCE(TRY_CONVERT(datetime2, ct.fha_de_ini, 103), TRY_CONVERT(datetime2, ct.fha_de_ini)), 120), '')
+                    OR ISNULL(ca.resumen_hechos, '') <> ISNULL(ct.rmen_de_hchos, '')
+                  )
+        )
+        INSERT INTO carpeta_investigacion_historico (
+            id_carpeta_investigacion,
+            identificador_carpeta_fiscalia,
+            nomenclatura_carpeta_fiscalia,
+            fecha_inicio,
+            resumen_hechos,
+            id_usuario_registro,
+            fecha_registro,
+            id_carga,
+            id_usuario_modificacion,
+            id_carga_nueva,
+            tipo_movimiento,
+            fecha_modificacion,
+            activo
+        )
+        SELECT
+            id_carpeta_investigacion,
+            identificador_carpeta_fiscalia,
+            nomenclatura_carpeta_fiscalia,
+            fecha_inicio,
+            resumen_hechos,
+            id_usuario_registro,
+            fecha_registro,
+            id_carga,
+            @IdUsuarioConfirmacion,
+            @IdCargaActualizacion,
+            'MODIFICADO',
+            SYSDATETIME(),
+            activo
+        FROM carpetas_modificadas;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCargaActualizacion = idCargaActualizacion,
+                IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
+    }
+
+    private async Task ActualizarCarpetasModificadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion)
+    {
+        var sql = @"
+        ;WITH carga_actualizacion AS (
+            SELECT id_carga, id_entidad_federativa, mes_corte, anio_corte
+            FROM carga
+            WHERE id_carga = @IdCargaActualizacion
+        ),
+        cargas_periodo AS (
+            SELECT c.id_carga, c.fecha_confirmacion
+            FROM carga c
+            INNER JOIN carga_actualizacion ca
+                ON ca.id_entidad_federativa = c.id_entidad_federativa
+               AND ca.mes_corte = c.mes_corte
+               AND ca.anio_corte = c.anio_corte
+            WHERE c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+              AND c.activo = 1
+        ),
+        carpetas_actuales AS (
+            SELECT
+                ci.id_carpeta_investigacion,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, ci.id_carga DESC, ci.id_carpeta_investigacion DESC
+                ) AS rn
+            FROM carpeta_investigacion ci
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = ci.id_carga
+            WHERE ci.activo = 1
+        )
+        UPDATE ci
+        SET ci.nomenclatura_carpeta_fiscalia = ct.ntra_ci,
+            ci.fecha_inicio = COALESCE(
+                TRY_CONVERT(datetime2, ct.fha_de_ini, 103),
+                TRY_CONVERT(datetime2, ct.fha_de_ini)
+            ),
+            ci.resumen_hechos = ct.rmen_de_hchos,
+            ci.id_carga = @IdCargaActualizacion
+        FROM carpeta_investigacion ci
+        INNER JOIN carpetas_actuales ca
+            ON ca.id_carpeta_investigacion = ci.id_carpeta_investigacion
+           AND ca.rn = 1
+        INNER JOIN carga_tmp_carpeta ct
+            ON ct.id_ci = ci.identificador_carpeta_fiscalia
+           AND ct.id_carga = @IdCargaActualizacion
+           AND ct.activo = 1
+        WHERE ci.activo = 1
+          AND (
+                ISNULL(ci.nomenclatura_carpeta_fiscalia, '') <> ISNULL(ct.ntra_ci, '')
+                OR ISNULL(CONVERT(varchar(19), ci.fecha_inicio, 120), '') <> ISNULL(CONVERT(varchar(19), COALESCE(TRY_CONVERT(datetime2, ct.fha_de_ini, 103), TRY_CONVERT(datetime2, ct.fha_de_ini)), 120), '')
+                OR ISNULL(ci.resumen_hechos, '') <> ISNULL(ct.rmen_de_hchos, '')
+              );
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCargaActualizacion = idCargaActualizacion
+            },
+            transaction);
+    }
+
+    private async Task InsertarCarpetasNuevasActualizacionAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
+    {
+        var sql = @"
+        ;WITH carga_actualizacion AS (
+            SELECT id_carga, id_entidad_federativa, mes_corte, anio_corte
+            FROM carga
+            WHERE id_carga = @IdCargaActualizacion
+        ),
+        cargas_periodo AS (
+            SELECT c.id_carga
+            FROM carga c
+            INNER JOIN carga_actualizacion ca
+                ON ca.id_entidad_federativa = c.id_entidad_federativa
+               AND ca.mes_corte = c.mes_corte
+               AND ca.anio_corte = c.anio_corte
+            WHERE c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+              AND c.activo = 1
+        )
+        INSERT INTO carpeta_investigacion (
+            identificador_carpeta_fiscalia,
+            nomenclatura_carpeta_fiscalia,
+            fecha_inicio,
+            resumen_hechos,
+            id_usuario_registro,
+            fecha_registro,
+            id_carga,
+            activo
+        )
+        SELECT
+            ct.id_ci,
+            ct.ntra_ci,
+            COALESCE(
+                TRY_CONVERT(datetime2, ct.fha_de_ini, 103),
+                TRY_CONVERT(datetime2, ct.fha_de_ini)
+            ),
+            ct.rmen_de_hchos,
+            @IdUsuarioConfirmacion,
+            SYSDATETIME(),
+            @IdCargaActualizacion,
+            1
+        FROM carga_tmp_carpeta ct
+        WHERE ct.id_carga = @IdCargaActualizacion
+          AND ct.activo = 1
+          AND NOT EXISTS (
+                SELECT 1
+                FROM carpeta_investigacion ci
+                INNER JOIN cargas_periodo cp
+                    ON cp.id_carga = ci.id_carga
+                WHERE ci.identificador_carpeta_fiscalia = ct.id_ci
+                  AND ci.activo = 1
+          );
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCargaActualizacion = idCargaActualizacion,
+                IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
+    }
+
+    private async Task InsertarHistoricoCarpetasEliminadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
+    {
+        var sql = @"
+        ;WITH carga_actualizacion AS (
+            SELECT id_carga, id_entidad_federativa, mes_corte, anio_corte
+            FROM carga
+            WHERE id_carga = @IdCargaActualizacion
+        ),
+        cargas_periodo AS (
+            SELECT c.id_carga, c.fecha_confirmacion
+            FROM carga c
+            INNER JOIN carga_actualizacion ca
+                ON ca.id_entidad_federativa = c.id_entidad_federativa
+               AND ca.mes_corte = c.mes_corte
+               AND ca.anio_corte = c.anio_corte
+            WHERE c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+              AND c.activo = 1
+        ),
+        carpetas_actuales AS (
+            SELECT
+                ci.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, ci.id_carga DESC, ci.id_carpeta_investigacion DESC
+                ) AS rn
+            FROM carpeta_investigacion ci
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = ci.id_carga
+            WHERE ci.activo = 1
+        ),
+        carpetas_eliminadas AS (
+            SELECT ca.*
+            FROM carpetas_actuales ca
+            LEFT JOIN carga_tmp_carpeta ct
+                ON ct.id_ci = ca.identificador_carpeta_fiscalia
+               AND ct.id_carga = @IdCargaActualizacion
+               AND ct.activo = 1
+            WHERE ca.rn = 1
+              AND ct.id_ci IS NULL
+        )
+        INSERT INTO carpeta_investigacion_historico (
+            id_carpeta_investigacion,
+            identificador_carpeta_fiscalia,
+            nomenclatura_carpeta_fiscalia,
+            fecha_inicio,
+            resumen_hechos,
+            id_usuario_registro,
+            fecha_registro,
+            id_carga,
+            id_usuario_modificacion,
+            id_carga_nueva,
+            tipo_movimiento,
+            fecha_modificacion,
+            activo
+        )
+        SELECT
+            id_carpeta_investigacion,
+            identificador_carpeta_fiscalia,
+            nomenclatura_carpeta_fiscalia,
+            fecha_inicio,
+            resumen_hechos,
+            id_usuario_registro,
+            fecha_registro,
+            id_carga,
+            @IdUsuarioConfirmacion,
+            @IdCargaActualizacion,
+            'ELIMINADO',
+            SYSDATETIME(),
+            activo
+        FROM carpetas_eliminadas;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCargaActualizacion = idCargaActualizacion,
+                IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
+    }
+
+    private async Task DesactivarCarpetasEliminadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion)
+    {
+        var sql = @"
+        ;WITH carga_actualizacion AS (
+            SELECT id_carga, id_entidad_federativa, mes_corte, anio_corte
+            FROM carga
+            WHERE id_carga = @IdCargaActualizacion
+        ),
+        cargas_periodo AS (
+            SELECT c.id_carga, c.fecha_confirmacion
+            FROM carga c
+            INNER JOIN carga_actualizacion ca
+                ON ca.id_entidad_federativa = c.id_entidad_federativa
+               AND ca.mes_corte = c.mes_corte
+               AND ca.anio_corte = c.anio_corte
+            WHERE c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+              AND c.activo = 1
+        ),
+        carpetas_actuales AS (
+            SELECT
+                ci.id_carpeta_investigacion,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, ci.id_carga DESC, ci.id_carpeta_investigacion DESC
+                ) AS rn
+            FROM carpeta_investigacion ci
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = ci.id_carga
+            WHERE ci.activo = 1
+        )
+        UPDATE ci
+        SET ci.activo = 0,
+            ci.id_carga = @IdCargaActualizacion
+        FROM carpeta_investigacion ci
+        INNER JOIN carpetas_actuales ca
+            ON ca.id_carpeta_investigacion = ci.id_carpeta_investigacion
+           AND ca.rn = 1
+        LEFT JOIN carga_tmp_carpeta ct
+            ON ct.id_ci = ci.identificador_carpeta_fiscalia
+           AND ct.id_carga = @IdCargaActualizacion
+           AND ct.activo = 1
+        WHERE ci.activo = 1
+          AND ct.id_ci IS NULL;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCargaActualizacion = idCargaActualizacion
+            },
+            transaction);
+    }
+
+    private async Task ConfirmarActualizacionFinalAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
+    {
+        var sql = @"
+        UPDATE carga
+        SET estado = 'CONFIRMADO_ACTUALIZACION',
+            fecha_confirmacion = SYSDATETIME(),
+            id_usuario_confirmacion = @IdUsuarioConfirmacion,
+            mensaje_error = NULL
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_carpeta
+        SET estado = 'PROCESADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_delito
+        SET estado = 'PROCESADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_victima
+        SET estado = 'PROCESADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga,
+                IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
+    }
+
 }
