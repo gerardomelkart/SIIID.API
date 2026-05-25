@@ -200,7 +200,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // mesCorte = 1
         // anioCorte = 2026
         //
-        // Todas las fha_de_ini de carpetas deben ser enero 2026.
+        // Todas las fha_de_ini de carpetas deben corresponder al mes de información
+        // asociado al corte seleccionado
         if (mesCorte.HasValue && anioCorte.HasValue)
         {
             response.Errores.AddRange(ValidarPeriodoCarpetas(

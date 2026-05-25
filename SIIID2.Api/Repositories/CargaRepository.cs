@@ -1189,12 +1189,11 @@ public class CargaRepository : ICargaRepository
 
     public async Task<List<CargaValidacionResumenItem>> ObtenerResumenDiferenciasActualizacionAsync(long idCargaActualizacion)
     {
-        // Compara la actualización en staging contra la información activa actual
+        // Compara la actualización en staging contra la versión final activa vigente
         // del mismo periodo y entidad.
         //
-        // Por ahora regresa solo conteos.
-        // Después este mismo criterio se usará para generar el acuse previo
-        // y para aplicar la confirmación diferencial.
+        // Se usa ROW_NUMBER para tomar la versión activa más reciente por identificador fiscalía.
+        // Esto evita mezclar información cuando ya existen actualizaciones confirmadas previas.
 
         var sql = @"
         DECLARE @IdEntidadFederativa TINYINT;
@@ -1208,8 +1207,10 @@ public class CargaRepository : ICargaRepository
         FROM carga
         WHERE id_carga = @IdCargaActualizacion;
 
-        ;WITH cargas_base AS (
-            SELECT id_carga
+        ;WITH cargas_periodo AS (
+            SELECT
+                id_carga,
+                fecha_confirmacion
             FROM carga
             WHERE id_entidad_federativa = @IdEntidadFederativa
               AND mes_corte = @MesCorte
@@ -1217,17 +1218,31 @@ public class CargaRepository : ICargaRepository
               AND estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
               AND activo = 1
         ),
-        carpetas_actuales AS (
+        carpetas_actuales_base AS (
             SELECT
                 ci.id_carpeta_investigacion,
                 ci.identificador_carpeta_fiscalia,
                 ci.nomenclatura_carpeta_fiscalia,
                 ci.fecha_inicio,
-                ci.resumen_hechos
+                ci.resumen_hechos,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, ci.id_carga DESC, ci.id_carpeta_investigacion DESC
+                ) AS rn
             FROM carpeta_investigacion ci
-            INNER JOIN cargas_base cb
-                ON cb.id_carga = ci.id_carga
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = ci.id_carga
             WHERE ci.activo = 1
+        ),
+        carpetas_actuales AS (
+            SELECT
+                id_carpeta_investigacion,
+                identificador_carpeta_fiscalia,
+                nomenclatura_carpeta_fiscalia,
+                fecha_inicio,
+                resumen_hechos
+            FROM carpetas_actuales_base
+            WHERE rn = 1
         ),
         carpetas_tmp AS (
             SELECT
@@ -1265,7 +1280,7 @@ public class CargaRepository : ICargaRepository
                 ON ct.id_ci = ca.identificador_carpeta_fiscalia
             WHERE ct.id_ci IS NULL
         ),
-        delitos_actuales AS (
+        delitos_actuales_base AS (
             SELECT
                 d.id_delito,
                 ci.identificador_carpeta_fiscalia AS id_ci,
@@ -1286,14 +1301,43 @@ public class CargaRepository : ICargaRepository
                 d.id_codigo_postal,
                 d.coordenada_x,
                 d.coordenada_y,
-                d.domicilio_hechos
+                d.domicilio_hechos,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, d.id_carga DESC, d.id_delito DESC
+                ) AS rn
             FROM delito d
             INNER JOIN carpeta_investigacion ci
                 ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
                AND ci.activo = 1
-            INNER JOIN cargas_base cb
-                ON cb.id_carga = d.id_carga
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = d.id_carga
             WHERE d.activo = 1
+        ),
+        delitos_actuales AS (
+            SELECT
+                id_delito,
+                id_ci,
+                identificador_delito_fiscalia,
+                delito_fiscalia,
+                modalidad_delito_fiscalia,
+                id_forma_accion,
+                fecha_hechos,
+                id_instrumento_comision,
+                id_grado_consumacion,
+                id_modalidad_delito,
+                id_entidad_federativa,
+                id_municipio,
+                id_localidad_fiscalia,
+                localidad_fiscalia_nombre,
+                id_colonia_fiscalia,
+                colonia_fiscalia_nombre,
+                id_codigo_postal,
+                coordenada_x,
+                coordenada_y,
+                domicilio_hechos
+            FROM delitos_actuales_base
+            WHERE rn = 1
         ),
         delitos_tmp AS (
             SELECT
@@ -1391,7 +1435,7 @@ public class CargaRepository : ICargaRepository
                AND dt.id_delito = da.identificador_delito_fiscalia
             WHERE dt.id_delito IS NULL
         ),
-        victimas_actuales AS (
+        victimas_actuales_base AS (
             SELECT
                 v.id_victima,
                 ci.identificador_carpeta_fiscalia AS id_ci,
@@ -1405,7 +1449,11 @@ public class CargaRepository : ICargaRepository
                 v.id_pertenece_poblacion_indigena,
                 v.id_presenta_discapacidad,
                 v.fecha_nacimiento,
-                v.edad
+                v.edad,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia, v.identificador_victima_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, v.id_carga DESC, v.id_victima DESC
+                ) AS rn
             FROM victima v
             INNER JOIN delito d
                 ON d.id_delito = v.id_delito
@@ -1413,9 +1461,27 @@ public class CargaRepository : ICargaRepository
             INNER JOIN carpeta_investigacion ci
                 ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
                AND ci.activo = 1
-            INNER JOIN cargas_base cb
-                ON cb.id_carga = v.id_carga
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = v.id_carga
             WHERE v.activo = 1
+        ),
+        victimas_actuales AS (
+            SELECT
+                id_victima,
+                id_ci,
+                id_delito_fiscalia,
+                identificador_victima_fiscalia,
+                id_tipo_victima,
+                id_tipo_victima_moral,
+                id_sexo,
+                id_genero,
+                id_nacionalidad,
+                id_pertenece_poblacion_indigena,
+                id_presenta_discapacidad,
+                fecha_nacimiento,
+                edad
+            FROM victimas_actuales_base
+            WHERE rn = 1
         ),
         victimas_tmp AS (
             SELECT
@@ -1571,8 +1637,10 @@ public class CargaRepository : ICargaRepository
                     OR id_entidad_federativa = @IdEntidadFederativaUsuario
                   )
         ),
-        cargas_base AS (
-            SELECT c.id_carga
+        cargas_periodo AS (
+            SELECT
+                c.id_carga,
+                c.fecha_confirmacion
             FROM carga c
             INNER JOIN carga_actualizacion ca
                 ON ca.id_entidad_federativa = c.id_entidad_federativa
@@ -1581,16 +1649,29 @@ public class CargaRepository : ICargaRepository
             WHERE c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
               AND c.activo = 1
         ),
-        carpetas_actuales AS (
+        carpetas_actuales_base AS (
             SELECT
                 ci.identificador_carpeta_fiscalia,
                 ci.nomenclatura_carpeta_fiscalia,
                 ci.fecha_inicio,
-                ci.resumen_hechos
+                ci.resumen_hechos,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, ci.id_carga DESC, ci.id_carpeta_investigacion DESC
+                ) AS rn
             FROM carpeta_investigacion ci
-            INNER JOIN cargas_base cb
-                ON cb.id_carga = ci.id_carga
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = ci.id_carga
             WHERE ci.activo = 1
+        ),
+        carpetas_actuales AS (
+            SELECT
+                identificador_carpeta_fiscalia,
+                nomenclatura_carpeta_fiscalia,
+                fecha_inicio,
+                resumen_hechos
+            FROM carpetas_actuales_base
+            WHERE rn = 1
         ),
         carpetas_tmp AS (
             SELECT
@@ -1606,7 +1687,7 @@ public class CargaRepository : ICargaRepository
                 ON ca.id_carga = c.id_carga
             WHERE c.activo = 1
         ),
-        delitos_actuales AS (
+        delitos_actuales_base AS (
             SELECT
                 ci.identificador_carpeta_fiscalia AS id_ci,
                 d.identificador_delito_fiscalia,
@@ -1626,14 +1707,42 @@ public class CargaRepository : ICargaRepository
                 d.id_codigo_postal,
                 d.coordenada_x,
                 d.coordenada_y,
-                d.domicilio_hechos
+                d.domicilio_hechos,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, d.id_carga DESC, d.id_delito DESC
+                ) AS rn
             FROM delito d
             INNER JOIN carpeta_investigacion ci
                 ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
                AND ci.activo = 1
-            INNER JOIN cargas_base cb
-                ON cb.id_carga = d.id_carga
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = d.id_carga
             WHERE d.activo = 1
+        ),
+        delitos_actuales AS (
+            SELECT
+                id_ci,
+                identificador_delito_fiscalia,
+                delito_fiscalia,
+                modalidad_delito_fiscalia,
+                id_forma_accion,
+                fecha_hechos,
+                id_instrumento_comision,
+                id_grado_consumacion,
+                id_modalidad_delito,
+                id_entidad_federativa,
+                id_municipio,
+                id_localidad_fiscalia,
+                localidad_fiscalia_nombre,
+                id_colonia_fiscalia,
+                colonia_fiscalia_nombre,
+                id_codigo_postal,
+                coordenada_x,
+                coordenada_y,
+                domicilio_hechos
+            FROM delitos_actuales_base
+            WHERE rn = 1
         ),
         delitos_tmp AS (
             SELECT
@@ -1693,7 +1802,7 @@ public class CargaRepository : ICargaRepository
             ) cp
             WHERE d.activo = 1
         ),
-        victimas_actuales AS (
+        victimas_actuales_base AS (
             SELECT
                 ci.identificador_carpeta_fiscalia AS id_ci,
                 d.identificador_delito_fiscalia AS id_delito_fiscalia,
@@ -1706,7 +1815,11 @@ public class CargaRepository : ICargaRepository
                 v.id_pertenece_poblacion_indigena,
                 v.id_presenta_discapacidad,
                 v.fecha_nacimiento,
-                v.edad
+                v.edad,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia, v.identificador_victima_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, v.id_carga DESC, v.id_victima DESC
+                ) AS rn
             FROM victima v
             INNER JOIN delito d
                 ON d.id_delito = v.id_delito
@@ -1714,9 +1827,26 @@ public class CargaRepository : ICargaRepository
             INNER JOIN carpeta_investigacion ci
                 ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
                AND ci.activo = 1
-            INNER JOIN cargas_base cb
-                ON cb.id_carga = v.id_carga
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = v.id_carga
             WHERE v.activo = 1
+        ),
+        victimas_actuales AS (
+            SELECT
+                id_ci,
+                id_delito_fiscalia,
+                identificador_victima_fiscalia,
+                id_tipo_victima,
+                id_tipo_victima_moral,
+                id_sexo,
+                id_genero,
+                id_nacionalidad,
+                id_pertenece_poblacion_indigena,
+                id_presenta_discapacidad,
+                fecha_nacimiento,
+                edad
+            FROM victimas_actuales_base
+            WHERE rn = 1
         ),
         victimas_tmp AS (
             SELECT
