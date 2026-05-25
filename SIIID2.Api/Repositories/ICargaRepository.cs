@@ -42,4 +42,6 @@ public interface ICargaRepository
     // Guarda el intento completo de actualización.
     // Usa tipo_carga = ACTUALIZACION.
     Task<long> GuardarIntentoActualizacionAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<ArchivoFila> filasCarpetas,  List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas);
+
+    Task<List<CargaValidacionResumenItem>> ObtenerResumenDiferenciasActualizacionAsync(long idCargaActualizacion);
 }

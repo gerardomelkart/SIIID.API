@@ -320,7 +320,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Solo se llega aquí si:
         // - no hay error bloqueante de periodo sin carga confirmada
         // - no hay actualización pendiente existente
-        await _cargaRepository.GuardarIntentoActualizacionAsync(
+        var idCargaActualizacion = await _cargaRepository.GuardarIntentoActualizacionAsync(
             idUsuarioCarga,
             idEntidadFederativaCarga,
             response.CodigoReferencia,
@@ -334,6 +334,15 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             filasCarpetas,
             filasDelitos,
             filasVictimas);
+
+        if (response.EsValido)
+        {
+            var resumenDiferencias = await _cargaRepository.ObtenerResumenDiferenciasActualizacionAsync(idCargaActualizacion);
+
+            response.ResumenValidacion.AddRange(resumenDiferencias);
+
+            response.Mensaje = "Actualización validada correctamente. Revise las diferencias antes de confirmar la actualización.";
+        }
 
         return response;
     }
