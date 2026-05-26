@@ -865,4 +865,163 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             request.Aceptar,
             idUsuarioConfirmacion);
     }
+
+    public async Task<ActualizacionPeriodoResponse> ConsultarPeriodoActualizacionAsync(int mesCorte, int anioCorte, int idUsuarioConsulta, int? idEntidadFederativa = null)
+    {
+        var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuarioConsulta == null)
+        {
+            return new ActualizacionPeriodoResponse
+            {
+                EsValido = false,
+                PuedeActualizar = false,
+                TieneCargaConfirmada = false,
+                ExisteActualizacionPendiente = false,
+                MesCorte = mesCorte,
+                AnioCorte = anioCorte,
+                Mensaje = "El usuario autenticado no existe o no está activo."
+            };
+        }
+
+        if (!usuarioConsulta.HabilitaModificacion)
+        {
+            return new ActualizacionPeriodoResponse
+            {
+                EsValido = false,
+                PuedeActualizar = false,
+                TieneCargaConfirmada = false,
+                ExisteActualizacionPendiente = false,
+                IdEntidadFederativa = usuarioConsulta.IdEntidadFederativa,
+                MesCorte = mesCorte,
+                AnioCorte = anioCorte,
+                Mensaje = "El usuario autenticado no tiene habilitada la modificación de información."
+            };
+        }
+
+        if (mesCorte < 1 || mesCorte > 12)
+        {
+            return new ActualizacionPeriodoResponse
+            {
+                EsValido = false,
+                PuedeActualizar = false,
+                TieneCargaConfirmada = false,
+                ExisteActualizacionPendiente = false,
+                IdEntidadFederativa = usuarioConsulta.IdEntidadFederativa,
+                MesCorte = mesCorte,
+                AnioCorte = anioCorte,
+                Mensaje = "El mes de corte debe ser un número entre 1 y 12."
+            };
+        }
+
+        if (anioCorte < 2000 || anioCorte > 2100)
+        {
+            return new ActualizacionPeriodoResponse
+            {
+                EsValido = false,
+                PuedeActualizar = false,
+                TieneCargaConfirmada = false,
+                ExisteActualizacionPendiente = false,
+                IdEntidadFederativa = usuarioConsulta.IdEntidadFederativa,
+                MesCorte = mesCorte,
+                AnioCorte = anioCorte,
+                Mensaje = "El año de corte debe ser un número válido entre 2000 y 2100."
+            };
+        }
+
+        int? idEntidadConsulta;
+
+        if (usuarioConsulta.EsSuperUsuario)
+        {
+            idEntidadConsulta = idEntidadFederativa;
+
+            if (!idEntidadConsulta.HasValue)
+            {
+                return new ActualizacionPeriodoResponse
+                {
+                    EsValido = false,
+                    PuedeActualizar = false,
+                    TieneCargaConfirmada = false,
+                    ExisteActualizacionPendiente = false,
+                    IdEntidadFederativa = null,
+                    MesCorte = mesCorte,
+                    AnioCorte = anioCorte,
+                    Mensaje = "Debe enviar la entidad federativa que desea consultar."
+                };
+            }
+        }
+        else
+        {
+            idEntidadConsulta = usuarioConsulta.IdEntidadFederativa;
+
+            if (!idEntidadConsulta.HasValue)
+            {
+                return new ActualizacionPeriodoResponse
+                {
+                    EsValido = false,
+                    PuedeActualizar = false,
+                    TieneCargaConfirmada = false,
+                    ExisteActualizacionPendiente = false,
+                    IdEntidadFederativa = null,
+                    MesCorte = mesCorte,
+                    AnioCorte = anioCorte,
+                    Mensaje = "El usuario no tiene una entidad federativa asignada."
+                };
+            }
+        }
+
+        var existeCargaConfirmada = await _cargaRepository.ExisteCargaConfirmadaAsync(
+            idEntidadConsulta.Value,
+            mesCorte,
+            anioCorte);
+
+        if (!existeCargaConfirmada)
+        {
+            return new ActualizacionPeriodoResponse
+            {
+                EsValido = true,
+                PuedeActualizar = false,
+                TieneCargaConfirmada = false,
+                ExisteActualizacionPendiente = false,
+                IdEntidadFederativa = idEntidadConsulta.Value,
+                MesCorte = mesCorte,
+                AnioCorte = anioCorte,
+                Mensaje = $"No existe una carga inicial confirmada para el periodo {mesCorte:00}/{anioCorte}. No se puede realizar actualización."
+            };
+        }
+
+        var codigoActualizacionPendiente = await _cargaRepository.ObtenerCodigoActualizacionPendienteAsync(
+            idEntidadConsulta.Value,
+            mesCorte,
+            anioCorte);
+
+        if (!string.IsNullOrWhiteSpace(codigoActualizacionPendiente))
+        {
+            return new ActualizacionPeriodoResponse
+            {
+                EsValido = true,
+                PuedeActualizar = false,
+                TieneCargaConfirmada = true,
+                ExisteActualizacionPendiente = true,
+                CodigoActualizacionPendiente = codigoActualizacionPendiente,
+                IdEntidadFederativa = idEntidadConsulta.Value,
+                MesCorte = mesCorte,
+                AnioCorte = anioCorte,
+                Mensaje = $"Ya existe una actualización pendiente para el periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {codigoActualizacionPendiente}."
+            };
+        }
+
+        return new ActualizacionPeriodoResponse
+        {
+            EsValido = true,
+            PuedeActualizar = true,
+            TieneCargaConfirmada = true,
+            ExisteActualizacionPendiente = false,
+            CodigoActualizacionPendiente = null,
+            IdEntidadFederativa = idEntidadConsulta.Value,
+            MesCorte = mesCorte,
+            AnioCorte = anioCorte,
+            Mensaje = $"Existe carga inicial confirmada para el periodo {mesCorte:00}/{anioCorte}. Puede continuar con la actualización."
+        };
+    }
 }

@@ -9,4 +9,6 @@ public interface IActualizacionArchivosService
     Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta);
 
     Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(ConfirmarCargaRequest request, int idUsuarioConfirmacion);
+
+    Task<ActualizacionPeriodoResponse> ConsultarPeriodoActualizacionAsync(int mesCorte, int anioCorte, int idUsuarioConsulta, int? idEntidadFederativa = null);
 }

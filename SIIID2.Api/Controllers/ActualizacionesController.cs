@@ -226,4 +226,35 @@ public class ActualizacionesController : ControllerBase
             });
         }
     }
+
+    [Authorize]
+    [HttpGet("periodo")]
+    public async Task<IActionResult> ConsultarPeriodoActualizacion([FromQuery] int mesCorte, [FromQuery] int anioCorte, [FromQuery] int? idEntidadFederativa = null)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        var resultado = await _actualizacionArchivosService.ConsultarPeriodoActualizacionAsync(
+            mesCorte,
+            anioCorte,
+            idUsuarioConsulta,
+            idEntidadFederativa);
+
+        if (!resultado.EsValido)
+        {
+            return BadRequest(resultado);
+        }
+
+        return Ok(resultado);
+    }
 }
