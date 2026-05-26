@@ -3998,4 +3998,165 @@ public class CargaRepository : ICargaRepository
         }, transaction);
     }
 
+    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoActualizacionAsync(long idCargaActualizacion)
+    {
+        // Genera el resumen del acuse confirmado de actualización.
+        // A diferencia del acuse confirmado normal, aquí no basta con d.id_carga = @IdCargaActualizacion,
+        // porque los registros sin cambios pueden seguir ligados a la carga inicial o a una actualización previa.
+        //
+        // Por eso se obtiene el periodo de la actualización y se toman las versiones activas vigentes
+        // de carpetas, delitos y víctimas para ese corte completo.
+
+        var sql = @"
+        DECLARE @IdEntidadFederativa TINYINT;
+        DECLARE @MesCorte TINYINT;
+        DECLARE @AnioCorte SMALLINT;
+
+        SELECT
+            @IdEntidadFederativa = id_entidad_federativa,
+            @MesCorte = mes_corte,
+            @AnioCorte = anio_corte
+        FROM carga
+        WHERE id_carga = @IdCargaActualizacion;
+
+        ;WITH cargas_periodo AS (
+            SELECT
+                id_carga,
+                fecha_confirmacion
+            FROM carga
+            WHERE id_entidad_federativa = @IdEntidadFederativa
+              AND mes_corte = @MesCorte
+              AND anio_corte = @AnioCorte
+              AND estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+              AND activo = 1
+        ),
+        carpetas_vigentes_base AS (
+            SELECT
+                ci.id_carpeta_investigacion,
+                ci.identificador_carpeta_fiscalia,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC,
+                             ci.id_carga DESC,
+                             ci.id_carpeta_investigacion DESC
+                ) AS rn
+            FROM carpeta_investigacion ci
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = ci.id_carga
+            WHERE ci.activo = 1
+        ),
+        carpetas_vigentes AS (
+            SELECT
+                id_carpeta_investigacion,
+                identificador_carpeta_fiscalia
+            FROM carpetas_vigentes_base
+            WHERE rn = 1
+        ),
+        delitos_vigentes_base AS (
+            SELECT
+                d.id_delito,
+                d.id_modalidad_delito,
+                ci.identificador_carpeta_fiscalia,
+                d.identificador_delito_fiscalia,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC,
+                             d.id_carga DESC,
+                             d.id_delito DESC
+                ) AS rn
+            FROM delito d
+            INNER JOIN carpetas_vigentes cv
+                ON cv.id_carpeta_investigacion = d.id_carpeta_investigacion
+            INNER JOIN carpeta_investigacion ci
+                ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
+               AND ci.activo = 1
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = d.id_carga
+            WHERE d.activo = 1
+        ),
+        delitos_vigentes AS (
+            SELECT
+                id_delito,
+                id_modalidad_delito,
+                identificador_carpeta_fiscalia,
+                identificador_delito_fiscalia
+            FROM delitos_vigentes_base
+            WHERE rn = 1
+        ),
+        victimas_vigentes_base AS (
+            SELECT
+                v.id_victima,
+                v.id_delito,
+                ci.identificador_carpeta_fiscalia,
+                d.identificador_delito_fiscalia,
+                v.identificador_victima_fiscalia,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ci.identificador_carpeta_fiscalia,
+                                 d.identificador_delito_fiscalia,
+                                 v.identificador_victima_fiscalia
+                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC,
+                             v.id_carga DESC,
+                             v.id_victima DESC
+                ) AS rn
+            FROM victima v
+            INNER JOIN delitos_vigentes dv
+                ON dv.id_delito = v.id_delito
+            INNER JOIN delito d
+                ON d.id_delito = v.id_delito
+               AND d.activo = 1
+            INNER JOIN carpeta_investigacion ci
+                ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
+               AND ci.activo = 1
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = v.id_carga
+            WHERE v.activo = 1
+        ),
+        victimas_vigentes AS (
+            SELECT
+                id_victima,
+                id_delito
+            FROM victimas_vigentes_base
+            WHERE rn = 1
+        )
+        SELECT
+            cd.clave2 AS ClaveDelito,
+            cd.delito AS TipoDelito,
+            csd.clave3 AS ClaveSubtipo,
+            csd.subtipo_delito AS SubtipoDelito,
+            COUNT(DISTINCT dv.id_delito) AS TotalDelitos,
+            COUNT(vv.id_victima) AS TotalVictimas
+        FROM delitos_vigentes dv
+        INNER JOIN catalogo_modalidad_delito cmd
+            ON cmd.id_modalidad_delito = dv.id_modalidad_delito
+           AND cmd.activo = 1
+        INNER JOIN catalogo_subtipo_delito csd
+            ON csd.id_subtipo_delito = cmd.id_subtipo_delito
+           AND csd.activo = 1
+        INNER JOIN catalogo_delito cd
+            ON cd.id_delito = csd.id_delito
+           AND cd.activo = 1
+        LEFT JOIN victimas_vigentes vv
+            ON vv.id_delito = dv.id_delito
+        GROUP BY
+            cd.clave2,
+            cd.delito,
+            csd.clave3,
+            csd.subtipo_delito
+        ORDER BY
+            cd.clave2,
+            csd.clave3;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var resumen = await connection.QueryAsync<CargaAcuseResumenItem>(
+            sql,
+            new
+            {
+                IdCargaActualizacion = idCargaActualizacion
+            });
+
+        return resumen.ToList();
+    }
+
 }

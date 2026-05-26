@@ -12,9 +12,12 @@ public class ActualizacionesController : ControllerBase
 {
     private readonly IActualizacionArchivosService _actualizacionArchivosService;
 
-    public ActualizacionesController(IActualizacionArchivosService actualizacionArchivosService)
+    private readonly IAcusePdfService _acusePdfService;
+
+    public ActualizacionesController(IActualizacionArchivosService actualizacionArchivosService, IAcusePdfService acusePdfService)
     {
         _actualizacionArchivosService = actualizacionArchivosService;
+        _acusePdfService = acusePdfService;
     }
 
     // Endpoint para validar archivos de actualización.
@@ -127,5 +130,101 @@ public class ActualizacionesController : ControllerBase
         }
 
         return Ok(resultado);
+    }
+
+    [Authorize]
+    [HttpGet("{codigoReferencia}/acuse")]
+    public async Task<IActionResult> DescargarAcusePrevioActualizacion(string codigoReferencia)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        try
+        {
+            var pdf = await _acusePdfService.GenerarAcusePrevioActualizacionAsync(
+                codigoReferencia,
+                idUsuarioConsulta);
+
+            return File(
+                pdf,
+                "application/pdf",
+                $"ACUSE_PREVIO_ACTUALIZACION_{codigoReferencia}.pdf");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "ACUSE_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "ACUSE_NO_DISPONIBLE",
+                mensaje = ex.Message
+            });
+        }
+    }
+
+    [Authorize]
+    [HttpGet("{codigoReferencia}/acuse-confirmado")]
+    public async Task<IActionResult> DescargarAcuseConfirmadoActualizacion(string codigoReferencia)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        try
+        {
+            var pdf = await _acusePdfService.GenerarAcuseConfirmadoActualizacionAsync(
+                codigoReferencia,
+                idUsuarioConsulta);
+
+            return File(
+                pdf,
+                "application/pdf",
+                $"ACUSE_ACTUALIZACION_{codigoReferencia}.pdf");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "ACUSE_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "ACUSE_NO_DISPONIBLE",
+                mensaje = ex.Message
+            });
+        }
     }
 }

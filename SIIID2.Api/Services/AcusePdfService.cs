@@ -104,6 +104,97 @@ public class AcusePdfService : IAcusePdfService
             "ACUSE DE CARGA",
             mostrarMarcaPrevio: false);
     }
+
+    public async Task<byte[]> GenerarAcusePrevioActualizacionAsync(string codigoReferencia, int idUsuarioConsulta)
+    {
+        // QuestPDF requiere declarar licencia.
+        QuestPDF.Settings.License = LicenseType.Community;
+
+        var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuarioConsulta == null)
+        {
+            throw new UnauthorizedAccessException("El usuario autenticado no existe o no está activo.");
+        }
+
+        var carga = await _cargaRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
+
+        if (carga == null)
+        {
+            throw new InvalidOperationException("No se encontró la actualización solicitada.");
+        }
+
+        // El acuse previo de actualización solo aplica para actualizaciones validadas pendientes.
+        if (!string.Equals(carga.Estado, "VALIDADO_PENDIENTE_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("El acuse previo de actualización solo puede generarse para actualizaciones en estado VALIDADO_PENDIENTE_ACTUALIZACION.");
+        }
+
+        // Usuario normal solo puede consultar acuses de su entidad.
+        if (!usuarioConsulta.EsSuperUsuario &&
+            usuarioConsulta.IdEntidadFederativa.HasValue &&
+            carga.IdEntidadFederativa.HasValue &&
+            usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa.Value)
+        {
+            throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
+        }
+
+        // La actualización trae los tres archivos completos.
+        // Por eso el acuse previo sale del staging de esa actualización.
+        var resumen = await _cargaRepository.ObtenerResumenAcuseAsync(carga.IdCarga);
+
+        return GenerarPdf(
+            carga,
+            resumen,
+            "ACUSE PREVIO DE ACTUALIZACIÓN",
+            mostrarMarcaPrevio: true);
+    }
+
+    public async Task<byte[]> GenerarAcuseConfirmadoActualizacionAsync(string codigoReferencia, int idUsuarioConsulta)
+    {
+        // QuestPDF requiere declarar licencia.
+        QuestPDF.Settings.License = LicenseType.Community;
+
+        var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuarioConsulta == null)
+        {
+            throw new UnauthorizedAccessException("El usuario autenticado no existe o no está activo.");
+        }
+
+        var carga = await _cargaRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
+
+        if (carga == null)
+        {
+            throw new InvalidOperationException("No se encontró la actualización solicitada.");
+        }
+
+        // El acuse confirmado de actualización solo aplica después de confirmar la actualización.
+        if (!string.Equals(carga.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("El acuse confirmado de actualización solo puede generarse para actualizaciones en estado CONFIRMADO_ACTUALIZACION.");
+        }
+
+        // Usuario normal solo puede consultar acuses de su entidad.
+        if (!usuarioConsulta.EsSuperUsuario &&
+            usuarioConsulta.IdEntidadFederativa.HasValue &&
+            carga.IdEntidadFederativa.HasValue &&
+            usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa.Value)
+        {
+            throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
+        }
+
+        // Este resumen sale de las tablas finales activas del periodo completo,
+        // porque los registros sin cambios pueden seguir ligados a cargas anteriores.
+        var resumen = await _cargaRepository.ObtenerResumenAcuseConfirmadoActualizacionAsync(carga.IdCarga);
+
+        return GenerarPdf(
+            carga,
+            resumen,
+            "ACUSE DE ACTUALIZACIÓN",
+            mostrarMarcaPrevio: false);
+    }
+
     private byte[] GenerarPdf(CargaAcuseInfo carga, List<CargaAcuseResumenItem> resumen, string titulo, bool mostrarMarcaPrevio)
     {
         var totalDelitos = resumen.Sum(x => x.TotalDelitos);

@@ -48,4 +48,6 @@ public interface ICargaRepository
     Task<ActualizacionDiferenciasResponse?> ObtenerDetalleDiferenciasActualizacionAsync(string codigoReferencia, int? idEntidadFederativaUsuario, bool esSuperUsuario);
 
     Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion);
+
+    Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoActualizacionAsync(long idCargaActualizacion);
 }
