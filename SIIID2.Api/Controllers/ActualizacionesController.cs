@@ -11,7 +11,6 @@ namespace SIIID2.Api.Controllers;
 public class ActualizacionesController : ControllerBase
 {
     private readonly IActualizacionArchivosService _actualizacionArchivosService;
-
     private readonly IAcusePdfService _acusePdfService;
 
     public ActualizacionesController(IActualizacionArchivosService actualizacionArchivosService, IAcusePdfService acusePdfService)

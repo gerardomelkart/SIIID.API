@@ -293,7 +293,15 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
         // Estos errores bloquean el intento de actualización.
         // No se guarda fila en carga ni staging para evitar ensuciar la base.
+        //
+        // Si el periodo viene inválido, no se debe guardar la carga con mes/anio en 0.
+        // Si no existe carga confirmada o ya hay una actualización pendiente,
+        // tampoco se guarda staging.
         if (response.Errores.Any(x =>
+                x.Codigo == "ACTUALIZACION_MES_CORTE_OBLIGATORIO" ||
+                x.Codigo == "ACTUALIZACION_MES_CORTE_INVALIDO" ||
+                x.Codigo == "ACTUALIZACION_ANIO_CORTE_OBLIGATORIO" ||
+                x.Codigo == "ACTUALIZACION_ANIO_CORTE_INVALIDO" ||
                 x.Codigo == "ACTUALIZACION_SIN_CARGA_CONFIRMADA" ||
                 x.Codigo == "ACTUALIZACION_PENDIENTE_EXISTENTE"))
         {

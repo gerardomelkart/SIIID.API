@@ -2390,37 +2390,6 @@ public class CargaRepository : ICargaRepository
             transaction);
     }
 
-    private async Task AplicarActualizacionCarpetasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
-    {
-        await InsertarHistoricoCarpetasModificadasAsync(
-            connection,
-            transaction,
-            idCargaActualizacion,
-            idUsuarioConfirmacion);
-
-        await ActualizarCarpetasModificadasAsync(
-            connection,
-            transaction,
-            idCargaActualizacion);
-
-        await InsertarCarpetasNuevasActualizacionAsync(
-            connection,
-            transaction,
-            idCargaActualizacion,
-            idUsuarioConfirmacion);
-
-        await InsertarHistoricoCarpetasEliminadasAsync(
-            connection,
-            transaction,
-            idCargaActualizacion,
-            idUsuarioConfirmacion);
-
-        await DesactivarCarpetasEliminadasAsync(
-            connection,
-            transaction,
-            idCargaActualizacion);
-    }
-
     private async Task InsertarHistoricoCarpetasModificadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
     {
         var sql = @"

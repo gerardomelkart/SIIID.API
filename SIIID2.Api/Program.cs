@@ -19,7 +19,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Habilita controladores MVC/API.
 builder.Services.AddControllers();
 
-//errores personalizados
+// Configuración de respuestas personalizadas para errores de modelo.
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
@@ -82,15 +82,19 @@ builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 // Registro del servicio principal de carga.
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.
 builder.Services.AddScoped<ICargaArchivosService, CargaArchivosService>();
-//para las actualizaciones
+// Registro del servicio de actualizaciones.
 builder.Services.AddScoped<IActualizacionArchivosService, ActualizacionArchivosService>();
-//para el login
+
+// Registro del servicio de autenticación.
 builder.Services.AddScoped<IAuthService, AuthService>();
-//para que jale el pdf
+
+// Registro del servicio de generación de acuses PDF.
 builder.Services.AddScoped<IAcusePdfService, AcusePdfService>();
-//creacion de usuarios
+
+// Registro del servicio de usuarios.
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
-//para que jale el token
+
+// Configuración de autenticación JWT.
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("No se encontró Jwt:SecretKey.");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("No se encontró Jwt:Issuer.");
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("No se encontró Jwt:Audience.");

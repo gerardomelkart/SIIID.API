@@ -316,9 +316,7 @@ public class AcusePdfService : IAcusePdfService
                 .Text(text =>
                 {
                     text.DefaultTextStyle(x => x.FontSize(7.5f));
-                    text.Span("\n").Bold();
-                    //text.Span("Código de referencia: ").Bold();
-                    //text.Span(carga.CodigoReferencia);
+                    text.Span("\n");
                 });
 
             column.Item()
