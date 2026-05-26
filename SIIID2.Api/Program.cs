@@ -70,7 +70,7 @@ builder.Services.AddScoped<IDbConnectionFactory, SqlServerConnectionFactory>();
 // Registro de repositorios.
 builder.Services.AddScoped<ICatalogoRepository, CatalogoRepository>();
 
-// Registro de validadores específicos por archivo y ya como tal la validacion cruzada.
+// Registro de validadores específicos por archivo, validación cruzada y catálogos.
 builder.Services.AddScoped<CarpetasValidator>();
 builder.Services.AddScoped<DelitosValidator>();
 builder.Services.AddScoped<VictimasValidator>();
