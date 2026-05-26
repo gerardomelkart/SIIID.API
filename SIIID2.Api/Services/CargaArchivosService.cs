@@ -187,16 +187,14 @@ public class CargaArchivosService : ICargaArchivosService
             filasDelitos,
             filasVictimas));
 
-        // El mes y año corte se obtienen desde la fecha de inicio de carpetas.
-        var mesInformacion = ObtenerMesCorteDesdeCarpetas(filasCarpetas);
-        var anioInformacion = ObtenerAnioCorteDesdeCarpetas(filasCarpetas);
-
-        var periodoCorte = ObtenerPeriodoCorteDesdePeriodoInformacion(
-            mesInformacion,
-            anioInformacion);
-
-        var mesCorte = periodoCorte.MesCorte;
-        var anioCorte = periodoCorte.AnioCorte;
+        // El mes/año de corte corresponde al periodo de información reportado.
+        // Ejemplo:
+        // Si la información cargada es de abril 2026, entonces:
+        // mes_corte = 4
+        // anio_corte = 2026.
+        // La fecha en que se carga o confirma queda registrada aparte en fecha_validacion / fecha_confirmacion.
+        var mesCorte = ObtenerMesCorteDesdeCarpetas(filasCarpetas);
+        var anioCorte = ObtenerAnioCorteDesdeCarpetas(filasCarpetas);
 
         // Obtenemos la entidad real de la carga.
         // Para usuario normal viene de su usuario.
@@ -677,18 +675,5 @@ public class CargaArchivosService : ICargaArchivosService
             .ToArray();
 
         return new string(caracteres).Normalize(NormalizationForm.FormC);
-    }
-
-    private static (int MesCorte, int AnioCorte) ObtenerPeriodoCorteDesdePeriodoInformacion(int mesInformacion, int anioInformacion)
-    {
-        // El archivo contiene información del mes inmediato anterior al corte.
-        // Ejemplo:
-        // Información abril 2026 => corte mayo 2026.
-        if (mesInformacion == 12)
-        {
-            return (1, anioInformacion + 1);
-        }
-
-        return (mesInformacion + 1, anioInformacion);
     }
 }

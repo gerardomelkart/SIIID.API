@@ -1,4 +1,5 @@
-﻿using QuestPDF.Fluent;
+﻿using System.Globalization;
+using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using SIIID2.Api.Models;
@@ -25,7 +26,6 @@ public class AcusePdfService : IAcusePdfService
 
     public async Task<byte[]> GenerarAcusePrevioAsync(string codigoReferencia, int idUsuarioConsulta)
     {
-        // QuestPDF requiere declarar licencia.
         QuestPDF.Settings.License = LicenseType.Community;
 
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
@@ -42,13 +42,11 @@ public class AcusePdfService : IAcusePdfService
             throw new InvalidOperationException("No se encontró la carga solicitada.");
         }
 
-        // El acuse previo solo aplica para cargas validadas y pendientes de confirmar.
         if (!string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("El acuse previo solo puede generarse para cargas en estado VALIDADO_PENDIENTE.");
         }
 
-        // Usuario normal solo puede consultar acuses de su entidad.
         if (!usuarioConsulta.EsSuperUsuario &&
             usuarioConsulta.IdEntidadFederativa.HasValue &&
             carga.IdEntidadFederativa.HasValue &&
@@ -59,12 +57,15 @@ public class AcusePdfService : IAcusePdfService
 
         var resumen = await _cargaRepository.ObtenerResumenAcuseAsync(carga.IdCarga);
 
-        return GenerarPdf(carga, resumen, "ACUSE PREVIO", mostrarMarcaPrevio: true);
+        return GenerarPdf(
+            carga,
+            resumen,
+            "ACUSE PREVIO",
+            mostrarMarcaPrevio: true);
     }
 
     public async Task<byte[]> GenerarAcuseConfirmadoAsync(string codigoReferencia, int idUsuarioConsulta)
     {
-        // QuestPDF requiere declarar licencia.
         QuestPDF.Settings.License = LicenseType.Community;
 
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
@@ -81,13 +82,11 @@ public class AcusePdfService : IAcusePdfService
             throw new InvalidOperationException("No se encontró la carga solicitada.");
         }
 
-        // El acuse confirmado solo aplica para cargas confirmadas.
         if (!string.Equals(carga.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("El acuse confirmado solo puede generarse para cargas en estado CONFIRMADO.");
         }
 
-        // Usuario normal solo puede consultar acuses de su entidad.
         if (!usuarioConsulta.EsSuperUsuario &&
             usuarioConsulta.IdEntidadFederativa.HasValue &&
             carga.IdEntidadFederativa.HasValue &&
@@ -101,13 +100,12 @@ public class AcusePdfService : IAcusePdfService
         return GenerarPdf(
             carga,
             resumen,
-            "ACUSE DE CARGA",
+            "",
             mostrarMarcaPrevio: false);
     }
 
     public async Task<byte[]> GenerarAcusePrevioActualizacionAsync(string codigoReferencia, int idUsuarioConsulta)
     {
-        // QuestPDF requiere declarar licencia.
         QuestPDF.Settings.License = LicenseType.Community;
 
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
@@ -124,13 +122,11 @@ public class AcusePdfService : IAcusePdfService
             throw new InvalidOperationException("No se encontró la actualización solicitada.");
         }
 
-        // El acuse previo de actualización solo aplica para actualizaciones validadas pendientes.
         if (!string.Equals(carga.Estado, "VALIDADO_PENDIENTE_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("El acuse previo de actualización solo puede generarse para actualizaciones en estado VALIDADO_PENDIENTE_ACTUALIZACION.");
         }
 
-        // Usuario normal solo puede consultar acuses de su entidad.
         if (!usuarioConsulta.EsSuperUsuario &&
             usuarioConsulta.IdEntidadFederativa.HasValue &&
             carga.IdEntidadFederativa.HasValue &&
@@ -139,8 +135,6 @@ public class AcusePdfService : IAcusePdfService
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
         }
 
-        // La actualización trae los tres archivos completos.
-        // Por eso el acuse previo sale del staging de esa actualización.
         var resumen = await _cargaRepository.ObtenerResumenAcuseAsync(carga.IdCarga);
 
         return GenerarPdf(
@@ -152,7 +146,6 @@ public class AcusePdfService : IAcusePdfService
 
     public async Task<byte[]> GenerarAcuseConfirmadoActualizacionAsync(string codigoReferencia, int idUsuarioConsulta)
     {
-        // QuestPDF requiere declarar licencia.
         QuestPDF.Settings.License = LicenseType.Community;
 
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
@@ -169,13 +162,11 @@ public class AcusePdfService : IAcusePdfService
             throw new InvalidOperationException("No se encontró la actualización solicitada.");
         }
 
-        // El acuse confirmado de actualización solo aplica después de confirmar la actualización.
         if (!string.Equals(carga.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("El acuse confirmado de actualización solo puede generarse para actualizaciones en estado CONFIRMADO_ACTUALIZACION.");
         }
 
-        // Usuario normal solo puede consultar acuses de su entidad.
         if (!usuarioConsulta.EsSuperUsuario &&
             usuarioConsulta.IdEntidadFederativa.HasValue &&
             carga.IdEntidadFederativa.HasValue &&
@@ -184,14 +175,12 @@ public class AcusePdfService : IAcusePdfService
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
         }
 
-        // Este resumen sale de las tablas finales activas del periodo completo,
-        // porque los registros sin cambios pueden seguir ligados a cargas anteriores.
         var resumen = await _cargaRepository.ObtenerResumenAcuseConfirmadoActualizacionAsync(carga.IdCarga);
 
         return GenerarPdf(
             carga,
             resumen,
-            "ACUSE DE ACTUALIZACIÓN",
+            "",
             mostrarMarcaPrevio: false);
     }
 
@@ -206,7 +195,6 @@ public class AcusePdfService : IAcusePdfService
             {
                 page.Size(PageSizes.Letter);
 
-                // Márgenes compactos para que la tabla se parezca más al acuse anterior.
                 page.MarginTop(20);
                 page.MarginLeft(20);
                 page.MarginRight(20);
@@ -214,7 +202,6 @@ public class AcusePdfService : IAcusePdfService
 
                 page.DefaultTextStyle(x => x.FontSize(8).FontFamily("Arial"));
 
-                // Marca de agua en todas las páginas.
                 if (mostrarMarcaPrevio)
                 {
                     page.Background().Element(contenedor => ConstruirMarcaAgua(contenedor));
@@ -233,8 +220,14 @@ public class AcusePdfService : IAcusePdfService
                         .FontSize(17)
                         .Bold();
 
-                    // Datos generales del acuse.
-                    column.Item().Element(contenedor => ConstruirDatosGenerales(contenedor, carga));
+                    if (mostrarMarcaPrevio)
+                    {
+                        column.Item().Element(contenedor => ConstruirDatosGeneralesPrevio(contenedor, carga));
+                    }
+                    else
+                    {
+                        column.Item().Element(contenedor => ConstruirLeyendaAcuseConfirmado(contenedor, carga));
+                    }
 
                     column.Item().Element(contenedor => ConstruirDetalleRegistros(contenedor, carga));
 
@@ -257,8 +250,6 @@ public class AcusePdfService : IAcusePdfService
 
     private void ConstruirMarcaAgua(IContainer container)
     {
-        // Marca de agua PREVIO.
-        // Se baja más para que no quede tan alta en la primera hoja.
         container
             .AlignCenter()
             .AlignMiddle()
@@ -279,14 +270,12 @@ public class AcusePdfService : IAcusePdfService
         {
             column.Item().Row(row =>
             {
-                // Logo institucional principal.
                 row.RelativeItem(3)
                     .Height(55)
                     .AlignLeft()
                     .Image(rutaLogo)
                     .FitArea();
 
-                // Imagen superior derecha.
                 row.RelativeItem()
                     .Height(65)
                     .AlignRight()
@@ -308,7 +297,7 @@ public class AcusePdfService : IAcusePdfService
         });
     }
 
-    private void ConstruirDatosGenerales(IContainer container, CargaAcuseInfo carga)
+    private void ConstruirDatosGeneralesPrevio(IContainer container, CargaAcuseInfo carga)
     {
         container.Column(column =>
         {
@@ -328,6 +317,68 @@ public class AcusePdfService : IAcusePdfService
                     text.Span(" | Periodo: ").Bold();
                     text.Span($"{carga.MesCorte:00}/{carga.AnioCorte}");
                     text.Span(" | Fecha validación: ").Bold();
+                    text.Span($"{carga.FechaValidacion:dd/MM/yyyy HH:mm}");
+                });
+        });
+    }
+
+    private void ConstruirLeyendaAcuseConfirmado(IContainer container, CargaAcuseInfo carga)
+    {
+        var fechaAcuse = carga.FechaConfirmacion ?? carga.FechaValidacion;
+
+        container.Column(column =>
+        {
+            column.Spacing(6);
+
+            column.Item()
+                .PaddingTop(4)
+                .AlignCenter()
+                .Text("ACUSE DE ENTREGA DE INFORMACIÓN")
+                .FontSize(13)
+                .Bold();
+
+            column.Item()
+                .Text(text =>
+                {
+                    text.DefaultTextStyle(x => x.FontSize(8.5f));
+
+                    text.Span("Mediante este documento, se confirma que la información proporcionada ha sido enviada de manera satisfactoria a través de nuestra plataforma web. ");
+                    text.Span("Queda así registrada su recepción formal, garantizando que los datos ingresados han sido recibidos y procesados conforme a los protocolos establecidos. ");
+                    text.Span("Para cualquier consulta o verificación posterior, este acuse servirá como constancia válida del envío realizado por parte de la entidad de ");
+                    text.Span(carga.EntidadFederativa).Bold();
+                    text.Span(", el día ");
+                    text.Span(ObtenerFechaLarga(fechaAcuse)).Bold();
+                    text.Span(", a las ");
+                    text.Span(fechaAcuse.ToString("HH:mm:ss", new CultureInfo("es-MX"))).Bold();
+                    text.Span(" horas.");
+                });
+
+            column.Item()
+                .PaddingTop(4)
+                .Text(text =>
+                {
+                    text.DefaultTextStyle(x => x.FontSize(8.5f));
+
+                    text.Span("Mes de Corte: ").Bold();
+                    text.Span(ObtenerNombreMes(carga.MesCorte));
+
+                    text.Span("    |    ");
+
+                    text.Span("Entidad: ").Bold();
+                    text.Span(carga.EntidadFederativa);
+                });
+
+            column.Item()
+                .Text(text =>
+                {
+                    text.DefaultTextStyle(x => x.FontSize(8.5f));
+
+                    text.Span("Periodo: ").Bold();
+                    text.Span($"{carga.MesCorte:00}/{carga.AnioCorte}");
+
+                    text.Span("    |    ");
+
+                    text.Span("Fecha validación: ").Bold();
                     text.Span($"{carga.FechaValidacion:dd/MM/yyyy HH:mm}");
                 });
         });
@@ -422,8 +473,6 @@ public class AcusePdfService : IAcusePdfService
 
     private string ObtenerRutaArchivo(string rutaRelativa)
     {
-        // Convierte wwwroot/images/archivo.png a ruta física.
-        // Esto evita errores cuando la API se ejecuta desde otra carpeta.
         var rutaLimpia = rutaRelativa
             .Replace("wwwroot/", string.Empty)
             .Replace("/", Path.DirectorySeparatorChar.ToString());
@@ -436,6 +485,24 @@ public class AcusePdfService : IAcusePdfService
         }
 
         return rutaFisica;
+    }
+
+    private static string ObtenerFechaLarga(DateTime fecha)
+    {
+        return $"{fecha:dd} de {ObtenerNombreMes(fecha.Month)} de {fecha:yyyy}";
+    }
+
+    private static string ObtenerNombreMes(int mes)
+    {
+        if (mes < 1 || mes > 12)
+        {
+            return mes.ToString("00");
+        }
+
+        var cultura = new CultureInfo("es-MX");
+        var nombreMes = cultura.DateTimeFormat.GetMonthName(mes);
+
+        return char.ToUpper(nombreMes[0], cultura) + nombreMes[1..];
     }
 
     private static IContainer CeldaEncabezado(IContainer container)

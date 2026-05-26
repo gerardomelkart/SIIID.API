@@ -426,6 +426,7 @@ public class CargaRepository : ICargaRepository
             c.total_victimas AS TotalVictimas,
             c.estado AS Estado,
             c.fecha_validacion AS FechaValidacion,
+            c.fecha_confirmacion AS FechaConfirmacion,
             c.id_usuario_carga AS IdUsuarioCarga,
             u.usuario AS UsuarioCarga
         FROM carga c

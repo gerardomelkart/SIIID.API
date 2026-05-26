@@ -805,14 +805,11 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
     private static (int Mes, int Anio) ObtenerPeriodoInformacionDesdeCorte(int mesCorte, int anioCorte)
     {
-        // Corte enero 2026 => información diciembre 2025.
-        if (mesCorte == 1)
-        {
-            return (12, anioCorte - 1);
-        }
-
-        // Corte mayo 2026 => información abril 2026.
-        return (mesCorte - 1, anioCorte);
+        // En el sistema, mesCorte/anioCorte representa el periodo de información reportado.
+        // Ejemplo:
+        // Si se selecciona abril 2026, los archivos deben contener información de abril 2026.
+        // La fecha en que se realiza la actualización se registra aparte en fecha_validacion.
+        return (mesCorte, anioCorte);
     }
 
     public async Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta)
