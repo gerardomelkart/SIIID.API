@@ -1845,9 +1845,7 @@ public class ActualizacionRepository : IActualizacionRepository
             transaction);
     }
 
-    public async Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(
-    string codigoReferencia,
-    int idUsuarioConsulta)
+    public async Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta)
     {
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
 
@@ -1879,9 +1877,7 @@ public class ActualizacionRepository : IActualizacionRepository
         return detalle;
     }
 
-    public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(
-        ConfirmarCargaRequest request,
-        int idUsuarioConfirmacion)
+    public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(ConfirmarCargaRequest request,  int idUsuarioConfirmacion)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.CodigoReferencia))
         {
