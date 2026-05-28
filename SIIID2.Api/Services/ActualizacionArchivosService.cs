@@ -23,6 +23,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     private readonly CargaIntegridadValidator _cargaIntegridadValidator;
     private readonly CatalogosValidator _catalogosValidator;
     private readonly ICargaRepository _cargaRepository;
+    private readonly IActualizacionDiferenciasRepository _actualizacionDiferenciasRepository;
+    private readonly IActualizacionRepository _actualizacionRepository;
     private readonly IUsuarioRepository _usuarioRepository;
 
     // Extensiones permitidas para los archivos de actualización.
@@ -43,6 +45,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         CargaIntegridadValidator cargaIntegridadValidator,
         CatalogosValidator catalogosValidator,
         ICargaRepository cargaRepository,
+        IActualizacionDiferenciasRepository actualizacionDiferenciasRepository,
+        IActualizacionRepository actualizacionRepository,
         IUsuarioRepository usuarioRepository)
     {
         _archivoReader = archivoReader;
@@ -52,6 +56,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         _cargaIntegridadValidator = cargaIntegridadValidator;
         _catalogosValidator = catalogosValidator;
         _cargaRepository = cargaRepository;
+        _actualizacionDiferenciasRepository = actualizacionDiferenciasRepository;
+        _actualizacionRepository = actualizacionRepository;
         _usuarioRepository = usuarioRepository;
     }
 
@@ -826,10 +832,10 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
-        var detalle = await _cargaRepository.ObtenerDetalleDiferenciasActualizacionAsync(
-            codigoReferencia,
-            usuarioConsulta.IdEntidadFederativa,
-            usuarioConsulta.EsSuperUsuario);
+        var detalle = await _actualizacionDiferenciasRepository.ObtenerDetalleDiferenciasActualizacionAsync(
+                    codigoReferencia,
+                    usuarioConsulta.IdEntidadFederativa,
+                    usuarioConsulta.EsSuperUsuario);
 
         if (detalle == null)
         {
@@ -857,7 +863,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
-        return await _cargaRepository.ConfirmarActualizacionAsync(
+        return await _actualizacionRepository.ConfirmarActualizacionAsync(
             request.CodigoReferencia,
             request.Aceptar,
             idUsuarioConfirmacion);
