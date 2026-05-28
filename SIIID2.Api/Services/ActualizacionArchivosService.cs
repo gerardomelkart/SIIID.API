@@ -852,7 +852,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
     public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(ConfirmarCargaRequest request, int idUsuarioConfirmacion)
     {
-        if (string.IsNullOrWhiteSpace(request.CodigoReferencia))
+        if (request == null || string.IsNullOrWhiteSpace(request.CodigoReferencia))
         {
             return new ConfirmarCargaResponse
             {

@@ -77,6 +77,7 @@ builder.Services.AddScoped<VictimasValidator>();
 builder.Services.AddScoped<CargaIntegridadValidator>();
 builder.Services.AddScoped<CatalogosValidator>();
 builder.Services.AddScoped<ICargaRepository, CargaRepository>();
+builder.Services.AddScoped<IAcuseRepository, AcuseRepository>();
 builder.Services.AddScoped<IActualizacionDiferenciasRepository, ActualizacionDiferenciasRepository>();
 builder.Services.AddScoped<IActualizacionRepository, ActualizacionRepository>();
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();

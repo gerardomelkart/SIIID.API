@@ -13,13 +13,13 @@ public class AcusePdfService : IAcusePdfService
     private const string RutaMujerAcuse = "wwwroot/images/mujer_acuses.png";
     private const string RutaPiePaginaAcuse = "wwwroot/images/pie_pagina_acuses.png";
 
-    private readonly ICargaRepository _cargaRepository;
+    private readonly IAcuseRepository _acuseRepository;
     private readonly IUsuarioRepository _usuarioRepository;
     private readonly IWebHostEnvironment _webHostEnvironment;
 
-    public AcusePdfService(ICargaRepository cargaRepository, IUsuarioRepository usuarioRepository, IWebHostEnvironment webHostEnvironment)
+    public AcusePdfService(IAcuseRepository acuseRepository, IUsuarioRepository usuarioRepository, IWebHostEnvironment webHostEnvironment)
     {
-        _cargaRepository = cargaRepository;
+        _acuseRepository = acuseRepository;
         _usuarioRepository = usuarioRepository;
         _webHostEnvironment = webHostEnvironment;
     }
@@ -35,7 +35,7 @@ public class AcusePdfService : IAcusePdfService
             throw new UnauthorizedAccessException("El usuario autenticado no existe o no está activo.");
         }
 
-        var carga = await _cargaRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
+        var carga = await _acuseRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
 
         if (carga == null)
         {
@@ -55,7 +55,7 @@ public class AcusePdfService : IAcusePdfService
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
         }
 
-        var resumen = await _cargaRepository.ObtenerResumenAcuseAsync(carga.IdCarga);
+        var resumen = await _acuseRepository.ObtenerResumenAcuseAsync(carga.IdCarga);
 
         return GenerarPdf(
             carga,
@@ -75,7 +75,7 @@ public class AcusePdfService : IAcusePdfService
             throw new UnauthorizedAccessException("El usuario autenticado no existe o no está activo.");
         }
 
-        var carga = await _cargaRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
+        var carga = await _acuseRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
 
         if (carga == null)
         {
@@ -95,7 +95,7 @@ public class AcusePdfService : IAcusePdfService
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
         }
 
-        var resumen = await _cargaRepository.ObtenerResumenAcuseConfirmadoAsync(carga.IdCarga);
+        var resumen = await _acuseRepository.ObtenerResumenAcuseConfirmadoAsync(carga.IdCarga);
 
         return GenerarPdf(
             carga,
@@ -115,7 +115,7 @@ public class AcusePdfService : IAcusePdfService
             throw new UnauthorizedAccessException("El usuario autenticado no existe o no está activo.");
         }
 
-        var carga = await _cargaRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
+        var carga = await _acuseRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
 
         if (carga == null)
         {
@@ -135,7 +135,7 @@ public class AcusePdfService : IAcusePdfService
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
         }
 
-        var resumen = await _cargaRepository.ObtenerResumenAcuseAsync(carga.IdCarga);
+        var resumen = await _acuseRepository.ObtenerResumenAcuseAsync(carga.IdCarga);
 
         return GenerarPdf(
             carga,
@@ -155,7 +155,7 @@ public class AcusePdfService : IAcusePdfService
             throw new UnauthorizedAccessException("El usuario autenticado no existe o no está activo.");
         }
 
-        var carga = await _cargaRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
+        var carga = await  _acuseRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
 
         if (carga == null)
         {
@@ -175,7 +175,7 @@ public class AcusePdfService : IAcusePdfService
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
         }
 
-        var resumen = await _cargaRepository.ObtenerResumenAcuseConfirmadoActualizacionAsync(carga.IdCarga);
+        var resumen = await _acuseRepository.ObtenerResumenAcuseConfirmadoActualizacionAsync(carga.IdCarga);
 
         return GenerarPdf(
             carga,
