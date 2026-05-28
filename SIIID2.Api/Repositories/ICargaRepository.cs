@@ -29,10 +29,4 @@ public interface ICargaRepository
     // Obtiene el código de una actualización pendiente para la misma entidad y periodo.
     // Si regresa null, no existe pendiente.
     Task<string?> ObtenerCodigoActualizacionPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
-
-    // Guarda el intento completo de actualización.
-    // Usa tipo_carga = ACTUALIZACION.
-    Task<long> GuardarIntentoActualizacionAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<ArchivoFila> filasCarpetas,  List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas);
-
-    Task<List<CargaValidacionResumenItem>> ObtenerResumenDiferenciasActualizacionAsync(long idCargaActualizacion);
 }

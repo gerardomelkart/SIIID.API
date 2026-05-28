@@ -10,7 +10,6 @@ using Microsoft.IdentityModel.Tokens;
 using SIIID2.Api.Middleware;
 using Serilog;
 using Microsoft.AspNetCore.Mvc;
-using SIIID2.Api.Models;
 
 // Punto de arranque de la API.
 // Aquí se registran servicios, controladores, Swagger y configuración general.
@@ -77,6 +76,7 @@ builder.Services.AddScoped<VictimasValidator>();
 builder.Services.AddScoped<CargaIntegridadValidator>();
 builder.Services.AddScoped<CatalogosValidator>();
 builder.Services.AddScoped<ICargaRepository, CargaRepository>();
+builder.Services.AddScoped<IActualizacionCargaRepository, ActualizacionCargaRepository>();
 builder.Services.AddScoped<IAcuseRepository, AcuseRepository>();
 builder.Services.AddScoped<IActualizacionDiferenciasRepository, ActualizacionDiferenciasRepository>();
 builder.Services.AddScoped<IActualizacionRepository, ActualizacionRepository>();

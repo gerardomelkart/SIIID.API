@@ -26,6 +26,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     private readonly IActualizacionDiferenciasRepository _actualizacionDiferenciasRepository;
     private readonly IActualizacionRepository _actualizacionRepository;
     private readonly IUsuarioRepository _usuarioRepository;
+    private readonly IActualizacionCargaRepository _actualizacionCargaRepository;
 
     // Extensiones permitidas para los archivos de actualización.
     private readonly string[] _extensionesPermitidas =
@@ -45,6 +46,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         CargaIntegridadValidator cargaIntegridadValidator,
         CatalogosValidator catalogosValidator,
         ICargaRepository cargaRepository,
+        IActualizacionCargaRepository actualizacionCargaRepository,
         IActualizacionDiferenciasRepository actualizacionDiferenciasRepository,
         IActualizacionRepository actualizacionRepository,
         IUsuarioRepository usuarioRepository)
@@ -56,6 +58,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         _cargaIntegridadValidator = cargaIntegridadValidator;
         _catalogosValidator = catalogosValidator;
         _cargaRepository = cargaRepository;
+        _actualizacionCargaRepository = actualizacionCargaRepository;
         _actualizacionDiferenciasRepository = actualizacionDiferenciasRepository;
         _actualizacionRepository = actualizacionRepository;
         _usuarioRepository = usuarioRepository;
@@ -331,7 +334,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Solo se llega aquí si:
         // - no hay error bloqueante de periodo sin carga confirmada
         // - no hay actualización pendiente existente
-        var idCargaActualizacion = await _cargaRepository.GuardarIntentoActualizacionAsync(
+        var idCargaActualizacion = await _actualizacionCargaRepository.GuardarIntentoActualizacionAsync(
             idUsuarioCarga,
             idEntidadFederativaCarga,
             response.CodigoReferencia,
@@ -348,7 +351,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
         if (response.EsValido)
         {
-            var resumenDiferencias = await _cargaRepository.ObtenerResumenDiferenciasActualizacionAsync(idCargaActualizacion);
+            var resumenDiferencias = await _actualizacionCargaRepository.ObtenerResumenDiferenciasActualizacionAsync(idCargaActualizacion);
 
             response.ResumenValidacion.AddRange(resumenDiferencias);
 
