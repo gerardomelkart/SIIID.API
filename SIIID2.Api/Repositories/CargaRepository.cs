@@ -1626,12 +1626,6 @@ public class CargaRepository : ICargaRepository
 
     public async Task<ActualizacionDiferenciasResponse?> ObtenerDetalleDiferenciasActualizacionAsync(string codigoReferencia, int? idEntidadFederativaUsuario, bool esSuperUsuario)
     {
-        // Devuelve el detalle de diferencias de una actualización pendiente.
-        // Incluye carpetas, delitos y víctimas.
-        //
-        // Para cada registro modificado regresa los campos que cambiaron.
-        // Para nuevos/eliminados regresa el identificador de fiscalía.
-
         var sql = @"
         ;WITH carga_actualizacion AS (
             SELECT TOP 1
@@ -1690,6 +1684,7 @@ public class CargaRepository : ICargaRepository
             SELECT
                 c.id_ci,
                 c.ntra_ci,
+                c.fha_de_ini AS fha_de_ini_excel,
                 COALESCE(
                     TRY_CONVERT(datetime2, c.fha_de_ini, 103),
                     TRY_CONVERT(datetime2, c.fha_de_ini)
@@ -1721,6 +1716,13 @@ public class CargaRepository : ICargaRepository
                 d.coordenada_x,
                 d.coordenada_y,
                 d.domicilio_hechos,
+                CONVERT(varchar(50), fa.clave) AS forma_acc_valor,
+                CONVERT(varchar(50), ic.clave) AS emto_com_dto_valor,
+                CONVERT(varchar(50), gc.clave) AS grdo_cons_valor,
+                md.clave4 AS clasf_de_dto_valor,
+                ef.clave AS id_ent_hchos_valor,
+                mun.clave AS id_mun_hchos_valor,
+                ccp.codigo_postal AS cp_valor,
                 ROW_NUMBER() OVER (
                     PARTITION BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia
                     ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, d.id_carga DESC, d.id_delito DESC
@@ -1731,6 +1733,20 @@ public class CargaRepository : ICargaRepository
                AND ci.activo = 1
             INNER JOIN cargas_periodo cp
                 ON cp.id_carga = d.id_carga
+            LEFT JOIN catalogo_forma_accion fa
+                ON fa.id_forma_accion = d.id_forma_accion
+            LEFT JOIN catalogo_instrumento_comision ic
+                ON ic.id_instrumento_comision = d.id_instrumento_comision
+            LEFT JOIN catalogo_grado_consumacion gc
+                ON gc.id_grado_consumacion = d.id_grado_consumacion
+            LEFT JOIN catalogo_modalidad_delito md
+                ON md.id_modalidad_delito = d.id_modalidad_delito
+            LEFT JOIN catalogo_entidad_federativa ef
+                ON ef.id_entidad_federativa = d.id_entidad_federativa
+            LEFT JOIN catalogo_municipio mun
+                ON mun.id_municipio = d.id_municipio
+            LEFT JOIN catalogo_codigo_postal ccp
+                ON ccp.id_codigo_postal = d.id_codigo_postal
             WHERE d.activo = 1
         ),
         delitos_actuales AS (
@@ -1753,7 +1769,14 @@ public class CargaRepository : ICargaRepository
                 id_codigo_postal,
                 coordenada_x,
                 coordenada_y,
-                domicilio_hechos
+                domicilio_hechos,
+                forma_acc_valor,
+                emto_com_dto_valor,
+                grdo_cons_valor,
+                clasf_de_dto_valor,
+                id_ent_hchos_valor,
+                id_mun_hchos_valor,
+                cp_valor
             FROM delitos_actuales_base
             WHERE rn = 1
         ),
@@ -1763,6 +1786,22 @@ public class CargaRepository : ICargaRepository
                 d.id_delito,
                 d.dto,
                 d.moda_dto,
+
+                d.forma_acc AS forma_acc_excel,
+                d.fha_de_hchos AS fha_de_hchos_excel,
+                d.emto_com_dto AS emto_com_dto_excel,
+                d.grdo_cons AS grdo_cons_excel,
+                d.clasf_de_dto AS clasf_de_dto_excel,
+                d.id_ent_hchos AS id_ent_hchos_excel,
+                d.id_mun_hchos AS id_mun_hchos_excel,
+                d.id_loc_hchos AS id_loc_hchos_excel,
+                d.nom_loc_hchos AS nom_loc_hchos_excel,
+                d.id_col_hchos AS id_col_hchos_excel,
+                d.nom_col_hchos AS nom_col_hchos_excel,
+                d.cp AS cp_excel,
+                d.coord_x AS coord_x_excel,
+                d.coord_y AS coord_y_excel,
+
                 fa.id_forma_accion,
                 COALESCE(
                     TRY_CONVERT(datetime2, CONCAT(d.fha_de_hchos, ' ', NULLIF(d.hra_de_hchos, '')), 103),
@@ -1829,6 +1868,13 @@ public class CargaRepository : ICargaRepository
                 v.id_presenta_discapacidad,
                 v.fecha_nacimiento,
                 v.edad,
+                CONVERT(varchar(50), tv.clave) AS id_tv_valor,
+                CONVERT(varchar(50), tvm.clave) AS id_tpm_valor,
+                CONVERT(varchar(50), sx.clave) AS sexo_valor,
+                CONVERT(varchar(50), gen.clave) AS genero_valor,
+                nac.clave AS nacional_valor,
+                CONVERT(varchar(50), pob.clave) AS pob_valor,
+                CONVERT(varchar(50), disc.clave) AS disc_valor,
                 ROW_NUMBER() OVER (
                     PARTITION BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia, v.identificador_victima_fiscalia
                     ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, v.id_carga DESC, v.id_victima DESC
@@ -1842,6 +1888,20 @@ public class CargaRepository : ICargaRepository
                AND ci.activo = 1
             INNER JOIN cargas_periodo cp
                 ON cp.id_carga = v.id_carga
+            LEFT JOIN catalogo_tipo_victima tv
+                ON tv.id_tipo_victima = v.id_tipo_victima
+            LEFT JOIN catalogo_tipo_victima_moral tvm
+                ON tvm.id_tipo_victima_moral = v.id_tipo_victima_moral
+            LEFT JOIN catalogo_sexo sx
+                ON sx.id_sexo = v.id_sexo
+            LEFT JOIN catalogo_genero gen
+                ON gen.id_genero = v.id_genero
+            LEFT JOIN catalogo_nacionalidad nac
+                ON nac.id_nacionalidad = v.id_nacionalidad
+            LEFT JOIN catalogo_pertenece_poblacion_indigena pob
+                ON pob.id_pertenece_poblacion_indigena = v.id_pertenece_poblacion_indigena
+            LEFT JOIN catalogo_presenta_discapacidad disc
+                ON disc.id_presenta_discapacidad = v.id_presenta_discapacidad
             WHERE v.activo = 1
         ),
         victimas_actuales AS (
@@ -1857,7 +1917,14 @@ public class CargaRepository : ICargaRepository
                 id_pertenece_poblacion_indigena,
                 id_presenta_discapacidad,
                 fecha_nacimiento,
-                edad
+                edad,
+                id_tv_valor,
+                id_tpm_valor,
+                sexo_valor,
+                genero_valor,
+                nacional_valor,
+                pob_valor,
+                disc_valor
             FROM victimas_actuales_base
             WHERE rn = 1
         ),
@@ -1866,6 +1933,17 @@ public class CargaRepository : ICargaRepository
                 v.id_ci,
                 v.id_delito,
                 v.id_vicf,
+
+                v.id_tv AS id_tv_excel,
+                v.id_tpm AS id_tpm_excel,
+                v.sexo AS sexo_excel,
+                v.genero AS genero_excel,
+                v.pob AS pob_excel,
+                v.disc AS disc_excel,
+                v.fha_nac AS fha_nac_excel,
+                v.edad AS edad_excel,
+                v.nacional AS nacional_excel,
+
                 tv.id_tipo_victima,
                 tvm.id_tipo_victima_moral,
                 sx.id_sexo,
@@ -1912,12 +1990,19 @@ public class CargaRepository : ICargaRepository
             'NUEVO' AS TipoMovimiento,
             'id_ci' AS CampoIdentificador,
             ct.id_ci AS IdentificadorFiscalia,
-            NULL AS Campo,
-            NULL AS ValorAnterior,
-            NULL AS ValorNuevo
+            dif.Campo,
+            dif.ValorAnterior,
+            dif.ValorNuevo
         FROM carpetas_tmp ct
         LEFT JOIN carpetas_actuales ca
             ON ca.identificador_carpeta_fiscalia = ct.id_ci
+        CROSS APPLY (
+            VALUES
+                ('id_ci', CAST(NULL AS varchar(max)), CONVERT(varchar(max), ct.id_ci)),
+                ('ntra_ci', CAST(NULL AS varchar(max)), CONVERT(varchar(max), ct.ntra_ci)),
+                ('fha_de_ini', CAST(NULL AS varchar(max)), CONVERT(varchar(max), ct.fha_de_ini_excel)),
+                ('rmen_de_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), ct.rmen_de_hchos))
+        ) dif(Campo, ValorAnterior, ValorNuevo)
         WHERE ca.identificador_carpeta_fiscalia IS NULL
 
         UNION ALL
@@ -1927,12 +2012,19 @@ public class CargaRepository : ICargaRepository
             'ELIMINADO',
             'id_ci',
             ca.identificador_carpeta_fiscalia,
-            NULL,
-            NULL,
-            NULL
+            dif.Campo,
+            dif.ValorAnterior,
+            dif.ValorNuevo
         FROM carpetas_actuales ca
         LEFT JOIN carpetas_tmp ct
             ON ct.id_ci = ca.identificador_carpeta_fiscalia
+        CROSS APPLY (
+            VALUES
+                ('id_ci', CONVERT(varchar(max), ca.identificador_carpeta_fiscalia), CAST(NULL AS varchar(max))),
+                ('ntra_ci', CONVERT(varchar(max), ca.nomenclatura_carpeta_fiscalia), CAST(NULL AS varchar(max))),
+                ('fha_de_ini', CONVERT(varchar(max), CONVERT(varchar(10), ca.fecha_inicio, 103)), CAST(NULL AS varchar(max))),
+                ('rmen_de_hchos', CONVERT(varchar(max), ca.resumen_hechos), CAST(NULL AS varchar(max)))
+        ) dif(Campo, ValorAnterior, ValorNuevo)
         WHERE ct.id_ci IS NULL
 
         UNION ALL
@@ -1950,11 +2042,11 @@ public class CargaRepository : ICargaRepository
             ON ca.identificador_carpeta_fiscalia = ct.id_ci
         CROSS APPLY (
             VALUES
-                ('nomenclatura_carpeta_fiscalia', ca.nomenclatura_carpeta_fiscalia, ct.ntra_ci),
-                ('fecha_inicio', CONVERT(varchar(19), ca.fecha_inicio, 120), CONVERT(varchar(19), ct.fecha_inicio, 120)),
-                ('resumen_hechos', ca.resumen_hechos, ct.rmen_de_hchos)
-        ) dif(Campo, ValorAnterior, ValorNuevo)
-        WHERE ISNULL(dif.ValorAnterior, '') <> ISNULL(dif.ValorNuevo, '')
+                ('ntra_ci', CONVERT(varchar(max), ca.nomenclatura_carpeta_fiscalia), CONVERT(varchar(max), ct.ntra_ci), CONVERT(varchar(max), ca.nomenclatura_carpeta_fiscalia), CONVERT(varchar(max), ct.ntra_ci)),
+                ('fha_de_ini', CONVERT(varchar(max), CONVERT(varchar(10), ca.fecha_inicio, 103)), CONVERT(varchar(max), ct.fha_de_ini_excel), CONVERT(varchar(max), CONVERT(varchar(19), ca.fecha_inicio, 120)), CONVERT(varchar(max), CONVERT(varchar(19), ct.fecha_inicio, 120))),
+                ('rmen_de_hchos', CONVERT(varchar(max), ca.resumen_hechos), CONVERT(varchar(max), ct.rmen_de_hchos), CONVERT(varchar(max), ca.resumen_hechos), CONVERT(varchar(max), ct.rmen_de_hchos))
+        ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
+        WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '')
 
         UNION ALL
 
@@ -1963,13 +2055,35 @@ public class CargaRepository : ICargaRepository
             'NUEVO',
             'id_ci + id_delito',
             CONCAT(dt.id_ci, ' | ', dt.id_delito),
-            NULL,
-            NULL,
-            NULL
+            dif.Campo,
+            dif.ValorAnterior,
+            dif.ValorNuevo
         FROM delitos_tmp dt
         LEFT JOIN delitos_actuales da
             ON da.id_ci = dt.id_ci
            AND da.identificador_delito_fiscalia = dt.id_delito
+        CROSS APPLY (
+            VALUES
+                ('id_ci', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.id_ci)),
+                ('id_delito', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.id_delito)),
+                ('dto', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.dto)),
+                ('moda_dto', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.moda_dto)),
+                ('forma_acc', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.forma_acc_excel)),
+                ('fha_de_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.fha_de_hchos_excel)),
+                ('emto_com_dto', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.emto_com_dto_excel)),
+                ('grdo_cons', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.grdo_cons_excel)),
+                ('clasf_de_dto', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.clasf_de_dto_excel)),
+                ('id_ent_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.id_ent_hchos_excel)),
+                ('id_mun_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.id_mun_hchos_excel)),
+                ('id_loc_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.id_loc_hchos_excel)),
+                ('nom_loc_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.nom_loc_hchos_excel)),
+                ('id_col_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.id_col_hchos_excel)),
+                ('nom_col_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.nom_col_hchos_excel)),
+                ('cp', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.cp_excel)),
+                ('coord_x', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.coord_x_excel)),
+                ('coord_y', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.coord_y_excel)),
+                ('dom_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.dom_hchos))
+        ) dif(Campo, ValorAnterior, ValorNuevo)
         WHERE da.identificador_delito_fiscalia IS NULL
 
         UNION ALL
@@ -1979,13 +2093,35 @@ public class CargaRepository : ICargaRepository
             'ELIMINADO',
             'id_ci + id_delito',
             CONCAT(da.id_ci, ' | ', da.identificador_delito_fiscalia),
-            NULL,
-            NULL,
-            NULL
+            dif.Campo,
+            dif.ValorAnterior,
+            dif.ValorNuevo
         FROM delitos_actuales da
         LEFT JOIN delitos_tmp dt
             ON dt.id_ci = da.id_ci
            AND dt.id_delito = da.identificador_delito_fiscalia
+        CROSS APPLY (
+            VALUES
+                ('id_ci', CONVERT(varchar(max), da.id_ci), CAST(NULL AS varchar(max))),
+                ('id_delito', CONVERT(varchar(max), da.identificador_delito_fiscalia), CAST(NULL AS varchar(max))),
+                ('dto', CONVERT(varchar(max), da.delito_fiscalia), CAST(NULL AS varchar(max))),
+                ('moda_dto', CONVERT(varchar(max), da.modalidad_delito_fiscalia), CAST(NULL AS varchar(max))),
+                ('forma_acc', CONVERT(varchar(max), da.forma_acc_valor), CAST(NULL AS varchar(max))),
+                ('fha_de_hchos', CONVERT(varchar(max), CONVERT(varchar(10), da.fecha_hechos, 103)), CAST(NULL AS varchar(max))),
+                ('emto_com_dto', CONVERT(varchar(max), da.emto_com_dto_valor), CAST(NULL AS varchar(max))),
+                ('grdo_cons', CONVERT(varchar(max), da.grdo_cons_valor), CAST(NULL AS varchar(max))),
+                ('clasf_de_dto', CONVERT(varchar(max), da.clasf_de_dto_valor), CAST(NULL AS varchar(max))),
+                ('id_ent_hchos', CONVERT(varchar(max), da.id_ent_hchos_valor), CAST(NULL AS varchar(max))),
+                ('id_mun_hchos', CONVERT(varchar(max), da.id_mun_hchos_valor), CAST(NULL AS varchar(max))),
+                ('id_loc_hchos', CONVERT(varchar(max), da.id_localidad_fiscalia), CAST(NULL AS varchar(max))),
+                ('nom_loc_hchos', CONVERT(varchar(max), da.localidad_fiscalia_nombre), CAST(NULL AS varchar(max))),
+                ('id_col_hchos', CONVERT(varchar(max), da.id_colonia_fiscalia), CAST(NULL AS varchar(max))),
+                ('nom_col_hchos', CONVERT(varchar(max), da.colonia_fiscalia_nombre), CAST(NULL AS varchar(max))),
+                ('cp', CONVERT(varchar(max), da.cp_valor), CAST(NULL AS varchar(max))),
+                ('coord_x', CONVERT(varchar(max), da.coordenada_x), CAST(NULL AS varchar(max))),
+                ('coord_y', CONVERT(varchar(max), da.coordenada_y), CAST(NULL AS varchar(max))),
+                ('dom_hchos', CONVERT(varchar(max), da.domicilio_hechos), CAST(NULL AS varchar(max)))
+        ) dif(Campo, ValorAnterior, ValorNuevo)
         WHERE dt.id_delito IS NULL
 
         UNION ALL
@@ -2004,25 +2140,25 @@ public class CargaRepository : ICargaRepository
            AND da.identificador_delito_fiscalia = dt.id_delito
         CROSS APPLY (
             VALUES
-                ('delito_fiscalia', da.delito_fiscalia, dt.dto),
-                ('modalidad_delito_fiscalia', da.modalidad_delito_fiscalia, dt.moda_dto),
-                ('id_forma_accion', CONVERT(varchar(50), da.id_forma_accion), CONVERT(varchar(50), dt.id_forma_accion)),
-                ('fecha_hechos', CONVERT(varchar(19), da.fecha_hechos, 120), CONVERT(varchar(19), dt.fecha_hechos, 120)),
-                ('id_instrumento_comision', CONVERT(varchar(50), da.id_instrumento_comision), CONVERT(varchar(50), dt.id_instrumento_comision)),
-                ('id_grado_consumacion', CONVERT(varchar(50), da.id_grado_consumacion), CONVERT(varchar(50), dt.id_grado_consumacion)),
-                ('id_modalidad_delito', CONVERT(varchar(50), da.id_modalidad_delito), CONVERT(varchar(50), dt.id_modalidad_delito)),
-                ('id_entidad_federativa', CONVERT(varchar(50), da.id_entidad_federativa), CONVERT(varchar(50), dt.id_entidad_federativa)),
-                ('id_municipio', CONVERT(varchar(50), da.id_municipio), CONVERT(varchar(50), dt.id_municipio)),
-                ('id_localidad_fiscalia', da.id_localidad_fiscalia, dt.id_loc_hchos),
-                ('localidad_fiscalia_nombre', da.localidad_fiscalia_nombre, dt.nom_loc_hchos),
-                ('id_colonia_fiscalia', da.id_colonia_fiscalia, dt.id_col_hchos),
-                ('colonia_fiscalia_nombre', da.colonia_fiscalia_nombre, dt.nom_col_hchos),
-                ('id_codigo_postal', CONVERT(varchar(50), da.id_codigo_postal), CONVERT(varchar(50), dt.id_codigo_postal)),
-                ('coordenada_x', CONVERT(varchar(50), da.coordenada_x), CONVERT(varchar(50), dt.coordenada_x)),
-                ('coordenada_y', CONVERT(varchar(50), da.coordenada_y), CONVERT(varchar(50), dt.coordenada_y)),
-                ('domicilio_hechos', da.domicilio_hechos, dt.dom_hchos)
-        ) dif(Campo, ValorAnterior, ValorNuevo)
-        WHERE ISNULL(dif.ValorAnterior, '') <> ISNULL(dif.ValorNuevo, '')
+                ('dto', CONVERT(varchar(max), da.delito_fiscalia), CONVERT(varchar(max), dt.dto), CONVERT(varchar(max), da.delito_fiscalia), CONVERT(varchar(max), dt.dto)),
+                ('moda_dto', CONVERT(varchar(max), da.modalidad_delito_fiscalia), CONVERT(varchar(max), dt.moda_dto), CONVERT(varchar(max), da.modalidad_delito_fiscalia), CONVERT(varchar(max), dt.moda_dto)),
+                ('forma_acc', CONVERT(varchar(max), da.forma_acc_valor), CONVERT(varchar(max), dt.forma_acc_excel), CONVERT(varchar(max), da.id_forma_accion), CONVERT(varchar(max), dt.id_forma_accion)),
+                ('fha_de_hchos', CONVERT(varchar(max), CONVERT(varchar(10), da.fecha_hechos, 103)), CONVERT(varchar(max), dt.fha_de_hchos_excel), CONVERT(varchar(max), CONVERT(varchar(19), da.fecha_hechos, 120)), CONVERT(varchar(max), CONVERT(varchar(19), dt.fecha_hechos, 120))),
+                ('emto_com_dto', CONVERT(varchar(max), da.emto_com_dto_valor), CONVERT(varchar(max), dt.emto_com_dto_excel), CONVERT(varchar(max), da.id_instrumento_comision), CONVERT(varchar(max), dt.id_instrumento_comision)),
+                ('grdo_cons', CONVERT(varchar(max), da.grdo_cons_valor), CONVERT(varchar(max), dt.grdo_cons_excel), CONVERT(varchar(max), da.id_grado_consumacion), CONVERT(varchar(max), dt.id_grado_consumacion)),
+                ('clasf_de_dto', CONVERT(varchar(max), da.clasf_de_dto_valor), CONVERT(varchar(max), dt.clasf_de_dto_excel), CONVERT(varchar(max), da.id_modalidad_delito), CONVERT(varchar(max), dt.id_modalidad_delito)),
+                ('id_ent_hchos', CONVERT(varchar(max), da.id_ent_hchos_valor), CONVERT(varchar(max), dt.id_ent_hchos_excel), CONVERT(varchar(max), da.id_entidad_federativa), CONVERT(varchar(max), dt.id_entidad_federativa)),
+                ('id_mun_hchos', CONVERT(varchar(max), da.id_mun_hchos_valor), CONVERT(varchar(max), dt.id_mun_hchos_excel), CONVERT(varchar(max), da.id_municipio), CONVERT(varchar(max), dt.id_municipio)),
+                ('id_loc_hchos', CONVERT(varchar(max), da.id_localidad_fiscalia), CONVERT(varchar(max), dt.id_loc_hchos_excel), CONVERT(varchar(max), da.id_localidad_fiscalia), CONVERT(varchar(max), dt.id_loc_hchos_excel)),
+                ('nom_loc_hchos', CONVERT(varchar(max), da.localidad_fiscalia_nombre), CONVERT(varchar(max), dt.nom_loc_hchos_excel), CONVERT(varchar(max), da.localidad_fiscalia_nombre), CONVERT(varchar(max), dt.nom_loc_hchos_excel)),
+                ('id_col_hchos', CONVERT(varchar(max), da.id_colonia_fiscalia), CONVERT(varchar(max), dt.id_col_hchos_excel), CONVERT(varchar(max), da.id_colonia_fiscalia), CONVERT(varchar(max), dt.id_col_hchos_excel)),
+                ('nom_col_hchos', CONVERT(varchar(max), da.colonia_fiscalia_nombre), CONVERT(varchar(max), dt.nom_col_hchos_excel), CONVERT(varchar(max), da.colonia_fiscalia_nombre), CONVERT(varchar(max), dt.nom_col_hchos_excel)),
+                ('cp', CONVERT(varchar(max), da.cp_valor), CONVERT(varchar(max), dt.cp_excel), CONVERT(varchar(max), da.id_codigo_postal), CONVERT(varchar(max), dt.id_codigo_postal)),
+                ('coord_x', CONVERT(varchar(max), da.coordenada_x), CONVERT(varchar(max), dt.coord_x_excel), CONVERT(varchar(max), da.coordenada_x), CONVERT(varchar(max), dt.coordenada_x)),
+                ('coord_y', CONVERT(varchar(max), da.coordenada_y), CONVERT(varchar(max), dt.coord_y_excel), CONVERT(varchar(max), da.coordenada_y), CONVERT(varchar(max), dt.coordenada_y)),
+                ('dom_hchos', CONVERT(varchar(max), da.domicilio_hechos), CONVERT(varchar(max), dt.dom_hchos), CONVERT(varchar(max), da.domicilio_hechos), CONVERT(varchar(max), dt.dom_hchos))
+        ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
+        WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '')
 
         UNION ALL
 
@@ -2031,14 +2167,29 @@ public class CargaRepository : ICargaRepository
             'NUEVO',
             'id_ci + id_delito + id_vicf',
             CONCAT(vt.id_ci, ' | ', vt.id_delito, ' | ', vt.id_vicf),
-            NULL,
-            NULL,
-            NULL
+            dif.Campo,
+            dif.ValorAnterior,
+            dif.ValorNuevo
         FROM victimas_tmp vt
         LEFT JOIN victimas_actuales va
             ON va.id_ci = vt.id_ci
            AND va.id_delito_fiscalia = vt.id_delito
            AND va.identificador_victima_fiscalia = vt.id_vicf
+        CROSS APPLY (
+            VALUES
+                ('id_ci', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.id_ci)),
+                ('id_delito', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.id_delito)),
+                ('id_vicf', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.id_vicf)),
+                ('id_tv', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.id_tv_excel)),
+                ('id_tpm', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.id_tpm_excel)),
+                ('sexo', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.sexo_excel)),
+                ('genero', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.genero_excel)),
+                ('pob', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.pob_excel)),
+                ('disc', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.disc_excel)),
+                ('fha_nac', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.fha_nac_excel)),
+                ('edad', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.edad_excel)),
+                ('nacional', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.nacional_excel))
+        ) dif(Campo, ValorAnterior, ValorNuevo)
         WHERE va.identificador_victima_fiscalia IS NULL
 
         UNION ALL
@@ -2048,14 +2199,29 @@ public class CargaRepository : ICargaRepository
             'ELIMINADO',
             'id_ci + id_delito + id_vicf',
             CONCAT(va.id_ci, ' | ', va.id_delito_fiscalia, ' | ', va.identificador_victima_fiscalia),
-            NULL,
-            NULL,
-            NULL
+            dif.Campo,
+            dif.ValorAnterior,
+            dif.ValorNuevo
         FROM victimas_actuales va
         LEFT JOIN victimas_tmp vt
             ON vt.id_ci = va.id_ci
            AND vt.id_delito = va.id_delito_fiscalia
            AND vt.id_vicf = va.identificador_victima_fiscalia
+        CROSS APPLY (
+            VALUES
+                ('id_ci', CONVERT(varchar(max), va.id_ci), CAST(NULL AS varchar(max))),
+                ('id_delito', CONVERT(varchar(max), va.id_delito_fiscalia), CAST(NULL AS varchar(max))),
+                ('id_vicf', CONVERT(varchar(max), va.identificador_victima_fiscalia), CAST(NULL AS varchar(max))),
+                ('id_tv', CONVERT(varchar(max), va.id_tv_valor), CAST(NULL AS varchar(max))),
+                ('id_tpm', CONVERT(varchar(max), va.id_tpm_valor), CAST(NULL AS varchar(max))),
+                ('sexo', CONVERT(varchar(max), va.sexo_valor), CAST(NULL AS varchar(max))),
+                ('genero', CONVERT(varchar(max), va.genero_valor), CAST(NULL AS varchar(max))),
+                ('pob', CONVERT(varchar(max), va.pob_valor), CAST(NULL AS varchar(max))),
+                ('disc', CONVERT(varchar(max), va.disc_valor), CAST(NULL AS varchar(max))),
+                ('fha_nac', CONVERT(varchar(max), CONVERT(varchar(10), va.fecha_nacimiento, 103)), CAST(NULL AS varchar(max))),
+                ('edad', CONVERT(varchar(max), va.edad), CAST(NULL AS varchar(max))),
+                ('nacional', CONVERT(varchar(max), va.nacional_valor), CAST(NULL AS varchar(max)))
+        ) dif(Campo, ValorAnterior, ValorNuevo)
         WHERE vt.id_vicf IS NULL
 
         UNION ALL
@@ -2075,17 +2241,17 @@ public class CargaRepository : ICargaRepository
            AND va.identificador_victima_fiscalia = vt.id_vicf
         CROSS APPLY (
             VALUES
-                ('id_tipo_victima', CONVERT(varchar(50), va.id_tipo_victima), CONVERT(varchar(50), vt.id_tipo_victima)),
-                ('id_tipo_victima_moral', CONVERT(varchar(50), va.id_tipo_victima_moral), CONVERT(varchar(50), vt.id_tipo_victima_moral)),
-                ('id_sexo', CONVERT(varchar(50), va.id_sexo), CONVERT(varchar(50), vt.id_sexo)),
-                ('id_genero', CONVERT(varchar(50), va.id_genero), CONVERT(varchar(50), vt.id_genero)),
-                ('id_nacionalidad', CONVERT(varchar(50), va.id_nacionalidad), CONVERT(varchar(50), vt.id_nacionalidad)),
-                ('id_pertenece_poblacion_indigena', CONVERT(varchar(50), va.id_pertenece_poblacion_indigena), CONVERT(varchar(50), vt.id_pertenece_poblacion_indigena)),
-                ('id_presenta_discapacidad', CONVERT(varchar(50), va.id_presenta_discapacidad), CONVERT(varchar(50), vt.id_presenta_discapacidad)),
-                ('fecha_nacimiento', CONVERT(varchar(10), va.fecha_nacimiento, 120), CONVERT(varchar(10), vt.fecha_nacimiento, 120)),
-                ('edad', CONVERT(varchar(50), va.edad), CONVERT(varchar(50), vt.edad))
-        ) dif(Campo, ValorAnterior, ValorNuevo)
-        WHERE ISNULL(dif.ValorAnterior, '') <> ISNULL(dif.ValorNuevo, '');
+                ('id_tv', CONVERT(varchar(max), va.id_tv_valor), CONVERT(varchar(max), vt.id_tv_excel), CONVERT(varchar(max), va.id_tipo_victima), CONVERT(varchar(max), vt.id_tipo_victima)),
+                ('id_tpm', CONVERT(varchar(max), va.id_tpm_valor), CONVERT(varchar(max), vt.id_tpm_excel), CONVERT(varchar(max), va.id_tipo_victima_moral), CONVERT(varchar(max), vt.id_tipo_victima_moral)),
+                ('sexo', CONVERT(varchar(max), va.sexo_valor), CONVERT(varchar(max), vt.sexo_excel), CONVERT(varchar(max), va.id_sexo), CONVERT(varchar(max), vt.id_sexo)),
+                ('genero', CONVERT(varchar(max), va.genero_valor), CONVERT(varchar(max), vt.genero_excel), CONVERT(varchar(max), va.id_genero), CONVERT(varchar(max), vt.id_genero)),
+                ('pob', CONVERT(varchar(max), va.pob_valor), CONVERT(varchar(max), vt.pob_excel), CONVERT(varchar(max), va.id_pertenece_poblacion_indigena), CONVERT(varchar(max), vt.id_pertenece_poblacion_indigena)),
+                ('disc', CONVERT(varchar(max), va.disc_valor), CONVERT(varchar(max), vt.disc_excel), CONVERT(varchar(max), va.id_presenta_discapacidad), CONVERT(varchar(max), vt.id_presenta_discapacidad)),
+                ('fha_nac', CONVERT(varchar(max), CONVERT(varchar(10), va.fecha_nacimiento, 103)), CONVERT(varchar(max), vt.fha_nac_excel), CONVERT(varchar(max), CONVERT(varchar(10), va.fecha_nacimiento, 120)), CONVERT(varchar(max), CONVERT(varchar(10), vt.fecha_nacimiento, 120))),
+                ('edad', CONVERT(varchar(max), va.edad), CONVERT(varchar(max), vt.edad_excel), CONVERT(varchar(max), va.edad), CONVERT(varchar(max), vt.edad)),
+                ('nacional', CONVERT(varchar(max), va.nacional_valor), CONVERT(varchar(max), vt.nacional_excel), CONVERT(varchar(max), va.id_nacionalidad), CONVERT(varchar(max), vt.id_nacionalidad))
+        ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
+        WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '');
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();

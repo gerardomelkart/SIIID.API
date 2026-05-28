@@ -213,12 +213,15 @@ public class AcusePdfService : IAcusePdfService
                 {
                     column.Spacing(6);
 
-                    column.Item()
-                        .PaddingTop(4)
-                        .AlignCenter()
-                        .Text(titulo)
-                        .FontSize(17)
-                        .Bold();
+                    if (!string.IsNullOrWhiteSpace(titulo))
+                    {
+                        column.Item()
+                            .PaddingTop(4)
+                            .AlignCenter()
+                            .Text(titulo)
+                            .FontSize(17)
+                            .Bold();
+                    }
 
                     if (mostrarMarcaPrevio)
                     {
