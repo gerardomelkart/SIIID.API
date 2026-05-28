@@ -1808,5 +1808,97 @@ public class ActualizacionRepository : IActualizacionRepository
         await DesactivarCarpetasEliminadasAsync(connection, transaction, idCargaActualizacion);
     }
 
+    private async Task ConfirmarActualizacionFinalAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
+    {
+        var sql = @"
+        UPDATE carga
+        SET estado = 'CONFIRMADO_ACTUALIZACION',
+            fecha_confirmacion = SYSDATETIME(),
+            id_usuario_confirmacion = @IdUsuarioConfirmacion,
+            mensaje_error = NULL
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_carpeta
+        SET estado = 'PROCESADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_delito
+        SET estado = 'PROCESADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE carga_tmp_victima
+        SET estado = 'PROCESADO',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+    ";
+
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga,
+                IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
+    }
+
+    public async Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(
+    string codigoReferencia,
+    int idUsuarioConsulta)
+    {
+        var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuarioConsulta == null)
+        {
+            return new ActualizacionDiferenciasResponse
+            {
+                EsValido = false,
+                CodigoReferencia = codigoReferencia,
+                Mensaje = "El usuario autenticado no existe o no está activo."
+            };
+        }
+
+        var detalle = await _actualizacionDiferenciasRepository.ObtenerDetalleDiferenciasActualizacionAsync(
+            codigoReferencia,
+            usuarioConsulta.IdEntidadFederativa,
+            usuarioConsulta.EsSuperUsuario);
+
+        if (detalle == null)
+        {
+            return new ActualizacionDiferenciasResponse
+            {
+                EsValido = false,
+                CodigoReferencia = codigoReferencia,
+                Mensaje = "No se encontró una actualización pendiente válida para el código de referencia indicado."
+            };
+        }
+
+        return detalle;
+    }
+
+    public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(
+        ConfirmarCargaRequest request,
+        int idUsuarioConfirmacion)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.CodigoReferencia))
+        {
+            return new ConfirmarCargaResponse
+            {
+                EsValido = false,
+                CodigoReferencia = request?.CodigoReferencia ?? string.Empty,
+                Estado = "SOLICITUD_INVALIDA",
+                Mensaje = "Debe enviar el código de referencia de la actualización."
+            };
+        }
+
+        return await _actualizacionRepository.ConfirmarActualizacionAsync(
+            request.CodigoReferencia,
+            request.Aceptar,
+            idUsuarioConfirmacion);
+    }
+
 
 }

@@ -1601,59 +1601,6 @@ public class CargaRepository : ICargaRepository
         return resumen;
     }
 
-    private async Task ConfirmarActualizacionFinalAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
-    {
-        var sql = @"
-        UPDATE carga
-        SET estado = 'CONFIRMADO_ACTUALIZACION',
-            fecha_confirmacion = SYSDATETIME(),
-            id_usuario_confirmacion = @IdUsuarioConfirmacion,
-            mensaje_error = NULL
-        WHERE id_carga = @IdCarga;
-
-        UPDATE carga_tmp_carpeta
-        SET estado = 'PROCESADO',
-            fecha_procesamiento = SYSDATETIME()
-        WHERE id_carga = @IdCarga;
-
-        UPDATE carga_tmp_delito
-        SET estado = 'PROCESADO',
-            fecha_procesamiento = SYSDATETIME()
-        WHERE id_carga = @IdCarga;
-
-        UPDATE carga_tmp_victima
-        SET estado = 'PROCESADO',
-            fecha_procesamiento = SYSDATETIME()
-        WHERE id_carga = @IdCarga;
-    ";
-
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                IdUsuarioConfirmacion = idUsuarioConfirmacion
-            },
-            transaction);
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoActualizacionAsync(long idCargaActualizacion)
     {
         // Genera el resumen del acuse confirmado de actualización.
