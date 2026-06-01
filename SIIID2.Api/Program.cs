@@ -97,6 +97,12 @@ builder.Services.AddScoped<IAcusePdfService, AcusePdfService>();
 // Registro del servicio de usuarios.
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 
+//para los informes
+builder.Services.AddScoped<IInformeRepository, InformeRepository>();
+builder.Services.AddScoped<IInformeService, InformeService>();
+
+
+
 // Configuración de autenticación JWT.
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("No se encontró Jwt:SecretKey.");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("No se encontró Jwt:Issuer.");
