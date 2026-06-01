@@ -992,41 +992,34 @@ public class CargaRepository : ICargaRepository
         });
     }
 
-    public async Task<List<ActualizacionPeriodoDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idEntidadFederativa)
+    public async Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idEntidadFederativa)
     {
-        // Obtiene periodos con carga inicial confirmada.
-        // Si existe actualización pendiente para el periodo, se regresa el código
-        // para que el front pueda resolverla antes de crear otra.
+        // Obtiene los periodos realmente disponibles para actualización.
+        // Disponible significa:
+        // - existe carga inicial confirmada
+        // - no existe actualización pendiente para ese periodo
         var sql = @"
         SELECT
-            c.id_entidad_federativa AS IdEntidadFederativa,
-            c.mes_corte AS MesCorte,
             c.anio_corte AS AnioCorte,
-            CONCAT(RIGHT('00' + CONVERT(varchar(2), c.mes_corte), 2), '/', c.anio_corte) AS Periodo,
-            CASE
-                WHEN ap.codigo_referencia IS NULL THEN CAST(0 AS bit)
-                ELSE CAST(1 AS bit)
-            END AS ExisteActualizacionPendiente,
-            ap.codigo_referencia AS CodigoActualizacionPendiente
+            c.mes_corte AS MesCorte
         FROM carga c
-        OUTER APPLY (
-            SELECT TOP 1
-                ca.codigo_referencia
-            FROM carga ca
-            WHERE ca.id_entidad_federativa = c.id_entidad_federativa
-              AND ca.mes_corte = c.mes_corte
-              AND ca.anio_corte = c.anio_corte
-              AND ca.tipo_carga = 'ACTUALIZACION'
-              AND ca.estado = 'VALIDADO_PENDIENTE_ACTUALIZACION'
-              AND ca.activo = 1
-            ORDER BY
-                ca.fecha_validacion DESC,
-                ca.id_carga DESC
-        ) ap
         WHERE c.id_entidad_federativa = @IdEntidadFederativa
-          AND c.tipo_carga = 'INICIAL'
+          AND c.tipo_carga = 'CARGA_INICIAL'
           AND c.estado = 'CONFIRMADO'
           AND c.activo = 1
+          AND NOT EXISTS (
+              SELECT 1
+              FROM carga ca
+              WHERE ca.id_entidad_federativa = c.id_entidad_federativa
+                AND ca.mes_corte = c.mes_corte
+                AND ca.anio_corte = c.anio_corte
+                AND ca.tipo_carga = 'ACTUALIZACION'
+                AND ca.estado = 'VALIDADO_PENDIENTE_ACTUALIZACION'
+                AND ca.activo = 1
+          )
+        GROUP BY
+            c.anio_corte,
+            c.mes_corte
         ORDER BY
             c.anio_corte DESC,
             c.mes_corte DESC;
@@ -1034,11 +1027,47 @@ public class CargaRepository : ICargaRepository
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        var periodos = await connection.QueryAsync<ActualizacionPeriodoDisponibleItem>(sql, new
+        var periodos = await connection.QueryAsync<(int AnioCorte, int MesCorte)>(sql, new
         {
             IdEntidadFederativa = idEntidadFederativa
         });
 
-        return periodos.ToList();
+        return periodos
+            .GroupBy(x => x.AnioCorte)
+            .Select(g => new ActualizacionAnioDisponibleItem
+            {
+                AnioCorte = g.Key,
+                Meses = g
+                    .OrderByDescending(x => x.MesCorte)
+                    .Select(x => new ActualizacionMesDisponibleItem
+                    {
+                        MesCorte = x.MesCorte,
+                        NombreMes = ObtenerNombreMes(x.MesCorte),
+                        Periodo = $"{x.MesCorte:00}/{x.AnioCorte}"
+                    })
+                    .ToList()
+            })
+            .OrderByDescending(x => x.AnioCorte)
+            .ToList();
+    }
+
+    private static string ObtenerNombreMes(int mes)
+    {
+        return mes switch
+        {
+            1 => "Enero",
+            2 => "Febrero",
+            3 => "Marzo",
+            4 => "Abril",
+            5 => "Mayo",
+            6 => "Junio",
+            7 => "Julio",
+            8 => "Agosto",
+            9 => "Septiembre",
+            10 => "Octubre",
+            11 => "Noviembre",
+            12 => "Diciembre",
+            _ => string.Empty
+        };
     }
 }

@@ -11,4 +11,6 @@ public interface IActualizacionArchivosService
     Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(ConfirmarCargaRequest request, int idUsuarioConfirmacion);
 
     Task<ActualizacionPeriodoResponse> ConsultarPeriodoActualizacionAsync(int mesCorte, int anioCorte, int idUsuarioConsulta, int? idEntidadFederativa = null);
+
+    Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idUsuarioConsulta, int? idEntidadFederativa = null);
 }

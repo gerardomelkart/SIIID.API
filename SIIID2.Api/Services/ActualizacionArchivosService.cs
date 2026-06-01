@@ -1032,4 +1032,37 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             Mensaje = $"Existe carga inicial confirmada para el periodo {mesCorte:00}/{anioCorte}. Puede continuar con la actualización."
         };
     }
+
+    public async Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idUsuarioConsulta, int? idEntidadFederativa = null)
+    {
+        var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuarioConsulta == null)
+        {
+            return new List<ActualizacionAnioDisponibleItem>();
+        }
+
+        if (!usuarioConsulta.HabilitaModificacion)
+        {
+            return new List<ActualizacionAnioDisponibleItem>();
+        }
+
+        int? idEntidadConsulta;
+
+        if (usuarioConsulta.EsSuperUsuario)
+        {
+            idEntidadConsulta = idEntidadFederativa;
+        }
+        else
+        {
+            idEntidadConsulta = usuarioConsulta.IdEntidadFederativa;
+        }
+
+        if (!idEntidadConsulta.HasValue)
+        {
+            return new List<ActualizacionAnioDisponibleItem>();
+        }
+
+        return await _cargaRepository.ObtenerPeriodosDisponiblesActualizacionAsync(idEntidadConsulta.Value);
+    }
 }

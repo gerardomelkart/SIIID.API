@@ -30,5 +30,5 @@ public interface ICargaRepository
     // Si regresa null, no existe pendiente.
     Task<string?> ObtenerCodigoActualizacionPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
 
-    Task<List<ActualizacionPeriodoDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idEntidadFederativa);
+    Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idEntidadFederativa);
 }

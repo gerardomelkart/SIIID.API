@@ -257,4 +257,28 @@ public class ActualizacionesController : ControllerBase
 
         return Ok(resultado);
     }
+
+    [Authorize]
+    [HttpGet("periodos-disponibles")]
+    public async Task<IActionResult> ObtenerPeriodosDisponiblesActualizacion([FromQuery] int? idEntidadFederativa = null)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        var periodos = await _actualizacionArchivosService.ObtenerPeriodosDisponiblesActualizacionAsync(
+            idUsuarioConsulta,
+            idEntidadFederativa);
+
+        return Ok(periodos);
+    }
 }
