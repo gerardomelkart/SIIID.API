@@ -258,11 +258,19 @@ public class CargaArchivosService : ICargaArchivosService
             filasDelitos.Count,
             filasVictimas.Count);
 
-        // Si ya existe carga confirmada o pendiente para ese periodo,
-        // no guardamos staging como carga nueva.
-        // Confirmada: debe ir a flujo de actualización.
-        // Pendiente: debe confirmar o rechazar la carga anterior.
-        if (response.Errores.Any(x => x.Codigo == "CARGA_PERIODO_YA_CONFIRMADO" || x.Codigo == "CARGA_PENDIENTE_EXISTENTE"))
+        // Errores bloqueantes.
+        // No se guarda fila en carga ni staging para evitar ensuciar la base.
+        //
+        // Casos bloqueantes:
+        // - el usuario no tiene entidad asignada
+        // - el Excel contiene una entidad distinta a la del usuario
+        // - ya existe carga confirmada
+        // - ya existe carga pendiente
+        if (response.Errores.Any(x =>
+                x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD" ||
+                x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO" ||
+                x.Codigo == "CARGA_PERIODO_YA_CONFIRMADO" ||
+                x.Codigo == "CARGA_PENDIENTE_EXISTENTE"))
         {
             return response;
         }

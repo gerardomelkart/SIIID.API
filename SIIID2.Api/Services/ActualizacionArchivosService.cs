@@ -307,6 +307,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Si no existe carga confirmada o ya hay una actualización pendiente,
         // tampoco se guarda staging.
         if (response.Errores.Any(x =>
+                x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD" ||
+                x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO" ||
                 x.Codigo == "ACTUALIZACION_MES_CORTE_OBLIGATORIO" ||
                 x.Codigo == "ACTUALIZACION_MES_CORTE_INVALIDO" ||
                 x.Codigo == "ACTUALIZACION_ANIO_CORTE_OBLIGATORIO" ||

@@ -29,4 +29,6 @@ public interface ICargaRepository
     // Obtiene el código de una actualización pendiente para la misma entidad y periodo.
     // Si regresa null, no existe pendiente.
     Task<string?> ObtenerCodigoActualizacionPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
+
+    Task<List<ActualizacionPeriodoDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idEntidadFederativa);
 }

@@ -992,4 +992,53 @@ public class CargaRepository : ICargaRepository
         });
     }
 
+    public async Task<List<ActualizacionPeriodoDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idEntidadFederativa)
+    {
+        // Obtiene periodos con carga inicial confirmada.
+        // Si existe actualización pendiente para el periodo, se regresa el código
+        // para que el front pueda resolverla antes de crear otra.
+        var sql = @"
+        SELECT
+            c.id_entidad_federativa AS IdEntidadFederativa,
+            c.mes_corte AS MesCorte,
+            c.anio_corte AS AnioCorte,
+            CONCAT(RIGHT('00' + CONVERT(varchar(2), c.mes_corte), 2), '/', c.anio_corte) AS Periodo,
+            CASE
+                WHEN ap.codigo_referencia IS NULL THEN CAST(0 AS bit)
+                ELSE CAST(1 AS bit)
+            END AS ExisteActualizacionPendiente,
+            ap.codigo_referencia AS CodigoActualizacionPendiente
+        FROM carga c
+        OUTER APPLY (
+            SELECT TOP 1
+                ca.codigo_referencia
+            FROM carga ca
+            WHERE ca.id_entidad_federativa = c.id_entidad_federativa
+              AND ca.mes_corte = c.mes_corte
+              AND ca.anio_corte = c.anio_corte
+              AND ca.tipo_carga = 'ACTUALIZACION'
+              AND ca.estado = 'VALIDADO_PENDIENTE_ACTUALIZACION'
+              AND ca.activo = 1
+            ORDER BY
+                ca.fecha_validacion DESC,
+                ca.id_carga DESC
+        ) ap
+        WHERE c.id_entidad_federativa = @IdEntidadFederativa
+          AND c.tipo_carga = 'INICIAL'
+          AND c.estado = 'CONFIRMADO'
+          AND c.activo = 1
+        ORDER BY
+            c.anio_corte DESC,
+            c.mes_corte DESC;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var periodos = await connection.QueryAsync<ActualizacionPeriodoDisponibleItem>(sql, new
+        {
+            IdEntidadFederativa = idEntidadFederativa
+        });
+
+        return periodos.ToList();
+    }
 }

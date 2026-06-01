@@ -1,4 +1,6 @@
-﻿namespace SIIID2.Api.Repositories;
+﻿using SIIID2.Api.Models;
+
+namespace SIIID2.Api.Repositories;
 
 public interface ICatalogoRepository
 {
@@ -16,4 +18,10 @@ public interface ICatalogoRepository
 
     // Obtiene las combinaciones activas entidad + municipio.
     Task<HashSet<string>> ObtenerMunicipiosPorEntidadActivosAsync();
+
+    // Obtiene las entidades federativas activas para formularios del front.
+    Task<List<EntidadFederativaCatalogoItem>> ObtenerEntidadesFederativasActivasAsync();
+
+    // Obtiene los roles activos para formularios del front.
+    Task<List<RolCatalogoItem>> ObtenerRolesActivosAsync();
 }

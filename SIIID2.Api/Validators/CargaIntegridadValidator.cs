@@ -26,6 +26,8 @@ public class CargaIntegridadValidator
     public List<CargaValidacionError> Validar(List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
     {
         var errores = new List<CargaValidacionError>();
+        // Regla: ID_CI debe ser unico en la carga
+        ValidarIdCiUnicoEnCarpetas(filasCarpetas, errores);
         // Construimos índice de carpetas por ID_CI.
         var carpetasPorIdCi = filasCarpetas
             .Select(f => new CarpetaIntegridad
@@ -408,5 +410,39 @@ public class CargaIntegridadValidator
             DescripcionResumen = descripcionResumen,
             Mensaje = mensaje
         });
+    }
+
+    private void ValidarIdCiUnicoEnCarpetas(List<ArchivoFila> filasCarpetas, List<CargaValidacionError> errores)
+    {
+        var carpetasDuplicadas = filasCarpetas
+            .Select(f => new
+            {
+                Fila = f,
+                IdCi = ObtenerValor(f, "id_ci")?.Trim()
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x.IdCi))
+            .GroupBy(x => x.IdCi!, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        foreach (var grupo in carpetasDuplicadas)
+        {
+            var filas = grupo
+                .Select(x => x.Fila.NumeroFila)
+                .OrderBy(x => x)
+                .ToList();
+
+            foreach (var item in grupo)
+            {
+                AgregarError(
+                    errores,
+                    "carpetas",
+                    item.Fila,
+                    "id_ci",
+                    "INTEGRIDAD_ID_CI_DUPLICADO_PERIODO",
+                    "ID_CI duplicado en el periodo",
+                    $"El ID_CI \"{grupo.Key}\" está duplicado en el archivo de carpetas. Filas detectadas: {string.Join(", ", filas)}. El ID_CI debe ser único para el periodo.");
+            }
+        }
     }
 }

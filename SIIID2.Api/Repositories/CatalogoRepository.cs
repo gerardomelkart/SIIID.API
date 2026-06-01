@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using SIIID2.Api.Data;
+using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
 
@@ -102,7 +103,50 @@ public class CatalogoRepository : ICatalogoRepository
             .Select(x => x.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
-    
+
+    public async Task<List<EntidadFederativaCatalogoItem>> ObtenerEntidadesFederativasActivasAsync()
+    {
+        // Catálogo de entidades federativas activas.
+        // Se usa para combos del front, principalmente para SUPER_USUARIO.
+        var sql = @"
+        SELECT
+            id_entidad_federativa AS IdEntidadFederativa,
+            clave AS Clave,
+            nombre AS Nombre
+        FROM catalogo_entidad_federativa
+        WHERE activo = 1
+        ORDER BY
+            nombre;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var entidades = await connection.QueryAsync<EntidadFederativaCatalogoItem>(sql);
+
+        return entidades.ToList();
+    }
+
+    public async Task<List<RolCatalogoItem>> ObtenerRolesActivosAsync()
+    {
+        // Catálogo de roles activos.
+        // Se usa para combos del front en administración de usuarios.
+        var sql = @"
+        SELECT
+            id_rol AS IdRol,
+            rol AS Rol
+        FROM roles
+        WHERE activo = 1
+        ORDER BY
+            rol;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var roles = await connection.QueryAsync<RolCatalogoItem>(sql);
+
+        return roles.ToList();
+    }
+
     private static string NormalizarClaveMunicipio(string clave)
     {
         clave = clave.Trim();
