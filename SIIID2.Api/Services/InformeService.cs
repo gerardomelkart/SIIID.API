@@ -252,4 +252,34 @@ public class InformeService : IInformeService
             _ => string.Empty
         };
     }
+
+    public async Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? idEntidadFederativa, int mesCorte, int anioCorte)
+    {
+        var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuarioConsulta == null)
+        {
+            throw new UnauthorizedAccessException("El usuario autenticado no existe o no está activo.");
+        }
+
+        if (!usuarioConsulta.EsSuperUsuario)
+        {
+            throw new UnauthorizedAccessException("Solo un SUPER_USUARIO puede consultar el reporte de cargas.");
+        }
+
+        if (mesCorte < 1 || mesCorte > 12)
+        {
+            return new List<InformeReporteCargaItem>();
+        }
+
+        if (anioCorte < 2000 || anioCorte > 2100)
+        {
+            return new List<InformeReporteCargaItem>();
+        }
+
+        return await _informeRepository.ObtenerReporteCargasAsync(
+            idEntidadFederativa,
+            mesCorte,
+            anioCorte);
+    }
 }

@@ -93,4 +93,52 @@ public class InformesController : ControllerBase
             });
         }
     }
+
+    // Reporte de intentos y cargas por entidad y corte.
+    // Solo SUPER_USUARIO.
+    // Ejemplo: GET /api/informes/reporte-cargas?mesCorte=5&anioCorte=2026
+    [Authorize]
+    [HttpGet("reporte-cargas")]
+    public async Task<IActionResult> ObtenerReporteCargas([FromQuery] int mesCorte, [FromQuery] int anioCorte, [FromQuery] int? idEntidadFederativa = null)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        try
+        {
+            var reporte = await _informeService.ObtenerReporteCargasAsync(
+                idUsuarioConsulta,
+                idEntidadFederativa,
+                mesCorte,
+                anioCorte);
+
+            return Ok(new
+            {
+                esValido = true,
+                mesCorte,
+                anioCorte,
+                total = reporte.Count,
+                registros = reporte
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "INFORMES_REPORTE_CARGAS_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+    }
 }

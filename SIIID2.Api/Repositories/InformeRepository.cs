@@ -343,4 +343,112 @@ public class InformeRepository : IInformeRepository
             .Cast<IDictionary<string, object?>>()
             .ToList();
     }
+
+    public async Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int mesCorte, int anioCorte)
+    {
+        // Reporte de cargas por entidad y periodo.
+        // Solo SUPER_USUARIO consume este reporte.
+        //
+        // Se cuenta todo intento registrado en carga:
+        // - validado pendiente
+        // - confirmado
+        // - rechazado
+        // - expirado
+        // - error de validación
+        // - actualizaciones
+        //
+        // El último intento se toma por fecha_validacion/fecha_confirmacion y id_carga.
+        var sql = @"
+        WITH cargas_periodo AS (
+            SELECT
+                c.id_carga,
+                c.codigo_referencia,
+                c.tipo_carga,
+                c.estado,
+                c.id_entidad_federativa,
+                c.mes_corte,
+                c.anio_corte,
+                COALESCE(c.fecha_confirmacion, c.fecha_validacion) AS fecha_ultimo_movimiento,
+                ROW_NUMBER() OVER (
+                    PARTITION BY
+                        c.id_entidad_federativa,
+                        c.mes_corte,
+                        c.anio_corte
+                    ORDER BY
+                        COALESCE(c.fecha_confirmacion, c.fecha_validacion) DESC,
+                        c.id_carga DESC
+                ) AS rn
+            FROM carga c
+            WHERE c.activo = 1
+              AND c.mes_corte = @MesCorte
+              AND c.anio_corte = @AnioCorte
+              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
+        ),
+        conteo AS (
+            SELECT
+                id_entidad_federativa,
+                mes_corte,
+                anio_corte,
+                COUNT(1) AS intentos
+            FROM cargas_periodo
+            GROUP BY
+                id_entidad_federativa,
+                mes_corte,
+                anio_corte
+        ),
+        ultimo AS (
+            SELECT
+                id_entidad_federativa,
+                mes_corte,
+                anio_corte,
+                codigo_referencia,
+                tipo_carga,
+                estado,
+                fecha_ultimo_movimiento
+            FROM cargas_periodo
+            WHERE rn = 1
+        )
+        SELECT
+            ef.id_entidad_federativa AS IdEntidadFederativa,
+            ef.nombre AS EntidadFederativa,
+            ef.clave AS ClaveEntidad,
+            @MesCorte AS MesCorte,
+            @AnioCorte AS AnioCorte,
+            ISNULL(co.intentos, 0) AS Intentos,
+            ul.codigo_referencia AS UltimoIntento,
+            ul.tipo_carga AS TipoCargaUltimoIntento,
+            ul.estado AS EstatusUltimoIntento,
+            ul.fecha_ultimo_movimiento AS FechaUltimaCarga
+        FROM catalogo_entidad_federativa ef
+        LEFT JOIN conteo co
+            ON co.id_entidad_federativa = ef.id_entidad_federativa
+        LEFT JOIN ultimo ul
+            ON ul.id_entidad_federativa = ef.id_entidad_federativa
+        WHERE ef.activo = 1
+          AND (@IdEntidadFederativa IS NULL OR ef.id_entidad_federativa = @IdEntidadFederativa)
+        ORDER BY
+            ef.nombre;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var reporte = await connection.QueryAsync<InformeReporteCargaItem>(sql, new
+        {
+            IdEntidadFederativa = idEntidadFederativa,
+            MesCorte = mesCorte,
+            AnioCorte = anioCorte
+        });
+
+        return reporte
+            .Select(x =>
+            {
+                x.Corte = $"{ObtenerNombreMes(x.MesCorte)} {x.AnioCorte}";
+                x.FechaUltimaCargaTexto = x.FechaUltimaCarga.HasValue
+                    ? x.FechaUltimaCarga.Value.ToString("yyyy-MM-dd HH:mm:ss")
+                    : string.Empty;
+
+                return x;
+            })
+            .ToList();
+    }
 }

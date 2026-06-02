@@ -18,4 +18,8 @@ public interface IInformeRepository
 
     // Reconstruye víctimas activas del periodo confirmado.
     Task<List<IDictionary<string, object?>>> ObtenerVictimasConfirmadasPeriodoAsync(InformeArchivoCargaInfo carga);
+
+    // Obtiene reporte de intentos/cargas por entidad y periodo.
+    // Solo lo consume SUPER_USUARIO.
+    Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int mesCorte, int anioCorte);
 }
