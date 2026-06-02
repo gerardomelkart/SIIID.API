@@ -253,7 +253,7 @@ public class InformeService : IInformeService
         };
     }
 
-    public async Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? idEntidadFederativa, int mesCorte, int anioCorte)
+    public async Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? mesCorte, int? anioCorte)
     {
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
 
@@ -267,12 +267,12 @@ public class InformeService : IInformeService
             throw new UnauthorizedAccessException("Solo un SUPER_USUARIO puede consultar el reporte de cargas.");
         }
 
-        if (mesCorte < 1 || mesCorte > 12)
+        if (mesCorte.HasValue && (mesCorte.Value < 1 || mesCorte.Value > 12))
         {
             return new List<InformeReporteCargaItem>();
         }
 
-        if (anioCorte < 2000 || anioCorte > 2100)
+        if (anioCorte.HasValue && (anioCorte.Value < 2000 || anioCorte.Value > 2100))
         {
             return new List<InformeReporteCargaItem>();
         }

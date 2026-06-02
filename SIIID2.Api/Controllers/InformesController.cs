@@ -96,10 +96,11 @@ public class InformesController : ControllerBase
 
     // Reporte de intentos y cargas por entidad y corte.
     // Solo SUPER_USUARIO.
+    // Ejemplo: GET /api/informes/reporte-cargas
     // Ejemplo: GET /api/informes/reporte-cargas?mesCorte=5&anioCorte=2026
     [Authorize]
     [HttpGet("reporte-cargas")]
-    public async Task<IActionResult> ObtenerReporteCargas([FromQuery] int mesCorte, [FromQuery] int anioCorte, [FromQuery] int? idEntidadFederativa = null)
+    public async Task<IActionResult> ObtenerReporteCargas([FromQuery] int? mesCorte = null, [FromQuery] int? anioCorte = null, [FromQuery] int? idEntidadFederativa = null)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
 

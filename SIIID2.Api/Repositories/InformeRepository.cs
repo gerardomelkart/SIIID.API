@@ -344,20 +344,13 @@ public class InformeRepository : IInformeRepository
             .ToList();
     }
 
-    public async Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int mesCorte, int anioCorte)
+    public async Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int? mesCorte, int? anioCorte)
     {
         // Reporte de cargas por entidad y periodo.
         // Solo SUPER_USUARIO consume este reporte.
         //
-        // Se cuenta todo intento registrado en carga:
-        // - validado pendiente
-        // - confirmado
-        // - rechazado
-        // - expirado
-        // - error de validación
-        // - actualizaciones
-        //
-        // El último intento se toma por fecha_validacion/fecha_confirmacion y id_carga.
+        // Si no se envían filtros, regresa todos los periodos que tengan intentos.
+        // Cada fila representa entidad + mes_corte + anio_corte.
         var sql = @"
         WITH cargas_periodo AS (
             SELECT
@@ -380,9 +373,11 @@ public class InformeRepository : IInformeRepository
                 ) AS rn
             FROM carga c
             WHERE c.activo = 1
-              AND c.mes_corte = @MesCorte
-              AND c.anio_corte = @AnioCorte
+              AND c.mes_corte IS NOT NULL
+              AND c.anio_corte IS NOT NULL
               AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
+              AND (@MesCorte IS NULL OR c.mes_corte = @MesCorte)
+              AND (@AnioCorte IS NULL OR c.anio_corte = @AnioCorte)
         ),
         conteo AS (
             SELECT
@@ -412,21 +407,24 @@ public class InformeRepository : IInformeRepository
             ef.id_entidad_federativa AS IdEntidadFederativa,
             ef.nombre AS EntidadFederativa,
             ef.clave AS ClaveEntidad,
-            @MesCorte AS MesCorte,
-            @AnioCorte AS AnioCorte,
-            ISNULL(co.intentos, 0) AS Intentos,
+            co.mes_corte AS MesCorte,
+            co.anio_corte AS AnioCorte,
+            co.intentos AS Intentos,
             ul.codigo_referencia AS UltimoIntento,
             ul.tipo_carga AS TipoCargaUltimoIntento,
             ul.estado AS EstatusUltimoIntento,
             ul.fecha_ultimo_movimiento AS FechaUltimaCarga
-        FROM catalogo_entidad_federativa ef
-        LEFT JOIN conteo co
-            ON co.id_entidad_federativa = ef.id_entidad_federativa
-        LEFT JOIN ultimo ul
-            ON ul.id_entidad_federativa = ef.id_entidad_federativa
-        WHERE ef.activo = 1
-          AND (@IdEntidadFederativa IS NULL OR ef.id_entidad_federativa = @IdEntidadFederativa)
+        FROM conteo co
+        INNER JOIN catalogo_entidad_federativa ef
+            ON ef.id_entidad_federativa = co.id_entidad_federativa
+           AND ef.activo = 1
+        INNER JOIN ultimo ul
+            ON ul.id_entidad_federativa = co.id_entidad_federativa
+           AND ul.mes_corte = co.mes_corte
+           AND ul.anio_corte = co.anio_corte
         ORDER BY
+            co.anio_corte DESC,
+            co.mes_corte DESC,
             ef.nombre;
     ";
 

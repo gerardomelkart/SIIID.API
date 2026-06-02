@@ -21,5 +21,5 @@ public interface IInformeRepository
 
     // Obtiene reporte de intentos/cargas por entidad y periodo.
     // Solo lo consume SUPER_USUARIO.
-    Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int mesCorte, int anioCorte);
+    Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int? mesCorte, int? anioCorte);
 }
