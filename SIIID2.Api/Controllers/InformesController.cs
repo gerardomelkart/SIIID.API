@@ -43,4 +43,54 @@ public class InformesController : ControllerBase
 
         return Ok(envios);
     }
+
+    // Descarga ZIP con los archivos reconstruidos desde información confirmada.
+    // Ejemplo: GET /api/informes/envios/abc123/archivos
+    [Authorize]
+    [HttpGet("envios/{codigoReferencia}/archivos")]
+    public async Task<IActionResult> DescargarArchivosEnvio(string codigoReferencia)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        try
+        {
+            var zip = await _informeService.GenerarZipArchivosEnvioAsync(
+                codigoReferencia,
+                idUsuarioConsulta);
+
+            return File(
+                zip.Archivo,
+                "application/zip",
+                zip.NombreArchivo);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "INFORMES_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "INFORMES_ARCHIVOS_NO_DISPONIBLES",
+                mensaje = ex.Message
+            });
+        }
+    }
 }
