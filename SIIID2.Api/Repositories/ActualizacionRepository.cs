@@ -464,9 +464,9 @@ public class ActualizacionRepository : IActualizacionRepository
             ct.id_ci,
             ct.ntra_ci,
             COALESCE(
-                TRY_CONVERT(datetime2, CONCAT(c.fha_de_ini, ' ', NULLIF(c.hra_de_ini, '')), 103),
-                TRY_CONVERT(datetime2, c.fha_de_ini, 103),
-                TRY_CONVERT(datetime2, c.fha_de_ini)
+                TRY_CONVERT(datetime2, CONCAT(ct.fha_de_ini, ' ', NULLIF(ct.hra_de_ini, '')), 103),
+                TRY_CONVERT(datetime2, ct.fha_de_ini, 103),
+                TRY_CONVERT(datetime2, ct.fha_de_ini)
             ),
             ct.rmen_de_hchos,
             @IdUsuarioConfirmacion,
