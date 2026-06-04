@@ -21,6 +21,13 @@ public class ActualizacionRepository : IActualizacionRepository
         public bool HabilitaModificacion { get; set; }
     }
 
+    private class DuplicadoActivoValidacion
+    {
+        public string Seccion { get; set; } = string.Empty;
+
+        public int TotalGruposDuplicados { get; set; }
+    }
+
     private readonly IDbConnectionFactory _dbConnectionFactory;
     private readonly ILogger<ActualizacionRepository> _logger;
 
@@ -938,8 +945,27 @@ public class ActualizacionRepository : IActualizacionRepository
         INNER JOIN delitos_tmp dt
             ON dt.id_ci = da.identificador_carpeta_fiscalia
            AND dt.id_delito = de.identificador_delito_fiscalia
-        WHERE de.activo = 1;
-    ";
+        WHERE de.activo = 1
+          AND (
+                ISNULL(de.delito_fiscalia, '') <> ISNULL(dt.dto, '')
+                OR ISNULL(de.modalidad_delito_fiscalia, '') <> ISNULL(dt.moda_dto, '')
+                OR ISNULL(de.id_forma_accion, 0) <> ISNULL(dt.id_forma_accion, 0)
+                OR ISNULL(CONVERT(varchar(19), de.fecha_hechos, 120), '') <> ISNULL(CONVERT(varchar(19), dt.fecha_hechos, 120), '')
+                OR ISNULL(de.id_instrumento_comision, 0) <> ISNULL(dt.id_instrumento_comision, 0)
+                OR ISNULL(de.id_grado_consumacion, 0) <> ISNULL(dt.id_grado_consumacion, 0)
+                OR ISNULL(de.id_modalidad_delito, 0) <> ISNULL(dt.id_modalidad_delito, 0)
+                OR ISNULL(de.id_entidad_federativa, 0) <> ISNULL(dt.id_entidad_federativa, 0)
+                OR ISNULL(de.id_municipio, 0) <> ISNULL(dt.id_municipio, 0)
+                OR ISNULL(de.id_localidad_fiscalia, '') <> ISNULL(dt.id_loc_hchos, '')
+                OR ISNULL(de.localidad_fiscalia_nombre, '') <> ISNULL(dt.nom_loc_hchos, '')
+                OR ISNULL(de.id_colonia_fiscalia, '') <> ISNULL(dt.id_col_hchos, '')
+                OR ISNULL(de.colonia_fiscalia_nombre, '') <> ISNULL(dt.nom_col_hchos, '')
+                OR ISNULL(de.id_codigo_postal, 0) <> ISNULL(dt.id_codigo_postal, 0)
+                OR ISNULL(de.coordenada_x, 0) <> ISNULL(dt.coordenada_x, 0)
+                OR ISNULL(de.coordenada_y, 0) <> ISNULL(dt.coordenada_y, 0)
+                OR ISNULL(de.domicilio_hechos, '') <> ISNULL(dt.dom_hchos, '')
+              );
+         ";
 
         await connection.ExecuteAsync(sql, new
         {
@@ -1808,6 +1834,126 @@ public class ActualizacionRepository : IActualizacionRepository
         }, transaction);
     }
 
+    private async Task ValidarDuplicadosActivosPeriodoAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion)
+    {
+        var sql = @"
+        ;WITH carga_actualizacion AS (
+            SELECT
+                id_carga,
+                id_entidad_federativa,
+                mes_corte,
+                anio_corte
+            FROM carga
+            WHERE id_carga = @IdCargaActualizacion
+        ),
+        cargas_periodo AS (
+            SELECT c.id_carga
+            FROM carga c
+            INNER JOIN carga_actualizacion ca
+                ON ca.id_entidad_federativa = c.id_entidad_federativa
+               AND ca.mes_corte = c.mes_corte
+               AND ca.anio_corte = c.anio_corte
+            WHERE c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+              AND c.activo = 1
+
+            UNION
+
+            SELECT @IdCargaActualizacion
+        ),
+        duplicados_carpetas AS (
+            SELECT
+                ci.identificador_carpeta_fiscalia,
+                COUNT(1) AS total
+            FROM carpeta_investigacion ci
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = ci.id_carga
+            WHERE ci.activo = 1
+            GROUP BY
+                ci.identificador_carpeta_fiscalia
+            HAVING COUNT(1) > 1
+        ),
+        duplicados_delitos AS (
+            SELECT
+                ci.identificador_carpeta_fiscalia,
+                d.identificador_delito_fiscalia,
+                COUNT(1) AS total
+            FROM delito d
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = d.id_carga
+            INNER JOIN carpeta_investigacion ci
+                ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
+               AND ci.activo = 1
+            WHERE d.activo = 1
+            GROUP BY
+                ci.identificador_carpeta_fiscalia,
+                d.identificador_delito_fiscalia
+            HAVING COUNT(1) > 1
+        ),
+        duplicados_victimas AS (
+            SELECT
+                ci.identificador_carpeta_fiscalia,
+                d.identificador_delito_fiscalia,
+                v.identificador_victima_fiscalia,
+                COUNT(1) AS total
+            FROM victima v
+            INNER JOIN cargas_periodo cp
+                ON cp.id_carga = v.id_carga
+            INNER JOIN delito d
+                ON d.id_delito = v.id_delito
+               AND d.activo = 1
+            INNER JOIN carpeta_investigacion ci
+                ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
+               AND ci.activo = 1
+            WHERE v.activo = 1
+            GROUP BY
+                ci.identificador_carpeta_fiscalia,
+                d.identificador_delito_fiscalia,
+                v.identificador_victima_fiscalia
+            HAVING COUNT(1) > 1
+        )
+        SELECT
+            'carpetas' AS Seccion,
+            COUNT(1) AS TotalGruposDuplicados
+        FROM duplicados_carpetas
+
+        UNION ALL
+
+        SELECT
+            'delitos' AS Seccion,
+            COUNT(1) AS TotalGruposDuplicados
+        FROM duplicados_delitos
+
+        UNION ALL
+
+        SELECT
+            'victimas' AS Seccion,
+            COUNT(1) AS TotalGruposDuplicados
+        FROM duplicados_victimas;
+    ";
+
+        var duplicados = (await connection.QueryAsync<DuplicadoActivoValidacion>(
+                sql,
+                new
+                {
+                    IdCargaActualizacion = idCargaActualizacion
+                },
+                transaction))
+            .Where(x => x.TotalGruposDuplicados > 0)
+            .ToList();
+
+        if (duplicados.Count == 0)
+        {
+            return;
+        }
+
+        var detalle = string.Join(
+            ", ",
+            duplicados.Select(x => $"{x.Seccion}: {x.TotalGruposDuplicados}"));
+
+        throw new InvalidOperationException(
+            $"La actualización no puede confirmarse porque dejaría registros activos duplicados en el periodo. Detalle: {detalle}.");
+    }
+
     private async Task AplicarActualizacionCompletaAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
     {
         var relojTotal = Stopwatch.StartNew();
@@ -1886,6 +2032,11 @@ public class ActualizacionRepository : IActualizacionRepository
             "DesactivarCarpetasEliminadas",
             idCargaActualizacion,
             () => DesactivarCarpetasEliminadasAsync(connection, transaction, idCargaActualizacion));
+
+        await EjecutarPasoActualizacionAsync(
+             "ValidarDuplicadosActivosPeriodo",
+             idCargaActualizacion,
+             () => ValidarDuplicadosActivosPeriodoAsync(connection, transaction, idCargaActualizacion));
 
         relojTotal.Stop();
 
