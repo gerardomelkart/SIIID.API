@@ -315,6 +315,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 d.moda_dto,
                 d.forma_acc AS forma_acc_excel,
                 d.fha_de_hchos AS fha_de_hchos_excel,
+                d.hra_de_hchos AS hra_de_hchos_excel,
                 d.emto_com_dto AS emto_com_dto_excel,
                 d.grdo_cons AS grdo_cons_excel,
                 d.clasf_de_dto AS clasf_de_dto_excel,
@@ -330,6 +331,19 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 fa.id_forma_accion,
                 COALESCE(
                     TRY_CONVERT(datetime2, CONCAT(d.fha_de_hchos, ' ', NULLIF(d.hra_de_hchos, '')), 103),
+                    CASE
+                        WHEN TRY_CONVERT(float, REPLACE(NULLIF(d.hra_de_hchos, ''), ',', '.')) IS NOT NULL
+                             AND TRY_CONVERT(float, REPLACE(NULLIF(d.hra_de_hchos, ''), ',', '.')) >= 0
+                             AND TRY_CONVERT(float, REPLACE(NULLIF(d.hra_de_hchos, ''), ',', '.')) < 1
+                        THEN DATEADD(
+                            SECOND,
+                            CONVERT(int, ROUND(TRY_CONVERT(float, REPLACE(NULLIF(d.hra_de_hchos, ''), ',', '.')) * 86400, 0)),
+                            COALESCE(
+                                TRY_CONVERT(datetime2, d.fha_de_hchos, 103),
+                                TRY_CONVERT(datetime2, d.fha_de_hchos)
+                            )
+                        )
+                    END,
                     TRY_CONVERT(datetime2, d.fha_de_hchos, 103),
                     TRY_CONVERT(datetime2, d.fha_de_hchos)
                 ) AS fecha_hechos,
@@ -398,6 +412,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 ('moda_dto', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.moda_dto)),
                 ('forma_acc', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.forma_acc_excel)),
                 ('fha_de_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.fha_de_hchos_excel)),
+                ('hra_de_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.hra_de_hchos_excel)),
                 ('emto_com_dto', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.emto_com_dto_excel)),
                 ('grdo_cons', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.grdo_cons_excel)),
                 ('clasf_de_dto', CAST(NULL AS varchar(max)), CONVERT(varchar(max), dt.clasf_de_dto_excel)),
@@ -436,6 +451,11 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 ('moda_dto', CONVERT(varchar(max), da.modalidad_delito_fiscalia), CAST(NULL AS varchar(max))),
                 ('forma_acc', CONVERT(varchar(max), da.forma_acc_valor), CAST(NULL AS varchar(max))),
                 ('fha_de_hchos', CONVERT(varchar(max), CONVERT(varchar(10), da.fecha_hechos, 103)), CAST(NULL AS varchar(max))),
+                ('hra_de_hchos', CONVERT(varchar(max), CASE
+                    WHEN da.fecha_hechos IS NULL THEN ''
+                    WHEN CONVERT(time, da.fecha_hechos) = '00:00:00' THEN ''
+                    ELSE CONVERT(varchar(8), da.fecha_hechos, 108)
+                END), CAST(NULL AS varchar(max))),
                 ('emto_com_dto', CONVERT(varchar(max), da.emto_com_dto_valor), CAST(NULL AS varchar(max))),
                 ('grdo_cons', CONVERT(varchar(max), da.grdo_cons_valor), CAST(NULL AS varchar(max))),
                 ('clasf_de_dto', CONVERT(varchar(max), da.clasf_de_dto_valor), CAST(NULL AS varchar(max))),
@@ -471,7 +491,30 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 ('dto', CONVERT(varchar(max), da.delito_fiscalia), CONVERT(varchar(max), dt.dto), CONVERT(varchar(max), da.delito_fiscalia), CONVERT(varchar(max), dt.dto)),
                 ('moda_dto', CONVERT(varchar(max), da.modalidad_delito_fiscalia), CONVERT(varchar(max), dt.moda_dto), CONVERT(varchar(max), da.modalidad_delito_fiscalia), CONVERT(varchar(max), dt.moda_dto)),
                 ('forma_acc', CONVERT(varchar(max), da.forma_acc_valor), CONVERT(varchar(max), dt.forma_acc_excel), CONVERT(varchar(max), da.id_forma_accion), CONVERT(varchar(max), dt.id_forma_accion)),
-                ('fha_de_hchos', CONVERT(varchar(max), CONVERT(varchar(10), da.fecha_hechos, 103)), CONVERT(varchar(max), dt.fha_de_hchos_excel), CONVERT(varchar(max), CONVERT(varchar(19), da.fecha_hechos, 120)), CONVERT(varchar(max), CONVERT(varchar(19), dt.fecha_hechos, 120))),
+                ('fha_de_hchos',
+                    CONVERT(varchar(max), CONVERT(varchar(10), da.fecha_hechos, 103)),
+                    CONVERT(varchar(max), dt.fha_de_hchos_excel),
+                    CONVERT(varchar(max), CONVERT(varchar(10), da.fecha_hechos, 120)),
+                    CONVERT(varchar(max), CONVERT(varchar(10), dt.fecha_hechos, 120))
+                ),
+                ('hra_de_hchos',
+                    CONVERT(varchar(max), CASE
+                        WHEN da.fecha_hechos IS NULL THEN ''
+                        WHEN CONVERT(time, da.fecha_hechos) = '00:00:00' THEN ''
+                        ELSE CONVERT(varchar(8), da.fecha_hechos, 108)
+                    END),
+                    CONVERT(varchar(max), dt.hra_de_hchos_excel),
+                    CONVERT(varchar(max), CASE
+                        WHEN da.fecha_hechos IS NULL THEN ''
+                        WHEN CONVERT(time, da.fecha_hechos) = '00:00:00' THEN ''
+                        ELSE CONVERT(varchar(8), da.fecha_hechos, 108)
+                    END),
+                    CONVERT(varchar(max), CASE
+                        WHEN dt.fecha_hechos IS NULL THEN ''
+                        WHEN CONVERT(time, dt.fecha_hechos) = '00:00:00' THEN ''
+                        ELSE CONVERT(varchar(8), dt.fecha_hechos, 108)
+                    END)
+                ),
                 ('emto_com_dto', CONVERT(varchar(max), da.emto_com_dto_valor), CONVERT(varchar(max), dt.emto_com_dto_excel), CONVERT(varchar(max), da.id_instrumento_comision), CONVERT(varchar(max), dt.id_instrumento_comision)),
                 ('grdo_cons', CONVERT(varchar(max), da.grdo_cons_valor), CONVERT(varchar(max), dt.grdo_cons_excel), CONVERT(varchar(max), da.id_grado_consumacion), CONVERT(varchar(max), dt.id_grado_consumacion)),
                 ('clasf_de_dto', CONVERT(varchar(max), da.clasf_de_dto_valor), CONVERT(varchar(max), dt.clasf_de_dto_excel), CONVERT(varchar(max), da.id_modalidad_delito), CONVERT(varchar(max), dt.id_modalidad_delito)),
