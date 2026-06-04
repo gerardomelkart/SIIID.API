@@ -6,7 +6,7 @@ public interface IActualizacionArchivosService
 {
     Task<CargaValidacionResponse> ValidarActualizacionAsync(IFormCollection form, int idUsuarioCarga);
 
-    Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta);
+    Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta, int limitePorSeccion);
 
     Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(ConfirmarCargaRequest request, int idUsuarioConfirmacion);
 

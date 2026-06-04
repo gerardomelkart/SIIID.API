@@ -44,7 +44,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         _dbConnectionFactory = dbConnectionFactory;
     }
 
-    public async Task<ActualizacionDiferenciasResponse?> ObtenerDetalleDiferenciasActualizacionAsync(string codigoReferencia, int? idEntidadFederativaUsuario, bool esSuperUsuario)
+    public async Task<ActualizacionDiferenciasResponse?> ObtenerDetalleDiferenciasActualizacionAsync(string codigoReferencia, int? idEntidadFederativaUsuario, bool esSuperUsuario, int limitePorSeccion)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
 
@@ -77,6 +77,8 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         AgregarDiferenciasAlResponse(filas, "carpetas", response.Carpetas);
         AgregarDiferenciasAlResponse(filas, "delitos", response.Delitos);
         AgregarDiferenciasAlResponse(filas, "victimas", response.Victimas);
+
+        AplicarLimiteDiferencias(response, limitePorSeccion);
 
         return response;
     }
@@ -729,5 +731,50 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
 
             destino.Add(registro);
         }
+    }
+
+    private static void AplicarLimiteDiferencias(ActualizacionDiferenciasResponse response, int limitePorSeccion)
+    {
+        response.TotalCarpetas = response.Carpetas.Count;
+        response.TotalDelitos = response.Delitos.Count;
+        response.TotalVictimas = response.Victimas.Count;
+        response.TotalDiferencias =
+            response.TotalCarpetas +
+            response.TotalDelitos +
+            response.TotalVictimas;
+
+        response.LimitePorSeccion = limitePorSeccion;
+
+        if (limitePorSeccion == 0)
+        {
+            response.DetalleLimitado = response.TotalDiferencias > 0;
+
+            response.Carpetas = new List<ActualizacionDiferenciaRegistro>();
+            response.Delitos = new List<ActualizacionDiferenciaRegistro>();
+            response.Victimas = new List<ActualizacionDiferenciaRegistro>();
+
+            return;
+        }
+
+        var carpetasLimitadas = response.Carpetas
+            .Take(limitePorSeccion)
+            .ToList();
+
+        var delitosLimitados = response.Delitos
+            .Take(limitePorSeccion)
+            .ToList();
+
+        var victimasLimitadas = response.Victimas
+            .Take(limitePorSeccion)
+            .ToList();
+
+        response.DetalleLimitado =
+            response.TotalCarpetas > carpetasLimitadas.Count ||
+            response.TotalDelitos > delitosLimitados.Count ||
+            response.TotalVictimas > victimasLimitadas.Count;
+
+        response.Carpetas = carpetasLimitadas;
+        response.Delitos = delitosLimitados;
+        response.Victimas = victimasLimitadas;
     }
 }

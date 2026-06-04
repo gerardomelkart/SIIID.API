@@ -898,7 +898,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         return (mesCorte, anioCorte);
     }
 
-    public async Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta)
+    public async Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta, int limitePorSeccion)
     {
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
 
@@ -913,9 +913,10 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         }
 
         var detalle = await _actualizacionDiferenciasRepository.ObtenerDetalleDiferenciasActualizacionAsync(
-                    codigoReferencia,
-                    usuarioConsulta.IdEntidadFederativa,
-                    usuarioConsulta.EsSuperUsuario);
+            codigoReferencia,
+            usuarioConsulta.IdEntidadFederativa,
+            usuarioConsulta.EsSuperUsuario,
+            limitePorSeccion);
 
         if (detalle == null)
         {
