@@ -477,13 +477,17 @@ public class ActualizacionRepository : IActualizacionRepository
         WHERE ct.id_carga = @IdCargaActualizacion
           AND ct.activo = 1
           AND NOT EXISTS (
-                SELECT 1
-                FROM carpeta_investigacion ci
-                INNER JOIN cargas_periodo cp
-                    ON cp.id_carga = ci.id_carga
-                WHERE ci.identificador_carpeta_fiscalia = ct.id_ci
-                  AND ci.activo = 1
-          );
+              SELECT 1
+              FROM carpeta_investigacion ci
+              LEFT JOIN cargas_periodo cp
+                  ON cp.id_carga = ci.id_carga
+              WHERE ci.identificador_carpeta_fiscalia = ct.id_ci
+                AND ci.activo = 1
+                AND (
+                      cp.id_carga IS NOT NULL
+                      OR ci.id_carga = @IdCargaActualizacion
+                    )
+           );
     ";
 
         await connection.ExecuteAsync(
