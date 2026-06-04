@@ -134,6 +134,7 @@ public class ActualizacionCargaRepository : IActualizacionCargaRepository
                 id_ci,
                 ntra_ci,
                 COALESCE(
+                    TRY_CONVERT(datetime2, CONCAT(fha_de_ini, ' ', NULLIF(hra_de_ini, '')), 103),
                     TRY_CONVERT(datetime2, fha_de_ini, 103),
                     TRY_CONVERT(datetime2, fha_de_ini)
                 ) AS fecha_inicio,
