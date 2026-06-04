@@ -2,6 +2,8 @@
 using Microsoft.Data.SqlClient;
 using SIIID2.Api.Data;
 using SIIID2.Api.Models;
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace SIIID2.Api.Repositories;
 
@@ -20,10 +22,14 @@ public class ActualizacionRepository : IActualizacionRepository
     }
 
     private readonly IDbConnectionFactory _dbConnectionFactory;
+    private readonly ILogger<ActualizacionRepository> _logger;
 
-    public ActualizacionRepository(IDbConnectionFactory dbConnectionFactory)
+    public ActualizacionRepository(
+        IDbConnectionFactory dbConnectionFactory,
+        ILogger<ActualizacionRepository> logger)
     {
         _dbConnectionFactory = dbConnectionFactory;
+        _logger = logger;
     }
 
     public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion)
@@ -1786,26 +1792,119 @@ public class ActualizacionRepository : IActualizacionRepository
 
     private async Task AplicarActualizacionCompletaAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
     {
-        await InsertarHistoricoCarpetasModificadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion);
-        await ActualizarCarpetasModificadasAsync(connection, transaction, idCargaActualizacion);
-        await InsertarCarpetasNuevasActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion);
+        var relojTotal = Stopwatch.StartNew();
 
-        await InsertarHistoricoDelitosModificadosAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion);
-        await ActualizarDelitosModificadosAsync(connection, transaction, idCargaActualizacion);
-        await InsertarDelitosNuevosActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion);
+        await EjecutarPasoActualizacionAsync(
+            "InsertarHistoricoCarpetasModificadas",
+            idCargaActualizacion,
+            () => InsertarHistoricoCarpetasModificadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
 
-        await InsertarHistoricoVictimasModificadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion);
-        await ActualizarVictimasModificadasAsync(connection, transaction, idCargaActualizacion);
-        await InsertarVictimasNuevasActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion);
+        await EjecutarPasoActualizacionAsync(
+            "ActualizarCarpetasModificadas",
+            idCargaActualizacion,
+            () => ActualizarCarpetasModificadasAsync(connection, transaction, idCargaActualizacion));
 
-        await InsertarHistoricoVictimasEliminadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion);
-        await DesactivarVictimasEliminadasAsync(connection, transaction, idCargaActualizacion);
+        await EjecutarPasoActualizacionAsync(
+            "InsertarCarpetasNuevasActualizacion",
+            idCargaActualizacion,
+            () => InsertarCarpetasNuevasActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
 
-        await InsertarHistoricoDelitosEliminadosAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion);
-        await DesactivarDelitosEliminadosAsync(connection, transaction, idCargaActualizacion);
+        await EjecutarPasoActualizacionAsync(
+            "InsertarHistoricoDelitosModificados",
+            idCargaActualizacion,
+            () => InsertarHistoricoDelitosModificadosAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
 
-        await InsertarHistoricoCarpetasEliminadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion);
-        await DesactivarCarpetasEliminadasAsync(connection, transaction, idCargaActualizacion);
+        await EjecutarPasoActualizacionAsync(
+            "ActualizarDelitosModificados",
+            idCargaActualizacion,
+            () => ActualizarDelitosModificadosAsync(connection, transaction, idCargaActualizacion));
+
+        await EjecutarPasoActualizacionAsync(
+            "InsertarDelitosNuevosActualizacion",
+            idCargaActualizacion,
+            () => InsertarDelitosNuevosActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+
+        await EjecutarPasoActualizacionAsync(
+            "InsertarHistoricoVictimasModificadas",
+            idCargaActualizacion,
+            () => InsertarHistoricoVictimasModificadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+
+        await EjecutarPasoActualizacionAsync(
+            "ActualizarVictimasModificadas",
+            idCargaActualizacion,
+            () => ActualizarVictimasModificadasAsync(connection, transaction, idCargaActualizacion));
+
+        await EjecutarPasoActualizacionAsync(
+            "InsertarVictimasNuevasActualizacion",
+            idCargaActualizacion,
+            () => InsertarVictimasNuevasActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+
+        await EjecutarPasoActualizacionAsync(
+            "InsertarHistoricoVictimasEliminadas",
+            idCargaActualizacion,
+            () => InsertarHistoricoVictimasEliminadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+
+        await EjecutarPasoActualizacionAsync(
+            "DesactivarVictimasEliminadas",
+            idCargaActualizacion,
+            () => DesactivarVictimasEliminadasAsync(connection, transaction, idCargaActualizacion));
+
+        await EjecutarPasoActualizacionAsync(
+            "InsertarHistoricoDelitosEliminados",
+            idCargaActualizacion,
+            () => InsertarHistoricoDelitosEliminadosAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+
+        await EjecutarPasoActualizacionAsync(
+            "DesactivarDelitosEliminados",
+            idCargaActualizacion,
+            () => DesactivarDelitosEliminadosAsync(connection, transaction, idCargaActualizacion));
+
+        await EjecutarPasoActualizacionAsync(
+            "InsertarHistoricoCarpetasEliminadas",
+            idCargaActualizacion,
+            () => InsertarHistoricoCarpetasEliminadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+
+        await EjecutarPasoActualizacionAsync(
+            "DesactivarCarpetasEliminadas",
+            idCargaActualizacion,
+            () => DesactivarCarpetasEliminadasAsync(connection, transaction, idCargaActualizacion));
+
+        relojTotal.Stop();
+
+        _logger.LogInformation(
+            "PERFORMANCE_ACTUALIZACION_TOTAL idCargaActualizacion={IdCargaActualizacion} tiempoMs={TiempoMs}",
+            idCargaActualizacion,
+            relojTotal.ElapsedMilliseconds);
+    }
+
+    private async Task EjecutarPasoActualizacionAsync(string nombrePaso, long idCargaActualizacion, Func<Task> accion)
+    {
+        var reloj = Stopwatch.StartNew();
+
+        try
+        {
+            await accion();
+
+            reloj.Stop();
+
+            _logger.LogInformation(
+                "PERFORMANCE_ACTUALIZACION_PASO idCargaActualizacion={IdCargaActualizacion} paso={Paso} tiempoMs={TiempoMs}",
+                idCargaActualizacion,
+                nombrePaso,
+                reloj.ElapsedMilliseconds);
+        }
+        catch
+        {
+            reloj.Stop();
+
+            _logger.LogError(
+                "PERFORMANCE_ACTUALIZACION_ERROR idCargaActualizacion={IdCargaActualizacion} paso={Paso} tiempoMs={TiempoMs}",
+                idCargaActualizacion,
+                nombrePaso,
+                reloj.ElapsedMilliseconds);
+
+            throw;
+        }
     }
 
     private async Task ConfirmarActualizacionFinalAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
