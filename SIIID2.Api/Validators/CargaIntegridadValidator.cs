@@ -11,6 +11,7 @@ public class CargaIntegridadValidator
         public ArchivoFila Fila { get; set; } = null!;
         public string IdCi { get; set; } = string.Empty;
         public string? FechaInicio { get; set; }
+        public string? HoraInicio { get; set; }
     }
 
     // Modelo interno para trabajar delitos y víctimas en las validaciones cruzadas.
@@ -20,6 +21,7 @@ public class CargaIntegridadValidator
         public string? IdCi { get; set; }
         public string? IdDelito { get; set; }
         public string? FechaHechos { get; set; }
+        public string? HoraHechos { get; set; }
         public string? IdVicf { get; set; }
     }
 
@@ -42,7 +44,8 @@ public class CargaIntegridadValidator
             {
                 Fila = f,
                 IdCi = ObtenerValor(f, "id_ci")?.Trim() ?? string.Empty,
-                FechaInicio = ObtenerValor(f, "fha_de_ini")
+                FechaInicio = ObtenerValor(f, "fha_de_ini"),
+                HoraInicio = ObtenerValor(f, "hra_de_ini")
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.IdCi))
             .GroupBy(x => x.IdCi, StringComparer.OrdinalIgnoreCase)
@@ -55,7 +58,8 @@ public class CargaIntegridadValidator
                 Fila = f,
                 IdCi = ObtenerValor(f, "id_ci")?.Trim(),
                 IdDelito = ObtenerValor(f, "id_delito")?.Trim(),
-                FechaHechos = ObtenerValor(f, "fha_de_hchos")
+                FechaHechos = ObtenerValor(f, "fha_de_hchos"),
+                HoraHechos = ObtenerValor(f, "hra_de_hchos")
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.IdCi))
             .ToList();
@@ -267,6 +271,7 @@ public class CargaIntegridadValidator
         {
             var idCi = delito.IdCi;
             var fechaHechosValor = delito.FechaHechos;
+            var horaHechosValor = delito.HoraHechos;
 
             if (string.IsNullOrWhiteSpace(idCi)) 
             {
@@ -279,16 +284,17 @@ public class CargaIntegridadValidator
             }
                 
             var fechaInicioValor = carpeta.FechaInicio;
+            var horaInicioValor = carpeta.HoraInicio;
 
-            if (!IntentarConvertirFecha(fechaHechosValor, out var fechaHechos))
+            if (!IntentarConvertirFechaHora(fechaHechosValor, horaHechosValor, out var fechaHechos))
             {
                 continue;
             }
 
-            if (!IntentarConvertirFecha(fechaInicioValor, out var fechaInicio))
+            if (!IntentarConvertirFechaHora(fechaInicioValor, horaInicioValor, out var fechaInicio))
             {
                 continue;
-            } 
+            }
 
             if (fechaHechos > fechaInicio)
             {
@@ -538,4 +544,51 @@ public class CargaIntegridadValidator
     {
         return $"{idCi.Trim()}|{idDelito.Trim()}|{idVicf.Trim()}";
     }
+
+    private static bool IntentarConvertirFechaHora(string? fechaValor, string? horaValor, out DateTime fechaHora)
+    {
+        fechaHora = default;
+
+        if (!IntentarConvertirFecha(fechaValor, out var fecha))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(horaValor))
+        {
+            fechaHora = fecha;
+            return true;
+        }
+
+        horaValor = horaValor.Trim();
+
+        if (TimeSpan.TryParse(horaValor, CultureInfo.InvariantCulture, out var hora))
+        {
+            fechaHora = fecha.Date.Add(hora);
+            return true;
+        }
+
+        if (DateTime.TryParse(
+                horaValor,
+                new CultureInfo("es-MX"),
+                DateTimeStyles.None,
+                out var horaComoFecha))
+        {
+            fechaHora = fecha.Date.Add(horaComoFecha.TimeOfDay);
+            return true;
+        }
+
+        if (double.TryParse(horaValor.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var numeroExcel))
+        {
+            if (numeroExcel >= 0 && numeroExcel < 1)
+            {
+                fechaHora = fecha.Date.Add(TimeSpan.FromDays(numeroExcel));
+                return true;
+            }
+        }
+
+        fechaHora = fecha;
+        return true;
+    }
+
 }
