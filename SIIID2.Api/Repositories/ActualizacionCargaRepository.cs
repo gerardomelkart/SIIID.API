@@ -231,6 +231,7 @@ public class ActualizacionCargaRepository : IActualizacionCargaRepository
                 d.id_delito,
                 d.dto,
                 d.moda_dto,
+                fa.id_forma_accion,
                 COALESCE(
                     TRY_CONVERT(datetime2, CONCAT(d.fha_de_hchos, ' ', NULLIF(d.hra_de_hchos, '')), 103),
                     CASE
