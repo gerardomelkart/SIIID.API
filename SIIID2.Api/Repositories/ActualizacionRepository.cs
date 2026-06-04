@@ -1538,7 +1538,18 @@ public class ActualizacionRepository : IActualizacionRepository
             ON vt.id_ci = va.identificador_carpeta_fiscalia
            AND vt.id_delito = va.identificador_delito_fiscalia
            AND vt.id_vicf = vi.identificador_victima_fiscalia
-        WHERE vi.activo = 1;
+        WHERE vi.activo = 1
+          AND (
+                ISNULL(vi.id_tipo_victima, 0) <> ISNULL(vt.id_tipo_victima, 0)
+                OR ISNULL(vi.id_tipo_victima_moral, 0) <> ISNULL(vt.id_tipo_victima_moral, 0)
+                OR ISNULL(vi.id_sexo, 0) <> ISNULL(vt.id_sexo, 0)
+                OR ISNULL(vi.id_genero, 0) <> ISNULL(vt.id_genero, 0)
+                OR ISNULL(vi.id_nacionalidad, 0) <> ISNULL(vt.id_nacionalidad, 0)
+                OR ISNULL(vi.id_pertenece_poblacion_indigena, 0) <> ISNULL(vt.id_pertenece_poblacion_indigena, 0)
+                OR ISNULL(vi.id_presenta_discapacidad, 0) <> ISNULL(vt.id_presenta_discapacidad, 0)
+                OR ISNULL(CONVERT(varchar(10), vi.fecha_nacimiento, 120), '') <> ISNULL(CONVERT(varchar(10), vt.fecha_nacimiento, 120), '')
+                OR ISNULL(vi.edad, 0) <> ISNULL(vt.edad, 0)
+              );
     ";
 
         await connection.ExecuteAsync(sql, new
