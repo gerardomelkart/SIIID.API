@@ -159,8 +159,6 @@ public class CargaArchivosService : ICargaArchivosService
         var filasDelitos = await _archivoReader.LeerAsync(archivoDelitos!);
         var filasVictimas = await _archivoReader.LeerAsync(archivoVictimas!);
 
-        var idEntidadFederativaSeleccionada = ObtenerEntidadFederativaSeleccionadaDesdeForm(form, usuarioCarga, response.Errores);
-
         // Validaciones específicas de cada archivo.
         response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas));
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
@@ -203,7 +201,6 @@ public class CargaArchivosService : ICargaArchivosService
         // Para SUPER_USUARIO se toma del Excel de delitos.
         var idEntidadFederativaCarga = ObtenerEntidadFederativaCarga(
             usuarioCarga,
-            idEntidadFederativaSeleccionada,
             filasDelitos,
             response.Errores);
 
@@ -271,10 +268,7 @@ public class CargaArchivosService : ICargaArchivosService
         // - ya existe carga pendiente
         if (response.Errores.Any(x =>
                 x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD" ||
-                x.Codigo == "GENERAL_ENTIDAD_SELECCIONADA_OBLIGATORIA" ||
-                x.Codigo == "GENERAL_ENTIDAD_SELECCIONADA_INVALIDA" ||
                 x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO" ||
-                x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_SELECCIONADA" ||
                 x.Codigo == "CARGA_PERIODO_YA_CONFIRMADO" ||
                 x.Codigo == "CARGA_PENDIENTE_EXISTENTE"))
         {
@@ -313,7 +307,7 @@ public class CargaArchivosService : ICargaArchivosService
         return response;
     }
 
-    private int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga, int? idEntidadFederativaSeleccionada, List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    private int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
     {
         // Para usuarios normales, la entidad de la carga es la entidad asignada al usuario.
         if (!usuarioCarga.EsSuperUsuario)
@@ -378,77 +372,10 @@ public class CargaArchivosService : ICargaArchivosService
 
         var idEntidadExcel = entidades.First();
 
-        if (idEntidadFederativaSeleccionada.HasValue &&
-            idEntidadExcel != idEntidadFederativaSeleccionada.Value)
-        {
-            errores.Add(new CargaValidacionError
-            {
-                Archivo = "delitos",
-                Fila = null,
-                Columna = "id_ent_hchos",
-                Campo = "id_ent_hchos",
-                Valor = idEntidadExcel.ToString(CultureInfo.InvariantCulture),
-                Codigo = "DELITOS_ENTIDAD_NO_CORRESPONDE_SELECCIONADA",
-                DescripcionResumen = "Entidad del Excel distinta a la entidad seleccionada",
-                Mensaje = $"La entidad del Excel ({idEntidadExcel}) no corresponde con la entidad seleccionada ({idEntidadFederativaSeleccionada.Value})."
-            });
-
-            return null;
-        }
-
-        return idEntidadFederativaSeleccionada ?? idEntidadExcel;
+        return entidades.First();
     }
 
-    private static int? ObtenerEntidadFederativaSeleccionadaDesdeForm(IFormCollection form, UsuarioCargaInfo usuarioCarga, List<CargaValidacionError> errores)
-    {
-        // Solo SUPER_USUARIO debe seleccionar entidad desde el front.
-        // Los usuarios normales usan su entidad asignada.
-        if (!usuarioCarga.EsSuperUsuario)
-        {
-            return null;
-        }
 
-        var valorEntidad = form.TryGetValue("idEntidadFederativa", out var entidadValues)
-            ? entidadValues.FirstOrDefault()
-            : null;
-
-        if (string.IsNullOrWhiteSpace(valorEntidad))
-        {
-            errores.Add(new CargaValidacionError
-            {
-                Archivo = "general",
-                Fila = null,
-                Columna = "idEntidadFederativa",
-                Campo = "idEntidadFederativa",
-                Valor = null,
-                Codigo = "GENERAL_ENTIDAD_SELECCIONADA_OBLIGATORIA",
-                DescripcionResumen = "Entidad federativa obligatoria",
-                Mensaje = "Debe seleccionar la entidad federativa de la carga."
-            });
-
-            return null;
-        }
-
-        if (!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidadFederativa) ||
-            idEntidadFederativa <= 0)
-        {
-            errores.Add(new CargaValidacionError
-            {
-                Archivo = "general",
-                Fila = null,
-                Columna = "idEntidadFederativa",
-                Campo = "idEntidadFederativa",
-                Valor = valorEntidad,
-                Codigo = "GENERAL_ENTIDAD_SELECCIONADA_INVALIDA",
-                DescripcionResumen = "Entidad federativa inválida",
-                Mensaje = "La entidad federativa seleccionada no es válida."
-            });
-
-            return null;
-        }
-
-        return idEntidadFederativa;
-    }
 
     private List<CargaValidacionError> ValidarEntidadUsuarioCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos)
     {
