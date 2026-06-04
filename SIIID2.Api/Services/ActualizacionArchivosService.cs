@@ -311,7 +311,10 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // tampoco se guarda staging.
         if (response.Errores.Any(x =>
                 x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD" ||
+                x.Codigo == "GENERAL_ENTIDAD_SELECCIONADA_OBLIGATORIA" ||
+                x.Codigo == "GENERAL_ENTIDAD_SELECCIONADA_INVALIDA" ||
                 x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO" ||
+                x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_SELECCIONADA" ||
                 x.Codigo == "ACTUALIZACION_MES_CORTE_OBLIGATORIO" ||
                 x.Codigo == "ACTUALIZACION_MES_CORTE_INVALIDO" ||
                 x.Codigo == "ACTUALIZACION_ANIO_CORTE_OBLIGATORIO" ||
