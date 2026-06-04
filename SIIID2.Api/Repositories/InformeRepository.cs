@@ -183,7 +183,12 @@ public class InformeRepository : IInformeRepository
         SELECT
             ci.identificador_carpeta_fiscalia AS id_ci,
             ci.nomenclatura_carpeta_fiscalia AS ntra_ci,
-            CONVERT(varchar(10), ci.fecha_inicio, 103) AS fha_de_ini,
+            ISNULL(CONVERT(varchar(10), ci.fecha_inicio, 103), '') AS fha_de_ini,
+            CASE
+                WHEN ci.fecha_inicio IS NULL THEN ''
+                WHEN CONVERT(time, ci.fecha_inicio) = '00:00:00' THEN ''
+                ELSE CONVERT(varchar(8), ci.fecha_inicio, 108)
+            END AS hra_de_ini,
             ci.resumen_hechos AS rmen_de_hchos
         FROM carpeta_investigacion ci
         INNER JOIN cargas_periodo cp

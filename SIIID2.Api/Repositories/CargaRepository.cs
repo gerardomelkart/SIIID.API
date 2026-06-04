@@ -687,6 +687,7 @@ public class CargaRepository : ICargaRepository
             c.id_ci,
             c.ntra_ci,
             COALESCE(
+                TRY_CONVERT(datetime2, CONCAT(c.fha_de_ini, ' ', NULLIF(c.hra_de_ini, '')), 103),
                 TRY_CONVERT(datetime2, c.fha_de_ini, 103),
                 TRY_CONVERT(datetime2, c.fha_de_ini)
             ),
