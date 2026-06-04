@@ -314,7 +314,11 @@ public class ActualizacionRepository : IActualizacionRepository
             WHERE ca.rn = 1
               AND (
                     ISNULL(ca.nomenclatura_carpeta_fiscalia, '') <> ISNULL(ct.ntra_ci, '')
-                    OR ISNULL(CONVERT(varchar(19), ca.fecha_inicio, 120), '') <> ISNULL(CONVERT(varchar(19), COALESCE(TRY_CONVERT(datetime2, ct.fha_de_ini, 103), TRY_CONVERT(datetime2, ct.fha_de_ini)), 120), '')
+                    OR ISNULL(CONVERT(varchar(19), ca.fecha_inicio, 120), '') <> ISNULL(CONVERT(varchar(19), COALESCE(
+                        TRY_CONVERT(datetime2, CONCAT(ct.fha_de_ini, ' ', NULLIF(ct.hra_de_ini, '')), 103),
+                        TRY_CONVERT(datetime2, ct.fha_de_ini, 103),
+                        TRY_CONVERT(datetime2, ct.fha_de_ini)
+                    ), 120), '')
                     OR ISNULL(ca.resumen_hechos, '') <> ISNULL(ct.rmen_de_hchos, '')
                   )
         )
@@ -393,6 +397,7 @@ public class ActualizacionRepository : IActualizacionRepository
         UPDATE ci
         SET ci.nomenclatura_carpeta_fiscalia = ct.ntra_ci,
             ci.fecha_inicio = COALESCE(
+                TRY_CONVERT(datetime2, CONCAT(ct.fha_de_ini, ' ', NULLIF(ct.hra_de_ini, '')), 103),
                 TRY_CONVERT(datetime2, ct.fha_de_ini, 103),
                 TRY_CONVERT(datetime2, ct.fha_de_ini)
             ),
@@ -409,7 +414,11 @@ public class ActualizacionRepository : IActualizacionRepository
         WHERE ci.activo = 1
           AND (
                 ISNULL(ci.nomenclatura_carpeta_fiscalia, '') <> ISNULL(ct.ntra_ci, '')
-                OR ISNULL(CONVERT(varchar(19), ci.fecha_inicio, 120), '') <> ISNULL(CONVERT(varchar(19), COALESCE(TRY_CONVERT(datetime2, ct.fha_de_ini, 103), TRY_CONVERT(datetime2, ct.fha_de_ini)), 120), '')
+                OR ISNULL(CONVERT(varchar(19), ci.fecha_inicio, 120), '') <> ISNULL(CONVERT(varchar(19), COALESCE(
+                    TRY_CONVERT(datetime2, CONCAT(ct.fha_de_ini, ' ', NULLIF(ct.hra_de_ini, '')), 103),
+                    TRY_CONVERT(datetime2, ct.fha_de_ini, 103),
+                    TRY_CONVERT(datetime2, ct.fha_de_ini)
+                ), 120), '')
                 OR ISNULL(ci.resumen_hechos, '') <> ISNULL(ct.rmen_de_hchos, '')
               );
     ";
@@ -455,8 +464,9 @@ public class ActualizacionRepository : IActualizacionRepository
             ct.id_ci,
             ct.ntra_ci,
             COALESCE(
-                TRY_CONVERT(datetime2, ct.fha_de_ini, 103),
-                TRY_CONVERT(datetime2, ct.fha_de_ini)
+                TRY_CONVERT(datetime2, CONCAT(c.fha_de_ini, ' ', NULLIF(c.hra_de_ini, '')), 103),
+                TRY_CONVERT(datetime2, c.fha_de_ini, 103),
+                TRY_CONVERT(datetime2, c.fha_de_ini)
             ),
             ct.rmen_de_hchos,
             @IdUsuarioConfirmacion,

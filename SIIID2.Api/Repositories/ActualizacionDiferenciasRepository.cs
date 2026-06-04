@@ -133,7 +133,9 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 c.id_ci,
                 c.ntra_ci,
                 c.fha_de_ini AS fha_de_ini_excel,
+                c.hra_de_ini AS hra_de_ini_excel,
                 COALESCE(
+                    TRY_CONVERT(datetime2, CONCAT(c.fha_de_ini, ' ', NULLIF(c.hra_de_ini, '')), 103),
                     TRY_CONVERT(datetime2, c.fha_de_ini, 103),
                     TRY_CONVERT(datetime2, c.fha_de_ini)
                 ) AS fecha_inicio,
@@ -158,6 +160,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 ('id_ci', CAST(NULL AS varchar(max)), CONVERT(varchar(max), ct.id_ci)),
                 ('ntra_ci', CAST(NULL AS varchar(max)), CONVERT(varchar(max), ct.ntra_ci)),
                 ('fha_de_ini', CAST(NULL AS varchar(max)), CONVERT(varchar(max), ct.fha_de_ini_excel)),
+                ('hra_de_ini', CAST(NULL AS varchar(max)), CONVERT(varchar(max), ct.hra_de_ini_excel)),
                 ('rmen_de_hchos', CAST(NULL AS varchar(max)), CONVERT(varchar(max), ct.rmen_de_hchos))
         ) dif(Campo, ValorAnterior, ValorNuevo)
         WHERE ca.identificador_carpeta_fiscalia IS NULL
@@ -180,6 +183,11 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 ('id_ci', CONVERT(varchar(max), ca.identificador_carpeta_fiscalia), CAST(NULL AS varchar(max))),
                 ('ntra_ci', CONVERT(varchar(max), ca.nomenclatura_carpeta_fiscalia), CAST(NULL AS varchar(max))),
                 ('fha_de_ini', CONVERT(varchar(max), CONVERT(varchar(10), ca.fecha_inicio, 103)), CAST(NULL AS varchar(max))),
+                ('hra_de_ini', CONVERT(varchar(max), CASE
+                    WHEN ca.fecha_inicio IS NULL THEN ''
+                    WHEN CONVERT(time, ca.fecha_inicio) = '00:00:00' THEN ''
+                    ELSE CONVERT(varchar(8), ca.fecha_inicio, 108)
+                END), CAST(NULL AS varchar(max))),
                 ('rmen_de_hchos', CONVERT(varchar(max), ca.resumen_hechos), CAST(NULL AS varchar(max)))
         ) dif(Campo, ValorAnterior, ValorNuevo)
         WHERE ct.id_ci IS NULL
@@ -200,8 +208,36 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         CROSS APPLY (
             VALUES
                 ('ntra_ci', CONVERT(varchar(max), ca.nomenclatura_carpeta_fiscalia), CONVERT(varchar(max), ct.ntra_ci), CONVERT(varchar(max), ca.nomenclatura_carpeta_fiscalia), CONVERT(varchar(max), ct.ntra_ci)),
-                ('fha_de_ini', CONVERT(varchar(max), CONVERT(varchar(10), ca.fecha_inicio, 103)), CONVERT(varchar(max), ct.fha_de_ini_excel), CONVERT(varchar(max), CONVERT(varchar(19), ca.fecha_inicio, 120)), CONVERT(varchar(max), CONVERT(varchar(19), ct.fecha_inicio, 120))),
-                ('rmen_de_hchos', CONVERT(varchar(max), ca.resumen_hechos), CONVERT(varchar(max), ct.rmen_de_hchos), CONVERT(varchar(max), ca.resumen_hechos), CONVERT(varchar(max), ct.rmen_de_hchos))
+                ('fha_de_ini',
+                    CONVERT(varchar(max), CONVERT(varchar(10), ca.fecha_inicio, 103)),
+                    CONVERT(varchar(max), ct.fha_de_ini_excel),
+                    CONVERT(varchar(max), CONVERT(varchar(10), ca.fecha_inicio, 120)),
+                    CONVERT(varchar(max), CONVERT(varchar(10), ct.fecha_inicio, 120))
+                ),
+                ('hra_de_ini',
+                    CONVERT(varchar(max), CASE
+                        WHEN ca.fecha_inicio IS NULL THEN ''
+                        WHEN CONVERT(time, ca.fecha_inicio) = '00:00:00' THEN ''
+                        ELSE CONVERT(varchar(8), ca.fecha_inicio, 108)
+                    END),
+                    CONVERT(varchar(max), ct.hra_de_ini_excel),
+                    CONVERT(varchar(max), CASE
+                        WHEN ca.fecha_inicio IS NULL THEN ''
+                        WHEN CONVERT(time, ca.fecha_inicio) = '00:00:00' THEN ''
+                        ELSE CONVERT(varchar(8), ca.fecha_inicio, 108)
+                    END),
+                    CONVERT(varchar(max), CASE
+                        WHEN ct.fecha_inicio IS NULL THEN ''
+                        WHEN CONVERT(time, ct.fecha_inicio) = '00:00:00' THEN ''
+                        ELSE CONVERT(varchar(8), ct.fecha_inicio, 108)
+                    END)
+                ),
+                ('rmen_de_hchos',
+                    CONVERT(varchar(max), ca.resumen_hechos),
+                    CONVERT(varchar(max), ct.rmen_de_hchos),
+                    CONVERT(varchar(max), ca.resumen_hechos),
+                    CONVERT(varchar(max), ct.rmen_de_hchos)
+                )
         ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
         WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '');
     ";
