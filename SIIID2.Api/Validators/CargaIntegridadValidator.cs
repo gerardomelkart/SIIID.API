@@ -26,8 +26,16 @@ public class CargaIntegridadValidator
     public List<CargaValidacionError> Validar(List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
     {
         var errores = new List<CargaValidacionError>();
-        // Regla: ID_CI debe ser unico en la carga
+
+        // Regla: ID_CI debe ser único en carpetas.
         ValidarIdCiUnicoEnCarpetas(filasCarpetas, errores);
+
+        // Regla: ID_CI + ID_DELITO debe ser único en delitos.
+        ValidarIdDelitoUnicoPorCarpeta(filasDelitos, errores);
+
+        // Regla: ID_CI + ID_DELITO + ID_VICF debe ser único en víctimas.
+        ValidarIdVictimaUnicoPorDelito(filasVictimas, errores);
+
         // Construimos índice de carpetas por ID_CI.
         var carpetasPorIdCi = filasCarpetas
             .Select(f => new CarpetaIntegridad
@@ -444,5 +452,90 @@ public class CargaIntegridadValidator
                     $"El ID_CI \"{grupo.Key}\" está duplicado en el archivo de carpetas. Filas detectadas: {string.Join(", ", filas)}. El ID_CI debe ser único para el periodo.");
             }
         }
+    }
+
+    private void ValidarIdDelitoUnicoPorCarpeta(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    {
+        var delitosDuplicados = filasDelitos
+            .Select(f => new
+            {
+                Fila = f,
+                IdCi = ObtenerValor(f, "id_ci")?.Trim(),
+                IdDelito = ObtenerValor(f, "id_delito")?.Trim()
+            })
+            .Where(x =>
+                !string.IsNullOrWhiteSpace(x.IdCi) &&
+                !string.IsNullOrWhiteSpace(x.IdDelito))
+            .GroupBy(
+                x => CrearLlaveDelito(x.IdCi!, x.IdDelito!),
+                StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        foreach (var grupo in delitosDuplicados)
+        {
+            var filas = grupo
+                .Select(x => x.Fila.NumeroFila)
+                .OrderBy(x => x)
+                .ToList();
+
+            foreach (var item in grupo)
+            {
+                AgregarError(
+                    errores,
+                    "delitos",
+                    item.Fila,
+                    "id_ci+id_delito",
+                    "INTEGRIDAD_ID_DELITO_DUPLICADO_EN_CARPETA",
+                    "ID_DELITO duplicado para la carpeta",
+                    $"La combinación ID_CI \"{item.IdCi}\" + ID_DELITO \"{item.IdDelito}\" está duplicada en el archivo de delitos. Filas detectadas: {string.Join(", ", filas)}. La combinación debe ser única para el periodo.");
+            }
+        }
+    }
+
+    private void ValidarIdVictimaUnicoPorDelito(List<ArchivoFila> filasVictimas, List<CargaValidacionError> errores)
+    {
+        var victimasDuplicadas = filasVictimas
+            .Select(f => new
+            {
+                Fila = f,
+                IdCi = ObtenerValor(f, "id_ci")?.Trim(),
+                IdDelito = ObtenerValor(f, "id_delito")?.Trim(),
+                IdVicf = ObtenerValor(f, "id_vicf")?.Trim()
+            })
+            .Where(x =>
+                !string.IsNullOrWhiteSpace(x.IdCi) &&
+                !string.IsNullOrWhiteSpace(x.IdDelito) &&
+                !string.IsNullOrWhiteSpace(x.IdVicf))
+            .GroupBy(
+                x => CrearLlaveVictima(x.IdCi!, x.IdDelito!, x.IdVicf!),
+                StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        foreach (var grupo in victimasDuplicadas)
+        {
+            var filas = grupo
+                .Select(x => x.Fila.NumeroFila)
+                .OrderBy(x => x)
+                .ToList();
+
+            foreach (var item in grupo)
+            {
+                AgregarError(
+                    errores,
+                    "victimas",
+                    item.Fila,
+                    "id_ci+id_delito+id_vicf",
+                    "INTEGRIDAD_ID_VICTIMA_DUPLICADO_EN_DELITO",
+                    "ID_VICF duplicado para el delito",
+                    $"La combinación ID_CI \"{item.IdCi}\" + ID_DELITO \"{item.IdDelito}\" + ID_VICF \"{item.IdVicf}\" está duplicada en el archivo de víctimas. Filas detectadas: {string.Join(", ", filas)}. La combinación debe ser única para el periodo.");
+            }
+        }
+    }
+
+    private static string CrearLlaveVictima(string idCi, string idDelito, string idVicf)
+    {
+        return $"{idCi.Trim()}|{idDelito.Trim()}|{idVicf.Trim()}";
     }
 }
