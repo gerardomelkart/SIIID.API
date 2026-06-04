@@ -134,7 +134,21 @@ public class ActualizacionCargaRepository : IActualizacionCargaRepository
                 id_ci,
                 ntra_ci,
                 COALESCE(
-                    TRY_CONVERT(datetime2, CONCAT(fha_de_ini, ' ', NULLIF(hra_de_ini, '')), 103),
+                    TRY_CONVERT(datetime2, CONCAT(fha_de_ini, ' ', NULLIF(LTRIM(RTRIM(hra_de_ini)), '')), 103),
+                    TRY_CONVERT(datetime2, CONCAT(fha_de_ini, ' ', NULLIF(LTRIM(RTRIM(hra_de_ini)), ''))),
+                    CASE
+                        WHEN TRY_CONVERT(float, REPLACE(NULLIF(LTRIM(RTRIM(hra_de_ini)), ''), ',', '.')) IS NOT NULL
+                             AND TRY_CONVERT(float, REPLACE(NULLIF(LTRIM(RTRIM(hra_de_ini)), ''), ',', '.')) >= 0
+                             AND TRY_CONVERT(float, REPLACE(NULLIF(LTRIM(RTRIM(hra_de_ini)), ''), ',', '.')) < 1
+                        THEN DATEADD(
+                            SECOND,
+                            CONVERT(int, ROUND(TRY_CONVERT(float, REPLACE(NULLIF(LTRIM(RTRIM(hra_de_ini)), ''), ',', '.')) * 86400, 0)),
+                            COALESCE(
+                                TRY_CONVERT(datetime2, fha_de_ini, 103),
+                                TRY_CONVERT(datetime2, fha_de_ini)
+                            )
+                        )
+                    END,
                     TRY_CONVERT(datetime2, fha_de_ini, 103),
                     TRY_CONVERT(datetime2, fha_de_ini)
                 ) AS fecha_inicio,
