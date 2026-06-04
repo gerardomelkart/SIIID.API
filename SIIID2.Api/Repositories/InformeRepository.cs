@@ -357,81 +357,68 @@ public class InformeRepository : IInformeRepository
         // Si no se envían filtros, regresa todos los periodos que tengan intentos.
         // Cada fila representa entidad + mes_corte + anio_corte.
         var sql = @"
-        WITH cargas_periodo AS (
-            SELECT
-                c.id_carga,
-                c.codigo_referencia,
-                c.tipo_carga,
-                c.estado,
-                c.id_entidad_federativa,
-                c.mes_corte,
-                c.anio_corte,
-                COALESCE(c.fecha_confirmacion, c.fecha_validacion) AS fecha_ultimo_movimiento,
-                ROW_NUMBER() OVER (
-                    PARTITION BY
-                        c.id_entidad_federativa,
-                        c.mes_corte,
-                        c.anio_corte
-                    ORDER BY
-                        COALESCE(c.fecha_confirmacion, c.fecha_validacion) DESC,
-                        c.id_carga DESC
-                ) AS rn
-            FROM carga c
-            WHERE c.activo = 1
-              AND c.mes_corte IS NOT NULL
-              AND c.anio_corte IS NOT NULL
-              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
-              AND (@MesCorte IS NULL OR c.mes_corte = @MesCorte)
-              AND (@AnioCorte IS NULL OR c.anio_corte = @AnioCorte)
-        ),
-        conteo AS (
-            SELECT
-                id_entidad_federativa,
-                mes_corte,
-                anio_corte,
-                COUNT(1) AS intentos
-            FROM cargas_periodo
-            GROUP BY
-                id_entidad_federativa,
-                mes_corte,
-                anio_corte
-        ),
-        ultimo AS (
-            SELECT
-                id_entidad_federativa,
-                mes_corte,
-                anio_corte,
-                codigo_referencia,
-                tipo_carga,
-                estado,
-                fecha_ultimo_movimiento
-            FROM cargas_periodo
-            WHERE rn = 1
-        )
+    WITH periodos AS (
         SELECT
-            ef.id_entidad_federativa AS IdEntidadFederativa,
-            ef.nombre AS EntidadFederativa,
-            ef.clave AS ClaveEntidad,
-            co.mes_corte AS MesCorte,
-            co.anio_corte AS AnioCorte,
-            co.intentos AS Intentos,
-            ul.codigo_referencia AS UltimoIntento,
-            ul.tipo_carga AS TipoCargaUltimoIntento,
-            ul.estado AS EstatusUltimoIntento,
-            ul.fecha_ultimo_movimiento AS FechaUltimaCarga
-        FROM conteo co
-        INNER JOIN catalogo_entidad_federativa ef
-            ON ef.id_entidad_federativa = co.id_entidad_federativa
-           AND ef.activo = 1
-        INNER JOIN ultimo ul
-            ON ul.id_entidad_federativa = co.id_entidad_federativa
-           AND ul.mes_corte = co.mes_corte
-           AND ul.anio_corte = co.anio_corte
+            c.id_entidad_federativa,
+            c.mes_corte,
+            c.anio_corte,
+            COUNT(1) AS intentos
+        FROM carga c
+        WHERE c.activo = 1
+          AND c.mes_corte IS NOT NULL
+          AND c.anio_corte IS NOT NULL
+          AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
+          AND (@MesCorte IS NULL OR c.mes_corte = @MesCorte)
+          AND (@AnioCorte IS NULL OR c.anio_corte = @AnioCorte)
+        GROUP BY
+            c.id_entidad_federativa,
+            c.mes_corte,
+            c.anio_corte
+    )
+    SELECT
+        ef.id_entidad_federativa AS IdEntidadFederativa,
+        ef.nombre AS EntidadFederativa,
+        ef.clave AS ClaveEntidad,
+        p.mes_corte AS MesCorte,
+        p.anio_corte AS AnioCorte,
+        p.intentos AS Intentos,
+        ultimo.codigo_referencia AS UltimoIntento,
+        ultimo.tipo_carga AS TipoCargaUltimoIntento,
+        ultimo.estado AS EstatusUltimoIntento,
+        ultimo.fecha_ultimo_movimiento AS FechaUltimaCarga
+    FROM periodos p
+    INNER JOIN catalogo_entidad_federativa ef
+        ON ef.id_entidad_federativa = p.id_entidad_federativa
+       AND ef.activo = 1
+    OUTER APPLY (
+        SELECT TOP 1
+            c.codigo_referencia,
+            c.tipo_carga,
+            c.estado,
+            COALESCE(c.fecha_confirmacion, c.fecha_validacion) AS fecha_ultimo_movimiento
+        FROM carga c
+        WHERE c.activo = 1
+          AND c.id_entidad_federativa = p.id_entidad_federativa
+          AND c.mes_corte = p.mes_corte
+          AND c.anio_corte = p.anio_corte
         ORDER BY
-            co.anio_corte DESC,
-            co.mes_corte DESC,
-            ef.nombre;
-    ";
+            CASE
+                WHEN c.tipo_carga = 'ACTUALIZACION'
+                     AND c.estado = 'CONFIRMADO_ACTUALIZACION'
+                    THEN 1
+                WHEN c.tipo_carga = 'CARGA_INICIAL'
+                     AND c.estado = 'CONFIRMADO'
+                    THEN 1
+                ELSE 0
+            END DESC,
+            COALESCE(c.fecha_confirmacion, c.fecha_validacion) DESC,
+            c.id_carga DESC
+    ) ultimo
+    ORDER BY
+        p.anio_corte DESC,
+        p.mes_corte DESC,
+        ef.nombre;
+";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
