@@ -964,6 +964,10 @@ public class ActualizacionRepository : IActualizacionRepository
                AND ca.anio_corte = c.anio_corte
             WHERE c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
               AND c.activo = 1
+
+            UNION
+
+            SELECT @IdCargaActualizacion
         ),
         carpetas_vigentes AS (
             SELECT
