@@ -91,7 +91,7 @@ public class DelitosValidator : IArchivoCargaValidator
                 fila,
                 "dto",
                 errores,
-                250,
+                2000,
                 "DELITOS_DTO_SIN_INFORMACION",
                 "Falta la descripción del delito");
 
@@ -99,7 +99,7 @@ public class DelitosValidator : IArchivoCargaValidator
                 fila,
                 "moda_dto",
                 errores,
-                250,
+                2000,
                 "DELITOS_MODA_DTO_SIN_INFORMACION",
                 "Falta la descripción de la modalidad del delito");
 

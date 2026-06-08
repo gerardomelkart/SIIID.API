@@ -142,4 +142,55 @@ public class InformesController : ControllerBase
             });
         }
     }
+
+    // Descarga ZIP con las 4 sábanas estadísticas anuales.
+    // Solo SUPER_USUARIO.
+    // Ejemplo: GET /api/informes/sabanas?anioCorte=2026
+    [Authorize]
+    [HttpGet("sabanas")]
+    public async Task<IActionResult> DescargarSabanas([FromQuery] int anioCorte)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        try
+        {
+            var zip = await _informeService.GenerarZipSabanasAsync(
+                idUsuarioConsulta,
+                anioCorte);
+
+            return File(
+                zip.Archivo,
+                "application/zip",
+                zip.NombreArchivo);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "INFORMES_SABANAS_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "INFORMES_SABANAS_NO_DISPONIBLES",
+                mensaje = ex.Message
+            });
+        }
+    }
 }

@@ -296,7 +296,7 @@ public class CargaIntegridadValidator
                 continue;
             }
 
-            if (fechaHechos > fechaInicio)
+            if (fechaHechos.Date > fechaInicio.Date)
             {
                 AgregarError(
                     errores,

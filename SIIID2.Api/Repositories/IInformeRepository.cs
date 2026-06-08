@@ -22,4 +22,11 @@ public interface IInformeRepository
     // Obtiene reporte de intentos/cargas por entidad y periodo.
     // Solo lo consume SUPER_USUARIO.
     Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int? mesCorte, int? anioCorte);
+
+    // Sábanas estadísticas anuales.
+    // Solo SUPER_USUARIO.
+    Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte);
+    Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte);
+    Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalVictimasAsync(int anioCorte);
+    Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(int anioCorte);
 }

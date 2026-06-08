@@ -441,4 +441,24 @@ public class InformeRepository : IInformeRepository
             })
             .ToList();
     }
+
+    public Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte)
+    {
+        throw new NotImplementedException("Pendiente implementar query de sábana estatal de delitos.");
+    }
+
+    public Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte)
+    {
+        throw new NotImplementedException("Pendiente implementar query de sábana municipal de delitos.");
+    }
+
+    public Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalVictimasAsync(int anioCorte)
+    {
+        throw new NotImplementedException("Pendiente implementar query de sábana estatal de víctimas.");
+    }
+
+    public Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(int anioCorte)
+    {
+        throw new NotImplementedException("Pendiente implementar query de sábana municipal de víctimas.");
+    }
 }

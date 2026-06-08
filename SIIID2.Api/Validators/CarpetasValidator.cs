@@ -229,7 +229,8 @@ public class CarpetasValidator : IArchivoCargaValidator
     private void ValidarMesInmediatoAnterior(ArchivoFila fila, string columna, DateTime fechaInicio, List<CargaValidacionError> errores)
     {
         var fechaCarga = DateTime.Today;
-        var mesInmediatoAnterior = fechaCarga.AddMonths(-1);
+        //bookmark
+        var mesInmediatoAnterior = fechaCarga.AddMonths(-2);
 
         var perteneceAlMesAnterior =
             fechaInicio.Year == mesInmediatoAnterior.Year &&

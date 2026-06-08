@@ -96,6 +96,66 @@ public class InformeService : IInformeService
         };
     }
 
+    public async Task<InformeArchivoZipResponse> GenerarZipSabanasAsync(int idUsuarioConsulta, int anioCorte)
+    {
+        var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuarioConsulta == null)
+        {
+            throw new UnauthorizedAccessException("El usuario autenticado no existe o no está activo.");
+        }
+
+        if (!usuarioConsulta.EsSuperUsuario)
+        {
+            throw new UnauthorizedAccessException("Solo un SUPER_USUARIO puede descargar las sábanas estadísticas.");
+        }
+
+        if (anioCorte < 2000 || anioCorte > 2100)
+        {
+            throw new InvalidOperationException("El año de corte no es válido.");
+        }
+
+        var estatalDelitos = await _informeRepository.ObtenerSabanaEstatalDelitosAsync(anioCorte);
+        var municipalDelitos = await _informeRepository.ObtenerSabanaMunicipalDelitosAsync(anioCorte);
+        var estatalVictimas = await _informeRepository.ObtenerSabanaEstatalVictimasAsync(anioCorte);
+        var municipalVictimas = await _informeRepository.ObtenerSabanaMunicipalVictimasAsync(anioCorte);
+
+        using var zipStream = new MemoryStream();
+
+        using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            AgregarExcelAlZip(
+                archive,
+                "estatal-delitos.xlsx",
+                "estatal-delitos",
+                estatalDelitos);
+
+            AgregarExcelAlZip(
+                archive,
+                "municipal-delitos.xlsx",
+                "municipal-delitos",
+                municipalDelitos);
+
+            AgregarExcelAlZip(
+                archive,
+                "estatal-victimas.xlsx",
+                "estatal-victimas",
+                estatalVictimas);
+
+            AgregarExcelAlZip(
+                archive,
+                "municipal-victimas.xlsx",
+                "municipal-victimas",
+                municipalVictimas);
+        }
+
+        return new InformeArchivoZipResponse
+        {
+            Archivo = zipStream.ToArray(),
+            NombreArchivo = $"SABANAS_{anioCorte}.zip"
+        };
+    }
+
     private static void AgregarExcelAlZip(ZipArchive archive, string nombreArchivo, string nombreHoja, List<IDictionary<string, object?>> filas)
     {
         var entry = archive.CreateEntry(nombreArchivo, CompressionLevel.Fastest);
