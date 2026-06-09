@@ -961,6 +961,7 @@ public class InformeRepository : IInformeRepository
             m.anio_corte,
             m.clave_ent,
             m.entidad,
+            m.orden_sabana,
             m.orden_delito,
             m.bien_juridico,
             m.delito_sabana,
@@ -973,9 +974,6 @@ public class InformeRepository : IInformeRepository
         ORDER BY
             m.clave_ent,
             m.orden_sabana,
-            m.orden_delito,
-            m.subtipo_delito_sabana,
-            m.modalidad_delito_sabana,
             m.orden_sexo,
             m.orden_rango;
         ";
