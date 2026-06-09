@@ -641,7 +641,7 @@ public class InformeRepository : IInformeRepository
                 TRY_CONVERT(int, CONCAT(
                     TRY_CONVERT(int, ef.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
-                )) AS clave_municipio_compuesta
+                )) AS clave_municipio_compuesta,
                 mun.nombre AS municipio,
                 s.orden_sabana,
                 s.orden_delito,
@@ -665,7 +665,7 @@ public class InformeRepository : IInformeRepository
                 TRY_CONVERT(int, CONCAT(
                     TRY_CONVERT(int, efh.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
-                )) AS clave_municipio_compuesta
+                )) AS clave_municipio_compuesta,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
@@ -710,10 +710,10 @@ public class InformeRepository : IInformeRepository
                 c.anio_corte,
                 c.mes_corte,
                 TRY_CONVERT(int, efh.clave),
-                CONCAT(
-                    RIGHT('00' + CONVERT(varchar(2), TRY_CONVERT(int, efh.clave)), 2),
+                TRY_CONVERT(int, CONCAT(
+                    TRY_CONVERT(int, efh.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
-                ),
+                )),
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
@@ -1020,7 +1020,7 @@ public class InformeRepository : IInformeRepository
                 TRY_CONVERT(int, CONCAT(
                     TRY_CONVERT(int, ef.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
-                )) AS clave_municipio_compuesta
+                )) AS clave_municipio_compuesta,
                 mun.nombre AS municipio,
                 s.orden_sabana,
                 s.orden_delito,
@@ -1058,7 +1058,7 @@ public class InformeRepository : IInformeRepository
                 TRY_CONVERT(int, CONCAT(
                     TRY_CONVERT(int, efh.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
-                )) AS clave_municipio_compuesta
+                )) AS clave_municipio_compuesta,
                 mun.nombre AS municipio,
                 MIN(s.id_delito_sabana) AS orden_sabana,
                 MIN(cd.id_delito) AS orden_delito,
@@ -1141,10 +1141,10 @@ public class InformeRepository : IInformeRepository
                 c.anio_corte,
                 TRY_CONVERT(int, efh.clave),
                 efh.nombre,
-                CONCAT(
-                    RIGHT('00' + CONVERT(varchar(2), TRY_CONVERT(int, efh.clave)), 2),
+                TRY_CONVERT(int, CONCAT(
+                    TRY_CONVERT(int, efh.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
-                ),
+                )),
                 mun.nombre,
                 bj.bien_juridico,
                 s.delito_sabana,
