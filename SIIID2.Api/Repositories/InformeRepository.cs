@@ -1055,6 +1055,7 @@ public class InformeRepository : IInformeRepository
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 ) AS clave_municipio_compuesta,
                 mun.nombre AS municipio,
+                MIN(cd.id_delito) AS orden_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
