@@ -496,7 +496,7 @@ public class InformeRepository : IInformeRepository
             FROM catalogo_entidad_federativa ef
             CROSS JOIN sabana s
             WHERE ef.activo = 1
-              AND TRY_CONVERT(int, ef.clave) <> 33
+              AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
         ),
         conteos AS (
             SELECT
@@ -540,7 +540,7 @@ public class InformeRepository : IInformeRepository
                 ON bj.id_bien_juridico = cd.id_bien_juridico
                AND bj.activo = 1
             WHERE d.activo = 1
-              AND TRY_CONVERT(int, efh.clave) <> 33
+              AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
             GROUP BY
                 c.anio_corte,
                 c.mes_corte,
@@ -645,7 +645,7 @@ public class InformeRepository : IInformeRepository
                AND mun.activo = 1
             CROSS JOIN sabana s
             WHERE ef.activo = 1
-              AND TRY_CONVERT(int, ef.clave) <> 33
+              AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
         ),
         conteos AS (
             SELECT
@@ -696,7 +696,7 @@ public class InformeRepository : IInformeRepository
                 ON bj.id_bien_juridico = cd.id_bien_juridico
                AND bj.activo = 1
             WHERE d.activo = 1
-              AND TRY_CONVERT(int, efh.clave) <> 33
+              AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
             GROUP BY
                 c.anio_corte,
                 c.mes_corte,
@@ -822,7 +822,7 @@ public class InformeRepository : IInformeRepository
             CROSS JOIN sexos sx
             CROSS JOIN rangos_edad re
             WHERE ef.activo = 1
-              AND TRY_CONVERT(int, ef.clave) <> 33
+              AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
         ),
         conteos AS (
             SELECT
@@ -889,7 +889,7 @@ public class InformeRepository : IInformeRepository
                 ON bj.id_bien_juridico = cd.id_bien_juridico
                AND bj.activo = 1
             WHERE v.activo = 1
-              AND TRY_CONVERT(int, efh.clave) <> 33
+            AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
             GROUP BY
                 c.anio_corte,
                 c.mes_corte,
@@ -1032,7 +1032,7 @@ public class InformeRepository : IInformeRepository
                AND mun.activo = 1
             CROSS JOIN sabana s
             WHERE ef.activo = 1
-              AND TRY_CONVERT(int, ef.clave) <> 33
+              AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
         ),
         conteos AS (
             SELECT
@@ -1119,7 +1119,7 @@ public class InformeRepository : IInformeRepository
                 ON bj.id_bien_juridico = cd.id_bien_juridico
                AND bj.activo = 1
             WHERE v.activo = 1
-              AND TRY_CONVERT(int, efh.clave) <> 33
+              AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
             GROUP BY
                 c.anio_corte,
                 TRY_CONVERT(int, efh.clave),
