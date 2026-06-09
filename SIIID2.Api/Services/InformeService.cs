@@ -181,6 +181,11 @@ public class InformeService : IInformeService
         {
             worksheet.Cell(1, columna + 1).Value = columnas[columna];
             worksheet.Cell(1, columna + 1).Style.Font.Bold = true;
+
+            if (columnas[columna] == "Clave_Ent" || columnas[columna] == "Cve. Municipio")
+            {
+                worksheet.Column(columna + 1).Style.NumberFormat.Format = "@";
+            }
         }
 
         for (var fila = 0; fila < filas.Count; fila++)
@@ -192,7 +197,17 @@ public class InformeService : IInformeService
                     ? dato
                     : null;
 
-                worksheet.Cell(fila + 2, columna + 1).Value = ConvertirValorExcel(valor);
+                var celda = worksheet.Cell(fila + 2, columna + 1);
+
+                if (nombreColumna == "Clave_Ent" || nombreColumna == "Cve. Municipio")
+                {
+                    celda.Style.NumberFormat.Format = "@";
+                    celda.Value = valor?.ToString() ?? string.Empty;
+                }
+                else
+                {
+                    celda.Value = ConvertirValorExcel(valor);
+                }
             }
         }
 

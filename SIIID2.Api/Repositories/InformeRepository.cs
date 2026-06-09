@@ -462,12 +462,13 @@ public class InformeRepository : IInformeRepository
     {
         var sql = @"
             WITH sabana AS (
-                SELECT
-                    MIN(cd.id_delito) AS orden_delito,
-                    bj.bien_juridico,
-                    s.delito_sabana,
-                    s.subtipo_delito_sabana,
-                    s.modalidad_delito_sabana
+            SELECT
+                MIN(s.id_delito_sabana) AS orden_sabana,
+                MIN(cd.id_delito) AS orden_delito,
+                bj.bien_juridico,
+                s.delito_sabana,
+                s.subtipo_delito_sabana,
+                s.modalidad_delito_sabana
                 FROM catalogo_delito_sabana s
                 INNER JOIN catalogo_modalidad_delito md
                     ON md.id_modalidad_delito = s.id_modalidad_delito
@@ -556,7 +557,7 @@ public class InformeRepository : IInformeRepository
         )
         SELECT
             m.anio_corte AS [Año],
-            m.clave_ent AS [Clave_Ent],
+            RIGHT('00' + CONVERT(varchar(2), m.clave_ent), 2) AS [Clave_Ent],
             m.entidad AS [Entidad],
             m.bien_juridico AS [Bien jurídico afectado],
             m.delito_sabana AS [Tipo de delito],
@@ -605,12 +606,13 @@ public class InformeRepository : IInformeRepository
     {
         var sql = @"
             WITH sabana AS (
-                SELECT
-                    MIN(cd.id_delito) AS orden_delito,
-                    bj.bien_juridico,
-                    s.delito_sabana,
-                    s.subtipo_delito_sabana,
-                    s.modalidad_delito_sabana
+            SELECT
+                MIN(s.id_delito_sabana) AS orden_sabana,
+                MIN(cd.id_delito) AS orden_delito,
+                bj.bien_juridico,
+                s.delito_sabana,
+                s.subtipo_delito_sabana,
+                s.modalidad_delito_sabana
                 FROM catalogo_delito_sabana s
                 INNER JOIN catalogo_modalidad_delito md
                     ON md.id_modalidad_delito = s.id_modalidad_delito
@@ -718,7 +720,7 @@ public class InformeRepository : IInformeRepository
         )
         SELECT
             m.anio_corte AS [Año],
-            m.clave_ent AS [Clave_Ent],
+            RIGHT('00' + CONVERT(varchar(2), m.clave_ent), 2) AS [Clave_Ent],
             m.entidad AS [Entidad],
             m.clave_municipio_compuesta AS [Cve. Municipio],
             m.municipio AS [Municipio],
@@ -786,12 +788,13 @@ public class InformeRepository : IInformeRepository
             UNION ALL SELECT 6, 'No especificado'
         ),
         sabana AS (
-            SELECT
-                MIN(cd.id_delito) AS orden_delito,
-                bj.bien_juridico,
-                s.delito_sabana,
-                s.subtipo_delito_sabana,
-                s.modalidad_delito_sabana
+        SELECT
+            MIN(s.id_delito_sabana) AS orden_sabana,
+            MIN(cd.id_delito) AS orden_delito,
+            bj.bien_juridico,
+            s.delito_sabana,
+            s.subtipo_delito_sabana,
+            s.modalidad_delito_sabana
             FROM catalogo_delito_sabana s
             INNER JOIN catalogo_modalidad_delito md
                 ON md.id_modalidad_delito = s.id_modalidad_delito
@@ -923,7 +926,7 @@ public class InformeRepository : IInformeRepository
         )
         SELECT
             m.anio_corte AS [Año],
-            m.clave_ent AS [Clave_Ent],
+            RIGHT('00' + CONVERT(varchar(2), m.clave_ent), 2) AS [Clave_Ent],
             m.entidad AS [Entidad],
             m.bien_juridico AS [Bien jurídico afectado],
             m.delito_sabana AS [Tipo de delito],
@@ -982,12 +985,13 @@ public class InformeRepository : IInformeRepository
     {
         var sql = @"
         WITH sabana AS (
-            SELECT
-                MIN(cd.id_delito) AS orden_delito,
-                bj.bien_juridico,
-                s.delito_sabana,
-                s.subtipo_delito_sabana,
-                s.modalidad_delito_sabana
+        SELECT
+            MIN(s.id_delito_sabana) AS orden_sabana,
+            MIN(cd.id_delito) AS orden_delito,
+            bj.bien_juridico,
+            s.delito_sabana,
+            s.subtipo_delito_sabana,
+            s.modalidad_delito_sabana
             FROM catalogo_delito_sabana s
             INNER JOIN catalogo_modalidad_delito md
                 ON md.id_modalidad_delito = s.id_modalidad_delito
@@ -1227,7 +1231,7 @@ public class InformeRepository : IInformeRepository
         )
         SELECT
             anio_corte AS [Año],
-            clave_ent AS [Clave_Ent],
+            RIGHT('00' + CONVERT(varchar(2), clave_ent), 2) AS [Clave_Ent],
             entidad AS [Entidad],
             clave_municipio_compuesta AS [Cve. Municipio],
             municipio AS [Municipio],
