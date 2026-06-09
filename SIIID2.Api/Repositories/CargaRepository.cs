@@ -27,6 +27,16 @@ public class CargaRepository : ICargaRepository
         _dbConnectionFactory = dbConnectionFactory;
     }
 
+    private static string ValorTextoStaging(object? valor)
+    {
+        if (valor == null || valor == DBNull.Value)
+        {
+            return string.Empty;
+        }
+
+        return valor.ToString()?.Trim() ?? string.Empty;
+    }
+
     public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
     {
         // Este método guarda todo el intento de carga en una sola transacción.
@@ -192,11 +202,11 @@ public class CargaRepository : ICargaRepository
             tabla.Rows.Add(
                 idCarga,
                 fila.NumeroFila,
-                ObtenerValor(fila, "id_ci"),
-                ObtenerValor(fila, "ntra_ci"),
-                ObtenerValor(fila, "fha_de_ini"),
-                ObtenerValor(fila, "hra_de_ini"),
-                ObtenerValor(fila, "rmen_de_hchos"),
+                ValorTextoStaging(ObtenerValor(fila, "id_ci")),
+                ValorTextoStaging(ObtenerValor(fila, "ntra_ci")),
+                ValorTextoStaging(ObtenerValor(fila, "fha_de_ini")),
+                ValorTextoStaging(ObtenerValor(fila, "hra_de_ini")),
+                ValorTextoStaging(ObtenerValor(fila, "rmen_de_hchos")),
                 "PENDIENTE",
                 true);
         }
@@ -257,26 +267,26 @@ public class CargaRepository : ICargaRepository
             tabla.Rows.Add(
                 idCarga,
                 fila.NumeroFila,
-                ObtenerValor(fila, "id_ci"),
-                ObtenerValor(fila, "id_delito"),
-                ObtenerValor(fila, "dto"),
-                ObtenerValor(fila, "moda_dto"),
-                ObtenerValor(fila, "forma_acc"),
-                ObtenerValor(fila, "fha_de_hchos"),
-                ObtenerValor(fila, "hra_de_hchos"),
-                ObtenerValor(fila, "emto_com_dto"),
-                ObtenerValor(fila, "grdo_cons"),
-                ObtenerValor(fila, "clasf_de_dto"),
-                ObtenerValor(fila, "id_ent_hchos"),
-                ObtenerValor(fila, "id_mun_hchos"),
-                ObtenerValor(fila, "id_loc_hchos"),
-                ObtenerValor(fila, "nom_loc_hchos"),
-                ObtenerValor(fila, "id_col_hchos"),
-                ObtenerValor(fila, "nom_col_hchos"),
-                ObtenerValor(fila, "cp"),
-                ObtenerValor(fila, "coord_x"),
-                ObtenerValor(fila, "coord_y"),
-                ObtenerValor(fila, "dom_hchos"),
+                ValorTextoStaging(ObtenerValor(fila, "id_ci")),
+                ValorTextoStaging(ObtenerValor(fila, "id_delito")),
+                ValorTextoStaging(ObtenerValor(fila, "dto")),
+                ValorTextoStaging(ObtenerValor(fila, "moda_dto")),
+                ValorTextoStaging(ObtenerValor(fila, "forma_acc")),
+                ValorTextoStaging(ObtenerValor(fila, "fha_de_hchos")),
+                ValorTextoStaging(ObtenerValor(fila, "hra_de_hchos")),
+                ValorTextoStaging(ObtenerValor(fila, "emto_com_dto")),
+                ValorTextoStaging(ObtenerValor(fila, "grdo_cons")),
+                ValorTextoStaging(ObtenerValor(fila, "clasf_de_dto")),
+                ValorTextoStaging(ObtenerValor(fila, "id_ent_hchos")),
+                ValorTextoStaging(ObtenerValor(fila, "id_mun_hchos")),
+                ValorTextoStaging(ObtenerValor(fila, "id_loc_hchos")),
+                ValorTextoStaging(ObtenerValor(fila, "nom_loc_hchos")),
+                ValorTextoStaging(ObtenerValor(fila, "id_col_hchos")),
+                ValorTextoStaging(ObtenerValor(fila, "nom_col_hchos")),
+                ValorTextoStaging(ObtenerValor(fila, "cp")),
+                ValorTextoStaging(ObtenerValor(fila, "coord_x")),
+                ValorTextoStaging(ObtenerValor(fila, "coord_y")),
+                ValorTextoStaging(ObtenerValor(fila, "dom_hchos")),
                 "PENDIENTE",
                 true);
         }
@@ -344,18 +354,18 @@ public class CargaRepository : ICargaRepository
             tabla.Rows.Add(
                 idCarga,
                 fila.NumeroFila,
-                ObtenerValor(fila, "id_ci"),
-                ObtenerValor(fila, "id_delito"),
-                ObtenerValor(fila, "id_vicf"),
-                ObtenerValor(fila, "id_tv"),
-                ObtenerValor(fila, "id_tpm"),
-                ObtenerValor(fila, "sexo"),
-                ObtenerValor(fila, "genero"),
-                ObtenerValor(fila, "pob"),
-                ObtenerValor(fila, "disc"),
-                ObtenerValor(fila, "fha_nac"),
-                ObtenerValor(fila, "edad"),
-                ObtenerValor(fila, "nacional"),
+                ValorTextoStaging(ObtenerValor(fila, "id_ci")),
+                ValorTextoStaging(ObtenerValor(fila, "id_delito")),
+                ValorTextoStaging(ObtenerValor(fila, "id_vicf")),
+                ValorTextoStaging(ObtenerValor(fila, "id_tv")),
+                ValorTextoStaging(ObtenerValor(fila, "id_tpm")),
+                ValorTextoStaging(ObtenerValor(fila, "sexo")),
+                ValorTextoStaging(ObtenerValor(fila, "genero")),
+                ValorTextoStaging(ObtenerValor(fila, "pob")),
+                ValorTextoStaging(ObtenerValor(fila, "disc")),
+                ValorTextoStaging(ObtenerValor(fila, "fha_nac")),
+                ValorTextoStaging(ObtenerValor(fila, "edad")),
+                ValorTextoStaging(ObtenerValor(fila, "nacional")),
                 "PENDIENTE",
                 true);
         }
