@@ -1261,9 +1261,7 @@ public class InformeRepository : IInformeRepository
         ORDER BY
             clave_ent,
             clave_municipio_compuesta,
-            orden_delito,
-            subtipo_delito_sabana,
-            modalidad_delito_sabana,
+            orden_sabana,
             sexo,
             rango_edad;
         ";
