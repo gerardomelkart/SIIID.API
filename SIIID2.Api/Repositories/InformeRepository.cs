@@ -872,19 +872,7 @@ public class InformeRepository : IInformeRepository
                AND sx.activo = 1
             INNER JOIN catalogo_delito_sabana s
                 ON s.id_modalidad_delito = d.id_modalidad_delito
-               AND s.id_grado_consumacion       AND (
-                      (c.tipo_carga = 'CARGA_INICIAL' AND c.estado = 'CONFIRMADO')
-                   OR (c.tipo_carga = 'ACTUALIZACION' AND c.estado = 'CONFIRMADO_ACTUALIZACION')
-               )
-            INNER JOIN catalogo_entidad_federativa efh
-                ON efh.id_entidad_federativa = d.id_entidad_federativa
-               AND efh.activo = 1
-            INNER JOIN catalogo_tipo_victima tv
-                ON tv.id_tipo_victima = v.id_tipo_victima
-               AND tv.activo = 1
-            LEFT JOIN catalogo_sexo sx
-                ON sx.id_sexo = v.id_sexo
-               AND sx.activo = = d.id_grado_consumacion
+               AND s.id_grado_consumacion = d.id_grado_consumacion
                AND s.id_instrumento_comision = d.id_instrumento_comision
                AND s.id_forma_accion = d.id_forma_accion
                AND s.activo = 1
