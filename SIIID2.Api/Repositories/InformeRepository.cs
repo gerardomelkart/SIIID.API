@@ -494,6 +494,7 @@ public class InformeRepository : IInformeRepository
                 @AnioCorte AS anio_corte,
                 TRY_CONVERT(int, ef.clave) AS clave_ent,
                 ef.nombre AS entidad,
+                s.orden_sabana,
                 s.orden_delito,
                 s.bien_juridico,
                 s.delito_sabana,
@@ -587,6 +588,7 @@ public class InformeRepository : IInformeRepository
             m.anio_corte,
             m.clave_ent,
             m.entidad,
+            m.orden_sabana,
             m.orden_delito,
             m.bien_juridico,
             m.delito_sabana,
@@ -594,9 +596,7 @@ public class InformeRepository : IInformeRepository
             m.modalidad_delito_sabana
         ORDER BY
             m.clave_ent,
-            m.orden_delito,
-            m.subtipo_delito_sabana,
-            m.modalidad_delito_sabana;
+            m.orden_sabana;
         ";
 
         return await QueryDictionaryAnioAsync(sql, anioCorte);
@@ -755,6 +755,7 @@ public class InformeRepository : IInformeRepository
             m.entidad,
             m.clave_municipio_compuesta,
             m.municipio,
+            m.orden_sabana,
             m.orden_delito,
             m.bien_juridico,
             m.delito_sabana,
@@ -763,6 +764,7 @@ public class InformeRepository : IInformeRepository
         ORDER BY
             m.clave_ent,
             m.clave_municipio_compuesta,
+            m.orden_sabana;
             m.orden_delito,
             m.subtipo_delito_sabana,
             m.modalidad_delito_sabana;
@@ -820,6 +822,7 @@ public class InformeRepository : IInformeRepository
                 @AnioCorte AS anio_corte,
                 TRY_CONVERT(int, ef.clave) AS clave_ent,
                 ef.nombre AS entidad,
+                s.orden_sabana,
                 s.orden_delito,
                 s.bien_juridico,
                 s.delito_sabana,
@@ -971,6 +974,7 @@ public class InformeRepository : IInformeRepository
             m.rango_edad
         ORDER BY
             m.clave_ent,
+            m.orden_sabana,
             m.orden_delito,
             m.subtipo_delito_sabana,
             m.modalidad_delito_sabana,
@@ -1022,6 +1026,7 @@ public class InformeRepository : IInformeRepository
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 ) AS clave_municipio_compuesta,
                 mun.nombre AS municipio,
+                s.orden_sabana,
                 s.orden_delito,
                 s.bien_juridico,
                 s.delito_sabana,
