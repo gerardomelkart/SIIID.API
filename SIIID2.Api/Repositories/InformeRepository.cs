@@ -643,6 +643,7 @@ public class InformeRepository : IInformeRepository
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 ) AS clave_municipio_compuesta,
                 mun.nombre AS municipio,
+                s.orden_sabana,
                 s.orden_delito,
                 s.bien_juridico,
                 s.delito_sabana,
@@ -765,9 +766,6 @@ public class InformeRepository : IInformeRepository
             m.clave_ent,
             m.clave_municipio_compuesta,
             m.orden_sabana;
-            m.orden_delito,
-            m.subtipo_delito_sabana,
-            m.modalidad_delito_sabana;
         ";
 
         return await QueryDictionaryAnioAsync(sql, anioCorte);
