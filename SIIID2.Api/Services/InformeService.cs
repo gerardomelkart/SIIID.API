@@ -182,7 +182,7 @@ public class InformeService : IInformeService
             worksheet.Cell(1, columna + 1).Value = columnas[columna];
             worksheet.Cell(1, columna + 1).Style.Font.Bold = true;
 
-            if (columnas[columna] == "Clave_Ent" || columnas[columna] == "Cve. Municipio")
+            if (columnas[columna] == "Clave_Ent")
             {
                 worksheet.Column(columna + 1).Style.NumberFormat.Format = "@";
             }
@@ -199,7 +199,7 @@ public class InformeService : IInformeService
 
                 var celda = worksheet.Cell(fila + 2, columna + 1);
 
-                if (nombreColumna == "Clave_Ent" || nombreColumna == "Cve. Municipio")
+                if (nombreColumna == "Clave_Ent")
                 {
                     celda.Style.NumberFormat.Format = "@";
                     celda.Value = valor?.ToString() ?? string.Empty;
