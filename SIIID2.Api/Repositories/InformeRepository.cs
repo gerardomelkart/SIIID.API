@@ -494,12 +494,7 @@ public class InformeRepository : IInformeRepository
                 s.subtipo_delito_sabana,
                 s.modalidad_delito_sabana
             FROM catalogo_entidad_federativa ef
-            CROSSorden_delito,
-                s.bien_juridico,
-                s.delito_sabana,
-                s.subtipo_delito_sabana,
-                s.modalidad_delito_sabana
-            FROM catalogo_entidad_feder JOIN sabana s
+            CROSS JOIN sabana s
             WHERE ef.activo = 1
               AND TRY_CONVERT(int, ef.clave) <> 33
         ),
