@@ -461,28 +461,33 @@ public class InformeRepository : IInformeRepository
     public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte)
     {
         var sql = @"
-        WITH sabana AS (
-            SELECT DISTINCT
-                cd.id_delito AS orden_delito,
-                bj.bien_juridico,
-                s.delito_sabana,
-                s.subtipo_delito_sabana,
-                s.modalidad_delito_sabana
-            FROM catalogo_delito_sabana s
-            INNER JOIN catalogo_modalidad_delito md
-                ON md.id_modalidad_delito = s.id_modalidad_delito
-               AND md.activo = 1
-            INNER JOIN catalogo_subtipo_delito sd
-                ON sd.id_subtipo_delito = md.id_subtipo_delito
-               AND sd.activo = 1
-            INNER JOIN catalogo_delito cd
-                ON cd.id_delito = sd.id_delito
-               AND cd.activo = 1
-            INNER JOIN catalogo_bien_juridico bj
-                ON bj.id_bien_juridico = cd.id_bien_juridico
-               AND bj.activo = 1
-            WHERE s.activo = 1
-        ),
+            WITH sabana AS (
+                SELECT
+                    MIN(cd.id_delito) AS orden_delito,
+                    bj.bien_juridico,
+                    s.delito_sabana,
+                    s.subtipo_delito_sabana,
+                    s.modalidad_delito_sabana
+                FROM catalogo_delito_sabana s
+                INNER JOIN catalogo_modalidad_delito md
+                    ON md.id_modalidad_delito = s.id_modalidad_delito
+                   AND md.activo = 1
+                INNER JOIN catalogo_subtipo_delito sd
+                    ON sd.id_subtipo_delito = md.id_subtipo_delito
+                   AND sd.activo = 1
+                INNER JOIN catalogo_delito cd
+                    ON cd.id_delito = sd.id_delito
+                   AND cd.activo = 1
+                INNER JOIN catalogo_bien_juridico bj
+                    ON bj.id_bien_juridico = cd.id_bien_juridico
+                   AND bj.activo = 1
+                WHERE s.activo = 1
+                GROUP BY
+                    bj.bien_juridico,
+                    s.delito_sabana,
+                    s.subtipo_delito_sabana,
+                    s.modalidad_delito_sabana
+            ),
         matriz AS (
             SELECT
                 @AnioCorte AS anio_corte,
@@ -503,7 +508,6 @@ public class InformeRepository : IInformeRepository
                 c.anio_corte,
                 c.mes_corte,
                 TRY_CONVERT(int, efh.clave) AS clave_ent,
-                cd.id_delito AS orden_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
@@ -545,7 +549,6 @@ public class InformeRepository : IInformeRepository
                 c.anio_corte,
                 c.mes_corte,
                 TRY_CONVERT(int, efh.clave),
-                cd.id_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
@@ -575,7 +578,6 @@ public class InformeRepository : IInformeRepository
         LEFT JOIN conteos c
             ON c.anio_corte = m.anio_corte
            AND c.clave_ent = m.clave_ent
-           AND c.orden_delito = m.orden_delito
            AND c.bien_juridico = m.bien_juridico
            AND c.delito_sabana = m.delito_sabana
            AND c.subtipo_delito_sabana = m.subtipo_delito_sabana
@@ -602,28 +604,33 @@ public class InformeRepository : IInformeRepository
     public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte)
     {
         var sql = @"
-        WITH sabana AS (
-            SELECT DISTINCT
-                cd.id_delito AS orden_delito,
-                bj.bien_juridico,
-                s.delito_sabana,
-                s.subtipo_delito_sabana,
-                s.modalidad_delito_sabana
-            FROM catalogo_delito_sabana s
-            INNER JOIN catalogo_modalidad_delito md
-                ON md.id_modalidad_delito = s.id_modalidad_delito
-               AND md.activo = 1
-            INNER JOIN catalogo_subtipo_delito sd
-                ON sd.id_subtipo_delito = md.id_subtipo_delito
-               AND sd.activo = 1
-            INNER JOIN catalogo_delito cd
-                ON cd.id_delito = sd.id_delito
-               AND cd.activo = 1
-            INNER JOIN catalogo_bien_juridico bj
-                ON bj.id_bien_juridico = cd.id_bien_juridico
-               AND bj.activo = 1
-            WHERE s.activo = 1
-        ),
+            WITH sabana AS (
+                SELECT
+                    MIN(cd.id_delito) AS orden_delito,
+                    bj.bien_juridico,
+                    s.delito_sabana,
+                    s.subtipo_delito_sabana,
+                    s.modalidad_delito_sabana
+                FROM catalogo_delito_sabana s
+                INNER JOIN catalogo_modalidad_delito md
+                    ON md.id_modalidad_delito = s.id_modalidad_delito
+                   AND md.activo = 1
+                INNER JOIN catalogo_subtipo_delito sd
+                    ON sd.id_subtipo_delito = md.id_subtipo_delito
+                   AND sd.activo = 1
+                INNER JOIN catalogo_delito cd
+                    ON cd.id_delito = sd.id_delito
+                   AND cd.activo = 1
+                INNER JOIN catalogo_bien_juridico bj
+                    ON bj.id_bien_juridico = cd.id_bien_juridico
+                   AND bj.activo = 1
+                WHERE s.activo = 1
+                GROUP BY
+                    bj.bien_juridico,
+                    s.delito_sabana,
+                    s.subtipo_delito_sabana,
+                    s.modalidad_delito_sabana
+            ),
         matriz AS (
             SELECT
                 @AnioCorte AS anio_corte,
@@ -656,7 +663,6 @@ public class InformeRepository : IInformeRepository
                     RIGHT('00' + CONVERT(varchar(2), TRY_CONVERT(int, efh.clave)), 2),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 ) AS clave_municipio_compuesta,
-                cd.id_delito AS orden_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
@@ -705,7 +711,6 @@ public class InformeRepository : IInformeRepository
                     RIGHT('00' + CONVERT(varchar(2), TRY_CONVERT(int, efh.clave)), 2),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 ),
-                cd.id_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
@@ -738,7 +743,6 @@ public class InformeRepository : IInformeRepository
             ON c.anio_corte = m.anio_corte
            AND c.clave_ent = m.clave_ent
            AND c.clave_municipio_compuesta = m.clave_municipio_compuesta
-           AND c.orden_delito = m.orden_delito
            AND c.bien_juridico = m.bien_juridico
            AND c.delito_sabana = m.delito_sabana
            AND c.subtipo_delito_sabana = m.subtipo_delito_sabana
@@ -782,8 +786,8 @@ public class InformeRepository : IInformeRepository
             UNION ALL SELECT 6, 'No especificado'
         ),
         sabana AS (
-            SELECT DISTINCT
-                cd.id_delito AS orden_delito,
+            SELECT
+                MIN(cd.id_delito) AS orden_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
@@ -802,6 +806,11 @@ public class InformeRepository : IInformeRepository
                 ON bj.id_bien_juridico = cd.id_bien_juridico
                AND bj.activo = 1
             WHERE s.activo = 1
+            GROUP BY
+                bj.bien_juridico,
+                s.delito_sabana,
+                s.subtipo_delito_sabana,
+                s.modalidad_delito_sabana
         ),
         matriz AS (
             SELECT
@@ -829,7 +838,6 @@ public class InformeRepository : IInformeRepository
                 c.anio_corte,
                 c.mes_corte,
                 TRY_CONVERT(int, efh.clave) AS clave_ent,
-                cd.id_delito AS orden_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
@@ -894,7 +902,6 @@ public class InformeRepository : IInformeRepository
                 c.anio_corte,
                 c.mes_corte,
                 TRY_CONVERT(int, efh.clave),
-                cd.id_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
@@ -940,7 +947,6 @@ public class InformeRepository : IInformeRepository
         LEFT JOIN conteos c
             ON c.anio_corte = m.anio_corte
            AND c.clave_ent = m.clave_ent
-           AND c.orden_delito = m.orden_delito
            AND c.bien_juridico = m.bien_juridico
            AND c.delito_sabana = m.delito_sabana
            AND c.subtipo_delito_sabana = m.subtipo_delito_sabana
@@ -976,8 +982,8 @@ public class InformeRepository : IInformeRepository
     {
         var sql = @"
         WITH sabana AS (
-            SELECT DISTINCT
-                cd.id_delito AS orden_delito,
+            SELECT
+                MIN(cd.id_delito) AS orden_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
@@ -996,6 +1002,11 @@ public class InformeRepository : IInformeRepository
                 ON bj.id_bien_juridico = cd.id_bien_juridico
                AND bj.activo = 1
             WHERE s.activo = 1
+            GROUP BY
+                bj.bien_juridico,
+                s.delito_sabana,
+                s.subtipo_delito_sabana,
+                s.modalidad_delito_sabana
         ),
         matriz_municipal_sin_conteo AS (
             SELECT
@@ -1044,7 +1055,6 @@ public class InformeRepository : IInformeRepository
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 ) AS clave_municipio_compuesta,
                 mun.nombre AS municipio,
-                cd.id_delito AS orden_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
@@ -1129,7 +1139,6 @@ public class InformeRepository : IInformeRepository
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 ),
                 mun.nombre,
-                cd.id_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
