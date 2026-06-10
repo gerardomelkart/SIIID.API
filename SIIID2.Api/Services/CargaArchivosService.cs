@@ -559,7 +559,11 @@ public class CargaArchivosService : ICargaArchivosService
     private void FinalizarRespuesta(CargaValidacionResponse response, int totalCarpetas, int totalDelitos, int totalVictimas)
     {
         // Armamos el resumen que puede alimentar una vista tipo tabla.
-        response.ResumenValidacion = ConstruirResumenValidacion(response.Errores, totalCarpetas, totalDelitos, totalVictimas);
+        response.ResumenValidacion = ConstruirResumenValidacion(
+            response.Errores.Concat(response.Advertencias).ToList(),
+            totalCarpetas,
+            totalDelitos,
+            totalVictimas);
 
         if (response.EsValido && response.Advertencias.Count > 0)
         {

@@ -851,9 +851,16 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     {
         // EsValido es propiedad calculada en CargaValidacionResponse:
         // true si Errores.Count == 0.
-        response.Mensaje = response.EsValido
-            ? "Actualización validada correctamente. Puede generar el acuse previo y confirmar la actualización."
-            : "La actualización contiene errores de validación.";
+        if (response.EsValido && response.Advertencias.Count > 0)
+        {
+            response.Mensaje = "La actualización fue validada con advertencias. Revise las advertencias antes de continuar.";
+        }
+        else
+        {
+            response.Mensaje = response.EsValido
+                ? "Actualización validada correctamente. Puede generar el acuse previo y confirmar la actualización."
+                : "La actualización contiene errores de validación.";
+        }
 
         // Resumen base de registros recibidos.
         response.ResumenValidacion = new List<CargaValidacionResumenItem>
@@ -885,18 +892,27 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         };
 
         // Resumen de errores agrupados por archivo.
-        var erroresPorArchivo = response.Errores
-            .GroupBy(e => string.IsNullOrWhiteSpace(e.Archivo) ? "general" : e.Archivo)
+        var incidenciasPorArchivo = response.Errores
+            .Concat(response.Advertencias)
+            .Where(e =>
+                !string.IsNullOrWhiteSpace(e.Codigo) &&
+                !string.IsNullOrWhiteSpace(e.DescripcionResumen))
+            .GroupBy(e => new
+            {
+                Archivo = string.IsNullOrWhiteSpace(e.Archivo) ? "general" : e.Archivo,
+                e.Codigo,
+                e.DescripcionResumen
+            })
             .Select(g => new CargaValidacionResumenItem
             {
-                Archivo = g.Key,
-                Codigo = "TOTAL_ERRORES",
-                Descripcion = $"Total de errores encontrados en {g.Key}.",
+                Archivo = g.Key.Archivo,
+                Codigo = g.Key.Codigo,
+                Descripcion = g.Key.DescripcionResumen,
                 TotalRegistros = g.Count(),
                 EsError = true
             });
 
-        response.ResumenValidacion.AddRange(erroresPorArchivo);
+        response.ResumenValidacion.AddRange(incidenciasPorArchivo);
     }
 
     private static string GenerarCodigoReferencia()
