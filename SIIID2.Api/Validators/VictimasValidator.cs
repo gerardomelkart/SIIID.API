@@ -440,10 +440,15 @@ public class VictimasValidator : IArchivoCargaValidator
         {
             return;
         }
+        //3 = otro
+        if (idTv == 3)
+        {
+            return;
+        }
 
         // Regla general:
-        // id_tv = 3 Otro permite id_tpm = 5 Otro. y tambien id_tv = 4 No identificado permite id_tpm = 5 Otro.
-        if ((idTv == 3 || idTv == 4) && idTpm == 5)
+        // id_tv = 4 No identificado permite id_tpm = 5 Otro.
+        if (idTv == 4 && idTpm == 5)
         {
             return;
         }
