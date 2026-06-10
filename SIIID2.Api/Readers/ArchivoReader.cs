@@ -120,7 +120,7 @@ public class ArchivoReader : IArchivoReader
                 // GetFormattedString respeta lo que Excel muestra al usuario.
                 // Esto ayuda con fechas/horas que Excel guarda internamente como números.
                 var celda = worksheet.Cell(row, col);
-                var valor = NormalizarValorLeido(columna, ObtenerValorCeldaExcel(celda));
+                var valor = NormalizarValorLeido(columna, ObtenerValorCeldaExcel(columna, celda));
 
                 if (!string.IsNullOrWhiteSpace(valor))
                 {
@@ -138,12 +138,21 @@ public class ArchivoReader : IArchivoReader
         return filas;
     }
 
-    private static string? ObtenerValorCeldaExcel(IXLCell celda)
+    private static string? ObtenerValorCeldaExcel(string columna, IXLCell celda)
     {
         // Si la celda está vacía, no regresamos texto.
         if (celda.IsEmpty())
         {
             return null;
+        }
+
+        // Para clasf_de_dto necesitamos el valor real de la celda.
+        // Si Excel muestra 7.1 pero internamente trae 7.12, aquí recuperamos 7.12.
+        // Si internamente trae 7.10, se conserva como 7.10.
+        if (columna == "clasf_de_dto" && celda.DataType == XLDataType.Number)
+        {
+            var numero = celda.GetDouble();
+            return numero.ToString("0.00", CultureInfo.InvariantCulture);
         }
 
         // Si Excel reconoce la celda como fecha/hora real,
@@ -240,11 +249,20 @@ public class ArchivoReader : IArchivoReader
 
         valor = valor.Trim();
 
-        // Caso específico del catálogo de modalidad del delito:
-        // Excel puede traer 7.1, pero el catálogo lo maneja como 7.10.
-        if (columna == "clasf_de_dto" && valor == "7.1")
+        // Si clasf_de_dto viene como texto simple con un solo punto,
+        // lo formateamos a dos decimales:
+        // 7.1  -> 7.10
+        // 7.12 -> 7.12
+        // 1.03 -> 1.03
+        //
+        // No tocamos claves con más de un punto:
+        // 4.01.02.01 se queda igual.
+        if (columna == "clasf_de_dto" &&
+            valor.Contains('.') &&
+            valor.IndexOf('.') == valor.LastIndexOf('.') &&
+            decimal.TryParse(valor, NumberStyles.Number, CultureInfo.InvariantCulture, out var claveDecimal))
         {
-            return "7.10";
+            return claveDecimal.ToString("0.00", CultureInfo.InvariantCulture);
         }
 
         return valor;
