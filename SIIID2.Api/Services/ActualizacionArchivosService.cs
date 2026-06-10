@@ -227,10 +227,25 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
         if (sinErroresInternos)
         {
-            response.Errores.AddRange(_cargaIntegridadValidator.Validar(
+            var erroresIntegridad = _cargaIntegridadValidator.Validar(
                 filasCarpetas,
                 filasDelitos,
-                filasVictimas));
+                filasVictimas);
+
+            if (usuarioCarga.EsSuperUsuario)
+            {
+                response.Advertencias.AddRange(
+                    erroresIntegridad.Where(error =>
+                        error.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO"));
+
+                response.Errores.AddRange(
+                    erroresIntegridad.Where(error =>
+                        error.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO"));
+            }
+            else
+            {
+                response.Errores.AddRange(erroresIntegridad);
+            }
         }
 
         // Validaciones contra catálogos.
