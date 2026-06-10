@@ -60,8 +60,8 @@ public class ArchivoReader : IArchivoReader
                 {
                     continue;
                 }
-                var valor = csv.GetField(i);
-                fila.Columnas[columna] = string.IsNullOrWhiteSpace(valor) ? null:valor.Trim();
+                var valor = NormalizarValorLeido(columna, csv.GetField(i));
+                fila.Columnas[columna] = valor;
             }
             filas.Add(fila);
         }
@@ -120,14 +120,14 @@ public class ArchivoReader : IArchivoReader
                 // GetFormattedString respeta lo que Excel muestra al usuario.
                 // Esto ayuda con fechas/horas que Excel guarda internamente como números.
                 var celda = worksheet.Cell(row, col);
-                var valor = ObtenerValorCeldaExcel(celda);
+                var valor = NormalizarValorLeido(columna, ObtenerValorCeldaExcel(celda));
 
                 if (!string.IsNullOrWhiteSpace(valor))
                 {
                     filaVacia = false;
                 }
 
-                fila.Columnas[columna] = string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+                fila.Columnas[columna] = valor;
             }
             // No se agregan filas completamente vacías.
             if (!filaVacia) 
@@ -229,5 +229,24 @@ public class ArchivoReader : IArchivoReader
         // 4. Evita dobles guiones bajos y limpia extremos.
         texto = System.Text.RegularExpressions.Regex.Replace(texto, @"_+", "_");
         return texto.Trim('_');
+    }
+
+    private static string? NormalizarValorLeido(string columna, string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor))
+        {
+            return null;
+        }
+
+        valor = valor.Trim();
+
+        // Caso específico del catálogo de modalidad del delito:
+        // Excel puede traer 7.1, pero el catálogo lo maneja como 7.10.
+        if (columna == "clasf_de_dto" && valor == "7.1")
+        {
+            return "7.10";
+        }
+
+        return valor;
     }
 }
