@@ -174,10 +174,25 @@ public class CargaArchivosService : ICargaArchivosService
         // Esto evita errores repetidos o confusos cuando falta estructura básica.
         if (sinErroresInternos)
         {
-            response.Errores.AddRange(_cargaIntegridadValidator.Validar(
+            var erroresIntegridad = _cargaIntegridadValidator.Validar(
                 filasCarpetas,
                 filasDelitos,
-                filasVictimas));
+                filasVictimas);
+
+            if (usuarioCarga.EsSuperUsuario)
+            {
+                var advertenciasFechaHechos = erroresIntegridad
+                    .Where(e => e.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
+                    .ToList();
+
+                response.Advertencias.AddRange(advertenciasFechaHechos);
+
+                erroresIntegridad = erroresIntegridad
+                    .Where(e => e.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
+                    .ToList();
+            }
+
+            response.Errores.AddRange(erroresIntegridad);
         }
 
         // Las validaciones contra catálogos sí pueden ejecutarse aunque existan errores internos.
@@ -375,8 +390,6 @@ public class CargaArchivosService : ICargaArchivosService
         return entidades.First();
     }
 
-
-
     private List<CargaValidacionError> ValidarEntidadUsuarioCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos)
     {
         var errores = new List<CargaValidacionError>();
@@ -548,9 +561,16 @@ public class CargaArchivosService : ICargaArchivosService
         // Armamos el resumen que puede alimentar una vista tipo tabla.
         response.ResumenValidacion = ConstruirResumenValidacion(response.Errores, totalCarpetas, totalDelitos, totalVictimas);
 
-        response.Mensaje = response.EsValido
-            ? "La información fue validada correctamente. Puede continuar con el acuse previo."
-            : "La información contiene errores de validación.";
+        if (response.EsValido && response.Advertencias.Count > 0)
+        {
+            response.Mensaje = "La información fue validada con advertencias. Revise las advertencias antes de continuar.";
+        }
+        else
+        {
+            response.Mensaje = response.EsValido
+                ? "La información fue validada correctamente. Puede continuar con el acuse previo."
+                : "La información contiene errores de validación.";
+        }
     }
 
     private List<CargaValidacionResumenItem> ConstruirResumenValidacion(List<CargaValidacionError> errores, int totalCarpetas, int totalDelitos, int totalVictimas)

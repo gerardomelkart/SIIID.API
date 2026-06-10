@@ -113,7 +113,7 @@ public class VictimasValidator : IArchivoCargaValidator
             }
             else if (idTv == 3 || idTv == 4)
             {
-                ValidarVictimaOtroONoIdentificado(fila, errores);
+                ValidarVictimaOtroONoIdentificado(fila, idTv, errores);
             }
             else
             {
@@ -358,14 +358,14 @@ public class VictimasValidator : IArchivoCargaValidator
             "Persona moral con discapacidad distinta a No aplica");
     }
 
-    private void ValidarVictimaOtroONoIdentificado(ArchivoFila fila, List<CargaValidacionError> errores)
+    private void ValidarVictimaOtroONoIdentificado(ArchivoFila fila, int idTv, List<CargaValidacionError> errores)
     {
         // Para ID_TV = 3 Otro o ID_TV = 4 No identificado,
         // no aplicamos reglas estrictas de persona física ni persona moral.
         // Solo validamos formato si algunos campos vienen llenos.
 
         // ID_TPM puede venir vacío, 0 o 6 No identificada.
-        ValidarIdTpmParaOtroONoIdentificado(fila, errores);
+        ValidarIdTpmParaOtroONoIdentificado(fila, idTv, errores);
 
         ValidarEnteroOpcional(
             fila,
@@ -412,7 +412,7 @@ public class VictimasValidator : IArchivoCargaValidator
             "Edad con formato incorrecto");
     }
 
-    private void ValidarIdTpmParaOtroONoIdentificado(ArchivoFila fila, List<CargaValidacionError> errores)
+    private void ValidarIdTpmParaOtroONoIdentificado(ArchivoFila fila, int idTv, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, "id_tpm");
 
@@ -420,7 +420,7 @@ public class VictimasValidator : IArchivoCargaValidator
         if (EsValorVacioOCero(valor))
         {
             return;
-        }   
+        }
 
         if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idTpm))
         {
@@ -436,12 +436,17 @@ public class VictimasValidator : IArchivoCargaValidator
         }
 
         // 6 = No identificada.
-        // Para tipo de víctima Otro o No identificado, permitimos ID_TPM = 6.
         if (idTpm == 6)
         {
             return;
+        }
 
-        }   
+        // Regla general:
+        // id_tv = 3 Otro permite id_tpm = 5 Otro. y tambien id_tv = 4 No identificado permite id_tpm = 5 Otro.
+        if ((idTv == 3 || idTv == 4) && idTpm == 5)
+        {
+            return;
+        }
 
         AgregarError(
             errores,
@@ -449,7 +454,7 @@ public class VictimasValidator : IArchivoCargaValidator
             "id_tpm",
             "VICTIMAS_ID_TPM_NO_APLICA",
             "Tipo de persona moral no aplica para este tipo de víctima",
-            "Para tipo de víctima Otro o No identificado, id_tpm debe venir vacío, 0 o 6 No identificada.");
+            "Para tipo de víctima Otro, id_tpm puede venir vacío, 0, 5 Otro o 6 No identificada. Para tipo de víctima No identificado, id_tpm debe venir vacío, 0 o 6 No identificada.");
     }
 
     private void ValidarTextoObligatorio(ArchivoFila fila, string columna, List<CargaValidacionError> errores, int longitudMaxima, string codigo, string descripcionResumen)
