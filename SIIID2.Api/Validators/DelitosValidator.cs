@@ -137,7 +137,8 @@ public class DelitosValidator : IArchivoCargaValidator
                 "Clave de clasificación del delito sin información");
 
             // Fecha y hora de hechos.
-            ValidarFechaHechosObligatoria(fila, "fha_de_hchos", errores);
+            // La fecha de hechos puede venir vacía; si viene informada, debe ser válida.
+            ValidarFechaHechosOpcional(fila, "fha_de_hchos", errores);
 
             // La hora puede venir vacía, pero si viene debe ser válida.
             ValidarHoraOpcional(fila, "hra_de_hchos", errores);
@@ -383,19 +384,13 @@ public class DelitosValidator : IArchivoCargaValidator
         // Si llegó aquí, el CP tiene 5 dígitos y es utilizable.
     }
 
-    private void ValidarFechaHechosObligatoria(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
+    private void ValidarFechaHechosOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
+
+        // La fecha de hechos puede venir vacía.
         if (string.IsNullOrWhiteSpace(valor))
         {
-            AgregarError(
-                errores,
-                fila,
-                columna,
-                "DELITOS_FHA_DE_HCHOS_SIN_INFORMACION",
-                "Fecha de hechos sin información",
-                $"El campo {columna} es obligatorio.");
-
             return;
         }
 

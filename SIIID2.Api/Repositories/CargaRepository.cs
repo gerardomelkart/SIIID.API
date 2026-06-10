@@ -27,16 +27,6 @@ public class CargaRepository : ICargaRepository
         _dbConnectionFactory = dbConnectionFactory;
     }
 
-    private static string ValorTextoStaging(object? valor)
-    {
-        if (valor == null || valor == DBNull.Value)
-        {
-            return string.Empty;
-        }
-
-        return valor.ToString()?.Trim() ?? string.Empty;
-    }
-
     public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
     {
         // Este método guarda todo el intento de carga en una sola transacción.
@@ -677,6 +667,13 @@ public class CargaRepository : ICargaRepository
     {
         fila.Columnas.TryGetValue(columna, out var valor);
         return valor;
+    }
+
+    private static string ValorTextoStaging(string? valor)
+    {
+        return string.IsNullOrWhiteSpace(valor)
+            ? string.Empty
+            : valor.Trim();
     }
 
     private async Task InsertarCarpetasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioRegistro)
