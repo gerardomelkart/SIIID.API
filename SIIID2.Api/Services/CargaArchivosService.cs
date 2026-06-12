@@ -726,4 +726,127 @@ public class CargaArchivosService : ICargaArchivosService
 
         return new string(caracteres).Normalize(NormalizationForm.FormC);
     }
+
+    public async Task<ConfirmarCargaResponse> CargarMigracionDirectaAsync(IFormCollection form, int idUsuarioCarga)
+    {
+        // Endpoint exclusivo para migración histórica.
+        // Usa el usuario autenticado como usuario de carga, registro y confirmación.
+        // No ejecuta validaciones de negocio ni requiere confirmación posterior.
+
+        var usuarioCarga = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioCarga);
+
+        if (usuarioCarga == null)
+        {
+            return new ConfirmarCargaResponse
+            {
+                EsValido = false,
+                Estado = "USUARIO_CARGA_INVALIDO",
+                Mensaje = "El usuario autenticado no existe o no está activo."
+            };
+        }
+
+        if (!usuarioCarga.HabilitaCarga)
+        {
+            return new ConfirmarCargaResponse
+            {
+                EsValido = false,
+                Estado = "USUARIO_SIN_PERMISO_CARGA",
+                Mensaje = "El usuario autenticado no tiene habilitada la carga de información."
+            };
+        }
+
+        if (!usuarioCarga.IdEntidadFederativa.HasValue)
+        {
+            return new ConfirmarCargaResponse
+            {
+                EsValido = false,
+                Estado = "USUARIO_SIN_ENTIDAD",
+                Mensaje = "El usuario autenticado no tiene una entidad federativa asignada."
+            };
+        }
+
+        if (!TryObtenerEnteroForm(form, "mesCorte", out var mesCorte) || mesCorte < 1 || mesCorte > 12)
+        {
+            return new ConfirmarCargaResponse
+            {
+                EsValido = false,
+                Estado = "SOLICITUD_INVALIDA",
+                Mensaje = "Debe enviar mesCorte como número entre 1 y 12."
+            };
+        }
+
+        if (!TryObtenerEnteroForm(form, "anioCorte", out var anioCorte) || anioCorte < 2000 || anioCorte > 2100)
+        {
+            return new ConfirmarCargaResponse
+            {
+                EsValido = false,
+                Estado = "SOLICITUD_INVALIDA",
+                Mensaje = "Debe enviar anioCorte como año válido."
+            };
+        }
+
+        var archivos = form.Files;
+
+        if (archivos == null || archivos.Count == 0)
+        {
+            return new ConfirmarCargaResponse
+            {
+                EsValido = false,
+                Estado = "SOLICITUD_INVALIDA",
+                Mensaje = "Debe enviar los archivos de carpetas, delitos y víctimas."
+            };
+        }
+
+        var listaArchivos = archivos.ToList();
+
+        var archivoCarpetas = BuscarArchivoPorNombre(listaArchivos, "carpeta");
+        var archivoDelitos = BuscarArchivoPorNombre(listaArchivos, "delito");
+        var archivoVictimas = BuscarArchivoPorNombre(listaArchivos, "victima");
+
+        if (archivoCarpetas == null || archivoDelitos == null || archivoVictimas == null)
+        {
+            return new ConfirmarCargaResponse
+            {
+                EsValido = false,
+                Estado = "SOLICITUD_INVALIDA",
+                Mensaje = "Debe enviar un archivo de carpetas, uno de delitos y uno de víctimas. Los nombres deben contener carpeta, delito y victima."
+            };
+        }
+
+        // Solo lectura. No se ejecutan validadores de estructura, catálogo, integridad,
+        // entidad del Excel, periodo confirmado ni carga pendiente.
+        var filasCarpetas = await _archivoReader.LeerAsync(archivoCarpetas);
+        var filasDelitos = await _archivoReader.LeerAsync(archivoDelitos);
+        var filasVictimas = await _archivoReader.LeerAsync(archivoVictimas);
+
+        var idEntidadFederativa = usuarioCarga.IdEntidadFederativa.Value;
+
+        var codigoReferencia =
+            $"MIGRACION-{idEntidadFederativa}-{anioCorte}{mesCorte:00}-{DateTime.Now:yyyyMMddHHmmss}";
+
+        return await _cargaRepository.GuardarYConfirmarCargaDirectaAsync(
+            idUsuarioCarga,
+            idEntidadFederativa,
+            codigoReferencia,
+            mesCorte,
+            anioCorte,
+            filasCarpetas,
+            filasDelitos,
+            filasVictimas);
+    }
+
+    private static bool TryObtenerEnteroForm(IFormCollection form, string campo, out int valor)
+    {
+        valor = 0;
+
+        var texto = form.TryGetValue(campo, out var values)
+            ? values.FirstOrDefault()
+            : null;
+
+        return int.TryParse(
+            texto,
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out valor);
+    }
 }

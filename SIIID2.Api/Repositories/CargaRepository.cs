@@ -1107,4 +1107,92 @@ public class CargaRepository : ICargaRepository
             _ => string.Empty
         };
     }
+
+    public async Task<ConfirmarCargaResponse> GuardarYConfirmarCargaDirectaAsync(int idUsuarioCarga, int idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    {
+        // Carga directa para migración:
+        // - Usa el usuario autenticado como usuario de carga, registro y confirmación.
+        // - No ejecuta validaciones de negocio.
+        // - No espera confirmación posterior.
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+
+        await connection.OpenAsync();
+
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var idCarga = await CrearCargaAsync(
+                connection,
+                transaction,
+                idUsuarioCarga,
+                idEntidadFederativa,
+                codigoReferencia,
+                tipoCarga: "CARGA_INICIAL",
+                mesCorte,
+                anioCorte,
+                filasCarpetas.Count,
+                filasDelitos.Count,
+                filasVictimas.Count,
+                estado: "VALIDADO_PENDIENTE",
+                mensajeError: null);
+
+            await GuardarTmpCarpetasAsync(
+                connection,
+                transaction,
+                idCarga,
+                filasCarpetas);
+
+            await GuardarTmpDelitosAsync(
+                connection,
+                transaction,
+                idCarga,
+                filasDelitos);
+
+            await GuardarTmpVictimasAsync(
+                connection,
+                transaction,
+                idCarga,
+                filasVictimas);
+
+            await InsertarCarpetasFinalesAsync(
+                connection,
+                transaction,
+                idCarga,
+                idUsuarioCarga);
+
+            await InsertarDelitosFinalesAsync(
+                connection,
+                transaction,
+                idCarga,
+                idUsuarioCarga);
+
+            await InsertarVictimasFinalesAsync(
+                connection,
+                transaction,
+                idCarga,
+                idUsuarioCarga);
+
+            await ConfirmarCargaFinalAsync(
+                connection,
+                transaction,
+                idCarga,
+                idUsuarioCarga);
+
+            await transaction.CommitAsync();
+
+            return new ConfirmarCargaResponse
+            {
+                EsValido = true,
+                CodigoReferencia = codigoReferencia,
+                Estado = "CONFIRMADO",
+                Mensaje = "Carga directa de migración confirmada correctamente."
+            };
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
 }

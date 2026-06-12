@@ -9,4 +9,6 @@ public interface ICargaArchivosService
     // Valida los archivos recibidos y registra el intento de carga.
     // El idUsuarioCarga viene del Bearer Token, no del form-data.
     Task<CargaValidacionResponse> ValidarArchivosAsync(IFormCollection form, int idUsuarioCarga);
+
+    Task<ConfirmarCargaResponse> CargarMigracionDirectaAsync(IFormCollection form, int idUsuarioCarga);
 }

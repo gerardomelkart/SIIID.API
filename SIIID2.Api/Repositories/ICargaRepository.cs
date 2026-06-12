@@ -31,4 +31,6 @@ public interface ICargaRepository
     Task<string?> ObtenerCodigoActualizacionPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
 
     Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idEntidadFederativa);
+
+    Task<ConfirmarCargaResponse> GuardarYConfirmarCargaDirectaAsync(int idUsuarioCarga, int idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas);
 }
