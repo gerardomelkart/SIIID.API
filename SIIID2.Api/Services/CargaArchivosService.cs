@@ -170,6 +170,8 @@ public class CargaArchivosService : ICargaArchivosService
         // Guardamos si las validaciones internas pasaron limpias.
         var sinErroresInternos = response.Errores.Count == 0;
 
+        var advertenciasPendientes = new List<CargaValidacionError>();
+
         // Las validaciones cruzadas se ejecutan solo si las validaciones internas pasaron.
         // Esto evita errores repetidos o confusos cuando falta estructura básica.
         if (sinErroresInternos)
@@ -185,7 +187,7 @@ public class CargaArchivosService : ICargaArchivosService
                     .Where(e => e.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
                     .ToList();
 
-                response.Advertencias.AddRange(advertenciasFechaHechos);
+                advertenciasPendientes.AddRange(advertenciasFechaHechos);
 
                 erroresIntegridad = erroresIntegridad
                     .Where(e => e.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
@@ -201,6 +203,15 @@ public class CargaArchivosService : ICargaArchivosService
             filasCarpetas,
             filasDelitos,
             filasVictimas));
+
+        if (response.Errores.Count == 0)
+        {
+            response.Advertencias.AddRange(advertenciasPendientes);
+
+            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(
+                filasDelitos,
+                filasVictimas));
+        }
 
         // El mes/año de corte corresponde al periodo de información reportado.
         // Ejemplo:

@@ -492,8 +492,8 @@ public class CargaRepository : ICargaRepository
                 {
                     EsValido = true,
                     CodigoReferencia = codigoReferencia,
-                    Estado = "RECHAZADO_USUARIO",
-                    Mensaje = "La carga fue rechazada por el usuario."
+                    Estado = "RECHAZADO_VALIDACION",
+                    Mensaje = "La carga fue rechazada por validación."
                 };
             }
 
@@ -611,27 +611,28 @@ public class CargaRepository : ICargaRepository
     private async Task RechazarCargaAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
     {
         var sql = @"
-        UPDATE carga
-        SET estado = 'RECHAZADO_USUARIO',
-            fecha_confirmacion = SYSDATETIME(),
-            id_usuario_confirmacion = @IdUsuarioConfirmacion
-        WHERE id_carga = @IdCarga;
+                UPDATE carga
+                SET estado = 'RECHAZADO_VALIDACION',
+                    fecha_confirmacion = SYSDATETIME(),
+                    id_usuario_confirmacion = @IdUsuarioConfirmacion,
+                    mensaje_error = 'La carga fue rechazada por el usuario después de revisar advertencias de validación.'
+                WHERE id_carga = @IdCarga;
 
-        UPDATE carga_tmp_carpeta
-        SET estado = 'RECHAZADO_USUARIO',
-            fecha_procesamiento = SYSDATETIME()
-        WHERE id_carga = @IdCarga;
+                UPDATE carga_tmp_carpeta
+                SET estado = 'RECHAZADO_VALIDACION',
+                    fecha_procesamiento = SYSDATETIME()
+                WHERE id_carga = @IdCarga;
 
-        UPDATE carga_tmp_delito
-        SET estado = 'RECHAZADO_USUARIO',
-            fecha_procesamiento = SYSDATETIME()
-        WHERE id_carga = @IdCarga;
+                UPDATE carga_tmp_delito
+                SET estado = 'RECHAZADO_VALIDACION',
+                    fecha_procesamiento = SYSDATETIME()
+                WHERE id_carga = @IdCarga;
 
-        UPDATE carga_tmp_victima
-        SET estado = 'RECHAZADO_USUARIO',
-            fecha_procesamiento = SYSDATETIME()
-        WHERE id_carga = @IdCarga;
-    ";
+                UPDATE carga_tmp_victima
+                SET estado = 'RECHAZADO_VALIDACION',
+                    fecha_procesamiento = SYSDATETIME()
+                WHERE id_carga = @IdCarga;
+            ";
 
         await connection.ExecuteAsync(
             sql,

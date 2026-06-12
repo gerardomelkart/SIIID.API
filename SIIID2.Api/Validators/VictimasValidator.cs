@@ -102,7 +102,20 @@ public class VictimasValidator : IArchivoCargaValidator
             {
                 continue;
             }
-            
+
+            if (idTv == 2 && TieneVariablesPersonaFisicaInformadas(fila))
+            {
+                AgregarError(
+                    errores,
+                    fila,
+                    "id_tv",
+                    "VICTIMAS_ID_TV_NO_CORRESPONDE_VARIABLES_PERSONA_FISICA",
+                    "Tipo de víctima no corresponde con variables de persona física",
+                    "El tipo de víctima (ID_TV) no corresponde con las variables de persona física (SEXO, GENERO, POB, DISC, FHA_NAC, EDAD y/o NACIONAL).");
+
+                continue;
+            }
+
             if (idTv == 1)
             {
                 ValidarPersonaFisica(fila, errores);
@@ -128,6 +141,38 @@ public class VictimasValidator : IArchivoCargaValidator
         }
 
         return errores;
+    }
+
+    private bool TieneVariablesPersonaFisicaInformadas(ArchivoFila fila)
+    {
+        return TieneValorPersonaFisica(fila, "sexo") ||
+               TieneValorPersonaFisica(fila, "genero") ||
+               TieneValorPersonaFisica(fila, "fha_nac") ||
+               TieneValorPersonaFisica(fila, "edad") ||
+               TieneValorPersonaFisica(fila, "nacional") ||
+               TieneValorPersonaFisica(fila, "pob", aceptaNoAplica: true) ||
+               TieneValorPersonaFisica(fila, "disc", aceptaNoAplica: true);
+    }
+
+    private bool TieneValorPersonaFisica(ArchivoFila fila, string columna, bool aceptaNoAplica = false)
+    {
+        var valor = ObtenerValor(fila, columna);
+
+        if (EsValorVacioOCero(valor))
+        {
+            return false;
+        }
+
+        valor = valor!.Trim();
+
+        // Para POB y DISC, 4 representa No aplica.
+        // No debe contarse como dato de persona física en una persona moral.
+        if (aceptaNoAplica && valor == "4")
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private void ValidarColumnasObligatorias(List<ArchivoFila> filas, List<CargaValidacionError> errores)

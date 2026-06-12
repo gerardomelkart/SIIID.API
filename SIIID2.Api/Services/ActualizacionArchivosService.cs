@@ -225,6 +225,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Esto evita errores secundarios cuando la estructura base del archivo está mal.
         var sinErroresInternos = response.Errores.Count == 0;
 
+        var advertenciasPendientes = new List<CargaValidacionError>();
+
         if (sinErroresInternos)
         {
             var erroresIntegridad = _cargaIntegridadValidator.Validar(
@@ -234,18 +236,18 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
             if (usuarioCarga.EsSuperUsuario)
             {
-                response.Advertencias.AddRange(
-                    erroresIntegridad.Where(error =>
-                        error.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO"));
+                var advertenciasFechaHechos = erroresIntegridad
+                    .Where(error => error.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
+                    .ToList();
 
-                response.Errores.AddRange(
-                    erroresIntegridad.Where(error =>
-                        error.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO"));
+                advertenciasPendientes.AddRange(advertenciasFechaHechos);
+
+                erroresIntegridad = erroresIntegridad
+                    .Where(error => error.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
+                    .ToList();
             }
-            else
-            {
-                response.Errores.AddRange(erroresIntegridad);
-            }
+
+            response.Errores.AddRange(erroresIntegridad);
         }
 
         // Validaciones contra catálogos.
@@ -254,6 +256,15 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             filasCarpetas,
             filasDelitos,
             filasVictimas));
+
+        if (response.Errores.Count == 0)
+        {
+            response.Advertencias.AddRange(advertenciasPendientes);
+
+            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(
+                filasDelitos,
+                filasVictimas));
+        }
 
         // Obtenemos la entidad real de la actualización.
         // Para usuario normal viene de su usuario.

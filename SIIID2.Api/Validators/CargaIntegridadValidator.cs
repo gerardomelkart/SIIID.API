@@ -23,6 +23,13 @@ public class CargaIntegridadValidator
         public string? FechaHechos { get; set; }
         public string? HoraHechos { get; set; }
         public string? IdVicf { get; set; }
+
+        // Delitos
+        public string? ClasfDeDto { get; set; }
+        public string? GrdoCons { get; set; }
+
+        // Víctimas
+        public string? Sexo { get; set; }
     }
 
     public List<CargaValidacionError> Validar(List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
@@ -59,7 +66,9 @@ public class CargaIntegridadValidator
                 IdCi = ObtenerValor(f, "id_ci")?.Trim(),
                 IdDelito = ObtenerValor(f, "id_delito")?.Trim(),
                 FechaHechos = ObtenerValor(f, "fha_de_hchos"),
-                HoraHechos = ObtenerValor(f, "hra_de_hchos")
+                HoraHechos = ObtenerValor(f, "hra_de_hchos"),
+                ClasfDeDto = ObtenerValor(f, "clasf_de_dto")?.Trim(),
+                GrdoCons = ObtenerValor(f, "grdo_cons")?.Trim()
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.IdCi))
             .ToList();
@@ -71,7 +80,8 @@ public class CargaIntegridadValidator
                 Fila = f,
                 IdCi = ObtenerValor(f, "id_ci")?.Trim(),
                 IdDelito = ObtenerValor(f, "id_delito")?.Trim(),
-                IdVicf = ObtenerValor(f, "id_vicf")?.Trim()
+                IdVicf = ObtenerValor(f, "id_vicf")?.Trim(),
+                Sexo = ObtenerValor(f, "sexo")?.Trim()
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.IdCi))
             .ToList();
@@ -96,6 +106,18 @@ public class CargaIntegridadValidator
             .Select(x => CrearLlaveDelito(x.IdCi!, x.IdDelito!))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        var delitosPorLlave = delitosPorIdCi
+            .Where(x =>
+                !string.IsNullOrWhiteSpace(x.IdCi) &&
+                !string.IsNullOrWhiteSpace(x.IdDelito))
+            .GroupBy(
+                x => CrearLlaveDelito(x.IdCi!, x.IdDelito!),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.First(),
+                StringComparer.OrdinalIgnoreCase);
+
         var llavesVictimas = victimasPorIdCi
             .Where(x =>
                 !string.IsNullOrWhiteSpace(x.IdCi) &&
@@ -113,9 +135,144 @@ public class CargaIntegridadValidator
         ValidarDelitosConVictimas(delitosPorIdCi, llavesVictimas, errores);
         // Regla: cada víctima debe apuntar a una carpeta y a un delito existentes.
         ValidarVictimasContraCarpetasYDelitos(victimasPorIdCi, idsCarpetas, llavesDelitos, errores);
+        // Regla bloqueante: feminicidio no puede venir con sexo no identificado.
+        ValidarFeminicidioSexoNoIdentificado(victimasPorIdCi, delitosPorLlave, errores);
         // Regla: fecha de hechos no puede ser mayor que fecha de inicio.
         ValidarFechasHechosContraFechaInicio(delitosPorIdCi, carpetasPorIdCi, errores);
         return errores;
+    }
+
+    private void ValidarFeminicidioSexoHombre(List<RegistroIntegridad> victimas, Dictionary<string, RegistroIntegridad> delitosPorLlave, List<CargaValidacionError> advertencias)
+    {
+        foreach (var victima in victimas)
+        {
+            if (!TryObtenerDelitoFeminicidioAplicable(victima, delitosPorLlave, out _))
+            {
+                continue;
+            }
+
+            if (victima.Sexo?.Trim() != "1")
+            {
+                continue;
+            }
+
+            AgregarError(
+                advertencias,
+                "victimas",
+                victima.Fila,
+                "sexo",
+                "INTEGRIDAD_FEMINICIDIO_SEXO_HOMBRE_ADVERTENCIA",
+                "Feminicidio con sexo hombre",
+                "Se registraron feminicidios con sexo hombre, ¿Se trata de transfeminicidios?");
+        }
+    }
+
+    private void ValidarFeminicidioSexoNoIdentificado(List<RegistroIntegridad> victimas, Dictionary<string, RegistroIntegridad> delitosPorLlave, List<CargaValidacionError> errores)
+    {
+        foreach (var victima in victimas)
+        {
+            if (!TryObtenerDelitoFeminicidioAplicable(victima, delitosPorLlave, out _))
+            {
+                continue;
+            }
+
+            if (victima.Sexo?.Trim() != "3")
+            {
+                continue;
+            }
+
+            AgregarError(
+                errores,
+                "victimas",
+                victima.Fila,
+                "sexo",
+                "INTEGRIDAD_FEMINICIDIO_SEXO_NO_IDENTIFICADO",
+                "Feminicidio con sexo no identificado",
+                "Se registraron feminicidios con sexo no identificado.");
+        }
+    }
+
+    private static bool TryObtenerDelitoFeminicidioAplicable(RegistroIntegridad victima, Dictionary<string, RegistroIntegridad> delitosPorLlave, out RegistroIntegridad delito)
+    {
+        delito = null!;
+
+        var idCi = victima.IdCi;
+        var idDelito = victima.IdDelito;
+
+        if (string.IsNullOrWhiteSpace(idCi) || string.IsNullOrWhiteSpace(idDelito))
+        {
+            return false;
+        }
+
+        var llaveDelito = CrearLlaveDelito(idCi, idDelito);
+
+        if (!delitosPorLlave.TryGetValue(llaveDelito, out var delitoEncontrado))
+        {
+            return false;
+        }
+
+        if (!string.Equals(delitoEncontrado.ClasfDeDto?.Trim(), "1.03", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!int.TryParse(
+                delitoEncontrado.GrdoCons,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var gradoConsumacion))
+        {
+            return false;
+        }
+
+        if (gradoConsumacion is not (1 or 2 or 3))
+        {
+            return false;
+        }
+
+        delito = delitoEncontrado;
+        return true;
+    }
+
+    public List<CargaValidacionError> ValidarAdvertencias(List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    {
+        var advertencias = new List<CargaValidacionError>();
+
+        var delitosPorLlave = filasDelitos
+            .Select(f => new RegistroIntegridad
+            {
+                Fila = f,
+                IdCi = ObtenerValor(f, "id_ci")?.Trim(),
+                IdDelito = ObtenerValor(f, "id_delito")?.Trim(),
+                ClasfDeDto = ObtenerValor(f, "clasf_de_dto")?.Trim(),
+                GrdoCons = ObtenerValor(f, "grdo_cons")?.Trim()
+            })
+            .Where(x =>
+                !string.IsNullOrWhiteSpace(x.IdCi) &&
+                !string.IsNullOrWhiteSpace(x.IdDelito))
+            .GroupBy(
+                x => CrearLlaveDelito(x.IdCi!, x.IdDelito!),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.First(),
+                StringComparer.OrdinalIgnoreCase);
+
+        var victimas = filasVictimas
+            .Select(f => new RegistroIntegridad
+            {
+                Fila = f,
+                IdCi = ObtenerValor(f, "id_ci")?.Trim(),
+                IdDelito = ObtenerValor(f, "id_delito")?.Trim(),
+                IdVicf = ObtenerValor(f, "id_vicf")?.Trim(),
+                Sexo = ObtenerValor(f, "sexo")?.Trim()
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x.IdCi))
+            .ToList();
+
+        ValidarFeminicidioSexoHombre(victimas, delitosPorLlave, advertencias);
+
+        return advertencias;
     }
 
     private void ValidarConteoDelitosVictimas(List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas, List<CargaValidacionError> errores)
