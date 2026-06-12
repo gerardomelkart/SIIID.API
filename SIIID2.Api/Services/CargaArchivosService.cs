@@ -204,14 +204,6 @@ public class CargaArchivosService : ICargaArchivosService
             filasDelitos,
             filasVictimas));
 
-        if (response.Errores.Count == 0)
-        {
-            response.Advertencias.AddRange(advertenciasPendientes);
-
-            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(
-                filasDelitos,
-                filasVictimas));
-        }
 
         // El mes/año de corte corresponde al periodo de información reportado.
         // Ejemplo:
@@ -275,6 +267,17 @@ public class CargaArchivosService : ICargaArchivosService
                     });
                 }
             }
+        }
+
+        // Si no hay errores después de TODAS las validaciones,
+        // ahora sí agregamos advertencias de decisión.
+        if (response.Errores.Count == 0)
+        {
+            response.Advertencias.AddRange(advertenciasPendientes);
+
+            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(
+                filasDelitos,
+                filasVictimas));
         }
 
         // Construimos resumen y mensaje final.

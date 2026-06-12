@@ -257,15 +257,6 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             filasDelitos,
             filasVictimas));
 
-        if (response.Errores.Count == 0)
-        {
-            response.Advertencias.AddRange(advertenciasPendientes);
-
-            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(
-                filasDelitos,
-                filasVictimas));
-        }
-
         // Obtenemos la entidad real de la actualización.
         // Para usuario normal viene de su usuario.
         // Para SUPER_USUARIO se toma del archivo de delitos.
@@ -320,6 +311,15 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                     });
                 }
             }
+        }
+
+        if (response.Errores.Count == 0)
+        {
+            response.Advertencias.AddRange(advertenciasPendientes);
+
+            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(
+                filasDelitos,
+                filasVictimas));
         }
 
         // Construimos resumen y mensaje final.

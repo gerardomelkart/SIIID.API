@@ -142,8 +142,8 @@ public class ActualizacionRepository : IActualizacionRepository
                 {
                     EsValido = true,
                     CodigoReferencia = codigoReferencia,
-                    Estado = "RECHAZADO_USUARIO_ACTUALIZACION",
-                    Mensaje = "La actualización fue rechazada por el usuario."
+                    Estado = "RECHAZADO_VALIDACION_ACTUALIZACION",
+                    Mensaje = "La actualización fue rechazada por validación."
                 };
             }
 
@@ -217,23 +217,24 @@ public class ActualizacionRepository : IActualizacionRepository
     {
         var sql = @"
         UPDATE carga
-        SET estado = 'RECHAZADO_USUARIO_ACTUALIZACION',
+        SET estado = 'RECHAZADO_VALIDACION_ACTUALIZACION',
             fecha_confirmacion = SYSDATETIME(),
-            id_usuario_confirmacion = @IdUsuarioConfirmacion
+            id_usuario_confirmacion = @IdUsuarioConfirmacion,
+            mensaje_error = 'La actualización fue rechazada por el usuario después de revisar advertencias de validación.'
         WHERE id_carga = @IdCarga;
 
         UPDATE carga_tmp_carpeta
-        SET estado = 'RECHAZADO_USUARIO_ACTUALIZACION',
+        SET estado = 'RECHAZADO_VALIDACION_ACTUALIZACION',
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
 
         UPDATE carga_tmp_delito
-        SET estado = 'RECHAZADO_USUARIO_ACTUALIZACION',
+        SET estado = 'RECHAZADO_VALIDACION_ACTUALIZACION',
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
 
         UPDATE carga_tmp_victima
-        SET estado = 'RECHAZADO_USUARIO_ACTUALIZACION',
+        SET estado = 'RECHAZADO_VALIDACION_ACTUALIZACION',
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
