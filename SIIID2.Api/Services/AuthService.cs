@@ -97,6 +97,7 @@ public class AuthService : IAuthService
             {
                 IdUsuario = usuario.IdUsuario,
                 Usuario = usuario.Usuario,
+                Nombre = usuario.Nombre,
                 NombreCompleto = usuario.NombreCompleto,
                 Rol = usuario.Rol,
                 IdEntidadFederativa = usuario.IdEntidadFederativa,
