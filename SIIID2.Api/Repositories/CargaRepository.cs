@@ -1044,16 +1044,6 @@ public class CargaRepository : ICargaRepository
           AND c.tipo_carga = 'CARGA_INICIAL'
           AND c.estado = 'CONFIRMADO'
           AND c.activo = 1
-          AND NOT EXISTS (
-              SELECT 1
-              FROM carga ca
-              WHERE ca.id_entidad_federativa = c.id_entidad_federativa
-                AND ca.mes_corte = c.mes_corte
-                AND ca.anio_corte = c.anio_corte
-                AND ca.tipo_carga = 'ACTUALIZACION'
-                AND ca.estado = 'VALIDADO_PENDIENTE_ACTUALIZACION'
-                AND ca.activo = 1
-          )
         GROUP BY
             c.anio_corte,
             c.mes_corte
