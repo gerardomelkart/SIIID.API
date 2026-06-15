@@ -53,6 +53,7 @@ public class UsuarioRepository : IUsuarioRepository
                 u.id_usuario AS IdUsuario,
                 u.usuario AS Usuario,
                 u.password AS PasswordHash,
+                u.requiere_cambio_password AS RequiereCambioPassword,
                 u.nombre AS Nombre,
                 u.primer_apellido AS PrimerApellido,
                 u.segundo_apellido AS SegundoApellido,
@@ -285,43 +286,45 @@ public class UsuarioRepository : IUsuarioRepository
         try
         {
             var sqlUsuario = @"
-                INSERT INTO usuario (
-                    usuario,
-                    password,
-                    nombre,
-                    primer_apellido,
-                    segundo_apellido,
-                    correo_electronico,
-                    rfc,
-                    curp,
-                    telefono_contacto,
-                    id_entidad_federativa,
-                    fecha_alta,
-                    fecha_modificacion,
-                    id_usuario_alta,
-                    id_usuario_modificacion,
-                    id_rol,
-                    activo
-                )
-                OUTPUT INSERTED.id_usuario
-                VALUES (
-                    @Usuario,
-                    @Password,
-                    @Nombre,
-                    @PrimerApellido,
-                    @SegundoApellido,
-                    @CorreoElectronico,
-                    @Rfc,
-                    @Curp,
-                    @TelefonoContacto,
-                    @IdEntidadFederativa,
-                    SYSDATETIME(),
-                    SYSDATETIME(),
-                    @IdUsuarioAlta,
-                    @IdUsuarioAlta,
-                    @IdRol,
-                    1
-                );
+                            INSERT INTO usuario (
+                                usuario,
+                                password,
+                                requiere_cambio_password,
+                                nombre,
+                                primer_apellido,
+                                segundo_apellido,
+                                correo_electronico,
+                                rfc,
+                                curp,
+                                telefono_contacto,
+                                id_entidad_federativa,
+                                fecha_alta,
+                                fecha_modificacion,
+                                id_usuario_alta,
+                                id_usuario_modificacion,
+                                id_rol,
+                                activo
+                            )
+                            OUTPUT INSERTED.id_usuario
+                            VALUES (
+                                @Usuario,
+                                @Password,
+                                1,
+                                @Nombre,
+                                @PrimerApellido,
+                                @SegundoApellido,
+                                @CorreoElectronico,
+                                @Rfc,
+                                @Curp,
+                                @TelefonoContacto,
+                                @IdEntidadFederativa,
+                                SYSDATETIME(),
+                                SYSDATETIME(),
+                                @IdUsuarioAlta,
+                                @IdUsuarioAlta,
+                                @IdRol,
+                                1
+                            );
             ";
 
             var idUsuario = await connection.ExecuteScalarAsync<int>(
@@ -493,9 +496,15 @@ public class UsuarioRepository : IUsuarioRepository
                 id_rol = @IdRol,
                 fecha_modificacion = SYSDATETIME(),
                 id_usuario_modificacion = @IdUsuarioModificacion,
+
                 password = CASE
                     WHEN @PasswordHash IS NULL THEN password
                     ELSE @PasswordHash
+                END,
+
+                requiere_cambio_password = CASE
+                    WHEN @PasswordHash IS NULL THEN requiere_cambio_password
+                    ELSE 1
                 END
             WHERE id_usuario = @IdUsuario
               AND activo = 1;
@@ -751,5 +760,71 @@ public class UsuarioRepository : IUsuarioRepository
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    public async Task<UsuarioPasswordInfo?> ObtenerUsuarioPasswordAsync(int idUsuario)
+    {
+        var sql = @"
+        SELECT
+            id_usuario AS IdUsuario,
+            password AS PasswordHash,
+            requiere_cambio_password AS RequiereCambioPassword
+        FROM usuario
+        WHERE id_usuario = @IdUsuario
+          AND activo = 1;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.QueryFirstOrDefaultAsync<UsuarioPasswordInfo>(
+            sql,
+            new
+            {
+                IdUsuario = idUsuario
+            });
+    }
+
+    public async Task<bool?> ObtenerRequiereCambioPasswordAsync(int idUsuario)
+    {
+        var sql = @"
+        SELECT requiere_cambio_password
+        FROM usuario
+        WHERE id_usuario = @IdUsuario
+          AND activo = 1;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.QueryFirstOrDefaultAsync<bool?>(
+            sql,
+            new
+            {
+                IdUsuario = idUsuario
+            });
+    }
+
+    public async Task<bool> ActualizarPasswordPropioAsync(int idUsuario, string passwordHash)
+    {
+        var sql = @"
+        UPDATE usuario
+        SET password = @PasswordHash,
+            requiere_cambio_password = 0,
+            fecha_modificacion = SYSDATETIME(),
+            id_usuario_modificacion = @IdUsuario
+        WHERE id_usuario = @IdUsuario
+          AND activo = 1;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var registrosAfectados = await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdUsuario = idUsuario,
+                PasswordHash = passwordHash
+            });
+
+        return registrosAfectados > 0;
     }
 }

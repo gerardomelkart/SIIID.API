@@ -47,4 +47,13 @@ public interface IUsuarioRepository
 
     // Reactiva usuario y permisos.
     Task ReactivarUsuarioAsync(int idUsuario, ReactivarUsuarioRequest request, int idUsuarioModificacion);
+
+    // Obtiene contraseña y estado de cambio obligatorio de un usuario activo.
+    Task<UsuarioPasswordInfo?> ObtenerUsuarioPasswordAsync(int idUsuario);
+
+    // Obtiene únicamente la bandera para bloquear solicitudes del usuario.
+    Task<bool?> ObtenerRequiereCambioPasswordAsync(int idUsuario);
+
+    // Cambia la contraseña del propio usuario y desactiva la bandera.
+    Task<bool> ActualizarPasswordPropioAsync(int idUsuario, string passwordHash);
 }

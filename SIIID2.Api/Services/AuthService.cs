@@ -102,8 +102,130 @@ public class AuthService : IAuthService
                 IdEntidadFederativa = usuario.IdEntidadFederativa,
                 EntidadFederativa = usuario.EntidadFederativa,
                 HabilitaCarga = usuario.HabilitaCarga,
-                HabilitaModificacion = usuario.HabilitaModificacion
+                HabilitaModificacion = usuario.HabilitaModificacion,
+                RequiereCambioPassword = usuario.RequiereCambioPassword
             }
+        };
+    }
+
+    public async Task<CambiarPasswordResponse> CambiarPasswordAsync(int idUsuario, CambiarPasswordRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.NuevaPassword) ||
+            string.IsNullOrWhiteSpace(request.ConfirmarPassword))
+        {
+            return new CambiarPasswordResponse
+            {
+                EsValido = false,
+                Codigo = "PASSWORD_CAMPOS_OBLIGATORIOS",
+                Mensaje = "Debe capturar y confirmar la nueva contraseña."
+            };
+        }
+
+        if (!string.Equals(
+                request.NuevaPassword,
+                request.ConfirmarPassword,
+                StringComparison.Ordinal))
+        {
+            return new CambiarPasswordResponse
+            {
+                EsValido = false,
+                Codigo = "PASSWORD_CONFIRMACION_NO_COINCIDE",
+                Mensaje = "La confirmación de la contraseña no coincide."
+            };
+        }
+
+        if (request.NuevaPassword.Length < 8)
+        {
+            return new CambiarPasswordResponse
+            {
+                EsValido = false,
+                Codigo = "PASSWORD_CORTO",
+                Mensaje = "La nueva contraseña debe tener al menos 8 caracteres."
+            };
+        }
+
+        var usuario = await _usuarioRepository.ObtenerUsuarioPasswordAsync(idUsuario);
+
+        if (usuario == null)
+        {
+            return new CambiarPasswordResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_EXISTE",
+                Mensaje = "El usuario autenticado no existe o no está activo."
+            };
+        }
+
+        if (!usuario.RequiereCambioPassword)
+        {
+            return new CambiarPasswordResponse
+            {
+                EsValido = false,
+                Codigo = "CAMBIO_PASSWORD_NO_REQUERIDO",
+                Mensaje = "El usuario no tiene un cambio obligatorio de contraseña pendiente."
+            };
+        }
+
+        bool esLaMismaPassword;
+
+        try
+        {
+            esLaMismaPassword = BCrypt.Net.BCrypt.Verify(
+                request.NuevaPassword,
+                usuario.PasswordHash?.Trim() ?? string.Empty);
+        }
+        catch (BCrypt.Net.SaltParseException ex)
+        {
+            _logger.LogError(
+                ex,
+                "El usuario tiene una contraseña almacenada con formato inválido. IdUsuario: {IdUsuario}",
+                idUsuario);
+
+            return new CambiarPasswordResponse
+            {
+                EsValido = false,
+                Codigo = "PASSWORD_ALMACENADO_INVALIDO",
+                Mensaje = "No fue posible actualizar la contraseña."
+            };
+        }
+
+        if (esLaMismaPassword)
+        {
+            return new CambiarPasswordResponse
+            {
+                EsValido = false,
+                Codigo = "PASSWORD_IGUAL_ANTERIOR",
+                Mensaje = "La nueva contraseña debe ser diferente de la contraseña temporal."
+            };
+        }
+
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(
+            request.NuevaPassword,
+            workFactor: 12);
+
+        var actualizado = await _usuarioRepository.ActualizarPasswordPropioAsync(
+            idUsuario,
+            passwordHash);
+
+        if (!actualizado)
+        {
+            return new CambiarPasswordResponse
+            {
+                EsValido = false,
+                Codigo = "PASSWORD_NO_ACTUALIZADO",
+                Mensaje = "No fue posible actualizar la contraseña."
+            };
+        }
+
+        _logger.LogInformation(
+            "Cambio obligatorio de contraseña completado. IdUsuario: {IdUsuario}",
+            idUsuario);
+
+        return new CambiarPasswordResponse
+        {
+            EsValido = true,
+            Codigo = "PASSWORD_ACTUALIZADO",
+            Mensaje = "Contraseña actualizada correctamente."
         };
     }
 

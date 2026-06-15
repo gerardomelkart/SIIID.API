@@ -217,6 +217,9 @@ app.UseHttpsRedirection();
 
 //igual para los tokens
 app.UseAuthentication();
+
+app.UseMiddleware<CambioPasswordObligatorioMiddleware>();
+
 app.UseAuthorization();
 
 // Mapea los controllers, por ejemplo: /api/cargas/validar.
