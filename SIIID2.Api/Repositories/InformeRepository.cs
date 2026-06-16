@@ -272,7 +272,6 @@ public class InformeRepository : IInformeRepository
 
         LEFT JOIN catalogo_codigo_postal cp
             ON cp.id_codigo_postal = d.id_codigo_postal
-            ON cp.id_codigo_postal = d.id_codigo_postal
         WHERE d.activo = 1
         ORDER BY
             ci.identificador_carpeta_fiscalia,
