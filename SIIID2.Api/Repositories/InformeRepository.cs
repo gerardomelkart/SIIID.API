@@ -230,12 +230,18 @@ public class InformeRepository : IInformeRepository
             CONVERT(varchar(10), ic.clave) AS emto_com_dto,
             CONVERT(varchar(10), gc.clave) AS grdo_cons,
             md.clave4 AS clasf_de_dto,
+
+            ef.nombre AS nom_ent_hchos,
             CONVERT(varchar(10), d.id_entidad_federativa) AS id_ent_hchos,
+
+            mun.nombre AS nom_mun_hchos,
             mun.clave AS id_mun_hchos,
-            d.id_localidad_fiscalia AS id_loc_hchos,
+
             d.localidad_fiscalia_nombre AS nom_loc_hchos,
-            d.id_colonia_fiscalia AS id_col_hchos,
+            d.id_localidad_fiscalia AS id_loc_hchos,
+
             d.colonia_fiscalia_nombre AS nom_col_hchos,
+            d.id_colonia_fiscalia AS id_col_hchos,
             cp.codigo_postal AS cp,
             d.coordenada_x AS coord_x,
             d.coordenada_y AS coord_y,
@@ -254,9 +260,18 @@ public class InformeRepository : IInformeRepository
             ON ic.id_instrumento_comision = d.id_instrumento_comision
         INNER JOIN catalogo_grado_consumacion gc
             ON gc.id_grado_consumacion = d.id_grado_consumacion
+
+        INNER JOIN catalogo_entidad_federativa ef
+            ON ef.id_entidad_federativa = d.id_entidad_federativa
+           AND ef.activo = 1
+
         INNER JOIN catalogo_municipio mun
             ON mun.id_municipio = d.id_municipio
+           AND mun.id_entidad_federativa = ef.id_entidad_federativa
+           AND mun.activo = 1
+
         LEFT JOIN catalogo_codigo_postal cp
+            ON cp.id_codigo_postal = d.id_codigo_postal
             ON cp.id_codigo_postal = d.id_codigo_postal
         WHERE d.activo = 1
         ORDER BY
