@@ -387,7 +387,7 @@ public class InformeRepository : IInformeRepository
         // Si no se envían filtros, regresa todos los periodos que tengan intentos.
         // Cada fila representa entidad + mes_corte + anio_corte.
         var sql = @"
-    WITH periodos AS (
+        WITH periodos AS (
         SELECT
             c.id_entidad_federativa,
             c.mes_corte,
@@ -404,8 +404,8 @@ public class InformeRepository : IInformeRepository
             c.id_entidad_federativa,
             c.mes_corte,
             c.anio_corte
-    )
-    SELECT
+        )
+        SELECT
         ef.id_entidad_federativa AS IdEntidadFederativa,
         ef.nombre AS EntidadFederativa,
         ef.clave AS ClaveEntidad,
@@ -416,11 +416,11 @@ public class InformeRepository : IInformeRepository
         ultimo.tipo_carga AS TipoCargaUltimoIntento,
         ultimo.estado AS EstatusUltimoIntento,
         ultimo.fecha_ultimo_movimiento AS FechaUltimaCarga
-    FROM periodos p
-    INNER JOIN catalogo_entidad_federativa ef
+        FROM periodos p
+        INNER JOIN catalogo_entidad_federativa ef
         ON ef.id_entidad_federativa = p.id_entidad_federativa
-       AND ef.activo = 1
-    OUTER APPLY (
+        AND ef.activo = 1
+        OUTER APPLY (
         SELECT TOP 1
             c.codigo_referencia,
             c.tipo_carga,
@@ -443,12 +443,12 @@ public class InformeRepository : IInformeRepository
             END DESC,
             COALESCE(c.fecha_confirmacion, c.fecha_validacion) DESC,
             c.id_carga DESC
-    ) ultimo
-    ORDER BY
+        ) ultimo
+        ORDER BY
         p.anio_corte DESC,
         p.mes_corte DESC,
         ef.nombre;
-";
+        ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
