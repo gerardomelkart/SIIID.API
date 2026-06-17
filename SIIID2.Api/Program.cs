@@ -10,6 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 using SIIID2.Api.Middleware;
 using Serilog;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.HttpOverrides;
 
 // Punto de arranque de la API.
 // Aquí se registran servicios, controladores, Swagger y configuración general.
@@ -199,7 +200,18 @@ static string LimpiarNombreCampoModelo(string campo)
     return campo;
 }
 
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto;
+});
+
 var app = builder.Build();
+
+app.UseForwardedHeaders();
+
 
 // Manejo global de errores no controlados.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
