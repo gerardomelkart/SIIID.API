@@ -42,9 +42,12 @@ public class AcusePdfService : IAcusePdfService
             throw new InvalidOperationException("No se encontró la carga solicitada.");
         }
 
-        if (!string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase))
+        var estadoAcusePrevioPermitido =  string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(carga.Estado,"PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
+
+        if (!estadoAcusePrevioPermitido)
         {
-            throw new InvalidOperationException("El acuse previo solo puede generarse para cargas en estado VALIDADO_PENDIENTE.");
+            throw new InvalidOperationException("El acuse previo solo puede generarse para cargas validadas o pendientes de aprobacion.");
         }
 
         if (!usuarioConsulta.EsSuperUsuario &&
@@ -122,9 +125,12 @@ public class AcusePdfService : IAcusePdfService
             throw new InvalidOperationException("No se encontró la actualización solicitada.");
         }
 
-        if (!string.Equals(carga.Estado, "VALIDADO_PENDIENTE_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
+        var estadoAcusePrevioActualizacionPermitido = string.Equals(carga.Estado, "VALIDADO_PENDIENTE_ACTUALIZACION", StringComparison.OrdinalIgnoreCase)||
+            string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
+
+        if (!estadoAcusePrevioActualizacionPermitido)
         {
-            throw new InvalidOperationException("El acuse previo de actualización solo puede generarse para actualizaciones en estado VALIDADO_PENDIENTE_ACTUALIZACION.");
+            throw new InvalidOperationException("El acuse previo de actualizacion solo puede generarse para actualizaciones validadas o pendientes de aprobacion.");
         }
 
         if (!usuarioConsulta.EsSuperUsuario &&

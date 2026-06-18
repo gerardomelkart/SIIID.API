@@ -95,13 +95,17 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         FROM carga
         WHERE codigo_referencia = @CodigoReferencia
           AND tipo_carga = 'ACTUALIZACION'
-          AND estado = 'VALIDADO_PENDIENTE_ACTUALIZACION'
+          AND estado IN
+            (
+                'VALIDADO_PENDIENTE_ACTUALIZACION',
+                'PENDIENTE_APROBACION'
+            )
           AND activo = 1
           AND (
                 @EsSuperUsuario = 1
                 OR id_entidad_federativa = @IdEntidadFederativaUsuario
               );
-    ";
+        ";
 
         return await connection.QueryFirstOrDefaultAsync<ActualizacionDiferenciasContexto>(sql, new
         {
