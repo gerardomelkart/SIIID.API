@@ -81,6 +81,7 @@ builder.Services.AddScoped<IActualizacionCargaRepository, ActualizacionCargaRepo
 builder.Services.AddScoped<IAcuseRepository, AcuseRepository>();
 builder.Services.AddScoped<IActualizacionDiferenciasRepository, ActualizacionDiferenciasRepository>();
 builder.Services.AddScoped<IActualizacionRepository, ActualizacionRepository>();
+builder.Services.AddScoped<IAdministracionCargasRepository, AdministracionCargasRepository>();
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 
 // Registro del servicio principal de carga.
@@ -101,6 +102,8 @@ builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 //para los informes
 builder.Services.AddScoped<IInformeRepository, InformeRepository>();
 builder.Services.AddScoped<IInformeService, InformeService>();
+
+builder.Services.AddScoped<IAdministracionCargasService, AdministracionCargasService>();
 
 
 

@@ -658,7 +658,7 @@ public class CargaRepository : ICargaRepository
             u.id_entidad_federativa AS IdEntidadFederativaUsuario,
             CASE WHEN r.rol = 'SUPER_USUARIO' THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS EsSuperUsuario,
             ISNULL(h.habilita_carga, 0) AS HabilitaCarga
-        FROM carga c
+        FROM carga c WITH (UPDLOCK, HOLDLOCK)
         INNER JOIN usuario u
             ON u.id_usuario = @IdUsuarioConfirmacion
            AND u.activo = 1
@@ -669,8 +669,9 @@ public class CargaRepository : ICargaRepository
             ON h.id_usuario = u.id_usuario
            AND h.activo = 1
         WHERE c.codigo_referencia = @CodigoReferencia
+          AND c.tipo_carga = 'CARGA_INICIAL'
           AND c.activo = 1;
-    ";
+        ";
 
         return await connection.QueryFirstOrDefaultAsync<CargaConfirmacionInfo>(
             sql,
@@ -1334,5 +1335,261 @@ public class CargaRepository : ICargaRepository
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    public async Task<ConfirmarCargaResponse> AprobarCargaPendienteAsync(string codigoReferencia, int idUsuarioAprobacion)
+    {
+        using var connection =
+            (SqlConnection)_dbConnectionFactory.CrearConexion();
+
+        await connection.OpenAsync();
+
+        using var transaction =
+            (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var carga = await ObtenerCargaConfirmacionAsync(
+                connection,
+                transaction,
+                codigoReferencia,
+                idUsuarioAprobacion);
+
+            if (carga == null)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = "NO_ENCONTRADA",
+                    Mensaje =
+                        "No se encontro la carga pendiente de aprobacion."
+                };
+            }
+
+            if (!carga.EsSuperUsuario)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje =
+                        "Solo un superusuario puede aprobar cargas."
+                };
+            }
+
+            if (!string.Equals(
+                    carga.Estado,
+                    "PENDIENTE_APROBACION",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje =
+                        "La carga ya no se encuentra pendiente de aprobacion."
+                };
+            }
+
+            /*
+                Los registros finales conservan como usuario de registro
+                al enlace estatal que envio la informacion.
+            */
+            await InsertarCarpetasFinalesAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                carga.IdUsuarioCarga);
+
+            await InsertarDelitosFinalesAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                carga.IdUsuarioCarga);
+
+            await InsertarVictimasFinalesAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                carga.IdUsuarioCarga);
+
+            /*
+                La confirmacion sí queda asociada al administrador.
+            */
+            await ConfirmarCargaFinalAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                idUsuarioAprobacion);
+
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                estadoAnterior: "PENDIENTE_APROBACION",
+                estadoNuevo: "CONFIRMADO",
+                idUsuario: idUsuarioAprobacion,
+                comentario:
+                    "La carga fue aprobada por el superusuario.");
+
+            await transaction.CommitAsync();
+
+            return new ConfirmarCargaResponse
+            {
+                EsValido = true,
+                CodigoReferencia = codigoReferencia,
+                Estado = "CONFIRMADO",
+                Mensaje =
+                    "La carga fue aprobada y confirmada correctamente."
+            };
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<ConfirmarCargaResponse> RechazarCargaPendienteAsync(string codigoReferencia, int idUsuarioRechazo, string motivo)
+    {
+        using var connection =
+            (SqlConnection)_dbConnectionFactory.CrearConexion();
+
+        await connection.OpenAsync();
+
+        using var transaction =
+            (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var carga = await ObtenerCargaConfirmacionAsync(
+                connection,
+                transaction,
+                codigoReferencia,
+                idUsuarioRechazo);
+
+            if (carga == null)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = "NO_ENCONTRADA",
+                    Mensaje =
+                        "No se encontro la carga pendiente de aprobacion."
+                };
+            }
+
+            if (!carga.EsSuperUsuario)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje =
+                        "Solo un superusuario puede rechazar cargas."
+                };
+            }
+
+            if (!string.Equals(
+                    carga.Estado,
+                    "PENDIENTE_APROBACION",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje =
+                        "La carga ya no se encuentra pendiente de aprobacion."
+                };
+            }
+
+            await RechazarCargaAdministracionAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                idUsuarioRechazo,
+                motivo);
+
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                estadoAnterior: "PENDIENTE_APROBACION",
+                estadoNuevo: "RECHAZADO_ADMIN",
+                idUsuario: idUsuarioRechazo,
+                comentario: motivo);
+
+            await transaction.CommitAsync();
+
+            return new ConfirmarCargaResponse
+            {
+                EsValido = true,
+                CodigoReferencia = codigoReferencia,
+                Estado = "RECHAZADO_ADMIN",
+                Mensaje =
+                    "La carga fue rechazada por el administrador."
+            };
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    private static async Task RechazarCargaAdministracionAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioRechazo, string motivo)
+    {
+        const string sql = @"
+        UPDATE dbo.carga
+        SET estado = 'RECHAZADO_ADMIN',
+            fecha_confirmacion = SYSDATETIME(),
+            id_usuario_confirmacion = @IdUsuarioRechazo,
+            mensaje_error = @Motivo
+        WHERE id_carga = @IdCarga;
+
+        UPDATE dbo.carga_tmp_carpeta
+        SET estado = 'RECHAZADO_ADMIN',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE dbo.carga_tmp_delito
+        SET estado = 'RECHAZADO_ADMIN',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+
+        UPDATE dbo.carga_tmp_victima
+        SET estado = 'RECHAZADO_ADMIN',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_carga = @IdCarga;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga,
+                IdUsuarioRechazo = idUsuarioRechazo,
+                Motivo = motivo
+            },
+            transaction);
     }
 }

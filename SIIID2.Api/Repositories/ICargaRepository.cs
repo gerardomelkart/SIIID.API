@@ -33,4 +33,8 @@ public interface ICargaRepository
     Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idEntidadFederativa);
 
     Task<ConfirmarCargaResponse> GuardarYConfirmarCargaDirectaAsync(int idUsuarioCarga, int idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas);
+
+    Task<ConfirmarCargaResponse> AprobarCargaPendienteAsync(string codigoReferencia, int idUsuarioAprobacion);
+
+    Task<ConfirmarCargaResponse> RechazarCargaPendienteAsync(string codigoReferencia, int idUsuarioRechazo, string motivo);
 }
