@@ -369,19 +369,20 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // - no hay error bloqueante de periodo sin carga confirmada
         // - no hay actualización pendiente existente
         var idCargaActualizacion = await _actualizacionCargaRepository.GuardarIntentoActualizacionAsync(
-            idUsuarioCarga,
-            idEntidadFederativaCarga,
-            response.CodigoReferencia,
-            mesCorte ?? 0,
-            anioCorte ?? 0,
-            filasCarpetas.Count,
-            filasDelitos.Count,
-            filasVictimas.Count,
-            estadoCarga,
-            mensajeError,
-            filasCarpetas,
-            filasDelitos,
-            filasVictimas);
+                                    idUsuarioCarga,
+                                    idEntidadFederativaCarga,
+                                    response.CodigoReferencia,
+                                    mesCorte ?? 0,
+                                    anioCorte ?? 0,
+                                    filasCarpetas.Count,
+                                    filasDelitos.Count,
+                                    filasVictimas.Count,
+                                    estadoCarga,
+                                    mensajeError,
+                                    response.Advertencias,
+                                    filasCarpetas,
+                                    filasDelitos,
+                                    filasVictimas);
 
         if (response.EsValido)
         {

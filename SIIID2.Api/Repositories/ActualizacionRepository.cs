@@ -19,6 +19,7 @@ public class ActualizacionRepository : IActualizacionRepository
         public int? IdEntidadFederativaUsuario { get; set; }
         public bool EsSuperUsuario { get; set; }
         public bool HabilitaModificacion { get; set; }
+        public int IdUsuarioCarga { get; set; }
     }
 
     private class DuplicadoActivoValidacion
@@ -31,9 +32,7 @@ public class ActualizacionRepository : IActualizacionRepository
     private readonly IDbConnectionFactory _dbConnectionFactory;
     private readonly ILogger<ActualizacionRepository> _logger;
 
-    public ActualizacionRepository(
-        IDbConnectionFactory dbConnectionFactory,
-        ILogger<ActualizacionRepository> logger)
+    public ActualizacionRepository(IDbConnectionFactory dbConnectionFactory,ILogger<ActualizacionRepository> logger)
     {
         _dbConnectionFactory = dbConnectionFactory;
         _logger = logger;
@@ -41,11 +40,13 @@ public class ActualizacionRepository : IActualizacionRepository
 
     public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion)
     {
-        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+        using var connection =
+            (SqlConnection)_dbConnectionFactory.CrearConexion();
 
         await connection.OpenAsync();
 
-        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        using var transaction =
+            (SqlTransaction)await connection.BeginTransactionAsync();
 
         try
         {
@@ -64,11 +65,15 @@ public class ActualizacionRepository : IActualizacionRepository
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = "NO_ENCONTRADA",
-                    Mensaje = "No se encontró una actualización válida para confirmar."
+                    Mensaje =
+                        "No se encontro una actualizacion valida para continuar."
                 };
             }
 
-            if (!string.Equals(carga.Estado, "VALIDADO_PENDIENTE_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(
+                    carga.Estado,
+                    "VALIDADO_PENDIENTE_ACTUALIZACION",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
 
@@ -77,16 +82,42 @@ public class ActualizacionRepository : IActualizacionRepository
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje = "La actualización no se encuentra en estado VALIDADO_PENDIENTE_ACTUALIZACION."
+                    Mensaje =
+                        "La actualizacion no se encuentra en estado VALIDADO_PENDIENTE_ACTUALIZACION."
                 };
             }
 
-            if (carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
+            if (carga.IdUsuarioCarga != idUsuarioConfirmacion)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje =
+                        "Solo el usuario que realizo la actualizacion puede aceptar o rechazar esta validacion."
+                };
+            }
+
+            if (carga.FechaExpiracion.HasValue &&
+                carga.FechaExpiracion.Value < DateTime.Now)
             {
                 await ActualizarActualizacionExpiradaAsync(
                     connection,
                     transaction,
                     carga.IdCarga);
+
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga,
+                    estadoAnterior: carga.Estado,
+                    estadoNuevo: "EXPIRADO_ACTUALIZACION",
+                    idUsuario: null,
+                    comentario:
+                        "La actualizacion expiro antes de que el usuario tomara una decision.");
 
                 await transaction.CommitAsync();
 
@@ -95,7 +126,8 @@ public class ActualizacionRepository : IActualizacionRepository
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = "EXPIRADO_ACTUALIZACION",
-                    Mensaje = "La actualización ya expiró. Debe validar nuevamente los archivos."
+                    Mensaje =
+                        "La actualizacion ya expiro. Debe validar nuevamente los archivos."
                 };
             }
 
@@ -108,14 +140,16 @@ public class ActualizacionRepository : IActualizacionRepository
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje = "El usuario no tiene habilitada la modificación de información."
+                    Mensaje =
+                        "El usuario no tiene habilitada la modificacion de informacion."
                 };
             }
 
             if (!carga.EsSuperUsuario &&
                 carga.IdEntidadFederativaUsuario.HasValue &&
                 carga.IdEntidadFederativaCarga.HasValue &&
-                carga.IdEntidadFederativaUsuario.Value != carga.IdEntidadFederativaCarga.Value)
+                carga.IdEntidadFederativaUsuario.Value !=
+                carga.IdEntidadFederativaCarga.Value)
             {
                 await transaction.RollbackAsync();
 
@@ -124,7 +158,8 @@ public class ActualizacionRepository : IActualizacionRepository
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje = "El usuario no puede confirmar actualizaciones de otra entidad federativa."
+                    Mensaje =
+                        "El usuario no puede procesar actualizaciones de otra entidad federativa."
                 };
             }
 
@@ -136,6 +171,16 @@ public class ActualizacionRepository : IActualizacionRepository
                     carga.IdCarga,
                     idUsuarioConfirmacion);
 
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga,
+                    estadoAnterior: carga.Estado,
+                    estadoNuevo: "RECHAZADO_VALIDACION_ACTUALIZACION",
+                    idUsuario: idUsuarioConfirmacion,
+                    comentario:
+                        "La actualizacion fue rechazada por el usuario despues de revisar el acuse previo, las diferencias y las validaciones.");
+
                 await transaction.CommitAsync();
 
                 return new ConfirmarCargaResponse
@@ -143,7 +188,43 @@ public class ActualizacionRepository : IActualizacionRepository
                     EsValido = true,
                     CodigoReferencia = codigoReferencia,
                     Estado = "RECHAZADO_VALIDACION_ACTUALIZACION",
-                    Mensaje = "La actualización fue rechazada por validación."
+                    Mensaje =
+                        "La actualizacion fue rechazada correctamente."
+                };
+            }
+
+            await CargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                idUsuarioConfirmacion);
+
+            if (!carga.EsSuperUsuario)
+            {
+                await EnviarActualizacionAprobacionAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga);
+
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga,
+                    estadoAnterior: carga.Estado,
+                    estadoNuevo: "PENDIENTE_APROBACION",
+                    idUsuario: idUsuarioConfirmacion,
+                    comentario:
+                        "El enlace estatal acepto la actualizacion y la envio a revision administrativa.");
+
+                await transaction.CommitAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = true,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = "PENDIENTE_APROBACION",
+                    Mensaje =
+                        "La actualizacion fue enviada correctamente a revision administrativa."
                 };
             }
 
@@ -159,6 +240,16 @@ public class ActualizacionRepository : IActualizacionRepository
                 carga.IdCarga,
                 idUsuarioConfirmacion);
 
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                estadoAnterior: carga.Estado,
+                estadoNuevo: "CONFIRMADO_ACTUALIZACION",
+                idUsuario: idUsuarioConfirmacion,
+                comentario:
+                    "Actualizacion realizada y confirmada directamente por un superusuario.");
+
             await transaction.CommitAsync();
 
             return new ConfirmarCargaResponse
@@ -166,7 +257,8 @@ public class ActualizacionRepository : IActualizacionRepository
                 EsValido = true,
                 CodigoReferencia = codigoReferencia,
                 Estado = "CONFIRMADO_ACTUALIZACION",
-                Mensaje = "La actualización fue confirmada correctamente."
+                Mensaje =
+                    "La actualizacion fue confirmada correctamente."
             };
         }
         catch
@@ -181,6 +273,7 @@ public class ActualizacionRepository : IActualizacionRepository
         var sql = @"
         SELECT
             c.id_carga AS IdCarga,
+            c.id_usuario_carga AS IdUsuarioCarga,
             c.codigo_referencia AS CodigoReferencia,
             c.estado AS Estado,
             c.fecha_expiracion AS FechaExpiracion,
@@ -188,20 +281,20 @@ public class ActualizacionRepository : IActualizacionRepository
             u.id_entidad_federativa AS IdEntidadFederativaUsuario,
             CASE WHEN r.rol = 'SUPER_USUARIO' THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS EsSuperUsuario,
             ISNULL(h.habilita_modificacion, 0) AS HabilitaModificacion
-        FROM carga c
-        INNER JOIN usuario u
-            ON u.id_usuario = @IdUsuarioConfirmacion
-           AND u.activo = 1
-        INNER JOIN roles r
-            ON r.id_rol = u.id_rol
-           AND r.activo = 1
-        LEFT JOIN habilita_carga_modificacion h
-            ON h.id_usuario = u.id_usuario
-           AND h.activo = 1
-        WHERE c.codigo_referencia = @CodigoReferencia
-          AND c.tipo_carga = 'ACTUALIZACION'
-          AND c.activo = 1;
-    ";
+            FROM carga c
+            INNER JOIN usuario u
+                ON u.id_usuario = @IdUsuarioConfirmacion
+               AND u.activo = 1
+            INNER JOIN roles r
+                ON r.id_rol = u.id_rol
+               AND r.activo = 1
+            LEFT JOIN habilita_carga_modificacion h
+                ON h.id_usuario = u.id_usuario
+               AND h.activo = 1
+            WHERE c.codigo_referencia = @CodigoReferencia
+              AND c.tipo_carga = 'ACTUALIZACION'
+              AND c.activo = 1;
+        ";
 
         return await connection.QueryFirstOrDefaultAsync<ActualizacionConfirmacionInfo>(
             sql,
@@ -2219,6 +2312,40 @@ public class ActualizacionRepository : IActualizacionRepository
             {
                 IdCarga = idCarga,
                 IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
+    }
+
+    private static async Task EnviarActualizacionAprobacionAsync(SqlConnection connection, SqlTransaction transaction, long idCarga)
+    {
+        const string sql = @"
+        UPDATE dbo.carga
+        SET estado = 'PENDIENTE_APROBACION',
+            fecha_expiracion = NULL,
+            mensaje_error = NULL
+        WHERE id_carga = @IdCarga;
+
+        UPDATE dbo.carga_tmp_carpeta
+        SET estado = 'PENDIENTE_APROBACION',
+            fecha_procesamiento = NULL
+        WHERE id_carga = @IdCarga;
+
+        UPDATE dbo.carga_tmp_delito
+        SET estado = 'PENDIENTE_APROBACION',
+            fecha_procesamiento = NULL
+        WHERE id_carga = @IdCarga;
+
+        UPDATE dbo.carga_tmp_victima
+        SET estado = 'PENDIENTE_APROBACION',
+            fecha_procesamiento = NULL
+        WHERE id_carga = @IdCarga;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga
             },
             transaction);
     }

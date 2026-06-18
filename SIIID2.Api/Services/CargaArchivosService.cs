@@ -329,6 +329,7 @@ public class CargaArchivosService : ICargaArchivosService
             filasVictimas.Count,
             estadoCarga,
             mensajeError,
+            response.Advertencias,
             filasCarpetas,
             filasDelitos,
             filasVictimas);

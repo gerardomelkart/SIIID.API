@@ -15,7 +15,7 @@ public class ActualizacionCargaRepository : IActualizacionCargaRepository
         _dbConnectionFactory = dbConnectionFactory;
     }
 
-    public async Task<long> GuardarIntentoActualizacionAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    public async Task<long> GuardarIntentoActualizacionAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<CargaValidacionError> advertencias, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
     {
         // Guarda la actualización igual que una carga:
         // registro en carga + staging de carpetas/delitos/víctimas.
@@ -60,6 +60,23 @@ public class ActualizacionCargaRepository : IActualizacionCargaRepository
                 transaction,
                 idCarga,
                 filasVictimas);
+
+            await CargaAuditoriaSql.GuardarAdvertenciasAsync(
+                                    connection,
+                                    transaction,
+                                    idCarga,
+                                    advertencias);
+
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                                    connection,
+                                    transaction,
+                                    idCarga,
+                                    estadoAnterior: null,
+                                    estadoNuevo: estado,
+                                    idUsuario: idUsuarioCarga,
+                                    comentario: estado == "VALIDADO_PENDIENTE_ACTUALIZACION"
+                                        ? "Actualización validada y pendiente de decisión del usuario."
+                                        : "Intento de actualización registrado con errores de validación.");
 
             await transaction.CommitAsync();
 

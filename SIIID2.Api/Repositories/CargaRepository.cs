@@ -18,6 +18,7 @@ public class CargaRepository : ICargaRepository
         public int? IdEntidadFederativaUsuario { get; set; }
         public bool EsSuperUsuario { get; set; }
         public bool HabilitaCarga { get; set; }
+        public int IdUsuarioCarga { get; set; }
     }
 
     private readonly IDbConnectionFactory _dbConnectionFactory;
@@ -27,7 +28,7 @@ public class CargaRepository : ICargaRepository
         _dbConnectionFactory = dbConnectionFactory;
     }
 
-    public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<CargaValidacionError> advertencias, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos,  List<ArchivoFila> filasVictimas)
     {
         // Este método guarda todo el intento de carga en una sola transacción.
         // Si falla cualquier parte, se revierte carga y staging.
@@ -71,6 +72,23 @@ public class CargaRepository : ICargaRepository
                 transaction,
                 idCarga,
                 filasVictimas);
+
+            await CargaAuditoriaSql.GuardarAdvertenciasAsync(
+                                    connection,
+                                    transaction,
+                                    idCarga,
+                                    advertencias);
+
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                                    connection,
+                                    transaction,
+                                    idCarga,
+                                    estadoAnterior: null,
+                                    estadoNuevo: estado,
+                                    idUsuario: idUsuarioCarga,
+                                    comentario: estado == "VALIDADO_PENDIENTE"
+                                        ? "Carga inicial validada y pendiente de decisión del usuario."
+                                        : "Intento de carga inicial registrado con errores de validación.");
 
             await transaction.CommitAsync();
 
@@ -389,13 +407,13 @@ public class CargaRepository : ICargaRepository
 
     public async Task<ConfirmarCargaResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion)
     {
-        // Confirma o rechaza una carga validada.
-        // Todo se ejecuta en transacción para evitar cargas parciales.
-        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+        using var connection =
+            (SqlConnection)_dbConnectionFactory.CrearConexion();
 
         await connection.OpenAsync();
 
-        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        using var transaction =
+            (SqlTransaction)await connection.BeginTransactionAsync();
 
         try
         {
@@ -414,11 +432,14 @@ public class CargaRepository : ICargaRepository
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = "NO_ENCONTRADA",
-                    Mensaje = "No se encontró una carga válida para confirmar."
+                    Mensaje = "No se encontro una carga valida para continuar."
                 };
             }
 
-            if (!string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(
+                    carga.Estado,
+                    "VALIDADO_PENDIENTE",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
 
@@ -427,16 +448,42 @@ public class CargaRepository : ICargaRepository
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje = "La carga no se encuentra en estado VALIDADO_PENDIENTE."
+                    Mensaje =
+                        "La carga no se encuentra en estado VALIDADO_PENDIENTE."
                 };
             }
 
-            if (carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
+            if (carga.IdUsuarioCarga != idUsuarioConfirmacion)
+            {
+                await transaction.RollbackAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = false,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = carga.Estado,
+                    Mensaje =
+                        "Solo el usuario que realizo la carga puede aceptar o rechazar esta validacion."
+                };
+            }
+
+            if (carga.FechaExpiracion.HasValue &&
+                carga.FechaExpiracion.Value < DateTime.Now)
             {
                 await ActualizarCargaExpiradaAsync(
                     connection,
                     transaction,
                     carga.IdCarga);
+
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga,
+                    estadoAnterior: carga.Estado,
+                    estadoNuevo: "EXPIRADO",
+                    idUsuario: null,
+                    comentario:
+                        "La carga expiro antes de que el usuario tomara una decision.");
 
                 await transaction.CommitAsync();
 
@@ -445,7 +492,8 @@ public class CargaRepository : ICargaRepository
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = "EXPIRADO",
-                    Mensaje = "La carga ya expiró. Debe validar nuevamente los archivos."
+                    Mensaje =
+                        "La carga ya expiro. Debe validar nuevamente los archivos."
                 };
             }
 
@@ -458,14 +506,16 @@ public class CargaRepository : ICargaRepository
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje = "El usuario no tiene habilitada la carga de información."
+                    Mensaje =
+                        "El usuario no tiene habilitada la carga de informacion."
                 };
             }
 
             if (!carga.EsSuperUsuario &&
                 carga.IdEntidadFederativaUsuario.HasValue &&
                 carga.IdEntidadFederativaCarga.HasValue &&
-                carga.IdEntidadFederativaUsuario.Value != carga.IdEntidadFederativaCarga.Value)
+                carga.IdEntidadFederativaUsuario.Value !=
+                carga.IdEntidadFederativaCarga.Value)
             {
                 await transaction.RollbackAsync();
 
@@ -474,7 +524,8 @@ public class CargaRepository : ICargaRepository
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje = "El usuario no puede confirmar cargas de otra entidad federativa."
+                    Mensaje =
+                        "El usuario no puede procesar cargas de otra entidad federativa."
                 };
             }
 
@@ -486,6 +537,16 @@ public class CargaRepository : ICargaRepository
                     carga.IdCarga,
                     idUsuarioConfirmacion);
 
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga,
+                    estadoAnterior: carga.Estado,
+                    estadoNuevo: "RECHAZADO_VALIDACION",
+                    idUsuario: idUsuarioConfirmacion,
+                    comentario:
+                        "La carga fue rechazada por el usuario despues de revisar el acuse previo y las validaciones.");
+
                 await transaction.CommitAsync();
 
                 return new ConfirmarCargaResponse
@@ -493,7 +554,42 @@ public class CargaRepository : ICargaRepository
                     EsValido = true,
                     CodigoReferencia = codigoReferencia,
                     Estado = "RECHAZADO_VALIDACION",
-                    Mensaje = "La carga fue rechazada por validación."
+                    Mensaje = "La carga fue rechazada correctamente."
+                };
+            }
+
+            await CargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                idUsuarioConfirmacion);
+
+            if (!carga.EsSuperUsuario)
+            {
+                await EnviarCargaAprobacionAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga);
+
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                    connection,
+                    transaction,
+                    carga.IdCarga,
+                    estadoAnterior: carga.Estado,
+                    estadoNuevo: "PENDIENTE_APROBACION",
+                    idUsuario: idUsuarioConfirmacion,
+                    comentario:
+                        "El enlace estatal acepto la validacion y envio la carga a revision administrativa.");
+
+                await transaction.CommitAsync();
+
+                return new ConfirmarCargaResponse
+                {
+                    EsValido = true,
+                    CodigoReferencia = codigoReferencia,
+                    Estado = "PENDIENTE_APROBACION",
+                    Mensaje =
+                        "La carga fue enviada correctamente a revision administrativa."
                 };
             }
 
@@ -521,6 +617,16 @@ public class CargaRepository : ICargaRepository
                 carga.IdCarga,
                 idUsuarioConfirmacion);
 
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                connection,
+                transaction,
+                carga.IdCarga,
+                estadoAnterior: carga.Estado,
+                estadoNuevo: "CONFIRMADO",
+                idUsuario: idUsuarioConfirmacion,
+                comentario:
+                    "Carga realizada y confirmada directamente por un superusuario.");
+
             await transaction.CommitAsync();
 
             return new ConfirmarCargaResponse
@@ -544,6 +650,7 @@ public class CargaRepository : ICargaRepository
         var sql = @"
         SELECT
             c.id_carga AS IdCarga,
+            c.id_usuario_carga AS IdUsuarioCarga,
             c.codigo_referencia AS CodigoReferencia,
             c.estado AS Estado,
             c.fecha_expiracion AS FechaExpiracion,
@@ -640,6 +747,40 @@ public class CargaRepository : ICargaRepository
             {
                 IdCarga = idCarga,
                 IdUsuarioConfirmacion = idUsuarioConfirmacion
+            },
+            transaction);
+    }
+
+    private static async Task EnviarCargaAprobacionAsync(SqlConnection connection, SqlTransaction transaction, long idCarga)
+    {
+        const string sql = @"
+        UPDATE dbo.carga
+        SET estado = 'PENDIENTE_APROBACION',
+            fecha_expiracion = NULL,
+            mensaje_error = NULL
+        WHERE id_carga = @IdCarga;
+
+        UPDATE dbo.carga_tmp_carpeta
+        SET estado = 'PENDIENTE_APROBACION',
+            fecha_procesamiento = NULL
+        WHERE id_carga = @IdCarga;
+
+        UPDATE dbo.carga_tmp_delito
+        SET estado = 'PENDIENTE_APROBACION',
+            fecha_procesamiento = NULL
+        WHERE id_carga = @IdCarga;
+
+        UPDATE dbo.carga_tmp_victima
+        SET estado = 'PENDIENTE_APROBACION',
+            fecha_procesamiento = NULL
+        WHERE id_carga = @IdCarga;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdCarga = idCarga
             },
             transaction);
     }
@@ -983,15 +1124,20 @@ public class CargaRepository : ICargaRepository
         // para la misma entidad y periodo.
         // Esto evita generar múltiples cargas pendientes del mismo corte.
         var sql = @"
-        SELECT TOP 1 codigo_referencia
-        FROM carga
-        WHERE id_entidad_federativa = @IdEntidadFederativa
-          AND mes_corte = @MesCorte
-          AND anio_corte = @AnioCorte
-          AND estado = 'VALIDADO_PENDIENTE'
-          AND activo = 1
-        ORDER BY fecha_validacion DESC;
-    ";
+                SELECT TOP 1 codigo_referencia
+                FROM carga
+                WHERE id_entidad_federativa = @IdEntidadFederativa
+                  AND mes_corte = @MesCorte
+                  AND anio_corte = @AnioCorte
+                  AND tipo_carga = 'CARGA_INICIAL'
+                  AND estado IN
+                  (
+                      'VALIDADO_PENDIENTE',
+                      'PENDIENTE_APROBACION'
+                  )
+                  AND activo = 1
+                ORDER BY fecha_validacion DESC;
+        ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
@@ -1008,16 +1154,20 @@ public class CargaRepository : ICargaRepository
         // Revisa si ya existe una actualización validada pendiente de confirmar
         // para la misma entidad y periodo.
         var sql = @"
-        SELECT TOP 1 codigo_referencia
-        FROM carga
-        WHERE id_entidad_federativa = @IdEntidadFederativa
-          AND mes_corte = @MesCorte
-          AND anio_corte = @AnioCorte
-          AND tipo_carga = 'ACTUALIZACION'
-          AND estado = 'VALIDADO_PENDIENTE_ACTUALIZACION'
-          AND activo = 1
-        ORDER BY fecha_validacion DESC;
-    ";
+                SELECT TOP 1 codigo_referencia
+                FROM carga
+                WHERE id_entidad_federativa = @IdEntidadFederativa
+                  AND mes_corte = @MesCorte
+                  AND anio_corte = @AnioCorte
+                  AND tipo_carga = 'ACTUALIZACION'
+                  AND estado IN
+                  (
+                      'VALIDADO_PENDIENTE_ACTUALIZACION',
+                      'PENDIENTE_APROBACION'
+                  )
+                  AND activo = 1
+                ORDER BY fecha_validacion DESC;
+        ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
