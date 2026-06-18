@@ -15,6 +15,4 @@ public interface IAdministracionCargasRepository
     Task<List<IDictionary<string, object?>>> ObtenerDelitosPendientesAsync(long idCarga);
 
     Task<List<IDictionary<string, object?>>> ObtenerVictimasPendientesAsync(long idCarga);
-
-    Task<InformeArchivoZipResponse> GenerarZipArchivosPendientesAsync(int idUsuario, string codigoReferencia);
 }

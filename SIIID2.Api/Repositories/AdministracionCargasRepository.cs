@@ -1,10 +1,6 @@
 ﻿using Dapper;
-using DocumentFormat.OpenXml.Drawing.Charts;
 using SIIID2.Api.Data;
 using SIIID2.Api.Models;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-using ClosedXML.Excel;
-using System.IO.Compression;
 
 namespace SIIID2.Api.Repositories;
 
@@ -259,92 +255,5 @@ public class AdministracionCargasRepository : IAdministracionCargasRepository
             .Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase))
             .Cast<IDictionary<string, object?>>()
             .ToList();
-    }
-
-    public async Task<InformeArchivoZipResponse> GenerarZipArchivosPendientesAsync(int idUsuario, string codigoReferencia)
-    {
-        await ValidarSuperUsuarioAsync(idUsuario);
-
-        var referencia = await _administracionRepository.ObtenerReferenciaAsync(codigoReferencia);
-
-        if (referencia == null)
-        {
-            throw new KeyNotFoundException("No se encontro una carga con ese codigo de referencia.");
-        }
-
-        if (!string.Equals(referencia.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException($"La carga ya no se encuentra pendiente de aprobacion. Estado actual: {referencia.Estado}.");
-        }
-
-        var detalle = await _administracionRepository.ObtenerDetalleAsync(codigoReferencia);
-
-        if (detalle == null)
-        {
-            throw new InvalidOperationException("No fue posible obtener el detalle de la carga pendiente.");
-        }
-
-        var carpetas = await _administracionRepository.ObtenerCarpetasPendientesAsync(detalle.IdCarga);
-        var delitos = await _administracionRepository.ObtenerDelitosPendientesAsync(detalle.IdCarga);
-        var victimas = await _administracionRepository.ObtenerVictimasPendientesAsync(detalle.IdCarga);
-
-        using var zipStream = new MemoryStream();
-
-        using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            AgregarExcelAlZip(archive, "carpetas.xlsx", "carpetas", carpetas);
-            AgregarExcelAlZip(archive, "delitos.xlsx", "delitos", delitos);
-            AgregarExcelAlZip(archive, "victimas.xlsx", "victimas", victimas);
-        }
-
-        return new InformeArchivoZipResponse
-        {
-            Archivo = zipStream.ToArray(),
-            NombreArchivo = $"ARCHIVOS_REVISION_{codigoReferencia}.zip"
-        };
-    }
-
-    private static void AgregarExcelAlZip(ZipArchive archive, string nombreArchivo, string nombreHoja, List<IDictionary<string, object?>> filas)
-    {
-        var entry = archive.CreateEntry(nombreArchivo, CompressionLevel.Fastest);
-
-        using var entryStream = entry.Open();
-        using var workbook = new XLWorkbook();
-
-        var worksheet = workbook.Worksheets.Add(nombreHoja);
-
-        if (filas.Count == 0)
-        {
-            worksheet.Cell(1, 1).Value = "Sin registros";
-            workbook.SaveAs(entryStream);
-            return;
-        }
-
-        var columnas = filas.First().Keys.ToList();
-
-        for (var columna = 0; columna < columnas.Count; columna++)
-        {
-            worksheet.Cell(1, columna + 1).Value = columnas[columna];
-            worksheet.Cell(1, columna + 1).Style.Font.Bold = true;
-            worksheet.Column(columna + 1).Style.NumberFormat.Format = "@";
-        }
-
-        for (var fila = 0; fila < filas.Count; fila++)
-        {
-            for (var columna = 0; columna < columnas.Count; columna++)
-            {
-                var nombreColumna = columnas[columna];
-                var valor = filas[fila].TryGetValue(nombreColumna, out var dato) ? dato : null;
-                var celda = worksheet.Cell(fila + 2, columna + 1);
-
-                celda.Style.NumberFormat.Format = "@";
-                celda.Value = valor?.ToString() ?? string.Empty;
-            }
-        }
-
-        worksheet.SheetView.FreezeRows(1);
-        worksheet.RangeUsed()?.SetAutoFilter();
-
-        workbook.SaveAs(entryStream);
     }
 }
