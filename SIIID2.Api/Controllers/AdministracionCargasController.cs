@@ -164,4 +164,41 @@ public class AdministracionCargasController : ControllerBase
                    "RECHAZADO_ADMIN",
                    StringComparison.OrdinalIgnoreCase);
     }
+
+    [HttpGet("{codigoReferencia}/archivos")]
+    public async Task<IActionResult> DescargarArchivos(string codigoReferencia)
+    {
+        if (!ObtenerIdUsuario(out var idUsuario))
+        {
+            return TokenSinUsuario();
+        }
+
+        try
+        {
+            var zip = await _administracionService.GenerarZipArchivosPendientesAsync(idUsuario, codigoReferencia);
+            return File(zip.Archivo, "application/zip", zip.NombreArchivo);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                esValido = false,
+                codigo = "CARGA_NO_ENCONTRADA",
+                codigoReferencia,
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new
+            {
+                esValido = false,
+                codigo = "CARGA_NO_PENDIENTE",
+                codigoReferencia,
+                mensaje = ex.Message
+            });
+        }
+    }
+
+
 }
