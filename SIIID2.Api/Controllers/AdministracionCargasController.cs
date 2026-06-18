@@ -41,12 +41,41 @@ public class AdministracionCargasController : ControllerBase
 
         var detalle = await _administracionService.ObtenerDetalleAsync(idUsuario, codigoReferencia);
 
-        if (detalle == null)
+        if (detalle != null)
         {
-            return NotFound(new {esValido = false, codigo = "CARGA_PENDIENTE_NO_ENCONTRADA", mensaje = "No se encontro una carga pendiente con ese codigo."});
+            return Ok(new
+            {
+                esValido = true,
+                detalle
+            });
         }
 
-        return Ok(new {esValido = true, detalle });
+        /*
+            Si no apareció en el detalle pendiente, revisamos si
+            la carga existe pero ya fue aprobada o rechazada.
+        */
+        var referencia = await _administracionService.ObtenerReferenciaAsync(idUsuario, codigoReferencia);
+
+        if (referencia == null)
+        {
+            return NotFound(new
+            {
+                esValido = false,
+                codigo = "CARGA_NO_ENCONTRADA",
+                codigoReferencia,
+                mensaje = "No se encontro una carga con ese codigo de referencia."
+            });
+        }
+
+        return Conflict(new
+        {
+            esValido = false,
+            codigo = "CARGA_NO_PENDIENTE",
+            codigoReferencia = referencia.CodigoReferencia,
+            tipoCarga = referencia.TipoCarga,
+            estado = referencia.Estado,
+            mensaje = $"La carga ya no se encuentra pendiente de aprobacion. Estado actual: {referencia.Estado}."
+        });
     }
 
     [HttpPost("{codigoReferencia}/aprobar")]
@@ -67,6 +96,11 @@ public class AdministracionCargasController : ControllerBase
         if (resultado.Estado == "NO_ENCONTRADA")
         {
             return NotFound(resultado);
+        }
+
+        if (EsCargaYaResuelta(resultado.Estado))
+        {
+            return Conflict(resultado);
         }
 
         return BadRequest(resultado);
@@ -92,6 +126,11 @@ public class AdministracionCargasController : ControllerBase
             return NotFound(resultado);
         }
 
+        if (EsCargaYaResuelta(resultado.Estado))
+        {
+            return Conflict(resultado);
+        }
+
         return BadRequest(resultado);
     }
 
@@ -106,5 +145,23 @@ public class AdministracionCargasController : ControllerBase
     {
         return Unauthorized(new {esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
             mensaje = "El token no contiene un id de usuario valido.", traceId =  HttpContext.TraceIdentifier });
+    }
+
+    private static bool EsCargaYaResuelta(string? estado)
+    {
+        return string.Equals(
+                   estado,
+                   "CONFIRMADO",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               string.Equals(
+                   estado,
+                   "CONFIRMADO_ACTUALIZACION",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               string.Equals(
+                   estado,
+                   "RECHAZADO_ADMIN",
+                   StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -144,4 +144,21 @@ public class AdministracionCargasRepository : IAdministracionCargasRepository
         carga.Advertencias = advertencias.ToList();
         return carga;
     }
+
+    public async Task<CargaReferenciaAdministracionInfo?> ObtenerReferenciaAsync(string codigoReferencia)
+    {
+        const string sql = @"
+        SELECT TOP 1
+            c.codigo_referencia AS CodigoReferencia,
+            c.tipo_carga AS TipoCarga,
+            c.estado AS Estado
+        FROM dbo.carga c
+        WHERE c.codigo_referencia = @CodigoReferencia
+          AND c.activo = 1;
+        ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.QueryFirstOrDefaultAsync<CargaReferenciaAdministracionInfo>(sql, new {CodigoReferencia = codigoReferencia});
+    }
 }

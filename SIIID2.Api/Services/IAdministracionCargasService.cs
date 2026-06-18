@@ -11,4 +11,6 @@ public interface IAdministracionCargasService
     Task<ConfirmarCargaResponse> AprobarAsync(int idUsuario, string codigoReferencia);
 
     Task<ConfirmarCargaResponse> RechazarAsync(int idUsuario, string codigoReferencia, string motivo);
+
+    Task<CargaReferenciaAdministracionInfo?> ObtenerReferenciaAsync(int idUsuario, string codigoReferencia);
 }

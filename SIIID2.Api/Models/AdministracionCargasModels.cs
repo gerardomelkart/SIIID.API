@@ -65,6 +65,15 @@ public class CargaPendienteAdministracionDetalle : CargaPendienteAdministracionI
     public List<CargaAdvertenciaAdministracionItem> Advertencias { get; set; } = [];
 }
 
+public class CargaReferenciaAdministracionInfo
+{
+    public string CodigoReferencia { get; set; } = string.Empty;
+
+    public string TipoCarga { get; set; } = string.Empty;
+
+    public string Estado { get; set; } = string.Empty;
+}
+
 public class RechazarCargaAdministracionRequest
 {
     [Required(ErrorMessage = "El motivo del rechazo es obligatorio.")]
