@@ -95,9 +95,14 @@ public class ActualizacionesController : ControllerBase
             limitePorSeccion = 100;
         }
 
-        if (limitePorSeccion > 1000)
+        if (limitePorSeccion <= 0)
         {
-            limitePorSeccion = 1000;
+            limitePorSeccion = 100;
+        }
+
+        if (limitePorSeccion > 200)
+        {
+            limitePorSeccion = 200;
         }
 
         var resultado = await _actualizacionArchivosService.ObtenerDetalleDiferenciasAsync(

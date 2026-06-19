@@ -259,10 +259,10 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                     CONVERT(varchar(max), ct.rmen_de_hchos)
                 )
         ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
-        WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '');
+        WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";
 
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, contexto);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, contexto, commandTimeout: 180);
 
         return filas.ToList();
     }
@@ -548,10 +548,10 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 ('coord_y', CONVERT(varchar(max), da.coordenada_y), CONVERT(varchar(max), dt.coord_y_excel), CONVERT(varchar(max), da.coordenada_y), CONVERT(varchar(max), dt.coordenada_y)),
                 ('dom_hchos', CONVERT(varchar(max), da.domicilio_hechos), CONVERT(varchar(max), dt.dom_hchos), CONVERT(varchar(max), da.domicilio_hechos), CONVERT(varchar(max), dt.dom_hchos))
         ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
-        WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '');
+        WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";
 
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, contexto);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, contexto, commandTimeout: 180);
 
         return filas.ToList();
     }
@@ -753,10 +753,10 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 ('edad', CONVERT(varchar(max), va.edad), CONVERT(varchar(max), vt.edad_excel), CONVERT(varchar(max), va.edad), CONVERT(varchar(max), vt.edad)),
                 ('nacional', CONVERT(varchar(max), va.nacional_valor), CONVERT(varchar(max), vt.nacional_excel), CONVERT(varchar(max), va.id_nacionalidad), CONVERT(varchar(max), vt.id_nacionalidad))
         ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
-        WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '');
+        WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";
 
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, contexto);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, contexto, commandTimeout: 180);
 
         return filas.ToList();
     }
