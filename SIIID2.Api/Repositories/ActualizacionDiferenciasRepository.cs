@@ -61,9 +61,20 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
 
         var filas = new List<ActualizacionDiferenciaRow>();
 
-        filas.AddRange(await ObtenerDiferenciasCarpetasAsync(connection, contexto));
-        filas.AddRange(await ObtenerDiferenciasDelitosAsync(connection, contexto));
-        filas.AddRange(await ObtenerDiferenciasVictimasAsync(connection, contexto));
+        filas.AddRange(await ObtenerDiferenciasCarpetasAsync(
+            connection,
+            contexto,
+            limitePorSeccion));
+
+        filas.AddRange(await ObtenerDiferenciasDelitosAsync(
+            connection,
+            contexto,
+            limitePorSeccion));
+
+        filas.AddRange(await ObtenerDiferenciasVictimasAsync(
+            connection,
+            contexto,
+            limitePorSeccion));
 
         var response = new ActualizacionDiferenciasResponse
         {
@@ -115,7 +126,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         });
     }
 
-    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasCarpetasAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto)
+    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasCarpetasAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
     {
         var sql = @"
         ;WITH carpetas_actuales AS (
@@ -164,7 +175,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             WHERE c.id_carga = @IdCarga
               AND c.activo = 1
         )
-        SELECT
+        SELECT TOP (@LimiteFilas)
             'carpetas' AS Seccion,
             'NUEVO' AS TipoMovimiento,
             'id_ci' AS CampoIdentificador,
@@ -187,7 +198,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
 
         UNION ALL
 
-        SELECT
+        SELECT TOP (@LimiteFilas)
             'carpetas',
             'ELIMINADO',
             'id_ci',
@@ -214,7 +225,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
 
         UNION ALL
 
-        SELECT
+        SELECT TOP (@LimiteFilas)
             'carpetas',
             'MODIFICADO',
             'id_ci',
@@ -262,12 +273,26 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";
 
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, contexto, commandTimeout: 180);
+        var limiteFilas = Math.Max(limitePorSeccion, 1) * 5;
+
+        var parametros = new
+        {
+            contexto.IdCarga,
+            contexto.IdEntidadFederativa,
+            contexto.MesCorte,
+            contexto.AnioCorte,
+            LimiteFilas = limiteFilas
+        };
+
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(
+            sql,
+            parametros,
+            commandTimeout: 180);
 
         return filas.ToList();
     }
 
-    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasDelitosAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto)
+    private static async Task<List<ActualizacionDiferenciaRow>>ObtenerDiferenciasDelitosAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
     {
         var sql = @"
         ;WITH delitos_actuales AS (
@@ -411,7 +436,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             WHERE d.id_carga = @IdCarga
               AND d.activo = 1
         )
-        SELECT
+        SELECT TOP (@LimiteFilas)
             'delitos' AS Seccion,
             'NUEVO' AS TipoMovimiento,
             'id_ci + id_delito' AS CampoIdentificador,
@@ -450,7 +475,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
 
         UNION ALL
 
-        SELECT
+        SELECT TOP (@LimiteFilas)
             'delitos',
             'ELIMINADO',
             'id_ci + id_delito',
@@ -493,7 +518,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
 
         UNION ALL
 
-        SELECT
+        SELECT TOP (@LimiteFilas)
             'delitos',
             'MODIFICADO',
             'id_ci + id_delito',
@@ -551,12 +576,29 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";
 
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, contexto, commandTimeout: 180);
+        /*
+            Un delito genera hasta veinte filas de campos.
+        */
+        var limiteFilas = Math.Max(limitePorSeccion, 1) * 20;
+
+        var parametros = new
+        {
+            contexto.IdCarga,
+            contexto.IdEntidadFederativa,
+            contexto.MesCorte,
+            contexto.AnioCorte,
+            LimiteFilas = limiteFilas
+        };
+
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(
+            sql,
+            parametros,
+            commandTimeout: 180);
 
         return filas.ToList();
     }
 
-    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasVictimasAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto)
+    private static async Task<List<ActualizacionDiferenciaRow>>ObtenerDiferenciasVictimasAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
     {
         var sql = @"
         ;WITH victimas_actuales AS (
@@ -664,7 +706,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             WHERE v.id_carga = @IdCarga
               AND v.activo = 1
         )
-        SELECT
+        SELECT SELECT TOP (@LimiteFilas)
             'victimas' AS Seccion,
             'NUEVO' AS TipoMovimiento,
             'id_ci + id_delito + id_vicf' AS CampoIdentificador,
@@ -696,7 +738,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
 
         UNION ALL
 
-        SELECT
+        SELECT TOP (@LimiteFilas)
             'victimas',
             'ELIMINADO',
             'id_ci + id_delito + id_vicf',
@@ -728,7 +770,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
 
         UNION ALL
 
-        SELECT
+        SELECT TOP (@LimiteFilas)
             'victimas',
             'MODIFICADO',
             'id_ci + id_delito + id_vicf',
@@ -756,7 +798,26 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";
 
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, contexto, commandTimeout: 180);
+        /*
+            Una víctima genera hasta doce filas de campos.
+        */
+        var limiteFilas = Math.Max(limitePorSeccion, 1) * 12;
+
+        var parametros = new
+        {
+            contexto.IdCarga,
+            contexto.IdEntidadFederativa,
+            contexto.MesCorte,
+            contexto.AnioCorte,
+            LimiteFilas = limiteFilas
+        };
+
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(
+            sql,
+            parametros,
+            commandTimeout: 180);
+
+        return filas.ToList();
 
         return filas.ToList();
     }
