@@ -818,8 +818,6 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             commandTimeout: 180);
 
         return filas.ToList();
-
-        return filas.ToList();
     }
 
     private static void AgregarDiferenciasAlResponse(List<ActualizacionDiferenciaRow> filas, string seccion, List<ActualizacionDiferenciaRegistro> destino)
