@@ -12,6 +12,8 @@ public class ActualizacionPeriodoResponse
 
     public string? CodigoActualizacionPendiente { get; set; }
 
+    public string? EstadoActualizacionPendiente { get; set; }
+
     public int? IdEntidadFederativa { get; set; }
 
     public int MesCorte { get; set; }

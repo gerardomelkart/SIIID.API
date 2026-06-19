@@ -291,23 +291,24 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             }
             else
             {
-                var codigoActualizacionPendiente = await _cargaRepository.ObtenerCodigoActualizacionPendienteAsync(
-                    idEntidadFederativaCarga.Value,
-                    mesCorte.Value,
-                    anioCorte.Value);
+                var actualizacionPendiente = await _cargaRepository.ObtenerCodigoActualizacionPendienteAsync(idEntidadFederativaCarga.Value, mesCorte.Value, anioCorte.Value);
 
-                if (!string.IsNullOrWhiteSpace(codigoActualizacionPendiente))
+                if (actualizacionPendiente != null)
                 {
+                    var enRevisionAdministrativa = string.Equals(actualizacionPendiente.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
+
                     response.Errores.Add(new CargaValidacionError
                     {
                         Archivo = "general",
                         Fila = null,
                         Columna = "",
                         Campo = "",
-                        Valor = codigoActualizacionPendiente,
-                        Codigo = "ACTUALIZACION_PENDIENTE_EXISTENTE",
-                        DescripcionResumen = "Ya existe actualización pendiente",
-                        Mensaje = $"Ya existe una actualización validada pendiente de confirmar para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte.Value:00}/{anioCorte.Value}. Código de referencia pendiente: {codigoActualizacionPendiente}. Debe confirmar o rechazar esa actualización antes de enviar una nueva."
+                        Valor = actualizacionPendiente.CodigoReferencia,
+                        Codigo = enRevisionAdministrativa ? "ACTUALIZACION_PENDIENTE_APROBACION" : "ACTUALIZACION_PENDIENTE_EXISTENTE",
+                        DescripcionResumen = enRevisionAdministrativa ? "Actualización en revisión administrativa" : "Ya existe actualización pendiente",
+                        Mensaje = enRevisionAdministrativa
+                            ? $"Ya existe una actualización en revisión administrativa para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte.Value:00}/{anioCorte.Value}. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}. Debe esperar la resolución del administrador."
+                            : $"Ya existe una actualización validada pendiente de confirmar para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte.Value:00}/{anioCorte.Value}. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}. Debe aceptar o rechazar esa actualización antes de enviar una nueva."
                     });
                 }
             }
@@ -346,7 +347,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 x.Codigo == "ACTUALIZACION_ANIO_CORTE_OBLIGATORIO" ||
                 x.Codigo == "ACTUALIZACION_ANIO_CORTE_INVALIDO" ||
                 x.Codigo == "ACTUALIZACION_SIN_CARGA_CONFIRMADA" ||
-                x.Codigo == "ACTUALIZACION_PENDIENTE_EXISTENTE"))
+                x.Codigo == "ACTUALIZACION_PENDIENTE_EXISTENTE" ||
+                x.Codigo == "ACTUALIZACION_PENDIENTE_APROBACION"))
         {
             return response;
         }
@@ -1117,24 +1119,26 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
-        var codigoActualizacionPendiente = await _cargaRepository.ObtenerCodigoActualizacionPendienteAsync(
-            idEntidadConsulta.Value,
-            mesCorte,
-            anioCorte);
+        var actualizacionPendiente = await _cargaRepository.ObtenerCodigoActualizacionPendienteAsync(idEntidadConsulta.Value, mesCorte, anioCorte);
 
-        if (!string.IsNullOrWhiteSpace(codigoActualizacionPendiente))
+        if (actualizacionPendiente != null)
         {
+            var enRevisionAdministrativa = string.Equals(actualizacionPendiente.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
+
             return new ActualizacionPeriodoResponse
             {
                 EsValido = true,
                 PuedeActualizar = false,
                 TieneCargaConfirmada = true,
                 ExisteActualizacionPendiente = true,
-                CodigoActualizacionPendiente = codigoActualizacionPendiente,
+                CodigoActualizacionPendiente = actualizacionPendiente.CodigoReferencia,
+                EstadoActualizacionPendiente = actualizacionPendiente.Estado,
                 IdEntidadFederativa = idEntidadConsulta.Value,
                 MesCorte = mesCorte,
                 AnioCorte = anioCorte,
-                Mensaje = $"Ya existe una actualización pendiente para el periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {codigoActualizacionPendiente}."
+                Mensaje = enRevisionAdministrativa
+                    ? $"La actualización del periodo {mesCorte:00}/{anioCorte} se encuentra en revisión administrativa. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}."
+                    : $"Ya existe una actualización pendiente para el periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}."
             };
         }
 

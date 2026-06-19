@@ -247,23 +247,24 @@ public class CargaArchivosService : ICargaArchivosService
             }
             else
             {
-                var codigoCargaPendiente = await _cargaRepository.ObtenerCodigoCargaPendienteAsync(
-                    idEntidadFederativaCarga.Value,
-                    mesCorte,
-                    anioCorte);
+                var cargaPendiente = await _cargaRepository.ObtenerCodigoCargaPendienteAsync(idEntidadFederativaCarga.Value, mesCorte, anioCorte);
 
-                if (!string.IsNullOrWhiteSpace(codigoCargaPendiente))
+                if (cargaPendiente != null)
                 {
+                    var enRevisionAdministrativa = string.Equals(cargaPendiente.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
+
                     response.Errores.Add(new CargaValidacionError
                     {
                         Archivo = "general",
                         Fila = null,
                         Columna = "",
                         Campo = "",
-                        Valor = codigoCargaPendiente,
-                        Codigo = "CARGA_PENDIENTE_EXISTENTE",
-                        DescripcionResumen = "Ya existe carga pendiente",
-                        Mensaje = $"Ya existe una carga validada pendiente de confirmar para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {codigoCargaPendiente}. Debe confirmar o rechazar esa carga antes de enviar una nueva."
+                        Valor = cargaPendiente.CodigoReferencia,
+                        Codigo = enRevisionAdministrativa ? "CARGA_PENDIENTE_APROBACION" : "CARGA_PENDIENTE_EXISTENTE",
+                        DescripcionResumen = enRevisionAdministrativa ? "Carga en revisión administrativa" : "Ya existe carga pendiente",
+                        Mensaje = enRevisionAdministrativa
+                            ? $"Ya existe una carga en revisión administrativa para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {cargaPendiente.CodigoReferencia}. Debe esperar la resolución del administrador."
+                            : $"Ya existe una carga validada pendiente de confirmar para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {cargaPendiente.CodigoReferencia}. Debe aceptar o rechazar esa carga antes de enviar una nueva."
                     });
                 }
             }
@@ -299,7 +300,8 @@ public class CargaArchivosService : ICargaArchivosService
                 x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD" ||
                 x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO" ||
                 x.Codigo == "CARGA_PERIODO_YA_CONFIRMADO" ||
-                x.Codigo == "CARGA_PENDIENTE_EXISTENTE"))
+                x.Codigo == "CARGA_PENDIENTE_EXISTENTE" ||
+                x.Codigo == "CARGA_PENDIENTE_APROBACION"))
         {
             return response;
         }

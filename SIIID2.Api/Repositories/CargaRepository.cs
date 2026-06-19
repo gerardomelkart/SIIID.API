@@ -1119,30 +1119,29 @@ public class CargaRepository : ICargaRepository
             transaction);
     }
 
-    public async Task<string?> ObtenerCodigoCargaPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
+    public async Task<CargaPendienteInfo?> ObtenerCodigoCargaPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
     {
-        // Revisa si ya existe una carga validada pendiente de confirmar
-        // para la misma entidad y periodo.
-        // Esto evita generar múltiples cargas pendientes del mismo corte.
         var sql = @"
-                SELECT TOP 1 codigo_referencia
-                FROM carga
-                WHERE id_entidad_federativa = @IdEntidadFederativa
-                  AND mes_corte = @MesCorte
-                  AND anio_corte = @AnioCorte
-                  AND tipo_carga = 'CARGA_INICIAL'
-                  AND estado IN
-                  (
-                      'VALIDADO_PENDIENTE',
-                      'PENDIENTE_APROBACION'
-                  )
-                  AND activo = 1
-                ORDER BY fecha_validacion DESC;
-        ";
+        SELECT TOP 1
+            codigo_referencia AS CodigoReferencia,
+            estado AS Estado
+        FROM carga
+        WHERE id_entidad_federativa = @IdEntidadFederativa
+          AND mes_corte = @MesCorte
+          AND anio_corte = @AnioCorte
+          AND tipo_carga = 'CARGA_INICIAL'
+          AND estado IN
+          (
+              'VALIDADO_PENDIENTE',
+              'PENDIENTE_APROBACION'
+          )
+          AND activo = 1
+        ORDER BY fecha_validacion DESC;
+    ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return await connection.QueryFirstOrDefaultAsync<string?>(sql, new
+        return await connection.QueryFirstOrDefaultAsync<CargaPendienteInfo>(sql, new
         {
             IdEntidadFederativa = idEntidadFederativa,
             MesCorte = mesCorte,
@@ -1150,29 +1149,29 @@ public class CargaRepository : ICargaRepository
         });
     }
 
-    public async Task<string?> ObtenerCodigoActualizacionPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
+    public async Task<CargaPendienteInfo?> ObtenerCodigoActualizacionPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
     {
-        // Revisa si ya existe una actualización validada pendiente de confirmar
-        // para la misma entidad y periodo.
         var sql = @"
-                SELECT TOP 1 codigo_referencia
-                FROM carga
-                WHERE id_entidad_federativa = @IdEntidadFederativa
-                  AND mes_corte = @MesCorte
-                  AND anio_corte = @AnioCorte
-                  AND tipo_carga = 'ACTUALIZACION'
-                  AND estado IN
-                  (
-                      'VALIDADO_PENDIENTE_ACTUALIZACION',
-                      'PENDIENTE_APROBACION'
-                  )
-                  AND activo = 1
-                ORDER BY fecha_validacion DESC;
-        ";
+        SELECT TOP 1
+            codigo_referencia AS CodigoReferencia,
+            estado AS Estado
+        FROM carga
+        WHERE id_entidad_federativa = @IdEntidadFederativa
+          AND mes_corte = @MesCorte
+          AND anio_corte = @AnioCorte
+          AND tipo_carga = 'ACTUALIZACION'
+          AND estado IN
+          (
+              'VALIDADO_PENDIENTE_ACTUALIZACION',
+              'PENDIENTE_APROBACION'
+          )
+          AND activo = 1
+        ORDER BY fecha_validacion DESC;
+    ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return await connection.QueryFirstOrDefaultAsync<string?>(sql, new
+        return await connection.QueryFirstOrDefaultAsync<CargaPendienteInfo>(sql, new
         {
             IdEntidadFederativa = idEntidadFederativa,
             MesCorte = mesCorte,

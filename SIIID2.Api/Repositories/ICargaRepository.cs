@@ -24,11 +24,8 @@ public interface ICargaRepository
     Task<ConfirmarCargaResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion);
     // Obtiene el código de una carga pendiente para la misma entidad y periodo.
     // Si regresa null, no existe pendiente.
-    Task<string?> ObtenerCodigoCargaPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
-
-    // Obtiene el código de una actualización pendiente para la misma entidad y periodo.
-    // Si regresa null, no existe pendiente.
-    Task<string?> ObtenerCodigoActualizacionPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
+    Task<CargaPendienteInfo?> ObtenerCodigoCargaPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
+    Task<CargaPendienteInfo?> ObtenerCodigoActualizacionPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
 
     Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idEntidadFederativa);
 
