@@ -706,7 +706,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             WHERE v.id_carga = @IdCarga
               AND v.activo = 1
         )
-        SELECT SELECT TOP (@LimiteFilas)
+        SELECT TOP (@LimiteFilas)
             'victimas' AS Seccion,
             'NUEVO' AS TipoMovimiento,
             'id_ci + id_delito + id_vicf' AS CampoIdentificador,
