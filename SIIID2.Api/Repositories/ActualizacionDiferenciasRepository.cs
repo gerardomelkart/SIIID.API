@@ -410,7 +410,6 @@ delitos_actuales AS (
     FROM delitos_actuales_base
     WHERE rn = 1
 ),
-delitos_tmp AS (
         delitos_tmp AS (
             SELECT
                 d.id_ci,
@@ -749,7 +748,6 @@ victimas_actuales AS (
     FROM victimas_actuales_base
     WHERE rn = 1
 ),
-victimas_tmp AS (
         victimas_tmp AS (
             SELECT
                 v.id_ci,
