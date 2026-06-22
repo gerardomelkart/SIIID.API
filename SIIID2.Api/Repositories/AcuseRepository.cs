@@ -287,7 +287,8 @@ public class AcuseRepository : IAcuseRepository
             csd.subtipo_delito
         ORDER BY
             cd.clave2,
-            csd.clave3;
+            csd.clave3
+        OPTION (RECOMPILE);
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
@@ -297,7 +298,8 @@ public class AcuseRepository : IAcuseRepository
             new
             {
                 IdCargaActualizacion = idCargaActualizacion
-            });
+            },
+            commandTimeout: 180);
 
         return resumen.ToList();
     }
