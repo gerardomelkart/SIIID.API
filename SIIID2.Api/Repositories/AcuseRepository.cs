@@ -151,145 +151,99 @@ public class AcuseRepository : IAcuseRepository
         // de carpetas, delitos y víctimas para ese corte completo.
 
         var sql = @"
-        DECLARE @IdEntidadFederativa TINYINT;
-        DECLARE @MesCorte TINYINT;
-        DECLARE @AnioCorte SMALLINT;
+            DECLARE @IdEntidadFederativa TINYINT;
+            DECLARE @MesCorte TINYINT;
+            DECLARE @AnioCorte SMALLINT;
 
-        SELECT
-            @IdEntidadFederativa = id_entidad_federativa,
-            @MesCorte = mes_corte,
-            @AnioCorte = anio_corte
-        FROM carga
-        WHERE id_carga = @IdCargaActualizacion;
-
-        ;WITH cargas_periodo AS (
             SELECT
-                id_carga,
-                fecha_confirmacion
+                @IdEntidadFederativa = id_entidad_federativa,
+                @MesCorte = mes_corte,
+                @AnioCorte = anio_corte
             FROM carga
-            WHERE id_entidad_federativa = @IdEntidadFederativa
-              AND mes_corte = @MesCorte
-              AND anio_corte = @AnioCorte
-              AND estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
-              AND activo = 1
-        ),
-        carpetas_vigentes_base AS (
+            WHERE id_carga = @IdCargaActualizacion;
+
+            ;WITH delitos_periodo AS (
+                SELECT
+                    d.id_delito,
+                    d.id_modalidad_delito,
+                    d.id_grado_consumacion,
+                    d.id_instrumento_comision,
+                    d.id_forma_accion
+                FROM delito d
+                INNER JOIN carga c
+                    ON c.id_carga = d.id_carga
+                INNER JOIN carpeta_investigacion ci
+                    ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
+                   AND ci.activo = 1
+                WHERE c.id_entidad_federativa = @IdEntidadFederativa
+                  AND c.mes_corte = @MesCorte
+                  AND c.anio_corte = @AnioCorte
+                  AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+                  AND c.activo = 1
+                  AND d.activo = 1
+            ),
+            delitos_resumen AS (
+                SELECT
+                    id_modalidad_delito,
+                    id_grado_consumacion,
+                    id_instrumento_comision,
+                    id_forma_accion,
+                    COUNT_BIG(1) AS TotalDelitos
+                FROM delitos_periodo
+                GROUP BY
+                    id_modalidad_delito,
+                    id_grado_consumacion,
+                    id_instrumento_comision,
+                    id_forma_accion
+            ),
+            victimas_resumen AS (
+                SELECT
+                    dp.id_modalidad_delito,
+                    dp.id_grado_consumacion,
+                    dp.id_instrumento_comision,
+                    dp.id_forma_accion,
+                    COUNT_BIG(1) AS TotalVictimas
+                FROM delitos_periodo dp
+                INNER JOIN victima v
+                    ON v.id_delito = dp.id_delito
+                   AND v.activo = 1
+                GROUP BY
+                    dp.id_modalidad_delito,
+                    dp.id_grado_consumacion,
+                    dp.id_instrumento_comision,
+                    dp.id_forma_accion
+            )
             SELECT
-                ci.id_carpeta_investigacion,
-                ci.identificador_carpeta_fiscalia,
-                ROW_NUMBER() OVER (
-                    PARTITION BY ci.identificador_carpeta_fiscalia
-                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC,
-                             ci.id_carga DESC,
-                             ci.id_carpeta_investigacion DESC
-                ) AS rn
-            FROM carpeta_investigacion ci
-            INNER JOIN cargas_periodo cp
-                ON cp.id_carga = ci.id_carga
-            WHERE ci.activo = 1
-        ),
-        carpetas_vigentes AS (
-            SELECT
-                id_carpeta_investigacion,
-                identificador_carpeta_fiscalia
-            FROM carpetas_vigentes_base
-            WHERE rn = 1
-        ),
-        delitos_vigentes_base AS (
-            SELECT
-                d.id_delito,
-                d.id_modalidad_delito,
-                ci.identificador_carpeta_fiscalia,
-                d.identificador_delito_fiscalia,
-                ROW_NUMBER() OVER (
-                    PARTITION BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia
-                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC,
-                             d.id_carga DESC,
-                             d.id_delito DESC
-                ) AS rn
-            FROM delito d
-            INNER JOIN carpetas_vigentes cv
-                ON cv.id_carpeta_investigacion = d.id_carpeta_investigacion
-            INNER JOIN carpeta_investigacion ci
-                ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
-               AND ci.activo = 1
-            INNER JOIN cargas_periodo cp
-                ON cp.id_carga = d.id_carga
-            WHERE d.activo = 1
-        ),
-        delitos_vigentes AS (
-            SELECT
-                id_delito,
-                id_modalidad_delito,
-                identificador_carpeta_fiscalia,
-                identificador_delito_fiscalia
-            FROM delitos_vigentes_base
-            WHERE rn = 1
-        ),
-        victimas_vigentes_base AS (
-            SELECT
-                v.id_victima,
-                v.id_delito,
-                ci.identificador_carpeta_fiscalia,
-                d.identificador_delito_fiscalia,
-                v.identificador_victima_fiscalia,
-                ROW_NUMBER() OVER (
-                    PARTITION BY ci.identificador_carpeta_fiscalia,
-                                 d.identificador_delito_fiscalia,
-                                 v.identificador_victima_fiscalia
-                    ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC,
-                             v.id_carga DESC,
-                             v.id_victima DESC
-                ) AS rn
-            FROM victima v
-            INNER JOIN delitos_vigentes dv
-                ON dv.id_delito = v.id_delito
-            INNER JOIN delito d
-                ON d.id_delito = v.id_delito
-               AND d.activo = 1
-            INNER JOIN carpeta_investigacion ci
-                ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
-               AND ci.activo = 1
-            INNER JOIN cargas_periodo cp
-                ON cp.id_carga = v.id_carga
-            WHERE v.activo = 1
-        ),
-        victimas_vigentes AS (
-            SELECT
-                id_victima,
-                id_delito
-            FROM victimas_vigentes_base
-            WHERE rn = 1
-        )
-        SELECT
-            cd.clave2 AS ClaveDelito,
-            cd.delito AS TipoDelito,
-            csd.clave3 AS ClaveSubtipo,
-            csd.subtipo_delito AS SubtipoDelito,
-            COUNT(DISTINCT dv.id_delito) AS TotalDelitos,
-            COUNT(vv.id_victima) AS TotalVictimas
-        FROM delitos_vigentes dv
-        INNER JOIN catalogo_modalidad_delito cmd
-            ON cmd.id_modalidad_delito = dv.id_modalidad_delito
-           AND cmd.activo = 1
-        INNER JOIN catalogo_subtipo_delito csd
-            ON csd.id_subtipo_delito = cmd.id_subtipo_delito
-           AND csd.activo = 1
-        INNER JOIN catalogo_delito cd
-            ON cd.id_delito = csd.id_delito
-           AND cd.activo = 1
-        LEFT JOIN victimas_vigentes vv
-            ON vv.id_delito = dv.id_delito
-        GROUP BY
-            cd.clave2,
-            cd.delito,
-            csd.clave3,
-            csd.subtipo_delito
-        ORDER BY
-            cd.clave2,
-            csd.clave3
-        OPTION (RECOMPILE);
-    ";
+                s.clave2_sabana AS ClaveDelito,
+                s.delito_sabana AS TipoDelito,
+                s.clave3_sabana AS ClaveSubtipo,
+                s.subtipo_delito_sabana AS SubtipoDelito,
+                CONVERT(int, ISNULL(dr.TotalDelitos, 0)) AS TotalDelitos,
+                CONVERT(int, ISNULL(vr.TotalVictimas, 0)) AS TotalVictimas,
+                MIN(s.id_delito_sabana) AS Orden
+            FROM catalogo_delito_sabana s
+            LEFT JOIN delitos_resumen dr
+                ON dr.id_modalidad_delito = s.id_modalidad_delito
+               AND dr.id_grado_consumacion = s.id_grado_consumacion
+               AND dr.id_instrumento_comision = s.id_instrumento_comision
+               AND dr.id_forma_accion = s.id_forma_accion
+            LEFT JOIN victimas_resumen vr
+                ON vr.id_modalidad_delito = s.id_modalidad_delito
+               AND vr.id_grado_consumacion = s.id_grado_consumacion
+               AND vr.id_instrumento_comision = s.id_instrumento_comision
+               AND vr.id_forma_accion = s.id_forma_accion
+            WHERE s.activo = 1
+            GROUP BY
+                s.clave2_sabana,
+                s.delito_sabana,
+                s.clave3_sabana,
+                s.subtipo_delito_sabana,
+                dr.TotalDelitos,
+                vr.TotalVictimas
+            ORDER BY
+                Orden
+            OPTION (RECOMPILE);
+            ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
