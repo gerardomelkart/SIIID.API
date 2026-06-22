@@ -129,23 +129,41 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
     private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasCarpetasAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
     {
         var sql = @"
-;WITH carpetas_actuales AS (
-    SELECT
-        ci.identificador_carpeta_fiscalia,
-        ci.nomenclatura_carpeta_fiscalia,
-        ci.fecha_inicio,
-        ci.resumen_hechos
-    FROM carpeta_investigacion ci
-    INNER JOIN carga c
-        ON c.id_carga = ci.id_carga
-    WHERE c.id_entidad_federativa = @IdEntidadFederativa
-      AND c.mes_corte = @MesCorte
-      AND c.anio_corte = @AnioCorte
-      AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
-      AND c.activo = 1
-      AND ci.activo = 1
-),
-carpetas_tmp AS (
+            ;WITH carpetas_actuales_base AS (
+                SELECT
+                    ci.id_carpeta_investigacion,
+                    ci.identificador_carpeta_fiscalia,
+                    ci.nomenclatura_carpeta_fiscalia,
+                    ci.fecha_inicio,
+                    ci.resumen_hechos,
+                    ROW_NUMBER() OVER
+                    (
+                        PARTITION BY ci.identificador_carpeta_fiscalia
+                        ORDER BY
+                            ISNULL(c.fecha_confirmacion, '19000101') DESC,
+                            ci.id_carga DESC,
+                            ci.id_carpeta_investigacion DESC
+                    ) AS rn
+                FROM carpeta_investigacion ci
+                INNER JOIN carga c
+                    ON c.id_carga = ci.id_carga
+                WHERE c.id_entidad_federativa = @IdEntidadFederativa
+                  AND c.mes_corte = @MesCorte
+                  AND c.anio_corte = @AnioCorte
+                  AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+                  AND c.activo = 1
+                  AND ci.activo = 1
+            ),
+            carpetas_actuales AS (
+                SELECT
+                    identificador_carpeta_fiscalia,
+                    nomenclatura_carpeta_fiscalia,
+                    fecha_inicio,
+                    resumen_hechos
+                FROM carpetas_actuales_base
+                WHERE rn = 1
+            ),
+            carpetas_tmp AS (
             SELECT
                 c.id_ci,
                 c.ntra_ci,
@@ -295,62 +313,104 @@ carpetas_tmp AS (
     private static async Task<List<ActualizacionDiferenciaRow>>ObtenerDiferenciasDelitosAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
     {
         var sql = @"
-;WITH delitos_actuales AS (
+        ;WITH delitos_actuales_base AS (
+            SELECT
+                d.id_delito,
+                ci.identificador_carpeta_fiscalia AS id_ci,
+                d.identificador_delito_fiscalia,
+                d.delito_fiscalia,
+                d.modalidad_delito_fiscalia,
+                d.id_forma_accion,
+                d.fecha_hechos,
+                d.id_instrumento_comision,
+                d.id_grado_consumacion,
+                d.id_modalidad_delito,
+                d.id_entidad_federativa,
+                d.id_municipio,
+                d.id_localidad_fiscalia,
+                d.localidad_fiscalia_nombre,
+                d.id_colonia_fiscalia,
+                d.colonia_fiscalia_nombre,
+                d.id_codigo_postal,
+                d.coordenada_x,
+                d.coordenada_y,
+                d.domicilio_hechos,
+                CONVERT(varchar(50), fa.clave) AS forma_acc_valor,
+                CONVERT(varchar(50), ic.clave) AS emto_com_dto_valor,
+                CONVERT(varchar(50), gc.clave) AS grdo_cons_valor,
+                md.clave4 AS clasf_de_dto_valor,
+                ef.clave AS id_ent_hchos_valor,
+                mun.clave AS id_mun_hchos_valor,
+                ccp.codigo_postal AS cp_valor,
+                ROW_NUMBER() OVER
+                (
+                    PARTITION BY
+                        ci.identificador_carpeta_fiscalia,
+                        d.identificador_delito_fiscalia
+                    ORDER BY
+                        ISNULL(c.fecha_confirmacion, '19000101') DESC,
+                        d.id_carga DESC,
+                        d.id_delito DESC
+                ) AS rn
+            FROM delito d
+            INNER JOIN carpeta_investigacion ci
+                ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
+               AND ci.activo = 1
+            INNER JOIN carga c
+                ON c.id_carga = d.id_carga
+            LEFT JOIN catalogo_forma_accion fa
+                ON fa.id_forma_accion = d.id_forma_accion
+            LEFT JOIN catalogo_instrumento_comision ic
+                ON ic.id_instrumento_comision = d.id_instrumento_comision
+            LEFT JOIN catalogo_grado_consumacion gc
+                ON gc.id_grado_consumacion = d.id_grado_consumacion
+            LEFT JOIN catalogo_modalidad_delito md
+                ON md.id_modalidad_delito = d.id_modalidad_delito
+            LEFT JOIN catalogo_entidad_federativa ef
+                ON ef.id_entidad_federativa = d.id_entidad_federativa
+            LEFT JOIN catalogo_municipio mun
+                ON mun.id_municipio = d.id_municipio
+            LEFT JOIN catalogo_codigo_postal ccp
+                ON ccp.id_codigo_postal = d.id_codigo_postal
+            WHERE c.id_entidad_federativa = @IdEntidadFederativa
+              AND c.mes_corte = @MesCorte
+              AND c.anio_corte = @AnioCorte
+              AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+              AND c.activo = 1
+              AND d.activo = 1
+        ),
+delitos_actuales AS (
     SELECT
-        ci.identificador_carpeta_fiscalia AS id_ci,
-        d.identificador_delito_fiscalia,
-        d.delito_fiscalia,
-        d.modalidad_delito_fiscalia,
-        d.id_forma_accion,
-        d.fecha_hechos,
-        d.id_instrumento_comision,
-        d.id_grado_consumacion,
-        d.id_modalidad_delito,
-        d.id_entidad_federativa,
-        d.id_municipio,
-        d.id_localidad_fiscalia,
-        d.localidad_fiscalia_nombre,
-        d.id_colonia_fiscalia,
-        d.colonia_fiscalia_nombre,
-        d.id_codigo_postal,
-        d.coordenada_x,
-        d.coordenada_y,
-        d.domicilio_hechos,
-        CONVERT(varchar(50), fa.clave) AS forma_acc_valor,
-        CONVERT(varchar(50), ic.clave) AS emto_com_dto_valor,
-        CONVERT(varchar(50), gc.clave) AS grdo_cons_valor,
-        md.clave4 AS clasf_de_dto_valor,
-        ef.clave AS id_ent_hchos_valor,
-        mun.clave AS id_mun_hchos_valor,
-        ccp.codigo_postal AS cp_valor
-    FROM delito d
-    INNER JOIN carpeta_investigacion ci
-        ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
-       AND ci.activo = 1
-    INNER JOIN carga c
-        ON c.id_carga = d.id_carga
-    LEFT JOIN catalogo_forma_accion fa
-        ON fa.id_forma_accion = d.id_forma_accion
-    LEFT JOIN catalogo_instrumento_comision ic
-        ON ic.id_instrumento_comision = d.id_instrumento_comision
-    LEFT JOIN catalogo_grado_consumacion gc
-        ON gc.id_grado_consumacion = d.id_grado_consumacion
-    LEFT JOIN catalogo_modalidad_delito md
-        ON md.id_modalidad_delito = d.id_modalidad_delito
-    LEFT JOIN catalogo_entidad_federativa ef
-        ON ef.id_entidad_federativa = d.id_entidad_federativa
-    LEFT JOIN catalogo_municipio mun
-        ON mun.id_municipio = d.id_municipio
-    LEFT JOIN catalogo_codigo_postal ccp
-        ON ccp.id_codigo_postal = d.id_codigo_postal
-    WHERE c.id_entidad_federativa = @IdEntidadFederativa
-      AND c.mes_corte = @MesCorte
-      AND c.anio_corte = @AnioCorte
-      AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
-      AND c.activo = 1
-      AND d.activo = 1
+        id_ci,
+        identificador_delito_fiscalia,
+        delito_fiscalia,
+        modalidad_delito_fiscalia,
+        id_forma_accion,
+        fecha_hechos,
+        id_instrumento_comision,
+        id_grado_consumacion,
+        id_modalidad_delito,
+        id_entidad_federativa,
+        id_municipio,
+        id_localidad_fiscalia,
+        localidad_fiscalia_nombre,
+        id_colonia_fiscalia,
+        colonia_fiscalia_nombre,
+        id_codigo_postal,
+        coordenada_x,
+        coordenada_y,
+        domicilio_hechos,
+        forma_acc_valor,
+        emto_com_dto_valor,
+        grdo_cons_valor,
+        clasf_de_dto_valor,
+        id_ent_hchos_valor,
+        id_mun_hchos_valor,
+        cp_valor
+    FROM delitos_actuales_base
+    WHERE rn = 1
 ),
-delitos_tmp AS (
+        delitos_tmp AS (
             SELECT
                 d.id_ci,
                 d.id_delito,
@@ -598,61 +658,97 @@ delitos_tmp AS (
         return filas.ToList();
     }
 
-    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasVictimasAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
+    private static async Task<List<ActualizacionDiferenciaRow>>ObtenerDiferenciasVictimasAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
     {
         var sql = @"
-;WITH victimas_actuales AS (
+        ;WITH victimas_actuales_base AS (
+            SELECT
+                v.id_victima,
+                ci.identificador_carpeta_fiscalia AS id_ci,
+                d.identificador_delito_fiscalia AS id_delito_fiscalia,
+                v.identificador_victima_fiscalia,
+                v.id_tipo_victima,
+                v.id_tipo_victima_moral,
+                v.id_sexo,
+                v.id_genero,
+                v.id_nacionalidad,
+                v.id_pertenece_poblacion_indigena,
+                v.id_presenta_discapacidad,
+                v.fecha_nacimiento,
+                v.edad,
+                CONVERT(varchar(50), tv.clave) AS id_tv_valor,
+                CONVERT(varchar(50), tvm.clave) AS id_tpm_valor,
+                CONVERT(varchar(50), sx.clave) AS sexo_valor,
+                CONVERT(varchar(50), gen.clave) AS genero_valor,
+                nac.clave AS nacional_valor,
+                CONVERT(varchar(50), pob.clave) AS pob_valor,
+                CONVERT(varchar(50), disc.clave) AS disc_valor,
+                ROW_NUMBER() OVER
+                (
+                    PARTITION BY
+                        ci.identificador_carpeta_fiscalia,
+                        d.identificador_delito_fiscalia,
+                        v.identificador_victima_fiscalia
+                    ORDER BY
+                        ISNULL(c.fecha_confirmacion, '19000101') DESC,
+                        v.id_carga DESC,
+                        v.id_victima DESC
+                ) AS rn
+            FROM victima v
+            INNER JOIN delito d
+                ON d.id_delito = v.id_delito
+               AND d.activo = 1
+            INNER JOIN carpeta_investigacion ci
+                ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
+               AND ci.activo = 1
+            INNER JOIN carga c
+                ON c.id_carga = v.id_carga
+            LEFT JOIN catalogo_tipo_victima tv
+                ON tv.id_tipo_victima = v.id_tipo_victima
+            LEFT JOIN catalogo_tipo_victima_moral tvm
+                ON tvm.id_tipo_victima_moral = v.id_tipo_victima_moral
+            LEFT JOIN catalogo_sexo sx
+                ON sx.id_sexo = v.id_sexo
+            LEFT JOIN catalogo_genero gen
+                ON gen.id_genero = v.id_genero
+            LEFT JOIN catalogo_nacionalidad nac
+                ON nac.id_nacionalidad = v.id_nacionalidad
+            LEFT JOIN catalogo_pertenece_poblacion_indigena pob
+                ON pob.id_pertenece_poblacion_indigena = v.id_pertenece_poblacion_indigena
+            LEFT JOIN catalogo_presenta_discapacidad disc
+                ON disc.id_presenta_discapacidad = v.id_presenta_discapacidad
+            WHERE c.id_entidad_federativa = @IdEntidadFederativa
+              AND c.mes_corte = @MesCorte
+              AND c.anio_corte = @AnioCorte
+              AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
+              AND c.activo = 1
+              AND v.activo = 1
+        ),
+victimas_actuales AS (
     SELECT
-        ci.identificador_carpeta_fiscalia AS id_ci,
-        d.identificador_delito_fiscalia AS id_delito_fiscalia,
-        v.identificador_victima_fiscalia,
-        v.id_tipo_victima,
-        v.id_tipo_victima_moral,
-        v.id_sexo,
-        v.id_genero,
-        v.id_nacionalidad,
-        v.id_pertenece_poblacion_indigena,
-        v.id_presenta_discapacidad,
-        v.fecha_nacimiento,
-        v.edad,
-        CONVERT(varchar(50), tv.clave) AS id_tv_valor,
-        CONVERT(varchar(50), tvm.clave) AS id_tpm_valor,
-        CONVERT(varchar(50), sx.clave) AS sexo_valor,
-        CONVERT(varchar(50), gen.clave) AS genero_valor,
-        nac.clave AS nacional_valor,
-        CONVERT(varchar(50), pob.clave) AS pob_valor,
-        CONVERT(varchar(50), disc.clave) AS disc_valor
-    FROM victima v
-    INNER JOIN delito d
-        ON d.id_delito = v.id_delito
-       AND d.activo = 1
-    INNER JOIN carpeta_investigacion ci
-        ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
-       AND ci.activo = 1
-    INNER JOIN carga c
-        ON c.id_carga = v.id_carga
-    LEFT JOIN catalogo_tipo_victima tv
-        ON tv.id_tipo_victima = v.id_tipo_victima
-    LEFT JOIN catalogo_tipo_victima_moral tvm
-        ON tvm.id_tipo_victima_moral = v.id_tipo_victima_moral
-    LEFT JOIN catalogo_sexo sx
-        ON sx.id_sexo = v.id_sexo
-    LEFT JOIN catalogo_genero gen
-        ON gen.id_genero = v.id_genero
-    LEFT JOIN catalogo_nacionalidad nac
-        ON nac.id_nacionalidad = v.id_nacionalidad
-    LEFT JOIN catalogo_pertenece_poblacion_indigena pob
-        ON pob.id_pertenece_poblacion_indigena = v.id_pertenece_poblacion_indigena
-    LEFT JOIN catalogo_presenta_discapacidad disc
-        ON disc.id_presenta_discapacidad = v.id_presenta_discapacidad
-    WHERE c.id_entidad_federativa = @IdEntidadFederativa
-      AND c.mes_corte = @MesCorte
-      AND c.anio_corte = @AnioCorte
-      AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
-      AND c.activo = 1
-      AND v.activo = 1
+        id_ci,
+        id_delito_fiscalia,
+        identificador_victima_fiscalia,
+        id_tipo_victima,
+        id_tipo_victima_moral,
+        id_sexo,
+        id_genero,
+        id_nacionalidad,
+        id_pertenece_poblacion_indigena,
+        id_presenta_discapacidad,
+        fecha_nacimiento,
+        edad,
+        id_tv_valor,
+        id_tpm_valor,
+        sexo_valor,
+        genero_valor,
+        nacional_valor,
+        pob_valor,
+        disc_valor
+    FROM victimas_actuales_base
+    WHERE rn = 1
 ),
-victimas_tmp AS (
+        victimas_tmp AS (
             SELECT
                 v.id_ci,
                 v.id_delito,
