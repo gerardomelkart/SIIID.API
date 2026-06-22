@@ -598,7 +598,7 @@ delitos_tmp AS (
         return filas.ToList();
     }
 
-    private static async Task<List<ActualizacionDiferenciaRow>>ObtenerDiferenciasVictimasAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
+    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasVictimasAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
     {
         var sql = @"
 ;WITH victimas_actuales AS (
