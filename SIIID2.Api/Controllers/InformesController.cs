@@ -148,7 +148,7 @@ public class InformesController : ControllerBase
     // Ejemplo: GET /api/informes/sabanas?anioCorte=2026
     [Authorize]
     [HttpGet("sabanas")]
-    public async Task<IActionResult> DescargarSabanas([FromQuery] int anioCorte)
+    public async Task<IActionResult> DescargarSabanas([FromQuery] int anioCorte, [FromQuery] string tipo = "COMPLETA")
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -165,14 +165,9 @@ public class InformesController : ControllerBase
 
         try
         {
-            var zip = await _informeService.GenerarZipSabanasAsync(
-                idUsuarioConsulta,
-                anioCorte);
+            var zip = await _informeService.GenerarZipSabanasAsync(idUsuarioConsulta, anioCorte, tipo);
 
-            return File(
-                zip.Archivo,
-                "application/zip",
-                zip.NombreArchivo);
+            return File(zip.Archivo, "application/zip", zip.NombreArchivo);
         }
         catch (UnauthorizedAccessException ex)
         {

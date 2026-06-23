@@ -102,7 +102,7 @@ public class InformeService : IInformeService
         };
     }
 
-    public async Task<InformeArchivoZipResponse> GenerarZipSabanasAsync(int idUsuarioConsulta, int anioCorte)
+    public async Task<InformeArchivoZipResponse> GenerarZipSabanasAsync(int idUsuarioConsulta, int anioCorte, string? tipoSabana)
     {
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
 
@@ -121,34 +121,40 @@ public class InformeService : IInformeService
             throw new InvalidOperationException("El año de corte no es válido.");
         }
 
+        var tipo = NormalizarTipoSabana(tipoSabana);
         var firma = await _informeRepository.ObtenerFirmaSabanaAsync(anioCorte);
-        var cacheKey = $"SABANAS:{anioCorte}:{firma.UltimoIdCarga}:{firma.TotalCargasConfirmadas}:{firma.UltimaFechaMovimiento:O}";
+        var cacheKey = $"SABANAS:{tipo}:{anioCorte}:{firma.UltimoIdCarga}:{firma.TotalCargasConfirmadas}:{firma.UltimaFechaMovimiento:O}";
 
         if (_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var sabanasCacheadas))
         {
-            _logger.LogInformation("PERFORMANCE_SABANAS_CACHE_HIT anio={AnioCorte} key={CacheKey}", anioCorte, cacheKey);
+            _logger.LogInformation("PERFORMANCE_SABANAS_CACHE_HIT tipo={TipoSabana} anio={AnioCorte} key={CacheKey}", tipo, anioCorte, cacheKey);
             return sabanasCacheadas!;
         }
 
         var swTotal = Stopwatch.StartNew();
         var swConsultas = Stopwatch.StartNew();
+        var tareas = new List<(string Archivo, string Hoja, Task<List<IDictionary<string, object?>>> Consulta)>();
 
-        var estatalDelitosTask = _informeRepository.ObtenerSabanaEstatalDelitosAsync(anioCorte);
-        var municipalDelitosTask = _informeRepository.ObtenerSabanaMunicipalDelitosAsync(anioCorte);
-        var estatalVictimasTask = _informeRepository.ObtenerSabanaEstatalVictimasAsync(anioCorte);
-        var municipalVictimasTask = _informeRepository.ObtenerSabanaMunicipalVictimasAsync(anioCorte);
+        if (tipo is "COMPLETA" or "ESTATALES")
+        {
+            tareas.Add(("estatal-delitos.xlsx", "estatal-delitos", _informeRepository.ObtenerSabanaEstatalDelitosAsync(anioCorte)));
+            tareas.Add(("estatal-victimas.xlsx", "estatal-victimas", _informeRepository.ObtenerSabanaEstatalVictimasAsync(anioCorte)));
+        }
 
-        await Task.WhenAll(estatalDelitosTask, municipalDelitosTask, estatalVictimasTask, municipalVictimasTask);
+        if (tipo is "COMPLETA" or "MUNICIPALES")
+        {
+            tareas.Add(("municipal-delitos.xlsx", "municipal-delitos", _informeRepository.ObtenerSabanaMunicipalDelitosAsync(anioCorte)));
+            tareas.Add(("municipal-victimas.xlsx", "municipal-victimas", _informeRepository.ObtenerSabanaMunicipalVictimasAsync(anioCorte)));
+        }
 
-        var estatalDelitos = await estatalDelitosTask;
-        var municipalDelitos = await municipalDelitosTask;
-        var estatalVictimas = await estatalVictimasTask;
-        var municipalVictimas = await municipalVictimasTask;
+        await Task.WhenAll(tareas.Select(x => x.Consulta));
+
+        var resultados = tareas.Select(x => (x.Archivo, x.Hoja, Filas: x.Consulta.Result)).ToList();
 
         swConsultas.Stop();
 
-        _logger.LogInformation("PERFORMANCE_SABANAS_CONSULTAS anio={AnioCorte} tiempoMs={TiempoMs} filasEstatalDelitos={EstatalDelitos} filasMunicipalDelitos={MunicipalDelitos} filasEstatalVictimas={EstatalVictimas} filasMunicipalVictimas={MunicipalVictimas}",
-            anioCorte, swConsultas.ElapsedMilliseconds, estatalDelitos.Count, municipalDelitos.Count, estatalVictimas.Count, municipalVictimas.Count);
+        _logger.LogInformation("PERFORMANCE_SABANAS_CONSULTAS tipo={TipoSabana} anio={AnioCorte} tiempoMs={TiempoMs} archivos={Archivos}",
+            tipo, anioCorte, swConsultas.ElapsedMilliseconds, string.Join(", ", resultados.Select(x => $"{x.Archivo}:{x.Filas.Count}")));
 
         var swZip = Stopwatch.StartNew();
 
@@ -156,22 +162,22 @@ public class InformeService : IInformeService
 
         using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
         {
-            AgregarExcelAlZip(archive, "estatal-delitos.xlsx", "estatal-delitos", estatalDelitos);
-            AgregarExcelAlZip(archive, "municipal-delitos.xlsx", "municipal-delitos", municipalDelitos);
-            AgregarExcelAlZip(archive, "estatal-victimas.xlsx", "estatal-victimas", estatalVictimas);
-            AgregarExcelAlZip(archive, "municipal-victimas.xlsx", "municipal-victimas", municipalVictimas);
+            foreach (var resultado in resultados)
+            {
+                AgregarExcelAlZip(archive, resultado.Archivo, resultado.Hoja, resultado.Filas);
+            }
         }
 
         swZip.Stop();
         swTotal.Stop();
 
-        _logger.LogInformation("PERFORMANCE_SABANAS_ZIP anio={AnioCorte} tiempoMs={TiempoMs}", anioCorte, swZip.ElapsedMilliseconds);
-        _logger.LogInformation("PERFORMANCE_SABANAS_TOTAL anio={AnioCorte} tiempoMs={TiempoMs}", anioCorte, swTotal.ElapsedMilliseconds);
+        _logger.LogInformation("PERFORMANCE_SABANAS_ZIP tipo={TipoSabana} anio={AnioCorte} tiempoMs={TiempoMs}", tipo, anioCorte, swZip.ElapsedMilliseconds);
+        _logger.LogInformation("PERFORMANCE_SABANAS_TOTAL tipo={TipoSabana} anio={AnioCorte} tiempoMs={TiempoMs}", tipo, anioCorte, swTotal.ElapsedMilliseconds);
 
         var response = new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = $"SABANAS_{anioCorte}.zip"
+            NombreArchivo = ObtenerNombreZipSabanas(tipo, anioCorte)
         };
 
         _cache.Set(
@@ -428,5 +434,28 @@ public class InformeService : IInformeService
             idEntidadFederativa,
             mesCorte,
             anioCorte);
+    }
+
+    private static string NormalizarTipoSabana(string? tipoSabana)
+    {
+        var tipo = (tipoSabana ?? "COMPLETA").Trim().ToUpperInvariant();
+
+        return tipo switch
+        {
+            "COMPLETA" => "COMPLETA",
+            "ESTATALES" => "ESTATALES",
+            "MUNICIPALES" => "MUNICIPALES",
+            _ => throw new InvalidOperationException("El tipo de sábana no es válido.")
+        };
+    }
+
+    private static string ObtenerNombreZipSabanas(string tipoSabana, int anioCorte)
+    {
+        return tipoSabana switch
+        {
+            "ESTATALES" => $"SABANAS_ESTATALES_{anioCorte}.zip",
+            "MUNICIPALES" => $"SABANAS_MUNICIPALES_{anioCorte}.zip",
+            _ => $"SABANAS_COMPLETAS_{anioCorte}.zip"
+        };
     }
 }
