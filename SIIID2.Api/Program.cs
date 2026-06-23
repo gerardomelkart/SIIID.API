@@ -19,6 +19,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Habilita controladores MVC/API.
 builder.Services.AddControllers();
 
+
+builder.Services.AddMemoryCache();
+
 // Configuración de respuestas personalizadas para errores de modelo.
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {

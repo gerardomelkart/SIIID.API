@@ -1,7 +1,9 @@
-﻿using SIIID2.Api.Models;
+﻿using ClosedXML.Excel;
+using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
+using System.Diagnostics;
 using System.IO.Compression;
-using ClosedXML.Excel;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace SIIID2.Api.Services;
 
@@ -9,11 +11,15 @@ public class InformeService : IInformeService
 {
     private readonly IInformeRepository _informeRepository;
     private readonly IUsuarioRepository _usuarioRepository;
+    private readonly ILogger<InformeService> _logger;
+    private readonly IMemoryCache _cache;
 
-    public InformeService(IInformeRepository informeRepository, IUsuarioRepository usuarioRepository)
+    public InformeService(IInformeRepository informeRepository, IUsuarioRepository usuarioRepository, ILogger<InformeService> logger, IMemoryCache cache)
     {
         _informeRepository = informeRepository;
         _usuarioRepository = usuarioRepository;
+        _logger = logger;
+        _cache = cache;
     }
 
     public async Task<List<InformeEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? mesCorte, int? anioCorte)
@@ -115,6 +121,18 @@ public class InformeService : IInformeService
             throw new InvalidOperationException("El año de corte no es válido.");
         }
 
+        var firma = await _informeRepository.ObtenerFirmaSabanaAsync(anioCorte);
+        var cacheKey = $"SABANAS:{anioCorte}:{firma.UltimoIdCarga}:{firma.TotalCargasConfirmadas}:{firma.UltimaFechaMovimiento:O}";
+
+        if (_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var sabanasCacheadas))
+        {
+            _logger.LogInformation("PERFORMANCE_SABANAS_CACHE_HIT anio={AnioCorte} key={CacheKey}", anioCorte, cacheKey);
+            return sabanasCacheadas!;
+        }
+
+        var swTotal = Stopwatch.StartNew();
+        var swConsultas = Stopwatch.StartNew();
+
         var estatalDelitosTask = _informeRepository.ObtenerSabanaEstatalDelitosAsync(anioCorte);
         var municipalDelitosTask = _informeRepository.ObtenerSabanaMunicipalDelitosAsync(anioCorte);
         var estatalVictimasTask = _informeRepository.ObtenerSabanaEstatalVictimasAsync(anioCorte);
@@ -127,40 +145,45 @@ public class InformeService : IInformeService
         var estatalVictimas = await estatalVictimasTask;
         var municipalVictimas = await municipalVictimasTask;
 
+        swConsultas.Stop();
+
+        _logger.LogInformation("PERFORMANCE_SABANAS_CONSULTAS anio={AnioCorte} tiempoMs={TiempoMs} filasEstatalDelitos={EstatalDelitos} filasMunicipalDelitos={MunicipalDelitos} filasEstatalVictimas={EstatalVictimas} filasMunicipalVictimas={MunicipalVictimas}",
+            anioCorte, swConsultas.ElapsedMilliseconds, estatalDelitos.Count, municipalDelitos.Count, estatalVictimas.Count, municipalVictimas.Count);
+
+        var swZip = Stopwatch.StartNew();
+
         using var zipStream = new MemoryStream();
 
         using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
         {
-            AgregarExcelAlZip(
-                archive,
-                "estatal-delitos.xlsx",
-                "estatal-delitos",
-                estatalDelitos);
-
-            AgregarExcelAlZip(
-                archive,
-                "municipal-delitos.xlsx",
-                "municipal-delitos",
-                municipalDelitos);
-
-            AgregarExcelAlZip(
-                archive,
-                "estatal-victimas.xlsx",
-                "estatal-victimas",
-                estatalVictimas);
-
-            AgregarExcelAlZip(
-                archive,
-                "municipal-victimas.xlsx",
-                "municipal-victimas",
-                municipalVictimas);
+            AgregarExcelAlZip(archive, "estatal-delitos.xlsx", "estatal-delitos", estatalDelitos);
+            AgregarExcelAlZip(archive, "municipal-delitos.xlsx", "municipal-delitos", municipalDelitos);
+            AgregarExcelAlZip(archive, "estatal-victimas.xlsx", "estatal-victimas", estatalVictimas);
+            AgregarExcelAlZip(archive, "municipal-victimas.xlsx", "municipal-victimas", municipalVictimas);
         }
 
-        return new InformeArchivoZipResponse
+        swZip.Stop();
+        swTotal.Stop();
+
+        _logger.LogInformation("PERFORMANCE_SABANAS_ZIP anio={AnioCorte} tiempoMs={TiempoMs}", anioCorte, swZip.ElapsedMilliseconds);
+        _logger.LogInformation("PERFORMANCE_SABANAS_TOTAL anio={AnioCorte} tiempoMs={TiempoMs}", anioCorte, swTotal.ElapsedMilliseconds);
+
+        var response = new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
             NombreArchivo = $"SABANAS_{anioCorte}.zip"
         };
+
+        _cache.Set(
+            cacheKey,
+            response,
+            new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(30),
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(4)
+            });
+
+        return response;
     }
 
     private static void AgregarExcelAlZip(ZipArchive archive, string nombreArchivo, string nombreHoja, List<IDictionary<string, object?>> filas)

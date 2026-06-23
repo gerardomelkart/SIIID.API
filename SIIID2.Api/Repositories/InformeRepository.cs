@@ -1271,4 +1271,32 @@ public class InformeRepository : IInformeRepository
 
         return await QueryDictionaryAnioAsync(sql, anioCorte);
     }
+
+    public async Task<InformeSabanaFirma> ObtenerFirmaSabanaAsync(int anioCorte)
+    {
+        var sql = @"
+        SELECT
+            ISNULL(MAX(c.id_carga), 0) AS UltimoIdCarga,
+            COUNT_BIG(1) AS TotalCargasConfirmadas,
+            MAX(COALESCE(c.fecha_confirmacion, c.fecha_validacion)) AS UltimaFechaMovimiento
+        FROM carga c
+        WHERE c.activo = 1
+          AND c.anio_corte = @AnioCorte
+          AND (
+                 (c.tipo_carga = 'CARGA_INICIAL' AND c.estado = 'CONFIRMADO')
+              OR (c.tipo_carga = 'ACTUALIZACION' AND c.estado = 'CONFIRMADO_ACTUALIZACION')
+          );
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var firma = await connection.QuerySingleAsync<InformeSabanaFirma>(
+            sql,
+            new
+            {
+                AnioCorte = anioCorte
+            });
+
+        return firma;
+    }
 }
