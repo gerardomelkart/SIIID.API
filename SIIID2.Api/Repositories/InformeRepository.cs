@@ -432,15 +432,6 @@ public class InformeRepository : IInformeRepository
           AND c.mes_corte = p.mes_corte
           AND c.anio_corte = p.anio_corte
         ORDER BY
-            CASE
-                WHEN c.tipo_carga = 'ACTUALIZACION'
-                     AND c.estado = 'CONFIRMADO_ACTUALIZACION'
-                    THEN 1
-                WHEN c.tipo_carga = 'CARGA_INICIAL'
-                     AND c.estado = 'CONFIRMADO'
-                    THEN 1
-                ELSE 0
-            END DESC,
             COALESCE(c.fecha_confirmacion, c.fecha_validacion) DESC,
             c.id_carga DESC
         ) ultimo
