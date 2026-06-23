@@ -463,28 +463,34 @@ public class InformeRepository : IInformeRepository
     public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte)
     {
         var sql = @"
-            WITH sabana AS (
-            SELECT
-                MIN(s.id_delito_sabana) AS orden_sabana,
-                MIN(cd.id_delito) AS orden_delito,
-                bj.bien_juridico,
-                s.delito_sabana,
-                s.subtipo_delito_sabana,
-                s.modalidad_delito_sabana
-                FROM catalogo_delito_sabana s
-                INNER JOIN catalogo_modalidad_delito md
-                    ON md.id_modalidad_delito = s.id_modalidad_delito
-                   AND md.activo = 1
-                INNER JOIN catalogo_subtipo_delito sd
-                    ON sd.id_subtipo_delito = md.id_subtipo_delito
-                   AND sd.activo = 1
-                INNER JOIN catalogo_delito cd
-                    ON cd.id_delito = sd.id_delito
-                   AND cd.activo = 1
-                INNER JOIN catalogo_bien_juridico bj
-                    ON bj.id_bien_juridico = cd.id_bien_juridico
-                   AND bj.activo = 1
-                WHERE s.activo = 1
+                WITH sabana AS (
+                SELECT
+                    MIN(COALESCE(ol.orden_general, s.id_delito_sabana)) AS orden_sabana,
+                    MIN(cd.id_delito) AS orden_delito,
+                    bj.bien_juridico,
+                    s.delito_sabana,
+                    s.subtipo_delito_sabana,
+                    s.modalidad_delito_sabana
+                    FROM catalogo_delito_sabana s
+                    INNER JOIN catalogo_modalidad_delito md
+                        ON md.id_modalidad_delito = s.id_modalidad_delito
+                       AND md.activo = 1
+                    INNER JOIN catalogo_subtipo_delito sd
+                        ON sd.id_subtipo_delito = md.id_subtipo_delito
+                       AND sd.activo = 1
+                    INNER JOIN catalogo_delito cd
+                        ON cd.id_delito = sd.id_delito
+                       AND cd.activo = 1
+                    INNER JOIN catalogo_bien_juridico bj
+                        ON bj.id_bien_juridico = cd.id_bien_juridico
+                       AND bj.activo = 1
+                    LEFT JOIN dbo.catalogo_sabana_orden_legacy ol
+                        ON ol.bien_juridico = bj.bien_juridico
+                       AND ol.delito_sabana = s.delito_sabana
+                       AND ol.subtipo_delito_sabana = s.subtipo_delito_sabana
+                       AND ol.modalidad_delito_sabana = s.modalidad_delito_sabana
+                       AND ol.activo = 1
+                    WHERE s.activo = 1
                 GROUP BY
                     bj.bien_juridico,
                     s.delito_sabana,
@@ -598,7 +604,10 @@ public class InformeRepository : IInformeRepository
             m.modalidad_delito_sabana
         ORDER BY
             m.clave_ent,
-            m.orden_sabana
+            m.orden_sabana,
+            m.orden_delito,
+            m.subtipo_delito_sabana,
+            m.modalidad_delito_sabana
         OPTION (RECOMPILE);
         ";
 
@@ -610,7 +619,7 @@ public class InformeRepository : IInformeRepository
         var sql = @"
             WITH sabana AS (
             SELECT
-                MIN(s.id_delito_sabana) AS orden_sabana,
+                MIN(COALESCE(ol.orden_general, s.id_delito_sabana)) AS orden_sabana,
                 MIN(cd.id_delito) AS orden_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
@@ -629,6 +638,12 @@ public class InformeRepository : IInformeRepository
                 INNER JOIN catalogo_bien_juridico bj
                     ON bj.id_bien_juridico = cd.id_bien_juridico
                    AND bj.activo = 1
+                LEFT JOIN dbo.catalogo_sabana_orden_legacy ol
+                    ON ol.bien_juridico = bj.bien_juridico
+                   AND ol.delito_sabana = s.delito_sabana
+                   AND ol.subtipo_delito_sabana = s.subtipo_delito_sabana
+                   AND ol.modalidad_delito_sabana = s.modalidad_delito_sabana
+                   AND ol.activo = 1
                 WHERE s.activo = 1
                 GROUP BY
                     bj.bien_juridico,
@@ -767,8 +782,12 @@ public class InformeRepository : IInformeRepository
             m.modalidad_delito_sabana
         ORDER BY
             m.clave_ent,
-            m.clave_municipio_compuesta,
-            m.orden_sabana;
+            m.orden_sabana,
+            m.orden_delito,
+            m.subtipo_delito_sabana,
+            m.modalidad_delito_sabana,
+            m.clave_municipio_compuesta
+        OPTION (RECOMPILE);
         ";
 
         return await QueryDictionaryAnioAsync(sql, anioCorte);
@@ -792,7 +811,7 @@ public class InformeRepository : IInformeRepository
         ),
         sabana AS (
         SELECT
-            MIN(s.id_delito_sabana) AS orden_sabana,
+            MIN(COALESCE(ol.orden_general, s.id_delito_sabana)) AS orden_sabana,
             MIN(cd.id_delito) AS orden_delito,
             bj.bien_juridico,
             s.delito_sabana,
@@ -811,6 +830,12 @@ public class InformeRepository : IInformeRepository
             INNER JOIN catalogo_bien_juridico bj
                 ON bj.id_bien_juridico = cd.id_bien_juridico
                AND bj.activo = 1
+            LEFT JOIN dbo.catalogo_sabana_orden_legacy ol
+                ON ol.bien_juridico = bj.bien_juridico
+               AND ol.delito_sabana = s.delito_sabana
+               AND ol.subtipo_delito_sabana = s.subtipo_delito_sabana
+               AND ol.modalidad_delito_sabana = s.modalidad_delito_sabana
+               AND ol.activo = 1
             WHERE s.activo = 1
             GROUP BY
                 bj.bien_juridico,
@@ -977,8 +1002,12 @@ public class InformeRepository : IInformeRepository
         ORDER BY
             m.clave_ent,
             m.orden_sabana,
+            m.orden_delito,
+            m.subtipo_delito_sabana,
+            m.modalidad_delito_sabana,
             m.orden_sexo,
-            m.orden_rango;
+            m.orden_rango
+        OPTION (RECOMPILE);
         ";
 
         return await QueryDictionaryAnioAsync(sql, anioCorte);
@@ -989,8 +1018,8 @@ public class InformeRepository : IInformeRepository
         var sql = @"
         WITH sabana AS (
         SELECT
-            MIN(s.id_delito_sabana) AS orden_sabana,
-            MIN(cd.id_delito) AS orden_delito,
+            MIN(COALESCE(ol.orden_municipal_victimas, ol.orden_general, s.id_delito_sabana)) AS orden_sabana,
+                    MIN(cd.id_delito) AS orden_delito,
             bj.bien_juridico,
             s.delito_sabana,
             s.subtipo_delito_sabana,
@@ -1008,6 +1037,12 @@ public class InformeRepository : IInformeRepository
             INNER JOIN catalogo_bien_juridico bj
                 ON bj.id_bien_juridico = cd.id_bien_juridico
                AND bj.activo = 1
+            LEFT JOIN dbo.catalogo_sabana_orden_legacy ol
+                ON ol.bien_juridico = bj.bien_juridico
+               AND ol.delito_sabana = s.delito_sabana
+               AND ol.subtipo_delito_sabana = s.subtipo_delito_sabana
+               AND ol.modalidad_delito_sabana = s.modalidad_delito_sabana
+               AND ol.activo = 1
             WHERE s.activo = 1
             GROUP BY
                 bj.bien_juridico,
@@ -1063,7 +1098,7 @@ public class InformeRepository : IInformeRepository
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 )) AS clave_municipio_compuesta,
                 mun.nombre AS municipio,
-                MIN(s.id_delito_sabana) AS orden_sabana,
+                MIN(COALESCE(ol.orden_municipal_victimas, ol.orden_general, s.id_delito_sabana)) AS orden_sabana,
                 MIN(cd.id_delito) AS orden_delito,
                 bj.bien_juridico,
                 s.delito_sabana,
@@ -1138,6 +1173,12 @@ public class InformeRepository : IInformeRepository
             INNER JOIN catalogo_bien_juridico bj
                 ON bj.id_bien_juridico = cd.id_bien_juridico
                AND bj.activo = 1
+            LEFT JOIN dbo.catalogo_sabana_orden_legacy ol
+                ON ol.bien_juridico = bj.bien_juridico
+               AND ol.delito_sabana = s.delito_sabana
+               AND ol.subtipo_delito_sabana = s.subtipo_delito_sabana
+               AND ol.modalidad_delito_sabana = s.modalidad_delito_sabana
+               AND ol.activo = 1
             WHERE v.activo = 1
               AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
             GROUP BY
@@ -1266,7 +1307,8 @@ public class InformeRepository : IInformeRepository
             clave_municipio_compuesta,
             orden_sabana,
             sexo,
-            rango_edad;
+            rango_edad
+        OPTION (RECOMPILE);
         ";
 
         return await QueryDictionaryAnioAsync(sql, anioCorte);
