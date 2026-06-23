@@ -115,10 +115,17 @@ public class InformeService : IInformeService
             throw new InvalidOperationException("El año de corte no es válido.");
         }
 
-        var estatalDelitos = await _informeRepository.ObtenerSabanaEstatalDelitosAsync(anioCorte);
-        var municipalDelitos = await _informeRepository.ObtenerSabanaMunicipalDelitosAsync(anioCorte);
-        var estatalVictimas = await _informeRepository.ObtenerSabanaEstatalVictimasAsync(anioCorte);
-        var municipalVictimas = await _informeRepository.ObtenerSabanaMunicipalVictimasAsync(anioCorte);
+        var estatalDelitosTask = _informeRepository.ObtenerSabanaEstatalDelitosAsync(anioCorte);
+        var municipalDelitosTask = _informeRepository.ObtenerSabanaMunicipalDelitosAsync(anioCorte);
+        var estatalVictimasTask = _informeRepository.ObtenerSabanaEstatalVictimasAsync(anioCorte);
+        var municipalVictimasTask = _informeRepository.ObtenerSabanaMunicipalVictimasAsync(anioCorte);
+
+        await Task.WhenAll(estatalDelitosTask, municipalDelitosTask, estatalVictimasTask, municipalVictimasTask);
+
+        var estatalDelitos = await estatalDelitosTask;
+        var municipalDelitos = await municipalDelitosTask;
+        var estatalVictimas = await estatalVictimasTask;
+        var municipalVictimas = await municipalVictimasTask;
 
         using var zipStream = new MemoryStream();
 
@@ -211,9 +218,51 @@ public class InformeService : IInformeService
             }
         }
 
-        worksheet.Columns().AdjustToContents();
+        AplicarAnchosBasicos(worksheet, columnas);
 
         workbook.SaveAs(entryStream);
+    }
+
+    private static void AplicarAnchosBasicos(IXLWorksheet worksheet, IReadOnlyList<string> columnas)
+    {
+        for (var i = 0; i < columnas.Count; i++)
+        {
+            var nombreColumna = columnas[i];
+            var columna = worksheet.Column(i + 1);
+
+            if (nombreColumna.Contains("Entidad", StringComparison.OrdinalIgnoreCase) ||
+                nombreColumna.Contains("Municipio", StringComparison.OrdinalIgnoreCase))
+            {
+                columna.Width = 28;
+                continue;
+            }
+
+            if (nombreColumna.Contains("Bien jurídico", StringComparison.OrdinalIgnoreCase) ||
+                nombreColumna.Contains("Tipo de delito", StringComparison.OrdinalIgnoreCase) ||
+                nombreColumna.Contains("Subtipo", StringComparison.OrdinalIgnoreCase) ||
+                nombreColumna.Contains("Modalidad", StringComparison.OrdinalIgnoreCase))
+            {
+                columna.Width = 32;
+                continue;
+            }
+
+            if (nombreColumna.Contains("Rango", StringComparison.OrdinalIgnoreCase))
+            {
+                columna.Width = 18;
+                continue;
+            }
+
+            if (nombreColumna is "Enero" or "Febrero" or "Marzo" or "Abril" or "Mayo" or "Junio"
+                or "Julio" or "Agosto" or "Septiembre" or "Octubre" or "Noviembre" or "Diciembre")
+            {
+                columna.Width = 12;
+                continue;
+            }
+
+            columna.Width = 14;
+        }
+
+        worksheet.SheetView.FreezeRows(1);
     }
 
     private static XLCellValue ConvertirValorExcel(object? valor)

@@ -367,10 +367,7 @@ public class InformeRepository : IInformeRepository
     {
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        var filas = await connection.QueryAsync(sql, new
-        {
-            AnioCorte = anioCorte
-        });
+        var filas = await connection.QueryAsync(sql, new {AnioCorte = anioCorte}, commandTimeout: 300);
 
         return filas
             .Select(fila => ((IDictionary<string, object?>)fila)
@@ -601,7 +598,8 @@ public class InformeRepository : IInformeRepository
             m.modalidad_delito_sabana
         ORDER BY
             m.clave_ent,
-            m.orden_sabana;
+            m.orden_sabana
+        OPTION (RECOMPILE);
         ";
 
         return await QueryDictionaryAnioAsync(sql, anioCorte);
