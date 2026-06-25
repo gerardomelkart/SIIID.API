@@ -157,6 +157,29 @@ public class InformeRepository : IInformeRepository
         return $"/api/cargas/{codigoReferencia}/acuse-confirmado";
     }
 
+    private static string ObtenerEstadoEnvioTexto(string estado, string tipoCarga)
+    {
+        var estadoNormalizado = (estado ?? string.Empty)
+            .Trim()
+            .ToUpperInvariant();
+
+        var esActualizacion = string.Equals(
+            tipoCarga,
+            "ACTUALIZACION",
+            StringComparison.OrdinalIgnoreCase);
+
+        var sufijo = esActualizacion ? "actualización" : "carga";
+
+        return estadoNormalizado switch
+        {
+            "CONFIRMADO" => $"Confirmado {sufijo}",
+            "CONFIRMADO_ACTUALIZACION" => $"Confirmado {sufijo}",
+            "PENDIENTE_APROBACION" => "Pendiente de aprobación",
+            "VALIDADO_PENDIENTE" => $"Pendiente {sufijo}",
+            _ => estadoNormalizado.Replace("_", " ")
+        };
+    }
+
     private static string ObtenerNombreMes(int mes)
     {
         return mes switch
