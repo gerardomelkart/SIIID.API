@@ -157,6 +157,14 @@ public class InformeService : IInformeService
         var tipo = NormalizarTipoSabana(tipoSabana);
         var firma = await _informeRepository.ObtenerFirmaSabanaAsync(anioCorte, idEntidadFederativaFiltro);
 
+        if (firma.TotalCargasConfirmadas == 0)
+        {
+            throw new InvalidOperationException(
+                idEntidadFederativaFiltro.HasValue
+                    ? $"No existe información confirmada para la entidad del usuario en el año {anioCorte}."
+                    : $"No existe información confirmada para el año {anioCorte}.");
+        }
+
         var cacheScope = idEntidadFederativaFiltro.HasValue
             ? $"ENTIDAD:{idEntidadFederativaFiltro.Value}"
             : "NACIONAL";

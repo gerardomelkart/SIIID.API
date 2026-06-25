@@ -105,6 +105,7 @@ builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 //para los informes
 builder.Services.AddScoped<IInformeRepository, InformeRepository>();
 builder.Services.AddScoped<IInformeService, InformeService>();
+builder.Services.AddScoped<IUltimosArchivosEntidadService, UltimosArchivosEntidadService>();
 
 builder.Services.AddScoped<IAdministracionCargasService, AdministracionCargasService>();
 

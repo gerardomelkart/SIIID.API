@@ -19,6 +19,7 @@ public class CargaArchivosService : ICargaArchivosService
     private readonly CatalogosValidator _catalogosValidator;
     private readonly ICargaRepository _cargaRepository;
     private readonly IUsuarioRepository _usuarioRepository;
+    private readonly IUltimosArchivosEntidadService _ultimosArchivosEntidadService;
 
     // Extensiones permitidas para los archivos de carga.
     private readonly string[] _extensionesPermitidas =
@@ -30,7 +31,7 @@ public class CargaArchivosService : ICargaArchivosService
     // Tamaño máximo permitido por archivo: 50 MB.
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public CargaArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IUsuarioRepository usuarioRepository)
+    public CargaArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IUsuarioRepository usuarioRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService)
     {
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
@@ -40,6 +41,7 @@ public class CargaArchivosService : ICargaArchivosService
         _catalogosValidator = catalogosValidator;
         _cargaRepository = cargaRepository;
         _usuarioRepository = usuarioRepository;
+        _ultimosArchivosEntidadService = ultimosArchivosEntidadService;
     }
 
     public async Task<CargaValidacionResponse> ValidarArchivosAsync(IFormCollection form, int idUsuarioCarga)
@@ -351,6 +353,11 @@ public class CargaArchivosService : ICargaArchivosService
             filasCarpetas,
             filasDelitos,
             filasVictimas);
+
+        if (idEntidadFederativaCarga.HasValue)
+        {
+            await _ultimosArchivosEntidadService.GuardarAsync(idEntidadFederativaCarga.Value, response.CodigoReferencia, "CARGA_INICIAL", mesCorte, anioCorte, archivoCarpetas!, archivoDelitos!, archivoVictimas!);
+        }
 
         return response;
     }

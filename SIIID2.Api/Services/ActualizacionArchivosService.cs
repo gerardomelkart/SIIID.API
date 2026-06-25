@@ -27,6 +27,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     private readonly IActualizacionRepository _actualizacionRepository;
     private readonly IUsuarioRepository _usuarioRepository;
     private readonly IActualizacionCargaRepository _actualizacionCargaRepository;
+    private readonly IUltimosArchivosEntidadService _ultimosArchivosEntidadService;
 
     // Extensiones permitidas para los archivos de actualización.
     private readonly string[] _extensionesPermitidas =
@@ -38,18 +39,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     // Tamaño máximo permitido por archivo: 50 MB.
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public ActualizacionArchivosService(
-        IArchivoReader archivoReader,
-        CarpetasValidator carpetasValidator,
-        DelitosValidator delitosValidator,
-        VictimasValidator victimasValidator,
-        CargaIntegridadValidator cargaIntegridadValidator,
-        CatalogosValidator catalogosValidator,
-        ICargaRepository cargaRepository,
-        IActualizacionCargaRepository actualizacionCargaRepository,
-        IActualizacionDiferenciasRepository actualizacionDiferenciasRepository,
-        IActualizacionRepository actualizacionRepository,
-        IUsuarioRepository usuarioRepository)
+    public ActualizacionArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IActualizacionCargaRepository actualizacionCargaRepository, IActualizacionDiferenciasRepository actualizacionDiferenciasRepository, IActualizacionRepository actualizacionRepository, IUsuarioRepository usuarioRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService)
     {
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
@@ -62,6 +52,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         _actualizacionDiferenciasRepository = actualizacionDiferenciasRepository;
         _actualizacionRepository = actualizacionRepository;
         _usuarioRepository = usuarioRepository;
+        _ultimosArchivosEntidadService = ultimosArchivosEntidadService;
     }
 
     public async Task<CargaValidacionResponse> ValidarActualizacionAsync(IFormCollection form, int idUsuarioCarga)
@@ -401,6 +392,11 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                                     filasCarpetas,
                                     filasDelitos,
                                     filasVictimas);
+
+        if (idEntidadFederativaCarga.HasValue && mesCorte.HasValue && anioCorte.HasValue)
+        {
+            await _ultimosArchivosEntidadService.GuardarAsync(idEntidadFederativaCarga.Value, response.CodigoReferencia, "ACTUALIZACION", mesCorte.Value, anioCorte.Value, archivoCarpetas!, archivoDelitos!, archivoVictimas!);
+        }
 
         if (response.EsValido)
         {
