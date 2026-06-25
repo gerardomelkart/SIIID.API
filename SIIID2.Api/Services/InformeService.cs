@@ -128,10 +128,26 @@ public class InformeService : IInformeService
             throw new UnauthorizedAccessException("El usuario autenticado no existe o no está activo.");
         }
 
-        if (!usuarioConsulta.EsSuperUsuario)
+        var rol = (usuarioConsulta.Rol ?? string.Empty).Trim().ToUpperInvariant();
+
+        var puedeDescargarSabana =
+            usuarioConsulta.EsSuperUsuario ||
+            rol == "ENLACE_ESTATAL" ||
+            rol == "CONSULTA";
+
+        if (!puedeDescargarSabana)
         {
-            throw new UnauthorizedAccessException("Solo un SUPER_USUARIO puede descargar las sábanas estadísticas.");
+            throw new UnauthorizedAccessException("No tiene permiso para descargar las sábanas estadísticas.");
         }
+
+        if (!usuarioConsulta.EsSuperUsuario && !usuarioConsulta.IdEntidadFederativa.HasValue)
+        {
+            throw new UnauthorizedAccessException("El usuario no tiene una entidad federativa asignada.");
+        }
+
+        var idEntidadFederativaFiltro = usuarioConsulta.EsSuperUsuario
+            ? null
+            : usuarioConsulta.IdEntidadFederativa;
 
         if (anioCorte < 2000 || anioCorte > 2100)
         {
@@ -139,8 +155,13 @@ public class InformeService : IInformeService
         }
 
         var tipo = NormalizarTipoSabana(tipoSabana);
-        var firma = await _informeRepository.ObtenerFirmaSabanaAsync(anioCorte);
-        var cacheKey = $"SABANAS:{tipo}:{anioCorte}:{firma.UltimoIdCarga}:{firma.TotalCargasConfirmadas}:{firma.UltimaFechaMovimiento:O}";
+        var firma = await _informeRepository.ObtenerFirmaSabanaAsync(anioCorte, idEntidadFederativaFiltro);
+
+        var cacheScope = idEntidadFederativaFiltro.HasValue
+            ? $"ENTIDAD:{idEntidadFederativaFiltro.Value}"
+            : "NACIONAL";
+
+        var cacheKey = $"SABANAS:{cacheScope}:{tipo}:{anioCorte}:{firma.UltimoIdCarga}:{firma.TotalCargasConfirmadas}:{firma.UltimaFechaMovimiento:O}";
 
         if (_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var sabanasCacheadas))
         {
@@ -154,14 +175,14 @@ public class InformeService : IInformeService
 
         if (tipo is "COMPLETA" or "ESTATALES")
         {
-            tareas.Add(("estatal-delitos.xlsx", "estatal-delitos", _informeRepository.ObtenerSabanaEstatalDelitosAsync(anioCorte)));
-            tareas.Add(("estatal-victimas.xlsx", "estatal-victimas", _informeRepository.ObtenerSabanaEstatalVictimasAsync(anioCorte)));
+            tareas.Add(("estatal-delitos.xlsx", "estatal-delitos", _informeRepository.ObtenerSabanaEstatalDelitosAsync(anioCorte, idEntidadFederativaFiltro)));
+            tareas.Add(("estatal-victimas.xlsx", "estatal-victimas", _informeRepository.ObtenerSabanaEstatalVictimasAsync(anioCorte, idEntidadFederativaFiltro)));
         }
 
         if (tipo is "COMPLETA" or "MUNICIPALES")
         {
-            tareas.Add(("municipal-delitos.xlsx", "municipal-delitos", _informeRepository.ObtenerSabanaMunicipalDelitosAsync(anioCorte)));
-            tareas.Add(("municipal-victimas.xlsx", "municipal-victimas", _informeRepository.ObtenerSabanaMunicipalVictimasAsync(anioCorte)));
+            tareas.Add(("municipal-delitos.xlsx", "municipal-delitos", _informeRepository.ObtenerSabanaMunicipalDelitosAsync(anioCorte, idEntidadFederativaFiltro)));
+            tareas.Add(("municipal-victimas.xlsx", "municipal-victimas", _informeRepository.ObtenerSabanaMunicipalVictimasAsync(anioCorte, idEntidadFederativaFiltro)));
         }
 
         await Task.WhenAll(tareas.Select(x => x.Consulta));
@@ -194,7 +215,7 @@ public class InformeService : IInformeService
         var response = new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = ObtenerNombreZipSabanas(tipo, anioCorte)
+            NombreArchivo = ObtenerNombreZipSabanas(tipo, anioCorte, idEntidadFederativaFiltro)
         };
 
         _cache.Set(
@@ -466,13 +487,17 @@ public class InformeService : IInformeService
         };
     }
 
-    private static string ObtenerNombreZipSabanas(string tipoSabana, int anioCorte)
+    private static string ObtenerNombreZipSabanas(string tipoSabana, int anioCorte, int? idEntidadFederativa)
     {
+        var sufijoEntidad = idEntidadFederativa.HasValue
+            ? $"_ENTIDAD_{idEntidadFederativa.Value:00}"
+            : string.Empty;
+
         return tipoSabana switch
         {
-            "ESTATALES" => $"SABANAS_ESTATALES_{anioCorte}.zip",
-            "MUNICIPALES" => $"SABANAS_MUNICIPALES_{anioCorte}.zip",
-            _ => $"SABANAS_COMPLETAS_{anioCorte}.zip"
+            "ESTATALES" => $"SABANAS_ESTATALES{sufijoEntidad}_{anioCorte}.zip",
+            "MUNICIPALES" => $"SABANAS_MUNICIPALES{sufijoEntidad}_{anioCorte}.zip",
+            _ => $"SABANAS_COMPLETAS{sufijoEntidad}_{anioCorte}.zip"
         };
     }
 }

@@ -423,11 +423,18 @@ public class InformeRepository : IInformeRepository
             .ToList();
     }
 
-    private async Task<List<IDictionary<string, object?>>> QueryDictionaryAnioAsync(string sql, int anioCorte)
+    private async Task<List<IDictionary<string, object?>>> QueryDictionaryAnioAsync(string sql, int anioCorte, int? idEntidadFederativa = null)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        var filas = await connection.QueryAsync(sql, new {AnioCorte = anioCorte}, commandTimeout: 300);
+        var filas = await connection.QueryAsync(
+            sql,
+            new
+            {
+                AnioCorte = anioCorte,
+                IdEntidadFederativa = idEntidadFederativa
+            },
+            commandTimeout: 300);
 
         return filas
             .Select(fila => ((IDictionary<string, object?>)fila)
@@ -520,7 +527,7 @@ public class InformeRepository : IInformeRepository
             .ToList();
     }
 
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte, int? idEntidadFederativa = null)
     {
         var sql = @"
                 WITH sabana AS (
@@ -572,6 +579,7 @@ public class InformeRepository : IInformeRepository
             CROSS JOIN sabana s
             WHERE ef.activo = 1
               AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
+              AND (@IdEntidadFederativa IS NULL OR ef.id_entidad_federativa = @IdEntidadFederativa)
         ),
         conteos AS (
             SELECT
@@ -615,6 +623,7 @@ public class InformeRepository : IInformeRepository
                AND bj.activo = 1
             WHERE d.activo = 1
               AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
+              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
             GROUP BY
                 c.anio_corte,
                 c.mes_corte,
@@ -671,10 +680,10 @@ public class InformeRepository : IInformeRepository
         OPTION (RECOMPILE);
         ";
 
-        return await QueryDictionaryAnioAsync(sql, anioCorte);
+        return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa);
     }
 
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte, int? idEntidadFederativa = null)
     {
         var sql = @"
             WITH sabana AS (
@@ -734,6 +743,7 @@ public class InformeRepository : IInformeRepository
             CROSS JOIN sabana s
             WHERE ef.activo = 1
               AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
+              AND (@IdEntidadFederativa IS NULL OR ef.id_entidad_federativa = @IdEntidadFederativa)
         ),
         conteos AS (
             SELECT
@@ -784,6 +794,7 @@ public class InformeRepository : IInformeRepository
                AND bj.activo = 1
             WHERE d.activo = 1
               AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
+              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
             GROUP BY
                 c.anio_corte,
                 c.mes_corte,
@@ -850,10 +861,10 @@ public class InformeRepository : IInformeRepository
         OPTION (RECOMPILE);
         ";
 
-        return await QueryDictionaryAnioAsync(sql, anioCorte);
+        return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa);
     }
 
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalVictimasAsync(int anioCorte)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalVictimasAsync(int anioCorte, int? idEntidadFederativa = null)
     {
         var sql = @"
         WITH sexos AS (
@@ -924,6 +935,7 @@ public class InformeRepository : IInformeRepository
             CROSS JOIN rangos_edad re
             WHERE ef.activo = 1
               AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
+              AND (@IdEntidadFederativa IS NULL OR ef.id_entidad_federativa = @IdEntidadFederativa)
         ),
         conteos AS (
             SELECT
@@ -990,6 +1002,7 @@ public class InformeRepository : IInformeRepository
                AND bj.activo = 1
             WHERE v.activo = 1
             AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
+            AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
             GROUP BY
                 c.anio_corte,
                 c.mes_corte,
@@ -1070,10 +1083,10 @@ public class InformeRepository : IInformeRepository
         OPTION (RECOMPILE);
         ";
 
-        return await QueryDictionaryAnioAsync(sql, anioCorte);
+        return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa);
     }
 
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(int anioCorte)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(int anioCorte, int? idEntidadFederativa = null)
     {
         var sql = @"
         WITH sabana AS (
@@ -1147,6 +1160,7 @@ public class InformeRepository : IInformeRepository
             CROSS JOIN sabana s
             WHERE ef.activo = 1
               AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
+              AND (@IdEntidadFederativa IS NULL OR ef.id_entidad_federativa = @IdEntidadFederativa)
         ),
         conteos AS (
             SELECT
@@ -1241,6 +1255,7 @@ public class InformeRepository : IInformeRepository
                AND ol.activo = 1
             WHERE v.activo = 1
               AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
+              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
             GROUP BY
                 c.anio_corte,
                 TRY_CONVERT(int, efh.clave),
@@ -1390,10 +1405,10 @@ public class InformeRepository : IInformeRepository
             END
         OPTION (RECOMPILE);";
 
-        return await QueryDictionaryAnioAsync(sql, anioCorte);
+        return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa);
     }
 
-    public async Task<InformeSabanaFirma> ObtenerFirmaSabanaAsync(int anioCorte)
+    public async Task<InformeSabanaFirma> ObtenerFirmaSabanaAsync(int anioCorte, int? idEntidadFederativa = null)
     {
         var sql = @"
         SELECT
@@ -1403,6 +1418,7 @@ public class InformeRepository : IInformeRepository
         FROM carga c
         WHERE c.activo = 1
           AND c.anio_corte = @AnioCorte
+          AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
           AND (
                  (c.tipo_carga = 'CARGA_INICIAL' AND c.estado = 'CONFIRMADO')
               OR (c.tipo_carga = 'ACTUALIZACION' AND c.estado = 'CONFIRMADO_ACTUALIZACION')
@@ -1415,7 +1431,8 @@ public class InformeRepository : IInformeRepository
             sql,
             new
             {
-                AnioCorte = anioCorte
+                AnioCorte = anioCorte,
+                IdEntidadFederativa = idEntidadFederativa
             });
 
         return firma;
