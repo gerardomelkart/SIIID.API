@@ -190,6 +190,22 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             return response;
         }
 
+        // Validación estructural temprana.
+        // Si falta una columna obligatoria, no leemos filas completas,
+        // no corremos más validaciones y no guardamos temporales.
+        var erroresEstructura = await ValidarEstructuraArchivosAsync(
+            archivoCarpetas!,
+            archivoDelitos!,
+            archivoVictimas!);
+
+        if (erroresEstructura.Count > 0)
+        {
+            response.Errores.AddRange(erroresEstructura);
+
+            FinalizarRespuesta(response, 0, 0, 0);
+            return response;
+        }
+
         // Leemos los tres archivos y los convertimos a filas genéricas.
         var filasCarpetas = await _archivoReader.LeerAsync(archivoCarpetas!);
         var filasDelitos = await _archivoReader.LeerAsync(archivoDelitos!);
@@ -1187,5 +1203,59 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         }
 
         return await _cargaRepository.ObtenerPeriodosDisponiblesActualizacionAsync(idEntidadConsulta.Value);
+    }
+
+    private async Task<List<CargaValidacionError>> ValidarEstructuraArchivosAsync(IFormFile archivoCarpetas, IFormFile archivoDelitos, IFormFile archivoVictimas)
+    {
+        var errores = new List<CargaValidacionError>();
+
+        await ValidarColumnasObligatoriasArchivoAsync(
+            archivoCarpetas,
+            "carpetas",
+            _carpetasValidator.ColumnasObligatorias,
+            errores);
+
+        await ValidarColumnasObligatoriasArchivoAsync(
+            archivoDelitos,
+            "delitos",
+            _delitosValidator.ColumnasObligatorias,
+            errores);
+
+        await ValidarColumnasObligatoriasArchivoAsync(
+            archivoVictimas,
+            "victimas",
+            _victimasValidator.ColumnasObligatorias,
+            errores);
+
+        return errores;
+    }
+
+    private async Task ValidarColumnasObligatoriasArchivoAsync(IFormFile archivo, string nombreArchivo, IReadOnlyCollection<string> columnasObligatorias, List<CargaValidacionError> errores)
+    {
+        var encabezados = await _archivoReader.LeerEncabezadosAsync(archivo);
+
+        var columnasArchivo = encabezados
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var columna in columnasObligatorias)
+        {
+            if (columnasArchivo.Contains(columna))
+            {
+                continue;
+            }
+
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = nombreArchivo,
+                Fila = 1,
+                Columna = columna,
+                Campo = columna,
+                Valor = null,
+                Codigo = $"{nombreArchivo.ToUpperInvariant()}_COLUMNA_OBLIGATORIA_NO_ENCONTRADA",
+                DescripcionResumen = "Columna obligatoria no encontrada",
+                Mensaje = $"El archivo de {nombreArchivo} no contiene la columna obligatoria \"{columna}\"."
+            });
+        }
     }
 }

@@ -6,6 +6,9 @@ namespace SIIID2.Api.Readers;
 // Permite cambiar la implementación sin modificar el servicio de carga.
 public interface IArchivoReader
 {
+    // Lee solamente encabezados normalizados, sin cargar todas las filas.
+    Task<List<string>> LeerEncabezadosAsync(IFormFile archivo);
+
     // Lee un archivo recibido por la API y lo transforma en una lista de filas genéricas.
     Task<List<ArchivoFila>> LeerAsync(IFormFile archivo);
 }

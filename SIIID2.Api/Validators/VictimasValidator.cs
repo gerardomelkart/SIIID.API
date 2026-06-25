@@ -25,6 +25,8 @@ public class VictimasValidator : IArchivoCargaValidator
         "nacional"
     };
 
+    public IReadOnlyCollection<string> ColumnasObligatorias => _columnasObligatorias;
+
     public List<CargaValidacionError> Validar(List<ArchivoFila> filas)
     {
         var errores = new List<CargaValidacionError>();

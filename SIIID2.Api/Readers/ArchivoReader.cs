@@ -267,4 +267,92 @@ public class ArchivoReader : IArchivoReader
 
         return valor;
     }
+
+    public async Task<List<string>> LeerEncabezadosAsync(IFormFile archivo)
+    {
+        var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
+
+        return extension switch
+        {
+            ".csv" => await LeerEncabezadosCsvAsync(archivo),
+            ".xlsx" => await LeerEncabezadosExcelAsync(archivo),
+            _ => throw new ArgumentException($"La extensión {extension} no es compatible para lectura.")
+        };
+    }
+
+    private async Task<List<string>> LeerEncabezadosCsvAsync(IFormFile archivo)
+    {
+        await using var stream = archivo.OpenReadStream();
+
+        using var reader = new StreamReader(
+            stream,
+            Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true);
+
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+        {
+            HasHeaderRecord = true,
+            BadDataFound = null,
+            MissingFieldFound = null,
+            HeaderValidated = null,
+            TrimOptions = TrimOptions.Trim
+        };
+
+        using var csv = new CsvReader(reader, config);
+
+        if (!await csv.ReadAsync())
+        {
+            return new List<string>();
+        }
+
+        csv.ReadHeader();
+
+        return csv.HeaderRecord?
+            .Select(NormalizarNombreColumna)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? new List<string>();
+    }
+
+    private async Task<List<string>> LeerEncabezadosExcelAsync(IFormFile archivo)
+    {
+        await using var stream = archivo.OpenReadStream();
+
+        using var workbook = new XLWorkbook(stream);
+
+        var worksheet = workbook.Worksheets.FirstOrDefault();
+
+        if (worksheet == null)
+        {
+            return new List<string>();
+        }
+
+        var primeraFilaUsada = worksheet.FirstRowUsed();
+        var ultimaColumnaUsada = worksheet.LastColumnUsed();
+
+        if (primeraFilaUsada == null || ultimaColumnaUsada == null)
+        {
+            return new List<string>();
+        }
+
+        var numeroFilaEncabezado = primeraFilaUsada.RowNumber();
+        var numeroUltimaColumna = ultimaColumnaUsada.ColumnNumber();
+
+        var encabezados = new List<string>();
+
+        for (var col = 1; col <= numeroUltimaColumna; col++)
+        {
+            var encabezado = worksheet.Cell(numeroFilaEncabezado, col).GetString();
+            var encabezadoNormalizado = NormalizarNombreColumna(encabezado);
+
+            if (!string.IsNullOrWhiteSpace(encabezadoNormalizado))
+            {
+                encabezados.Add(encabezadoNormalizado);
+            }
+        }
+
+        return encabezados
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
 }

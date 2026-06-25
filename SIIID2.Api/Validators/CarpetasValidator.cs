@@ -20,6 +20,8 @@ public class CarpetasValidator : IArchivoCargaValidator
         "rmen_de_hchos"
     };
 
+    public IReadOnlyCollection<string> ColumnasObligatorias => _columnasObligatorias;
+
     public List<CargaValidacionError> Validar(List<ArchivoFila> filas)
     {
         return Validar(filas, validarMesInmediatoAnterior: true);

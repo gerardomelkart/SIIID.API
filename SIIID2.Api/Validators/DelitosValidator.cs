@@ -35,6 +35,8 @@ public class DelitosValidator : IArchivoCargaValidator
         "dom_hchos"
     };
 
+    public IReadOnlyCollection<string> ColumnasObligatorias => _columnasObligatorias;
+
     public List<CargaValidacionError> Validar(List<ArchivoFila> filas)
     {
         var errores = new List<CargaValidacionError>();
