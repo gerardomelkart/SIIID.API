@@ -47,7 +47,7 @@ public class AcusePdfService : IAcusePdfService
 
         if (!estadoAcusePrevioPermitido)
         {
-            throw new InvalidOperationException("El acuse previo solo puede generarse para cargas validadas o pendientes de aprobacion.");
+            throw new InvalidOperationException("El informe previo solo puede generarse para cargas validadas o pendientes de aprobación.");
         }
 
         if (!usuarioConsulta.EsSuperUsuario &&
@@ -63,7 +63,7 @@ public class AcusePdfService : IAcusePdfService
         return GenerarPdf(
             carga,
             resumen,
-            "ACUSE PREVIO",
+            "INFORME PREVIO",
             mostrarMarcaPrevio: true);
     }
 
@@ -130,7 +130,7 @@ public class AcusePdfService : IAcusePdfService
 
         if (!estadoAcusePrevioActualizacionPermitido)
         {
-            throw new InvalidOperationException("El acuse previo de actualizacion solo puede generarse para actualizaciones validadas o pendientes de aprobacion.");
+            throw new InvalidOperationException("El informe previo de actualización solo puede generarse para actualizaciones validadas o pendientes de aprobación.");
         }
 
         if (!usuarioConsulta.EsSuperUsuario &&
@@ -146,7 +146,7 @@ public class AcusePdfService : IAcusePdfService
         return GenerarPdf(
             carga,
             resumen,
-            "ACUSE PREVIO DE ACTUALIZACIÓN",
+            "INFORME PREVIO DE ACTUALIZACIÓN",
             mostrarMarcaPrevio: true);
     }
 

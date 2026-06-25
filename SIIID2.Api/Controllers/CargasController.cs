@@ -115,7 +115,7 @@ public class CargasController : ControllerBase
             return File(
                 pdf,
                 "application/pdf",
-                $"ACUSE_PREVIO_{codigoReferencia}.pdf");
+                $"INFORME_PREVIO_{codigoReferencia}.pdf");
         }
         catch (UnauthorizedAccessException ex)
         {

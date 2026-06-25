@@ -173,7 +173,7 @@ public class ActualizacionesController : ControllerBase
             return File(
                 pdf,
                 "application/pdf",
-                $"ACUSE_PREVIO_ACTUALIZACION_{codigoReferencia}.pdf");
+                $"INFORME_PREVIO_ACTUALIZACION_{codigoReferencia}.pdf");
         }
         catch (UnauthorizedAccessException ex)
         {
