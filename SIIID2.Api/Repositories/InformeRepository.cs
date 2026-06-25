@@ -61,18 +61,14 @@ public class InformeRepository : IInformeRepository
                     FROM carga c2
                     WHERE c2.activo = 1
                       AND c2.id_entidad_federativa = v.id_entidad_federativa
+                      AND c2.mes_corte = v.mes_corte
+                      AND c2.anio_corte = v.anio_corte
+                      AND c2.id_carga <> v.id_carga
                       AND (
                             (c2.tipo_carga = 'CARGA_INICIAL' AND c2.estado = 'CONFIRMADO')
                          OR (c2.tipo_carga = 'ACTUALIZACION' AND c2.estado = 'CONFIRMADO_ACTUALIZACION')
                       )
-                      AND (
-                            c2.anio_corte < v.anio_corte
-                         OR (c2.anio_corte = v.anio_corte AND c2.mes_corte <= v.mes_corte)
-                      )
-                      AND c2.id_carga <> v.id_carga
                     ORDER BY
-                        c2.anio_corte DESC,
-                        c2.mes_corte DESC,
                         COALESCE(c2.fecha_confirmacion, c2.fecha_validacion) DESC,
                         c2.id_carga DESC
                 ) conf
