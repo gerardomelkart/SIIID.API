@@ -20,11 +20,12 @@ public class InformeRepository : IInformeRepository
         // Si hay varias actualizaciones confirmadas para el mismo corte,
         // se toma únicamente la más reciente.
         var sql = @"
-            WITH envios_confirmados AS (
+            WITH ultimo_visible AS (
                 SELECT
                     c.id_carga,
                     c.codigo_referencia,
                     c.tipo_carga,
+                    c.estado,
                     c.id_entidad_federativa,
                     c.mes_corte,
                     c.anio_corte,
@@ -45,15 +46,40 @@ public class InformeRepository : IInformeRepository
                 LEFT JOIN usuario uconf
                     ON uconf.id_usuario = c.id_usuario_confirmacion
                 WHERE c.activo = 1
-                  AND (
-                        (c.tipo_carga = 'CARGA_INICIAL' AND c.estado = 'CONFIRMADO')
-                     OR (c.tipo_carga = 'ACTUALIZACION' AND c.estado = 'CONFIRMADO_ACTUALIZACION')
-                  )
+                  AND c.estado NOT LIKE 'RECHAZADO%'
+            ),
+            envios AS (
+                SELECT
+                    v.*,
+                    conf.codigo_referencia AS codigo_referencia_confirmada,
+                    conf.tipo_carga AS tipo_carga_confirmada
+                FROM ultimo_visible v
+                OUTER APPLY (
+                    SELECT TOP 1
+                        c2.codigo_referencia,
+                        c2.tipo_carga
+                    FROM carga c2
+                    WHERE c2.activo = 1
+                      AND c2.id_entidad_federativa = v.id_entidad_federativa
+                      AND c2.mes_corte = v.mes_corte
+                      AND c2.anio_corte = v.anio_corte
+                      AND (
+                            (c2.tipo_carga = 'CARGA_INICIAL' AND c2.estado = 'CONFIRMADO')
+                         OR (c2.tipo_carga = 'ACTUALIZACION' AND c2.estado = 'CONFIRMADO_ACTUALIZACION')
+                      )
+                    ORDER BY
+                        COALESCE(c2.fecha_confirmacion, c2.fecha_validacion) DESC,
+                        c2.id_carga DESC
+                ) conf
+                WHERE v.rn = 1
             )
             SELECT
                 e.id_carga AS IdCarga,
                 e.codigo_referencia AS CodigoReferencia,
                 e.tipo_carga AS TipoCarga,
+                e.estado AS Estado,
+                e.codigo_referencia_confirmada AS CodigoReferenciaConfirmada,
+                e.tipo_carga_confirmada AS TipoCargaConfirmada,
                 e.id_entidad_federativa AS IdEntidadFederativa,
                 ef.nombre AS EntidadFederativa,
                 ef.clave AS ClaveEntidad,
@@ -61,11 +87,10 @@ public class InformeRepository : IInformeRepository
                 e.mes_corte AS MesCorte,
                 e.anio_corte AS AnioCorte,
                 e.usuario_envio AS UsuarioEnvio
-            FROM envios_confirmados e
+            FROM envios e
             INNER JOIN catalogo_entidad_federativa ef
                 ON ef.id_entidad_federativa = e.id_entidad_federativa
-            WHERE e.rn = 1
-              AND (@EsSuperUsuario = 1 OR e.id_entidad_federativa = @IdEntidadFederativaUsuario)
+            WHERE (@EsSuperUsuario = 1 OR e.id_entidad_federativa = @IdEntidadFederativaUsuario)
               AND (@IdEntidadFederativa IS NULL OR e.id_entidad_federativa = @IdEntidadFederativa)
               AND (@MesCorte IS NULL OR e.mes_corte = @MesCorte)
               AND (@AnioCorte IS NULL OR e.anio_corte = @AnioCorte)
@@ -91,12 +116,35 @@ public class InformeRepository : IInformeRepository
             {
                 x.FechaEnvioTexto = x.FechaEnvio.ToString("dd-MM-yyyy");
                 x.Corte = $"{ObtenerNombreMes(x.MesCorte)} {x.AnioCorte}";
-                x.EndpointAcuse = ObtenerEndpointAcuse(x.TipoCarga, x.CodigoReferencia);
-                x.EndpointExcel = $"/api/informes/envios/{x.CodigoReferencia}/archivos";
+
+                x.EsConfirmado =
+                    string.Equals(x.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(x.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+
+                x.EstadoTexto = ObtenerEstadoEnvioTexto(x.Estado, x.TipoCarga);
+
+                var codigoReferenciaDescarga = x.EsConfirmado
+                    ? x.CodigoReferencia
+                    : x.CodigoReferenciaConfirmada;
+
+                var tipoCargaDescarga = x.EsConfirmado
+                    ? x.TipoCarga
+                    : x.TipoCargaConfirmada;
+
+                if (!string.IsNullOrWhiteSpace(codigoReferenciaDescarga) &&
+                    !string.IsNullOrWhiteSpace(tipoCargaDescarga))
+                {
+                    x.EndpointAcuse = ObtenerEndpointAcuse(tipoCargaDescarga, codigoReferenciaDescarga);
+                    x.EndpointExcel = $"/api/informes/envios/{codigoReferenciaDescarga}/archivos";
+                }
+                else
+                {
+                    x.EndpointAcuse = string.Empty;
+                    x.EndpointExcel = string.Empty;
+                }
 
                 return x;
-            })
-            .ToList();
+            }).ToList();
     }
 
     private static string ObtenerEndpointAcuse(string tipoCarga, string codigoReferencia)
@@ -1359,5 +1407,28 @@ public class InformeRepository : IInformeRepository
             });
 
         return firma;
+    }
+
+    private static string ObtenerEstadoEnvioTexto(string estado, string tipoCarga)
+    {
+        var estadoNormalizado = (estado ?? string.Empty)
+            .Trim()
+            .ToUpperInvariant();
+
+        var esActualizacion = string.Equals(
+            tipoCarga,
+            "ACTUALIZACION",
+            StringComparison.OrdinalIgnoreCase);
+
+        var sufijo = esActualizacion ? "actualización" : "carga";
+
+        return estadoNormalizado switch
+        {
+            "CONFIRMADO" => $"Confirmado {sufijo}",
+            "CONFIRMADO_ACTUALIZACION" => $"Confirmado {sufijo}",
+            "PENDIENTE_APROBACION" => "Pendiente de aprobación",
+            "VALIDADO_PENDIENTE" => $"Pendiente {sufijo}",
+            _ => estadoNormalizado.Replace("_", " ")
+        };
     }
 }

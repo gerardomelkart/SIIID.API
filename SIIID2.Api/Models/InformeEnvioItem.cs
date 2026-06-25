@@ -8,6 +8,16 @@ public class InformeEnvioItem
 
     public string TipoCarga { get; set; } = string.Empty;
 
+    public string Estado { get; set; } = string.Empty;
+
+    public string EstadoTexto { get; set; } = string.Empty;
+
+    public bool EsConfirmado { get; set; }
+
+    public string? CodigoReferenciaConfirmada { get; set; }
+
+    public string? TipoCargaConfirmada { get; set; }
+
     public int IdEntidadFederativa { get; set; }
 
     public string EntidadFederativa { get; set; } = string.Empty;
