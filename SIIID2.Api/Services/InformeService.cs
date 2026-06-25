@@ -57,7 +57,7 @@ public class InformeService : IInformeService
 
         if (carga == null)
         {
-            throw new InvalidOperationException("No se encontró una carga o actualización confirmada para el código de referencia indicado.");
+            throw new InvalidOperationException("No se encontró una carga o actualización activa para el código de referencia indicado.");
         }
 
         if (!usuarioConsulta.EsSuperUsuario)
@@ -68,9 +68,26 @@ public class InformeService : IInformeService
             }
         }
 
-        var carpetas = await _informeRepository.ObtenerCarpetasConfirmadasPeriodoAsync(carga);
-        var delitos = await _informeRepository.ObtenerDelitosConfirmadosPeriodoAsync(carga);
-        var victimas = await _informeRepository.ObtenerVictimasConfirmadasPeriodoAsync(carga);
+        var esConfirmada =
+            string.Equals(carga.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(carga.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+
+        List<IDictionary<string, object?>> carpetas;
+        List<IDictionary<string, object?>> delitos;
+        List<IDictionary<string, object?>> victimas;
+
+        if (esConfirmada)
+        {
+            carpetas = await _informeRepository.ObtenerCarpetasConfirmadasPeriodoAsync(carga);
+            delitos = await _informeRepository.ObtenerDelitosConfirmadosPeriodoAsync(carga);
+            victimas = await _informeRepository.ObtenerVictimasConfirmadasPeriodoAsync(carga);
+        }
+        else
+        {
+            carpetas = await _informeRepository.ObtenerCarpetasPendientesAsync(carga.IdCarga);
+            delitos = await _informeRepository.ObtenerDelitosPendientesAsync(carga.IdCarga);
+            victimas = await _informeRepository.ObtenerVictimasPendientesAsync(carga.IdCarga);
+        }
 
         using var zipStream = new MemoryStream();
 

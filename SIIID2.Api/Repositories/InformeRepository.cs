@@ -124,24 +124,15 @@ public class InformeRepository : IInformeRepository
 
                 x.EstadoTexto = ObtenerEstadoEnvioTexto(x.Estado, x.TipoCarga);
 
-                var codigoReferenciaDescarga = x.EsConfirmado
-                    ? x.CodigoReferencia
-                    : x.CodigoReferenciaConfirmada;
-
-                var tipoCargaDescarga = x.EsConfirmado
-                    ? x.TipoCarga
-                    : x.TipoCargaConfirmada;
-
-                if (!string.IsNullOrWhiteSpace(codigoReferenciaDescarga) &&
-                    !string.IsNullOrWhiteSpace(tipoCargaDescarga))
+                if (x.EsConfirmado)
                 {
-                    x.EndpointAcuse = ObtenerEndpointAcuse(tipoCargaDescarga, codigoReferenciaDescarga);
-                    x.EndpointExcel = $"/api/informes/envios/{codigoReferenciaDescarga}/archivos";
+                    x.EndpointAcuse = ObtenerEndpointAcuse(x.TipoCarga, x.CodigoReferencia);
+                    x.EndpointExcel = $"/api/informes/envios/{x.CodigoReferencia}/archivos";
                 }
                 else
                 {
-                    x.EndpointAcuse = string.Empty;
-                    x.EndpointExcel = string.Empty;
+                    x.EndpointAcuse = ObtenerEndpointAcusePrevio(x.TipoCarga, x.CodigoReferencia);
+                    x.EndpointExcel = $"/api/informes/envios/{x.CodigoReferencia}/archivos";
                 }
 
                 return x;
@@ -220,10 +211,7 @@ public class InformeRepository : IInformeRepository
             ON ef.id_entidad_federativa = c.id_entidad_federativa
         WHERE c.codigo_referencia = @CodigoReferencia
           AND c.activo = 1
-          AND (
-                (c.tipo_carga = 'CARGA_INICIAL' AND c.estado = 'CONFIRMADO')
-             OR (c.tipo_carga = 'ACTUALIZACION' AND c.estado = 'CONFIRMADO_ACTUALIZACION')
-          );
+          AND c.estado NOT LIKE 'RECHAZADO%';
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
@@ -1431,5 +1419,111 @@ public class InformeRepository : IInformeRepository
             });
 
         return firma;
+    }
+
+    private static string ObtenerEndpointAcusePrevio(string tipoCarga, string codigoReferencia)
+    {
+        if (string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"/api/actualizaciones/{codigoReferencia}/acuse";
+        }
+
+        return $"/api/cargas/{codigoReferencia}/acuse";
+    }
+
+    public async Task<List<IDictionary<string, object?>>> ObtenerCarpetasPendientesAsync(long idCarga)
+    {
+        const string sql = @"
+        SELECT
+            c.id_ci,
+            c.ntra_ci,
+            c.fha_de_ini,
+            c.hra_de_ini,
+            c.rmen_de_hchos
+        FROM dbo.carga_tmp_carpeta c
+        WHERE c.id_carga = @IdCarga
+          AND c.activo = 1
+        ORDER BY c.numero_fila;
+    ";
+
+        return await QueryDictionaryCargaAsync(sql, idCarga);
+    }
+
+    public async Task<List<IDictionary<string, object?>>> ObtenerDelitosPendientesAsync(long idCarga)
+    {
+        const string sql = @"
+        SELECT
+            d.id_ci,
+            d.id_delito,
+            d.dto,
+            d.moda_dto,
+            d.forma_acc,
+            d.fha_de_hchos,
+            d.hra_de_hchos,
+            d.emto_com_dto,
+            d.grdo_cons,
+            d.clasf_de_dto,
+            ISNULL(ef.nombre, '') AS nom_ent_hchos,
+            d.id_ent_hchos,
+            ISNULL(mun.nombre, '') AS nom_mun_hchos,
+            d.id_mun_hchos,
+            d.nom_loc_hchos,
+            d.id_loc_hchos,
+            d.nom_col_hchos,
+            d.id_col_hchos,
+            d.cp,
+            d.coord_x,
+            d.coord_y,
+            d.dom_hchos
+        FROM dbo.carga_tmp_delito d
+        LEFT JOIN dbo.catalogo_entidad_federativa ef
+            ON ef.id_entidad_federativa = TRY_CONVERT(tinyint, d.id_ent_hchos)
+        LEFT JOIN dbo.catalogo_municipio mun
+            ON mun.id_entidad_federativa = ef.id_entidad_federativa
+           AND TRY_CONVERT(int, mun.clave) = TRY_CONVERT(int, d.id_mun_hchos)
+        WHERE d.id_carga = @IdCarga
+          AND d.activo = 1
+        ORDER BY d.numero_fila;
+    ";
+
+        return await QueryDictionaryCargaAsync(sql, idCarga);
+    }
+
+    public async Task<List<IDictionary<string, object?>>> ObtenerVictimasPendientesAsync(long idCarga)
+    {
+        const string sql = @"
+        SELECT
+            v.id_ci,
+            v.id_delito,
+            v.id_vicf,
+            v.id_tv,
+            v.id_tpm,
+            v.sexo,
+            v.genero,
+            v.pob,
+            v.disc,
+            v.fha_nac,
+            v.edad,
+            v.nacional
+        FROM dbo.carga_tmp_victima v
+        WHERE v.id_carga = @IdCarga
+          AND v.activo = 1
+        ORDER BY v.numero_fila;
+    ";
+
+        return await QueryDictionaryCargaAsync(sql, idCarga);
+    }
+
+    private async Task<List<IDictionary<string, object?>>> QueryDictionaryCargaAsync(string sql, long idCarga)
+    {
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var filas = await connection.QueryAsync(sql, new { IdCarga = idCarga });
+
+        return filas
+            .Select(fila => ((IDictionary<string, object?>)fila)
+                .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase))
+            .Cast<IDictionary<string, object?>>()
+            .ToList();
     }
 }
