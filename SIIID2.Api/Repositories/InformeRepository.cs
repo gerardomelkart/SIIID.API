@@ -1217,6 +1217,7 @@ public class InformeRepository : IInformeRepository
         ),
         resultado AS (
             SELECT
+                1 AS bloque_resultado,
                 anio_corte,
                 clave_ent,
                 entidad,
@@ -1247,6 +1248,7 @@ public class InformeRepository : IInformeRepository
             UNION ALL
 
             SELECT
+                2 AS bloque_resultado,
                 m.anio_corte,
                 m.clave_ent,
                 m.entidad,
@@ -1303,13 +1305,30 @@ public class InformeRepository : IInformeRepository
             diciembre AS [Diciembre]
         FROM resultado
         ORDER BY
-            clave_ent,
-            clave_municipio_compuesta,
-            orden_sabana,
-            sexo,
-            rango_edad
-        OPTION (RECOMPILE);
-        ";
+            bloque_resultado,
+
+            CASE WHEN bloque_resultado = 1 THEN clave_ent END,
+            CASE WHEN bloque_resultado = 1 THEN clave_municipio_compuesta END,
+            CASE WHEN bloque_resultado = 1 THEN orden_sabana END,
+
+            CASE WHEN bloque_resultado = 2 THEN orden_sabana END,
+            CASE WHEN bloque_resultado = 2 THEN clave_ent END,
+            CASE WHEN bloque_resultado = 2 THEN clave_municipio_compuesta END,
+
+            CASE sexo
+                WHEN 'Hombre' THEN 1
+                WHEN 'Mujer' THEN 2
+                ELSE 3
+            END,
+            CASE rango_edad
+                WHEN '0 a 12 años' THEN 1
+                WHEN '13 a 17 años' THEN 2
+                WHEN '18 a 29 años' THEN 3
+                WHEN '30 a 60 años' THEN 4
+                WHEN 'Más de 60 años' THEN 5
+                ELSE 6
+            END
+        OPTION (RECOMPILE);";
 
         return await QueryDictionaryAnioAsync(sql, anioCorte);
     }
