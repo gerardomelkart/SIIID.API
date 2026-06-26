@@ -17,9 +17,11 @@ public class UltimosArchivosEntidadService : IUltimosArchivosEntidadService
 
         Directory.CreateDirectory(rutaBase);
 
-        await GuardarArchivoOriginalAsync(archivoCarpetas, rutaBase, "carpetas");
-        await GuardarArchivoOriginalAsync(archivoDelitos, rutaBase, "delitos");
-        await GuardarArchivoOriginalAsync(archivoVictimas, rutaBase, "victimas");
+        LimpiarArchivosAnteriores(rutaBase);
+
+        await GuardarArchivoOriginalAsync(archivoCarpetas, rutaBase);
+        await GuardarArchivoOriginalAsync(archivoDelitos, rutaBase);
+        await GuardarArchivoOriginalAsync(archivoVictimas, rutaBase);
 
         var metadata = new
         {
@@ -39,21 +41,18 @@ public class UltimosArchivosEntidadService : IUltimosArchivosEntidadService
         await File.WriteAllTextAsync(Path.Combine(rutaBase, "metadata.json"), metadataJson);
     }
 
-    private static async Task GuardarArchivoOriginalAsync(IFormFile archivo, string rutaBase, string nombreLogico)
+    private static void LimpiarArchivosAnteriores(string rutaBase)
     {
-        var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
-
-        if (string.IsNullOrWhiteSpace(extension))
-        {
-            extension = ".xlsx";
-        }
-
-        foreach (var archivoAnterior in Directory.GetFiles(rutaBase, $"{nombreLogico}.*"))
+        foreach (var archivoAnterior in Directory.GetFiles(rutaBase))
         {
             File.Delete(archivoAnterior);
         }
+    }
 
-        var rutaDestino = Path.Combine(rutaBase, $"{nombreLogico}{extension}");
+    private static async Task GuardarArchivoOriginalAsync(IFormFile archivo, string rutaBase)
+    {
+        var nombreArchivo = Path.GetFileName(archivo.FileName);
+        var rutaDestino = Path.Combine(rutaBase, nombreArchivo);
 
         await using var origen = archivo.OpenReadStream();
 
