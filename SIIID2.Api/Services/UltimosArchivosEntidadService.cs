@@ -148,12 +148,55 @@ public class UltimosArchivosEntidadService : IUltimosArchivosEntidadService
 
     private static void LimpiarCarpetaEntidad(string rutaBase)
     {
-        if (Directory.Exists(rutaBase))
+        Directory.CreateDirectory(rutaBase);
+
+        LimpiarSubcarpeta(rutaBase, "carpetas");
+        LimpiarSubcarpeta(rutaBase, "delitos");
+        LimpiarSubcarpeta(rutaBase, "victimas");
+
+        var rutaMetadata = Path.Combine(rutaBase, "metadata.json");
+
+        if (File.Exists(rutaMetadata))
         {
-            Directory.Delete(rutaBase, recursive: true);
+            File.SetAttributes(rutaMetadata, FileAttributes.Normal);
+            File.Delete(rutaMetadata);
+        }
+    }
+
+    private static void LimpiarSubcarpeta(string rutaBase, string nombreSubcarpeta)
+    {
+        var rutaSubcarpeta = Path.Combine(rutaBase, nombreSubcarpeta);
+
+        Directory.CreateDirectory(rutaSubcarpeta);
+
+        foreach (var archivo in Directory.GetFiles(rutaSubcarpeta))
+        {
+            File.SetAttributes(archivo, FileAttributes.Normal);
+            File.Delete(archivo);
         }
 
-        Directory.CreateDirectory(rutaBase);
+        foreach (var carpeta in Directory.GetDirectories(rutaSubcarpeta))
+        {
+            LimpiarDirectorioRecursivo(carpeta);
+            Directory.Delete(carpeta, recursive: false);
+        }
+    }
+
+    private static void LimpiarDirectorioRecursivo(string rutaDirectorio)
+    {
+        foreach (var archivo in Directory.GetFiles(rutaDirectorio))
+        {
+            File.SetAttributes(archivo, FileAttributes.Normal);
+            File.Delete(archivo);
+        }
+
+        foreach (var carpeta in Directory.GetDirectories(rutaDirectorio))
+        {
+            LimpiarDirectorioRecursivo(carpeta);
+            Directory.Delete(carpeta, recursive: false);
+        }
+
+        File.SetAttributes(rutaDirectorio, FileAttributes.Normal);
     }
 
     private static async Task<UltimosArchivosEntidadArchivo> GuardarArchivoOriginalAsync(IFormFile archivo, string rutaBase, string tipo)
