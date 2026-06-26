@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SIIID2.Api.Services;
+using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Controllers;
 
@@ -10,10 +11,14 @@ namespace SIIID2.Api.Controllers;
 public class InformesController : ControllerBase
 {
     private readonly IInformeService _informeService;
+    private readonly IUltimosArchivosEntidadService _ultimosArchivosEntidadService;
+    private readonly IUsuarioRepository _usuarioRepository;
 
-    public InformesController(IInformeService informeService)
+    public InformesController(IInformeService informeService, IUltimosArchivosEntidadService ultimosArchivosEntidadService, IUsuarioRepository usuarioRepository)
     {
         _informeService = informeService;
+        _ultimosArchivosEntidadService = ultimosArchivosEntidadService;
+        _usuarioRepository = usuarioRepository;
     }
 
     // Consulta el último envío confirmado por entidad y periodo.
@@ -187,5 +192,101 @@ public class InformesController : ControllerBase
                 mensaje = ex.Message
             });
         }
+    }
+
+    // Consulta metadata de los últimos archivos originales recibidos por entidad.
+    // Solo SUPER_USUARIO.
+    // Ejemplo: GET /api/informes/archivos-originales
+    [Authorize]
+    [HttpGet("archivos-originales")]
+    public async Task<IActionResult> ObtenerArchivosOriginales()
+    {
+        var autorizacion = await ValidarSuperUsuarioAsync();
+
+        if (autorizacion != null)
+        {
+            return autorizacion;
+        }
+
+        var registros = await _ultimosArchivosEntidadService.ObtenerResumenAsync();
+
+        return Ok(new
+        {
+            esValido = true,
+            total = registros.Count,
+            registros
+        });
+    }
+
+    // Descarga ZIP con los archivos originales íntegros de la última carga/actualización de una entidad.
+    // Solo SUPER_USUARIO.
+    // Ejemplo: GET /api/informes/archivos-originales/1
+    [Authorize]
+    [HttpGet("archivos-originales/{idEntidadFederativa:int}")]
+    public async Task<IActionResult> DescargarArchivosOriginales(int idEntidadFederativa)
+    {
+        var autorizacion = await ValidarSuperUsuarioAsync();
+
+        if (autorizacion != null)
+        {
+            return autorizacion;
+        }
+
+        try
+        {
+            var zip = await _ultimosArchivosEntidadService.DescargarAsync(idEntidadFederativa);
+
+            return File(zip.Archivo, "application/zip", zip.NombreArchivo);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "INFORMES_ARCHIVOS_ORIGINALES_NO_DISPONIBLES",
+                mensaje = ex.Message
+            });
+        }
+    }
+
+    private async Task<IActionResult?> ValidarSuperUsuarioAsync()
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuarioConsulta == null)
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_USUARIO_NO_ENCONTRADO",
+                mensaje = "El usuario autenticado no existe o no está activo.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        if (!usuarioConsulta.EsSuperUsuario)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "INFORMES_ARCHIVOS_ORIGINALES_SIN_PERMISO",
+                mensaje = "Solo un SUPER_USUARIO puede consultar o descargar archivos originales."
+            });
+        }
+
+        return null;
     }
 }
