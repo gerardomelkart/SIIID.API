@@ -361,3 +361,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Mantener la carpeta, ignorar su contenido
+UltimosArchivosEntidad/*
+!UltimosArchivosEntidad/.gitkeep
