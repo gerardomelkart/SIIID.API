@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <Folder Include="logs\" />
+    <Folder Include="UltimosArchivosEntidad\" />
     <Folder Include="wwwroot\images\" />
   </ItemGroup>
 

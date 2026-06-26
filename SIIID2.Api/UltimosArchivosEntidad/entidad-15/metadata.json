@@ -1,0 +1,11 @@
+{
+  "idEntidadFederativa": 15,
+  "codigoReferencia": "60914ff3b00b4",
+  "tipoMovimiento": "CARGA_INICIAL",
+  "mesCorte": 5,
+  "anioCorte": 2026,
+  "fechaGuardado": "2026-06-25T18:21:04.6769586-06:00",
+  "archivoCarpetasOriginal": "carpetas.csv",
+  "archivoDelitosOriginal": "6a21e7af7ec09_DelitosEnviados.csv",
+  "archivoVictimasOriginal": "6a21e7af7ec09_VictimasEnviados.csv"
+}
