@@ -1,8 +1,11 @@
-﻿using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SIIID2.Api.Services;
+using Microsoft.Extensions.Caching.Memory;
+using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
+using SIIID2.Api.Services;
+using System.Security.Claims;
+using System.Security.Cryptography;
 
 namespace SIIID2.Api.Controllers;
 
@@ -13,12 +16,21 @@ public class InformesController : ControllerBase
     private readonly IInformeService _informeService;
     private readonly IUltimosArchivosEntidadService _ultimosArchivosEntidadService;
     private readonly IUsuarioRepository _usuarioRepository;
+    private readonly IMemoryCache _cache;
 
-    public InformesController(IInformeService informeService, IUltimosArchivosEntidadService ultimosArchivosEntidadService, IUsuarioRepository usuarioRepository)
+    public InformesController(IInformeService informeService, IUltimosArchivosEntidadService ultimosArchivosEntidadService, IUsuarioRepository usuarioRepository, IMemoryCache cache)
     {
         _informeService = informeService;
         _ultimosArchivosEntidadService = ultimosArchivosEntidadService;
         _usuarioRepository = usuarioRepository;
+        _cache = cache;
+    }
+
+    private class SabanaDownloadTicket
+    {
+        public int IdUsuarioConsulta { get; set; }
+        public int AnioCorte { get; set; }
+        public string Tipo { get; set; } = "COMPLETA";
     }
 
     // Consulta el último envío confirmado por entidad y periodo.
@@ -192,6 +204,102 @@ public class InformesController : ControllerBase
                 mensaje = ex.Message
             });
         }
+    }
+
+
+    [Authorize]
+    [HttpPost("sabanas/ticket")]
+    public async Task<IActionResult> CrearTicketDescargaSabanas([FromQuery] int anioCorte, [FromQuery] string tipo = "COMPLETA")
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        try
+        {
+            // Aquí se genera la sábana.
+            // El front se queda con loading hasta que este proceso termine.
+            var zip = await _informeService.GenerarZipSabanasAsync(idUsuarioConsulta, anioCorte, tipo);
+
+            var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+            var cacheKey = $"SABANAS_DOWNLOAD_TICKET:{ticket}";
+
+            _cache.Set(
+                cacheKey,
+                zip,
+                new MemoryCacheEntryOptions
+                {
+                    SlidingExpiration = TimeSpan.FromMinutes(5),
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+                });
+
+            return Ok(new
+            {
+                esValido = true,
+                ticket
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "INFORMES_SABANAS_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "INFORMES_SABANAS_NO_DISPONIBLES",
+                mensaje = ex.Message
+            });
+        }
+    }
+
+    [AllowAnonymous]
+    [HttpGet("sabanas/descargar")]
+    public IActionResult DescargarSabanasPorTicket([FromQuery] string ticket)
+    {
+        if (string.IsNullOrWhiteSpace(ticket))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "INFORMES_SABANAS_TICKET_REQUERIDO",
+                mensaje = "Debe proporcionar un ticket de descarga válido."
+            });
+        }
+
+        var cacheKey = $"SABANAS_DOWNLOAD_TICKET:{ticket}";
+
+        if (!_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var zip) || zip == null)
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "INFORMES_SABANAS_TICKET_INVALIDO",
+                mensaje = "El ticket de descarga no existe o ya expiró."
+            });
+        }
+
+        // Ticket de un solo uso.
+        _cache.Remove(cacheKey);
+
+        Response.Headers.CacheControl = "no-store";
+
+        return File(zip.Archivo, "application/zip", zip.NombreArchivo);
     }
 
     // Consulta metadata de los últimos archivos originales recibidos por entidad.
