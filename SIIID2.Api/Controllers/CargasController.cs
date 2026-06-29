@@ -234,43 +234,43 @@ public class CargasController : ControllerBase
     // Endpoint especial para migración histórica.
     // No se usa desde el frontend.
     // Usa el usuario del token y confirma directamente la carga.
-    [Authorize]
-    [HttpPost("migracion-directa")]
-    [Consumes("multipart/form-data")]
-    public async Task<IActionResult> CargarMigracionDirecta()
-    {
-        if (!Request.HasFormContentType)
-        {
-            return BadRequest(new ConfirmarCargaResponse
-            {
-                EsValido = false,
-                Estado = "SOLICITUD_INVALIDA",
-                Mensaje = "La petición debe enviarse como multipart/form-data."
-            });
-        }
+    //[Authorize]
+    //[HttpPost("migracion-directa")]
+    //[Consumes("multipart/form-data")]
+    //public async Task<IActionResult> CargarMigracionDirecta()
+    //{
+    //    if (!Request.HasFormContentType)
+    //    {
+    //        return BadRequest(new ConfirmarCargaResponse
+    //        {
+    //            EsValido = false,
+    //            Estado = "SOLICITUD_INVALIDA",
+    //            Mensaje = "La petición debe enviarse como multipart/form-data."
+    //        });
+    //    }
 
-        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+    //    var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioCarga))
-        {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
-        }
+    //    if (!int.TryParse(idUsuarioClaim, out var idUsuarioCarga))
+    //    {
+    //        return Unauthorized(new
+    //        {
+    //            esValido = false,
+    //            codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+    //            mensaje = "El token no contiene un id de usuario válido.",
+    //            traceId = HttpContext.TraceIdentifier
+    //        });
+    //    }
 
-        var resultado = await _cargaArchivosService.CargarMigracionDirectaAsync(
-            Request.Form,
-            idUsuarioCarga);
+    //    var resultado = await _cargaArchivosService.CargarMigracionDirectaAsync(
+    //        Request.Form,
+    //        idUsuarioCarga);
 
-        if (!resultado.EsValido)
-        {
-            return BadRequest(resultado);
-        }
+    //    if (!resultado.EsValido)
+    //    {
+    //        return BadRequest(resultado);
+    //    }
 
-        return Ok(resultado);
-    }
+    //    return Ok(resultado);
+    //}
 }
