@@ -104,10 +104,10 @@ public class InformesController : ControllerBase
         }
     }
 
-    // Descarga ZIP con sábanas estadísticas anuales.
-    // SUPER_USUARIO descarga información nacional.
-    // ENLACE_ESTATAL y CONSULTA descargan únicamente información de su entidad.
-    // Ejemplo: GET /api/informes/sabanas?anioCorte=2026&tipo=COMPLETA
+    // Reporte de intentos y cargas por entidad y corte.
+    // Solo SUPER_USUARIO.
+    // Ejemplo: GET /api/informes/reporte-cargas
+    // Ejemplo: GET /api/informes/reporte-cargas?mesCorte=5&anioCorte=2026
     [Authorize]
     [HttpGet("reporte-cargas")]
     public async Task<IActionResult> ObtenerReporteCargas([FromQuery] int? mesCorte = null, [FromQuery] int? anioCorte = null, [FromQuery] int? idEntidadFederativa = null)
@@ -153,9 +153,10 @@ public class InformesController : ControllerBase
         }
     }
 
-    // Descarga ZIP con las 4 sábanas estadísticas anuales.
-    // Solo SUPER_USUARIO.
-    // Ejemplo: GET /api/informes/sabanas?anioCorte=2026
+    // Descarga ZIP con sábanas estadísticas anuales.
+    // SUPER_USUARIO descarga información nacional.
+    // ENLACE_ESTATAL y CONSULTA descargan únicamente información de su entidad.
+    // Ejemplo: GET /api/informes/sabanas?anioCorte=2026&tipo=COMPLETA
     [Authorize]
     [HttpGet("sabanas")]
     public async Task<IActionResult> DescargarSabanas([FromQuery] int anioCorte, [FromQuery] string tipo = "COMPLETA")
