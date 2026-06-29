@@ -364,3 +364,19 @@ FodyWeavers.xsd
 
 # Mantener la carpeta, ignorar su contenido
 **/UltimosArchivosEntidad/**
+
+# Configuración local / sensible
+appsettings.Local.json
+appsettings.Production.json
+appsettings.*.local.json
+*.Development.local.json
+
+# SQL Server / respaldos
+*.bak
+*.trn
+*.bacpac
+
+# Paquetes pesados / dumps
+*.zip
+*.7z
+*.rar
