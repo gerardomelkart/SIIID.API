@@ -9,6 +9,9 @@ public interface IArchivoCargaValidator
     // Nombre lógico del archivo que valida: carpetas, delitos o victimas.
     string NombreArchivo { get; }
 
+    // Columnas mínimas que deben existir antes de leer y validar filas completas.
+    IReadOnlyCollection<string> ColumnasObligatorias { get; }
+
     // Ejecuta las validaciones específicas sobre las filas ya leídas.
     List<CargaValidacionError> Validar(List<ArchivoFila> filas);
 }

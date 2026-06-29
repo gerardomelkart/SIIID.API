@@ -244,7 +244,17 @@ app.UseAuthorization();
 // Mapea los controllers, por ejemplo: /api/cargas/validar.
 app.MapControllers();
 
-// Ruta raíz temporal para abrir Swagger al entrar a https://localhost:puerto/.
-app.MapGet("/", () => Results.Redirect("/swagger"));
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/", () => Results.Redirect("/swagger"));
+}
+else
+{
+    app.MapGet("/", () => Results.Ok(new
+    {
+        sistema = "SIIID2.Api",
+        estado = "OK"
+    }));
+}
 
 app.Run();

@@ -26,13 +26,6 @@ public class InformesController : ControllerBase
         _cache = cache;
     }
 
-    private class SabanaDownloadTicket
-    {
-        public int IdUsuarioConsulta { get; set; }
-        public int AnioCorte { get; set; }
-        public string Tipo { get; set; } = "COMPLETA";
-    }
-
     // Consulta el último envío confirmado por entidad y periodo.
     // Ejemplo: GET /api/informes/envios
     [Authorize]
@@ -111,10 +104,10 @@ public class InformesController : ControllerBase
         }
     }
 
-    // Reporte de intentos y cargas por entidad y corte.
-    // Solo SUPER_USUARIO.
-    // Ejemplo: GET /api/informes/reporte-cargas
-    // Ejemplo: GET /api/informes/reporte-cargas?mesCorte=5&anioCorte=2026
+    // Descarga ZIP con sábanas estadísticas anuales.
+    // SUPER_USUARIO descarga información nacional.
+    // ENLACE_ESTATAL y CONSULTA descargan únicamente información de su entidad.
+    // Ejemplo: GET /api/informes/sabanas?anioCorte=2026&tipo=COMPLETA
     [Authorize]
     [HttpGet("reporte-cargas")]
     public async Task<IActionResult> ObtenerReporteCargas([FromQuery] int? mesCorte = null, [FromQuery] int? anioCorte = null, [FromQuery] int? idEntidadFederativa = null)

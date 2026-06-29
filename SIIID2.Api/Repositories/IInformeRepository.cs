@@ -7,7 +7,9 @@ public interface IInformeRepository
     // Obtiene la última carga o actualización confirmada por entidad y periodo.
     Task<List<InformeEnvioItem>> ObtenerEnviosAsync( bool esSuperUsuario, int? idEntidadFederativaUsuario, int? idEntidadFederativa, int? mesCorte, int? anioCorte);
 
-    // Obtiene la carga confirmada usada para descargar archivos del informe.
+    // Obtiene una carga activa no rechazada para descargar archivos.
+    // Si está confirmada se reconstruye desde tablas finales;
+    // si está pendiente se reconstruye desde tablas temporales.
     Task<InformeArchivoCargaInfo?> ObtenerCargaConfirmadaParaArchivosAsync(string codigoReferencia);
 
     // Reconstruye carpetas activas del periodo confirmado.

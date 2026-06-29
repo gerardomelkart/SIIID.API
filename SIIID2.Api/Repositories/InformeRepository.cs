@@ -194,8 +194,9 @@ public class InformeRepository : IInformeRepository
 
     public async Task<InformeArchivoCargaInfo?> ObtenerCargaConfirmadaParaArchivosAsync(string codigoReferencia)
     {
-        // Obtiene una carga o actualización confirmada.
-        // Solo se permite descargar archivos de envíos ya confirmados.
+        // Obtiene una carga o actualización activa no rechazada.
+        // Las cargas confirmadas se descargan desde tablas finales;
+        // las pendientes se descargan desde tablas temporales.
         var sql = @"
         SELECT
             c.id_carga AS IdCarga,
