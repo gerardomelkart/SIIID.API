@@ -29,8 +29,8 @@ public class InformeRepository : IInformeRepository
                     c.id_entidad_federativa,
                     c.mes_corte,
                     c.anio_corte,
-                    COALESCE(c.fecha_confirmacion, c.fecha_validacion) AS fecha_envio,
-                    COALESCE(uconf.usuario, ucarga.usuario) AS usuario_envio,
+                    c.fecha_validacion AS fecha_envio,
+                    ucarga.usuario AS usuario_envio,
                     ROW_NUMBER() OVER (
                         PARTITION BY
                             c.id_entidad_federativa,
@@ -43,8 +43,6 @@ public class InformeRepository : IInformeRepository
                 FROM carga c
                 INNER JOIN usuario ucarga
                     ON ucarga.id_usuario = c.id_usuario_carga
-                LEFT JOIN usuario uconf
-                    ON uconf.id_usuario = c.id_usuario_confirmacion
                 WHERE c.activo = 1
                   AND c.estado NOT LIKE 'RECHAZADO%'
             ),
