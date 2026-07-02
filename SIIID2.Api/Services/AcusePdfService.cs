@@ -63,7 +63,6 @@ public class AcusePdfService : IAcusePdfService
         return GenerarPdf(
             carga,
             resumen,
-            "INFORME PREVIO",
             mostrarMarcaPrevio: true);
     }
 
@@ -103,7 +102,6 @@ public class AcusePdfService : IAcusePdfService
         return GenerarPdf(
             carga,
             resumen,
-            "",
             mostrarMarcaPrevio: false);
     }
 
@@ -146,7 +144,6 @@ public class AcusePdfService : IAcusePdfService
         return GenerarPdf(
             carga,
             resumen,
-            "INFORME PREVIO DE ACTUALIZACIÓN",
             mostrarMarcaPrevio: true);
     }
 
@@ -186,15 +183,11 @@ public class AcusePdfService : IAcusePdfService
         return GenerarPdf(
             carga,
             resumen,
-            "",
             mostrarMarcaPrevio: false);
     }
 
-    private byte[] GenerarPdf(CargaAcuseInfo carga, List<CargaAcuseResumenItem> resumen, string titulo, bool mostrarMarcaPrevio)
+    private byte[] GenerarPdf(CargaAcuseInfo carga, List<CargaAcuseResumenItem> resumen, bool mostrarMarcaPrevio)
     {
-        var totalDelitos = resumen.Sum(x => x.TotalDelitos);
-        var totalVictimas = resumen.Sum(x => x.TotalVictimas);
-
         return Document.Create(container =>
         {
             container.Page(page =>
@@ -206,50 +199,24 @@ public class AcusePdfService : IAcusePdfService
                 page.MarginRight(20);
                 page.MarginBottom(15);
 
-                page.DefaultTextStyle(x => x.FontSize(8).FontFamily("Arial"));
+                page.DefaultTextStyle(x => x.FontSize(8).FontFamily("Noto Sans"));
 
                 if (mostrarMarcaPrevio)
                 {
                     page.Background().Element(contenedor => ConstruirMarcaAgua(contenedor));
                 }
 
-                page.Header().Element(header => ConstruirEncabezado(header));
+                page.Header().Element(header => ConstruirEncabezado(header, carga));
 
                 page.Content().Column(column =>
                 {
                     column.Spacing(6);
 
-                    if (!string.IsNullOrWhiteSpace(titulo))
-                    {
-                        column.Item()
-                            .PaddingTop(4)
-                            .AlignCenter()
-                            .Text(titulo)
-                            .FontSize(17)
-                            .Bold();
-                    }
-
-                    if (mostrarMarcaPrevio)
-                    {
-                        column.Item().Element(contenedor => ConstruirDatosGeneralesPrevio(contenedor, carga));
-                    }
-                    else
-                    {
-                        column.Item().Element(contenedor => ConstruirLeyendaAcuseConfirmado(contenedor, carga));
-                    }
+                    column.Item().Element(contenedor => ConstruirLeyendaAcuse(contenedor, carga));
 
                     column.Item().Element(contenedor => ConstruirDetalleRegistros(contenedor, carga));
 
                     column.Item().Element(contenedor => ConstruirTablaResumen(contenedor, resumen));
-
-                    column.Item()
-                        .AlignRight()
-                        .PaddingTop(2)
-                        .Text(text =>
-                        {
-                            text.Span("Total: ").Bold();
-                            text.Span($"{totalDelitos}    {totalVictimas}").FontSize(12);
-                        });
                 });
 
                 page.Footer().Element(footer => ConstruirPiePagina(footer));
@@ -270,10 +237,12 @@ public class AcusePdfService : IAcusePdfService
             .FontColor(Colors.Red.Lighten4);
     }
 
-    private void ConstruirEncabezado(IContainer container)
+    private void ConstruirEncabezado(IContainer container, CargaAcuseInfo carga)
     {
         var rutaLogo = ObtenerRutaArchivo(RutaLogoAcuse);
         var rutaMujer = ObtenerRutaArchivo(RutaMujerAcuse);
+
+        var fechaAcuse = carga.FechaConfirmacion ?? carga.FechaValidacion;
 
         container.Column(column =>
         {
@@ -296,155 +265,72 @@ public class AcusePdfService : IAcusePdfService
             {
                 row.RelativeItem();
 
-                row.RelativeItem(1.7f).Column(right =>
+                row.RelativeItem(2.3f).Column(right =>
                 {
-                    right.Item().AlignRight().Text("SECRETARIADO EJECUTIVO DEL SISTEMA").Bold().FontSize(11);
-                    right.Item().AlignRight().Text("NACIONAL DE SEGURIDAD PÚBLICA").Bold().FontSize(11);
-                    right.Item().AlignRight().Text("CENTRO NACIONAL DE INFORMACIÓN").Bold().FontSize(11);
+                    right.Item().AlignRight().Text("SECRETARIADO EJECUTIVO DEL SISTEMA").Bold().FontSize(9);
+                    right.Item().AlignRight().Text("NACIONAL DE SEGURIDAD PÚBLICA").Bold().FontSize(9);
+                    right.Item().AlignRight().Text("CENTRO NACIONAL DE INFORMACIÓN").Bold().FontSize(9);
+
+                    right.Item()
+                        .PaddingTop(4)
+                        .AlignRight()
+                        .Text($"Ciudad de México a {ObtenerFechaLargaEncabezado(fechaAcuse)}")
+                        .FontSize(7.5f);
                 });
             });
         });
     }
 
-    private void ConstruirDatosGeneralesPrevio(IContainer container, CargaAcuseInfo carga)
-    {
-        container.Column(column =>
-        {
-            column.Item()
-                .Text(text =>
-                {
-                    text.DefaultTextStyle(x => x.FontSize(7.5f));
-                    text.Span("\n");
-                });
-
-            column.Item()
-                .Text(text =>
-                {
-                    text.DefaultTextStyle(x => x.FontSize(7.5f));
-                    text.Span("Entidad: ").Bold();
-                    text.Span(carga.EntidadFederativa);
-                    text.Span(" | Periodo: ").Bold();
-                    text.Span($"{carga.MesCorte:00}/{carga.AnioCorte}");
-                    text.Span(" | Fecha validación: ").Bold();
-                    text.Span($"{carga.FechaValidacion:dd/MM/yyyy HH:mm}");
-                });
-        });
-    }
-
-    private void ConstruirLeyendaAcuseConfirmado(IContainer container, CargaAcuseInfo carga)
-    {
-        var fechaAcuse = carga.FechaConfirmacion ?? carga.FechaValidacion;
-
-        container.Column(column =>
-        {
-            column.Spacing(6);
-
-            column.Item()
-                .PaddingTop(4)
-                .AlignCenter()
-                .Text("ACUSE DE ENTREGA DE INFORMACIÓN")
-                .FontSize(13)
-                .Bold();
-
-            column.Item()
-                .Text(text =>
-                {
-                    text.DefaultTextStyle(x => x.FontSize(8.5f));
-
-                    text.Span("Mediante este documento, se confirma que la información proporcionada ha sido enviada de manera satisfactoria a través de nuestra plataforma web. ");
-                    text.Span("Queda así registrada su recepción formal, garantizando que los datos ingresados han sido recibidos y procesados conforme a los protocolos establecidos. ");
-                    text.Span("Para cualquier consulta o verificación posterior, este acuse servirá como constancia válida del envío realizado por parte de la entidad de ");
-                    text.Span(carga.EntidadFederativa).Bold();
-                    text.Span(", el día ");
-                    text.Span(ObtenerFechaLarga(fechaAcuse)).Bold();
-                    text.Span(", a las ");
-                    text.Span(fechaAcuse.ToString("HH:mm:ss", new CultureInfo("es-MX"))).Bold();
-                    text.Span(" horas.");
-                });
-
-            column.Item()
-                .PaddingTop(4)
-                .Text(text =>
-                {
-                    text.DefaultTextStyle(x => x.FontSize(8.5f));
-
-                    text.Span("Mes de Corte: ").Bold();
-                    text.Span(ObtenerNombreMes(carga.MesCorte));
-
-                    text.Span("    |    ");
-
-                    text.Span("Entidad: ").Bold();
-                    text.Span(carga.EntidadFederativa);
-                });
-
-            column.Item()
-                .Text(text =>
-                {
-                    text.DefaultTextStyle(x => x.FontSize(8.5f));
-
-                    text.Span("Periodo: ").Bold();
-                    text.Span($"{carga.MesCorte:00}/{carga.AnioCorte}");
-
-                    text.Span("    |    ");
-
-                    text.Span("Fecha validación: ").Bold();
-                    text.Span($"{carga.FechaValidacion:dd/MM/yyyy HH:mm}");
-                });
-        });
-    }
 
     private void ConstruirDetalleRegistros(IContainer container, CargaAcuseInfo carga)
     {
+        var cultura = new CultureInfo("es-MX");
+
         container.Column(column =>
         {
             column.Item()
-                .Background("#7A1735")
-                .Padding(4)
-                .AlignCenter()
-                .Text("Detalle de registros enviados:")
-                .FontColor(Colors.White)
-                .Bold()
-                .FontSize(11);
-
-            column.Item().Table(table =>
-            {
-                table.ColumnsDefinition(columns =>
+                .PaddingTop(8)
+                .Table(table =>
                 {
-                    columns.RelativeColumn();
-                    columns.RelativeColumn();
+                    DefinirColumnasAcuse(table);
+
+                    table.Cell().ColumnSpan(6).Element(CeldaTituloSeccion)
+                        .Text("Detalle de registros suministrados");
+
+                    table.Cell().ColumnSpan(4).Element(CeldaEncabezado)
+                        .Text("Descripción");
+
+                    table.Cell().ColumnSpan(2).Element(CeldaEncabezado)
+                        .Text("Total");
+
+                    table.Cell().ColumnSpan(4).Element(CeldaDescripcionDetalle)
+                        .Text("Carpetas de investigación iniciadas:");
+
+                    table.Cell().ColumnSpan(2).Element(CeldaNumeroDetalle)
+                        .Text(carga.TotalCarpetasInvestigacion.ToString("N0", cultura));
+
+                    table.Cell().ColumnSpan(4).Element(CeldaDescripcionDetalle)
+                        .Text("Delitos:");
+
+                    table.Cell().ColumnSpan(2).Element(CeldaNumeroDetalle)
+                        .Text(carga.TotalDelitos.ToString("N0", cultura));
+
+                    table.Cell().ColumnSpan(4).Element(CeldaDescripcionDetalle)
+                        .Text("Víctimas:");
+
+                    table.Cell().ColumnSpan(2).Element(CeldaNumeroDetalle)
+                        .Text(carga.TotalVictimas.ToString("N0", cultura));
                 });
-
-                table.Header(header =>
-                {
-                    header.Cell().Element(CeldaEncabezado).Text("Descripcion");
-                    header.Cell().Element(CeldaEncabezado).Text("Total Registros");
-                });
-
-                table.Cell().Element(CeldaNormal).Text("Carpetas:");
-                table.Cell().Element(CeldaNormal).AlignCenter().Text(carga.TotalCarpetasInvestigacion.ToString());
-
-                table.Cell().Element(CeldaNormal).Text("Delitos:");
-                table.Cell().Element(CeldaNormal).AlignCenter().Text(carga.TotalDelitos.ToString());
-
-                table.Cell().Element(CeldaNormal).Text("Victimas:");
-                table.Cell().Element(CeldaNormal).AlignCenter().Text(carga.TotalVictimas.ToString());
-            });
         });
     }
 
     private void ConstruirTablaResumen(IContainer container, List<CargaAcuseResumenItem> resumen)
     {
+        var cultura = new CultureInfo("es-MX");
+
         container.Table(table =>
         {
-            table.ColumnsDefinition(columns =>
-            {
-                columns.ConstantColumn(45);
-                columns.RelativeColumn(2.2f);
-                columns.ConstantColumn(55);
-                columns.RelativeColumn(2.5f);
-                columns.ConstantColumn(45);
-                columns.ConstantColumn(45);
-            });
+            DefinirColumnasAcuse(table);
 
             table.Header(header =>
             {
@@ -453,7 +339,7 @@ public class AcusePdfService : IAcusePdfService
                 header.Cell().Element(CeldaEncabezado).Text("Clave\nSubtipo");
                 header.Cell().Element(CeldaEncabezado).Text("Subtipo de delito");
                 header.Cell().Element(CeldaEncabezado).Text("Total\nDelitos");
-                header.Cell().Element(CeldaEncabezado).Text("Total\nVictimas");
+                header.Cell().Element(CeldaEncabezado).Text("Total\nVíctimas");
             });
 
             foreach (var item in resumen)
@@ -462,8 +348,8 @@ public class AcusePdfService : IAcusePdfService
                 table.Cell().Element(CeldaNormal).Text(item.TipoDelito);
                 table.Cell().Element(CeldaNormal).Text(item.ClaveSubtipo);
                 table.Cell().Element(CeldaNormal).Text(item.SubtipoDelito);
-                table.Cell().Element(CeldaNormal).AlignCenter().Text(item.TotalDelitos.ToString());
-                table.Cell().Element(CeldaNormal).AlignCenter().Text(item.TotalVictimas.ToString());
+                table.Cell().Element(CeldaNumero).Text(item.TotalDelitos.ToString("N0", cultura));
+                table.Cell().Element(CeldaNumero).Text(item.TotalVictimas.ToString("N0", cultura));
             }
         });
     }
@@ -513,6 +399,30 @@ public class AcusePdfService : IAcusePdfService
 
         return char.ToUpper(nombreMes[0], cultura) + nombreMes[1..];
     }
+    private static void DefinirColumnasAcuse(TableDescriptor table)
+    {
+        table.ColumnsDefinition(columns =>
+        {
+            columns.ConstantColumn(45);
+            columns.RelativeColumn(2.4f);
+            columns.ConstantColumn(55);
+            columns.RelativeColumn(2.6f);
+            columns.ConstantColumn(50);
+            columns.ConstantColumn(50);
+        });
+    }
+
+    private static IContainer CeldaTituloSeccion(IContainer container)
+    {
+        return container
+            .Border(0.5f)
+            .BorderColor(Colors.Black)
+            .Background("#7A1735")
+            .Padding(3)
+            .AlignCenter()
+            .AlignMiddle()
+            .DefaultTextStyle(x => x.FontSize(8).Bold().FontColor(Colors.White));
+    }
 
     private static IContainer CeldaEncabezado(IContainer container)
     {
@@ -520,19 +430,104 @@ public class AcusePdfService : IAcusePdfService
             .Border(0.5f)
             .BorderColor(Colors.Black)
             .Background("#B7B7B7")
-            .Padding(2)
+            .Padding(3)
             .AlignCenter()
             .AlignMiddle()
-            .DefaultTextStyle(x => x.FontSize(8).Bold());
+            .DefaultTextStyle(x => x.FontSize(7.5f).Bold());
     }
 
     private static IContainer CeldaNormal(IContainer container)
     {
         return container
             .Border(0.5f)
-            .BorderColor(Colors.Grey.Darken1)
-            .Padding(2)
+            .BorderColor(Colors.Black)
+            .PaddingHorizontal(3)
+            .PaddingVertical(2)
             .AlignMiddle()
-            .DefaultTextStyle(x => x.FontSize(6.2f));
+            .DefaultTextStyle(x => x.FontSize(7.2f));
+    }
+
+    private static IContainer CeldaNumero(IContainer container)
+    {
+        return CeldaNormal(container)
+            .AlignCenter()
+            .DefaultTextStyle(x => x.FontSize(7.2f));
+    }
+
+    private static IContainer CeldaDescripcionDetalle(IContainer container)
+    {
+        return CeldaNormal(container)
+            .AlignRight()
+            .DefaultTextStyle(x => x.FontSize(7.5f).Bold());
+    }
+
+    private static IContainer CeldaNumeroDetalle(IContainer container)
+    {
+        return CeldaNormal(container)
+            .AlignCenter()
+            .DefaultTextStyle(x => x.FontSize(7.5f).Bold());
+    }
+
+
+
+    private void ConstruirLeyendaAcuse(IContainer container, CargaAcuseInfo carga)
+    {
+        var cultura = new CultureInfo("es-MX");
+        var fechaAcuse = carga.FechaConfirmacion ?? carga.FechaValidacion;
+        var entidad = carga.EntidadFederativa?.Trim() ?? string.Empty;
+        var entidadMayusculas = entidad.ToUpper(cultura);
+
+        container.Column(column =>
+        {
+            column.Spacing(8);
+
+            column.Item()
+                .PaddingTop(4)
+                .AlignCenter()
+                .Text($"ACUSE DE ENTREGA DE INFORMACIÓN DEL ESTADO DE {entidadMayusculas}")
+                .FontSize(12)
+                .Bold();
+
+            column.Item()
+                .Text(text =>
+                {
+                    text.DefaultTextStyle(x => x.FontSize(8.5f));
+
+                    text.Span("El presente acuse de recepción hace constar que la estadística delictiva reportada por la ");
+                    text.Span($"Fiscalía General del Estado de {entidad}").Bold();
+                    text.Span(" al ");
+                    text.Span("Registro Nacional de Incidencia Delictiva (RNID)").Bold();
+                    text.Span(" del Sistema Nacional de Seguridad Pública, ha sido enviada de manera satisfactoria a través de la plataforma web, mediante este acuse se confirma la entrega formal de la estadística delictiva del ");
+                    text.Span($"Estado de {entidad}").Bold();
+                    text.Span(" el día ");
+                    text.Span(ObtenerFechaLargaTexto(fechaAcuse)).Bold();
+                    text.Span(" a las ");
+                    text.Span(fechaAcuse.ToString("HH:mm:ss", cultura)).Bold();
+                    text.Span(" horas (Tiempo del centro de México).");
+                });
+
+            column.Item()
+                .PaddingTop(2)
+                .Text(text =>
+                {
+                    text.DefaultTextStyle(x => x.FontSize(8.5f));
+
+                    text.Span("Mes de corte estadístico: ");
+                    text.Span($"{ObtenerNombreMes(carga.MesCorte)} de {carga.AnioCorte}").Bold();
+                });
+        });
+    }
+
+    private static string ObtenerFechaLargaEncabezado(DateTime fecha)
+    {
+        return $"{fecha:dd} de {ObtenerNombreMes(fecha.Month)} de {fecha:yyyy}";
+    }
+
+    private static string ObtenerFechaLargaTexto(DateTime fecha)
+    {
+        var cultura = new CultureInfo("es-MX");
+        var nombreMes = cultura.DateTimeFormat.GetMonthName(fecha.Month);
+
+        return $"{fecha.Day} de {nombreMes} de {fecha:yyyy}";
     }
 }
