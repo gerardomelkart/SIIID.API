@@ -626,7 +626,7 @@ public class CargaArchivosService : ICargaArchivosService
             {
                 Archivo = "carpetas",
                 Codigo = "CARPETAS_TOTAL_REGISTROS",
-                Descripcion = "Total de registros en el archivo de expedientes",
+                Descripcion = "Total de registros en el archivo de carpetas",
                 TotalRegistros = totalCarpetas,
                 EsError = false
             },

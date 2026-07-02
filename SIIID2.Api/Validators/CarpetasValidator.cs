@@ -3,7 +3,7 @@ using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Validators;
 
-// Validador específico para el archivo de carpetas/expedientes.
+// Validador específico para el archivo de carpetas.
 // Aquí viven las reglas propias de carpetas, no las reglas generales de carga.
 public class CarpetasValidator : IArchivoCargaValidator
 {
@@ -42,7 +42,7 @@ public class CarpetasValidator : IArchivoCargaValidator
                 Campo = "",
                 Valor = null,
                 Codigo = "CARPETAS_SIN_REGISTROS",
-                DescripcionResumen = "Total de registros en el archivo de expedientes",
+                DescripcionResumen = "Total de registros en el archivo de carpetas",
                 Mensaje = "El archivo de carpetas no contiene registros para validar."
             });
 
@@ -76,7 +76,7 @@ public class CarpetasValidator : IArchivoCargaValidator
                 errores,
                 250,
                 "CARPETAS_NTRA_CI_SIN_INFORMACION",
-                "Falta la nomenclatura del expediente");
+                "Falta la nomenclatura de la carpeta");
 
             ValidarFechaInicioObligatoria(fila, "fha_de_ini", errores, validarMesInmediatoAnterior);
 
