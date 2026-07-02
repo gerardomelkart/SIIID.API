@@ -420,7 +420,7 @@ public class AcusePdfService : IAcusePdfService
                     header.Cell().Element(CeldaEncabezado).Text("Total Registros");
                 });
 
-                table.Cell().Element(CeldaNormal).Text("Expedientes:");
+                table.Cell().Element(CeldaNormal).Text("Carpetas:");
                 table.Cell().Element(CeldaNormal).AlignCenter().Text(carga.TotalCarpetasInvestigacion.ToString());
 
                 table.Cell().Element(CeldaNormal).Text("Delitos:");
