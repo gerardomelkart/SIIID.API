@@ -344,14 +344,27 @@ public class AcusePdfService : IAcusePdfService
 
             foreach (var item in resumen)
             {
-                table.Cell().Element(CeldaNormal).Text(item.ClaveDelito);
-                table.Cell().Element(CeldaNormal).Text(item.TipoDelito);
-                table.Cell().Element(CeldaNormal).Text(item.ClaveSubtipo);
-                table.Cell().Element(CeldaNormal).Text(item.SubtipoDelito);
-                table.Cell().Element(CeldaNumero).Text(item.TotalDelitos.ToString("N0", cultura));
-                table.Cell().Element(CeldaNumero).Text(item.TotalVictimas.ToString("N0", cultura));
+                table.Cell().Element(CeldaNormalSinCorte).Text(item.ClaveDelito);
+                table.Cell().Element(CeldaNormalSinCorte).Text(item.TipoDelito);
+                table.Cell().Element(CeldaNormalSinCorte).Text(item.ClaveSubtipo);
+                table.Cell().Element(CeldaNormalSinCorte).Text(item.SubtipoDelito);
+                table.Cell().Element(CeldaNumeroSinCorte).Text(item.TotalDelitos.ToString("N0", cultura));
+                table.Cell().Element(CeldaNumeroSinCorte).Text(item.TotalVictimas.ToString("N0", cultura));
             }
         });
+    }
+
+
+    private static IContainer CeldaNormalSinCorte(IContainer container)
+    {
+        return CeldaNormal(container)
+            .ShowEntire();
+    }
+
+    private static IContainer CeldaNumeroSinCorte(IContainer container)
+    {
+        return CeldaNumero(container)
+            .ShowEntire();
     }
 
     private void ConstruirPiePagina(IContainer container)
@@ -439,6 +452,7 @@ public class AcusePdfService : IAcusePdfService
     private static IContainer CeldaNormal(IContainer container)
     {
         return container
+            .ShowEntire()
             .Border(0.5f)
             .BorderColor(Colors.Black)
             .PaddingHorizontal(3)
@@ -449,8 +463,14 @@ public class AcusePdfService : IAcusePdfService
 
     private static IContainer CeldaNumero(IContainer container)
     {
-        return CeldaNormal(container)
+        return container
+            .ShowEntire()
+            .Border(0.5f)
+            .BorderColor(Colors.Black)
+            .PaddingHorizontal(3)
+            .PaddingVertical(2)
             .AlignCenter()
+            .AlignMiddle()
             .DefaultTextStyle(x => x.FontSize(7.2f));
     }
 

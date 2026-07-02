@@ -61,8 +61,38 @@ public class AcuseRepository : IAcuseRepository
             s.subtipo_delito_sabana AS SubtipoDelito,
             COUNT(DISTINCT d.id_carga_tmp_delito) AS TotalDelitos,
             COUNT(DISTINCT v.id_carga_tmp_victima) AS TotalVictimas,
-            MIN(s.id_delito_sabana) AS Orden
+            MIN(s.id_delito_sabana) AS Orden,
+            MIN(o.OrdenClave1) AS OrdenClave1,
+            MIN(o.OrdenClave2) AS OrdenClave2,
+            MIN(o.OrdenClave3) AS OrdenClave3
         FROM catalogo_delito_sabana s
+        CROSS APPLY (
+            SELECT ClaveSubtipoLimpia = LTRIM(RTRIM(s.clave3_sabana))
+        ) cs
+        CROSS APPLY (
+            SELECT
+                PrimerPunto = CHARINDEX('.', cs.ClaveSubtipoLimpia),
+                SegundoPunto = CHARINDEX('.', cs.ClaveSubtipoLimpia, CHARINDEX('.', cs.ClaveSubtipoLimpia) + 1)
+        ) p
+        CROSS APPLY (
+            SELECT
+                OrdenClave1 = TRY_CONVERT(int,
+                    CASE
+                        WHEN p.PrimerPunto = 0 THEN cs.ClaveSubtipoLimpia
+                        ELSE LEFT(cs.ClaveSubtipoLimpia, p.PrimerPunto - 1)
+                    END),
+                OrdenClave2 = TRY_CONVERT(int,
+                    CASE
+                        WHEN p.PrimerPunto = 0 THEN '0'
+                        WHEN p.SegundoPunto = 0 THEN SUBSTRING(cs.ClaveSubtipoLimpia, p.PrimerPunto + 1, 50)
+                        ELSE SUBSTRING(cs.ClaveSubtipoLimpia, p.PrimerPunto + 1, p.SegundoPunto - p.PrimerPunto - 1)
+                    END),
+                OrdenClave3 = TRY_CONVERT(int,
+                    CASE
+                        WHEN p.SegundoPunto = 0 THEN '0'
+                        ELSE SUBSTRING(cs.ClaveSubtipoLimpia, p.SegundoPunto + 1, 50)
+                    END)
+        ) o
         LEFT JOIN catalogo_modalidad_delito m
             ON m.id_modalidad_delito = s.id_modalidad_delito
         LEFT JOIN carga_tmp_delito d
@@ -83,6 +113,9 @@ public class AcuseRepository : IAcuseRepository
             s.clave3_sabana,
             s.subtipo_delito_sabana
         ORDER BY
+            OrdenClave1,
+            OrdenClave2,
+            OrdenClave3,
             Orden;
     ";
 
@@ -108,8 +141,38 @@ public class AcuseRepository : IAcuseRepository
             s.subtipo_delito_sabana AS SubtipoDelito,
             COUNT(DISTINCT d.id_delito) AS TotalDelitos,
             COUNT(DISTINCT v.id_victima) AS TotalVictimas,
-            MIN(s.id_delito_sabana) AS Orden
+            MIN(s.id_delito_sabana) AS Orden,
+            MIN(o.OrdenClave1) AS OrdenClave1,
+            MIN(o.OrdenClave2) AS OrdenClave2,
+            MIN(o.OrdenClave3) AS OrdenClave3
         FROM catalogo_delito_sabana s
+        CROSS APPLY (
+            SELECT ClaveSubtipoLimpia = LTRIM(RTRIM(s.clave3_sabana))
+        ) cs
+        CROSS APPLY (
+            SELECT
+                PrimerPunto = CHARINDEX('.', cs.ClaveSubtipoLimpia),
+                SegundoPunto = CHARINDEX('.', cs.ClaveSubtipoLimpia, CHARINDEX('.', cs.ClaveSubtipoLimpia) + 1)
+        ) p
+        CROSS APPLY (
+            SELECT
+                OrdenClave1 = TRY_CONVERT(int,
+                    CASE
+                        WHEN p.PrimerPunto = 0 THEN cs.ClaveSubtipoLimpia
+                        ELSE LEFT(cs.ClaveSubtipoLimpia, p.PrimerPunto - 1)
+                    END),
+                OrdenClave2 = TRY_CONVERT(int,
+                    CASE
+                        WHEN p.PrimerPunto = 0 THEN '0'
+                        WHEN p.SegundoPunto = 0 THEN SUBSTRING(cs.ClaveSubtipoLimpia, p.PrimerPunto + 1, 50)
+                        ELSE SUBSTRING(cs.ClaveSubtipoLimpia, p.PrimerPunto + 1, p.SegundoPunto - p.PrimerPunto - 1)
+                    END),
+                OrdenClave3 = TRY_CONVERT(int,
+                    CASE
+                        WHEN p.SegundoPunto = 0 THEN '0'
+                        ELSE SUBSTRING(cs.ClaveSubtipoLimpia, p.SegundoPunto + 1, 50)
+                    END)
+        ) o
         LEFT JOIN delito d
             ON d.id_carga = @IdCarga
            AND d.id_modalidad_delito = s.id_modalidad_delito
@@ -128,6 +191,9 @@ public class AcuseRepository : IAcuseRepository
             s.clave3_sabana,
             s.subtipo_delito_sabana
         ORDER BY
+            OrdenClave1,
+            OrdenClave2,
+            OrdenClave3,
             Orden;
     ";
 
@@ -220,8 +286,38 @@ public class AcuseRepository : IAcuseRepository
                 s.subtipo_delito_sabana AS SubtipoDelito,
                 CONVERT(int, ISNULL(dr.TotalDelitos, 0)) AS TotalDelitos,
                 CONVERT(int, ISNULL(vr.TotalVictimas, 0)) AS TotalVictimas,
-                MIN(s.id_delito_sabana) AS Orden
+                MIN(s.id_delito_sabana) AS Orden,
+                MIN(o.OrdenClave1) AS OrdenClave1,
+                MIN(o.OrdenClave2) AS OrdenClave2,
+                MIN(o.OrdenClave3) AS OrdenClave3
             FROM catalogo_delito_sabana s
+            CROSS APPLY (
+                SELECT ClaveSubtipoLimpia = LTRIM(RTRIM(s.clave3_sabana))
+            ) cs
+            CROSS APPLY (
+                SELECT
+                    PrimerPunto = CHARINDEX('.', cs.ClaveSubtipoLimpia),
+                    SegundoPunto = CHARINDEX('.', cs.ClaveSubtipoLimpia, CHARINDEX('.', cs.ClaveSubtipoLimpia) + 1)
+            ) p
+            CROSS APPLY (
+                SELECT
+                    OrdenClave1 = TRY_CONVERT(int,
+                        CASE
+                            WHEN p.PrimerPunto = 0 THEN cs.ClaveSubtipoLimpia
+                            ELSE LEFT(cs.ClaveSubtipoLimpia, p.PrimerPunto - 1)
+                        END),
+                    OrdenClave2 = TRY_CONVERT(int,
+                        CASE
+                            WHEN p.PrimerPunto = 0 THEN '0'
+                            WHEN p.SegundoPunto = 0 THEN SUBSTRING(cs.ClaveSubtipoLimpia, p.PrimerPunto + 1, 50)
+                            ELSE SUBSTRING(cs.ClaveSubtipoLimpia, p.PrimerPunto + 1, p.SegundoPunto - p.PrimerPunto - 1)
+                        END),
+                    OrdenClave3 = TRY_CONVERT(int,
+                        CASE
+                            WHEN p.SegundoPunto = 0 THEN '0'
+                            ELSE SUBSTRING(cs.ClaveSubtipoLimpia, p.SegundoPunto + 1, 50)
+                        END)
+            ) o
             LEFT JOIN delitos_resumen dr
                 ON dr.id_modalidad_delito = s.id_modalidad_delito
                AND dr.id_grado_consumacion = s.id_grado_consumacion
@@ -241,6 +337,9 @@ public class AcuseRepository : IAcuseRepository
                 dr.TotalDelitos,
                 vr.TotalVictimas
             ORDER BY
+                OrdenClave1,
+                OrdenClave2,
+                OrdenClave3,
                 Orden
             OPTION (RECOMPILE);
             ";
