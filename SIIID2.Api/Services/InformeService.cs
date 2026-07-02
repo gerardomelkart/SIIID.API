@@ -137,7 +137,7 @@ public class InformeService : IInformeService
 
         if (!puedeDescargarSabana)
         {
-            throw new UnauthorizedAccessException("No tiene permiso para descargar las sábanas estadísticas.");
+            throw new UnauthorizedAccessException("No tiene permiso para descargar los planos estadísticos.");
         }
 
         if (!usuarioConsulta.EsSuperUsuario && !usuarioConsulta.IdEntidadFederativa.HasValue)
@@ -491,7 +491,7 @@ public class InformeService : IInformeService
             "COMPLETA" => "COMPLETA",
             "ESTATALES" => "ESTATALES",
             "MUNICIPALES" => "MUNICIPALES",
-            _ => throw new InvalidOperationException("El tipo de sábana no es válido.")
+            _ => throw new InvalidOperationException("El tipo de plano no es válido.")
         };
     }
 
@@ -503,9 +503,9 @@ public class InformeService : IInformeService
 
         return tipoSabana switch
         {
-            "ESTATALES" => $"SABANAS_ESTATALES{sufijoEntidad}_{anioCorte}.zip",
-            "MUNICIPALES" => $"SABANAS_MUNICIPALES{sufijoEntidad}_{anioCorte}.zip",
-            _ => $"SABANAS_COMPLETAS{sufijoEntidad}_{anioCorte}.zip"
+            "ESTATALES" => $"PLANO_ESTATAL{sufijoEntidad}_{anioCorte}.zip",
+            "MUNICIPALES" => $"PLANO_MUNICIPAL{sufijoEntidad}_{anioCorte}.zip",
+            _ => $"PLANO_ESTADISTICO{sufijoEntidad}_{anioCorte}.zip"
         };
     }
 }
