@@ -347,7 +347,7 @@ public class AcusePdfService : IAcusePdfService
     {
         var rutaPiePagina = ObtenerRutaArchivo(RutaPiePaginaAcuse);
 
-        container.AlignCenter().Height(56).Width(572).Image(rutaPiePagina).FitArea();
+        container.AlignLeft().Height(54).Width(572).Image(rutaPiePagina).FitArea();
     }
 
     private string ObtenerRutaArchivo(string rutaRelativa)
