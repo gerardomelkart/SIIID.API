@@ -206,35 +206,28 @@ public class AcusePdfService : IAcusePdfService
                     page.Background().Element(contenedor => ConstruirMarcaAgua(contenedor));
                 }
 
-                page.Header().Element(header => ConstruirEncabezado(header, carga));
+                page.Header().ShowOnce().Element(header => ConstruirEncabezado(header, carga));
 
-                page.Content().Column(column =>
+                page.Content().Layers(layers =>
                 {
-                    column.Spacing(6);
+                    layers.PrimaryLayer().Column(column =>
+                    {
+                        column.Spacing(4);
+                        column.Item().Element(contenedor => ConstruirLeyendaAcuse(contenedor, carga));
+                        column.Item().Element(contenedor => ConstruirDetalleRegistros(contenedor, carga));
+                        column.Item().Element(contenedor => ConstruirTablaResumen(contenedor, resumen));
+                    });
 
-                    column.Item().Element(contenedor => ConstruirLeyendaAcuse(contenedor, carga));
-
-                    column.Item().Element(contenedor => ConstruirDetalleRegistros(contenedor, carga));
-
-                    column.Item().Element(contenedor => ConstruirTablaResumen(contenedor, resumen));
+                    layers.Layer().SkipOnce().AlignBottom().Element(contenedor => ConstruirPiePagina(contenedor));
                 });
 
-                page.Footer().Element(footer => ConstruirPiePagina(footer));
             });
         }).GeneratePdf();
     }
 
     private void ConstruirMarcaAgua(IContainer container)
     {
-        container
-            .AlignCenter()
-            .AlignMiddle()
-            .TranslateY(55)
-            .Rotate(-35)
-            .Text("PREVIO")
-            .FontSize(72)
-            .Bold()
-            .FontColor(Colors.Red.Lighten4);
+        container.AlignCenter().AlignMiddle().OffsetY(55).Rotate(-35).Text("PREVIO").FontSize(72).Bold().FontColor(Colors.Red.Lighten4);
     }
 
     private void ConstruirEncabezado(IContainer container, CargaAcuseInfo carga)
@@ -371,12 +364,7 @@ public class AcusePdfService : IAcusePdfService
     {
         var rutaPiePagina = ObtenerRutaArchivo(RutaPiePaginaAcuse);
 
-        container
-            .AlignCenter()
-            .Height(70)
-            .Width(571)
-            .Image(rutaPiePagina)
-            .FitArea();
+        container.AlignCenter().Height(58).Width(555).Image(rutaPiePagina).FitArea();
     }
 
     private string ObtenerRutaArchivo(string rutaRelativa)
@@ -456,7 +444,7 @@ public class AcusePdfService : IAcusePdfService
             .Border(0.5f)
             .BorderColor(Colors.Black)
             .PaddingHorizontal(3)
-            .PaddingVertical(2)
+            .PaddingVertical(1)
             .AlignMiddle()
             .DefaultTextStyle(x => x.FontSize(7.2f));
     }
@@ -468,10 +456,10 @@ public class AcusePdfService : IAcusePdfService
             .Border(0.5f)
             .BorderColor(Colors.Black)
             .PaddingHorizontal(3)
-            .PaddingVertical(2)
+            .PaddingVertical(1)
             .AlignCenter()
             .AlignMiddle()
-            .DefaultTextStyle(x => x.FontSize(7.2f));
+            .DefaultTextStyle(x => x.FontSize(7.0f));
     }
 
     private static IContainer CeldaDescripcionDetalle(IContainer container)
@@ -511,6 +499,7 @@ public class AcusePdfService : IAcusePdfService
             column.Item()
                 .Text(text =>
                 {
+                    text.Justify();
                     text.DefaultTextStyle(x => x.FontSize(8.5f));
 
                     text.Span("El presente acuse de recepción hace constar que la estadística delictiva reportada por la ");
