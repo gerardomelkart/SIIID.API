@@ -193,82 +193,65 @@ public class AcusePdfService : IAcusePdfService
             container.Page(page =>
             {
                 page.Size(PageSizes.Letter);
-
-                page.MarginTop(20);
+                page.MarginTop(12);
                 page.MarginLeft(20);
                 page.MarginRight(20);
-                page.MarginBottom(15);
-
+                page.MarginBottom(8);
                 page.DefaultTextStyle(x => x.FontSize(8).FontFamily("Noto Sans"));
 
                 if (mostrarMarcaPrevio)
                 {
-                    page.Background().Element(contenedor => ConstruirMarcaAgua(contenedor));
+                    page.Background().Layers(layers =>
+                    {
+                        layers.PrimaryLayer().ShowOnce().Element(contenedor => ConstruirMarcaAgua(contenedor, 80));
+                        layers.Layer().SkipOnce().Element(contenedor => ConstruirMarcaAgua(contenedor, 55));
+                    });
                 }
 
-                page.Header().ShowOnce().Element(header => ConstruirEncabezado(header, carga));
+                page.Header().Element(header => ConstruirEncabezado(header, carga));
 
-                page.Content().Layers(layers =>
+                page.Content().Column(column =>
                 {
-                    layers.PrimaryLayer().Column(column =>
-                    {
-                        column.Spacing(4);
-                        column.Item().Element(contenedor => ConstruirLeyendaAcuse(contenedor, carga));
-                        column.Item().Element(contenedor => ConstruirDetalleRegistros(contenedor, carga));
-                        column.Item().Element(contenedor => ConstruirTablaResumen(contenedor, resumen));
-                    });
-
-                    layers.Layer().SkipOnce().AlignBottom().Element(contenedor => ConstruirPiePagina(contenedor));
+                    column.Spacing(4);
+                    column.Item().Element(contenedor => ConstruirLeyendaAcuse(contenedor, carga));
+                    column.Item().Element(contenedor => ConstruirDetalleRegistros(contenedor, carga));
+                    column.Item().Element(contenedor => ConstruirTablaResumen(contenedor, resumen));
                 });
 
+                page.Footer().Element(footer => ConstruirPiePagina(footer));
             });
         }).GeneratePdf();
     }
 
-    private void ConstruirMarcaAgua(IContainer container)
+    private void ConstruirMarcaAgua(IContainer container, float offsetY)
     {
-        container.AlignCenter().AlignMiddle().OffsetY(55).Rotate(-35).Text("PREVIO").FontSize(72).Bold().FontColor(Colors.Red.Lighten4);
+        container.AlignCenter().AlignMiddle().OffsetY(offsetY).Rotate(-35).Text("PREVIO").FontSize(72).Bold().FontColor(Colors.Red.Lighten4);
     }
 
     private void ConstruirEncabezado(IContainer container, CargaAcuseInfo carga)
     {
         var rutaLogo = ObtenerRutaArchivo(RutaLogoAcuse);
         var rutaMujer = ObtenerRutaArchivo(RutaMujerAcuse);
-
         var fechaAcuse = carga.FechaConfirmacion ?? carga.FechaValidacion;
 
         container.Column(column =>
         {
             column.Item().Row(row =>
             {
-                row.RelativeItem(3)
-                    .Height(55)
-                    .AlignLeft()
-                    .Image(rutaLogo)
-                    .FitArea();
-
-                row.RelativeItem()
-                    .Height(65)
-                    .AlignRight()
-                    .Image(rutaMujer)
-                    .FitArea();
+                row.RelativeItem(3).Height(38).AlignLeft().Image(rutaLogo).FitArea();
+                row.RelativeItem().Height(42).AlignRight().Image(rutaMujer).FitArea();
             });
 
-            column.Item().PaddingTop(2).Row(row =>
+            column.Item().PaddingTop(1).Row(row =>
             {
                 row.RelativeItem();
 
                 row.RelativeItem(2.3f).Column(right =>
                 {
-                    right.Item().AlignRight().Text("SECRETARIADO EJECUTIVO DEL SISTEMA").Bold().FontSize(9);
-                    right.Item().AlignRight().Text("NACIONAL DE SEGURIDAD PÚBLICA").Bold().FontSize(9);
-                    right.Item().AlignRight().Text("CENTRO NACIONAL DE INFORMACIÓN").Bold().FontSize(9);
-
-                    right.Item()
-                        .PaddingTop(4)
-                        .AlignRight()
-                        .Text($"Ciudad de México a {ObtenerFechaLargaEncabezado(fechaAcuse)}")
-                        .FontSize(7.5f);
+                    right.Item().AlignRight().Text("SECRETARIADO EJECUTIVO DEL SISTEMA").Bold().FontSize(7.3f);
+                    right.Item().AlignRight().Text("NACIONAL DE SEGURIDAD PÚBLICA").Bold().FontSize(7.3f);
+                    right.Item().AlignRight().Text("CENTRO NACIONAL DE INFORMACIÓN").Bold().FontSize(7.3f);
+                    right.Item().PaddingTop(2).AlignRight().Text($"Ciudad de México a {ObtenerFechaLargaEncabezado(fechaAcuse)}").FontSize(6.8f);
                 });
             });
         });
@@ -364,7 +347,7 @@ public class AcusePdfService : IAcusePdfService
     {
         var rutaPiePagina = ObtenerRutaArchivo(RutaPiePaginaAcuse);
 
-        container.AlignCenter().Height(58).Width(555).Image(rutaPiePagina).FitArea();
+        container.AlignCenter().Height(56).Width(572).Image(rutaPiePagina).FitArea();
     }
 
     private string ObtenerRutaArchivo(string rutaRelativa)
