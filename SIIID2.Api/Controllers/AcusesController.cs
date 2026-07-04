@@ -3,9 +3,11 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 using SIIID2.Api.Services;
@@ -18,12 +20,14 @@ public class AcusesController : ControllerBase
 {
     private readonly IAcusePdfService _acusePdfService;
     private readonly IAcuseRepository _acuseRepository;
+    private readonly IDbConnectionFactory _dbConnectionFactory;
     private readonly IMemoryCache _cache;
 
-    public AcusesController(IAcusePdfService acusePdfService, IAcuseRepository acuseRepository, IMemoryCache cache)
+    public AcusesController(IAcusePdfService acusePdfService, IAcuseRepository acuseRepository, IDbConnectionFactory dbConnectionFactory, IMemoryCache cache)
     {
         _acusePdfService = acusePdfService;
         _acuseRepository = acuseRepository;
+        _dbConnectionFactory = dbConnectionFactory;
         _cache = cache;
     }
 
@@ -48,6 +52,16 @@ public class AcusesController : ControllerBase
 
         try
         {
+            if (tipoNormalizado is "PREVIO_CARGA" or "PREVIO_ACTUALIZACION")
+            {
+                var disponibilidad = await ObtenerDisponibilidadStagingRechazoAsync(codigoReferencia);
+
+                if (disponibilidad.EsRechazoAdministrador && !disponibilidad.TieneStagingDisponible)
+                {
+                    throw new InvalidOperationException("El informe previo ya no está disponible porque el staging de este rechazo histórico fue depurado por mantenimiento.");
+                }
+            }
+
             var pdf = tipoNormalizado switch
             {
                 "PREVIO_CARGA" => await _acusePdfService.GenerarAcusePrevioAsync(codigoReferencia, idUsuarioConsulta),
@@ -102,6 +116,27 @@ public class AcusesController : ControllerBase
         return File(archivo.Archivo, "application/pdf");
     }
 
+    private async Task<DisponibilidadStagingRechazo> ObtenerDisponibilidadStagingRechazoAsync(string codigoReferencia)
+    {
+        const string sql = @"
+            SELECT TOP 1
+                CASE WHEN c.estado = N'RECHAZADO_ADMIN' THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS EsRechazoAdministrador,
+                CASE
+                    WHEN EXISTS (SELECT 1 FROM dbo.carga_tmp_carpeta tc WHERE tc.id_carga = c.id_carga AND tc.activo = 1)
+                      OR EXISTS (SELECT 1 FROM dbo.carga_tmp_delito td WHERE td.id_carga = c.id_carga AND td.activo = 1)
+                      OR EXISTS (SELECT 1 FROM dbo.carga_tmp_victima tv WHERE tv.id_carga = c.id_carga AND tv.activo = 1)
+                    THEN CAST(1 AS bit)
+                    ELSE CAST(0 AS bit)
+                END AS TieneStagingDisponible
+            FROM dbo.carga c
+            WHERE c.codigo_referencia = @CodigoReferencia
+              AND c.activo = 1;";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.QueryFirstOrDefaultAsync<DisponibilidadStagingRechazo>(sql, new { CodigoReferencia = codigoReferencia }) ?? new DisponibilidadStagingRechazo();
+    }
+
     private static string ObtenerNombreArchivo(CargaAcuseInfo carga, string tipo)
     {
         var entidad = LimpiarNombreArchivo(carga.EntidadFederativa);
@@ -146,4 +181,10 @@ public class AcusesController : ControllerBase
     }
 
     private sealed record AcuseTicketArchivo(byte[] Archivo, string NombreArchivo);
+
+    private sealed class DisponibilidadStagingRechazo
+    {
+        public bool EsRechazoAdministrador { get; set; }
+        public bool TieneStagingDisponible { get; set; }
+    }
 }
