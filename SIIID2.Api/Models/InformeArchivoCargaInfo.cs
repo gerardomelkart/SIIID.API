@@ -1,4 +1,4 @@
-﻿namespace SIIID2.Api.Models;
+namespace SIIID2.Api.Models;
 
 public class InformeArchivoCargaInfo
 {
@@ -17,4 +17,6 @@ public class InformeArchivoCargaInfo
     public int AnioCorte { get; set; }
 
     public string EntidadFederativa { get; set; } = string.Empty;
+
+    public bool TieneStagingDisponible { get; set; }
 }
