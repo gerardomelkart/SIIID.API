@@ -1,4 +1,4 @@
-﻿namespace SIIID2.Api.Models;
+namespace SIIID2.Api.Models;
 
 public class InformeEnvioItem
 {
@@ -13,6 +13,16 @@ public class InformeEnvioItem
     public string EstadoTexto { get; set; } = string.Empty;
 
     public bool EsConfirmado { get; set; }
+
+    public bool EsRechazadoAdministrador { get; set; }
+
+    public string? MotivoRechazo { get; set; }
+
+    public DateTime? FechaRechazo { get; set; }
+
+    public string FechaRechazoTexto { get; set; } = string.Empty;
+
+    public string? UsuarioRechazo { get; set; }
 
     public string? CodigoReferenciaConfirmada { get; set; }
 

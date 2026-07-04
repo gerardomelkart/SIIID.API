@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
@@ -15,7 +15,11 @@ public class AcuseRepository : IAcuseRepository
 
     public async Task<CargaAcuseInfo?> ObtenerCargaParaAcuseAsync(string codigoReferencia)
     {
-        // Obtiene datos generales de la carga para el acuse previo.
+        // Obtiene datos generales de la carga para el acuse.
+        // Un rechazo administrativo conserva staging y se presenta como estado previo
+        // únicamente dentro del flujo de acuses para permitir regenerar el informe PREVIO.
+        // En ese caso se ignora la fecha de rechazo y se conserva la fecha de validación
+        // que tenía el informe previo original.
         var sql = @"
         SELECT
             c.id_carga AS IdCarga,
@@ -27,9 +31,18 @@ public class AcuseRepository : IAcuseRepository
             c.total_carpetas_investigacion AS TotalCarpetasInvestigacion,
             c.total_delitos AS TotalDelitos,
             c.total_victimas AS TotalVictimas,
-            c.estado AS Estado,
+            CASE
+                WHEN c.estado = 'RECHAZADO_ADMIN' AND c.tipo_carga = 'ACTUALIZACION'
+                    THEN 'VALIDADO_PENDIENTE_ACTUALIZACION'
+                WHEN c.estado = 'RECHAZADO_ADMIN'
+                    THEN 'VALIDADO_PENDIENTE'
+                ELSE c.estado
+            END AS Estado,
             c.fecha_validacion AS FechaValidacion,
-            c.fecha_confirmacion AS FechaConfirmacion,
+            CASE
+                WHEN c.estado = 'RECHAZADO_ADMIN' THEN NULL
+                ELSE c.fecha_confirmacion
+            END AS FechaConfirmacion,
             c.id_usuario_carga AS IdUsuarioCarga,
             u.usuario AS UsuarioCarga
         FROM carga c
