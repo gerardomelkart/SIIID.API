@@ -74,7 +74,14 @@ public class InformesRechazosController : ControllerBase
                 ucarga.usuario AS UsuarioEnvio,
                 c.mensaje_error AS MotivoRechazo,
                 c.fecha_confirmacion AS FechaRechazo,
-                urechazo.usuario AS UsuarioRechazo
+                urechazo.usuario AS UsuarioRechazo,
+                CASE
+                    WHEN EXISTS (SELECT 1 FROM dbo.carga_tmp_carpeta tc WHERE tc.id_carga = c.id_carga AND tc.activo = 1)
+                      OR EXISTS (SELECT 1 FROM dbo.carga_tmp_delito td WHERE td.id_carga = c.id_carga AND td.activo = 1)
+                      OR EXISTS (SELECT 1 FROM dbo.carga_tmp_victima tv WHERE tv.id_carga = c.id_carga AND tv.activo = 1)
+                    THEN CAST(1 AS bit)
+                    ELSE CAST(0 AS bit)
+                END AS TieneStagingDisponible
             FROM dbo.carga c
             INNER JOIN dbo.usuario ucarga
                 ON ucarga.id_usuario = c.id_usuario_carga
@@ -110,12 +117,12 @@ public class InformesRechazosController : ControllerBase
         {
             envio.FechaEnvioTexto = envio.FechaEnvio.ToString("dd-MM-yyyy");
             envio.Corte = $"{ObtenerNombreMes(envio.MesCorte)} {envio.AnioCorte}";
-            envio.EstadoTexto = "Rechazado por administrador";
+            envio.EstadoTexto = envio.TieneStagingDisponible ? "Rechazado por administrador" : "Rechazado por administrador (histórico)";
             envio.EsConfirmado = false;
             envio.EsRechazadoAdministrador = true;
             envio.FechaRechazoTexto = envio.FechaRechazo?.ToString("dd-MM-yyyy HH:mm") ?? string.Empty;
-            envio.EndpointAcuse = ObtenerEndpointAcusePrevio(envio.TipoCarga, envio.CodigoReferencia);
-            envio.EndpointExcel = $"/api/informes/rechazos/{envio.CodigoReferencia}/archivos";
+            envio.EndpointAcuse = envio.TieneStagingDisponible ? ObtenerEndpointAcusePrevio(envio.TipoCarga, envio.CodigoReferencia) : string.Empty;
+            envio.EndpointExcel = envio.TieneStagingDisponible ? $"/api/informes/rechazos/{envio.CodigoReferencia}/archivos" : string.Empty;
         }
 
         return Ok(rechazados);
@@ -159,7 +166,14 @@ public class InformesRechazosController : ControllerBase
                 c.id_entidad_federativa AS IdEntidadFederativa,
                 ef.nombre AS EntidadFederativa,
                 c.mes_corte AS MesCorte,
-                c.anio_corte AS AnioCorte
+                c.anio_corte AS AnioCorte,
+                CASE
+                    WHEN EXISTS (SELECT 1 FROM dbo.carga_tmp_carpeta tc WHERE tc.id_carga = c.id_carga AND tc.activo = 1)
+                      OR EXISTS (SELECT 1 FROM dbo.carga_tmp_delito td WHERE td.id_carga = c.id_carga AND td.activo = 1)
+                      OR EXISTS (SELECT 1 FROM dbo.carga_tmp_victima tv WHERE tv.id_carga = c.id_carga AND tv.activo = 1)
+                    THEN CAST(1 AS bit)
+                    ELSE CAST(0 AS bit)
+                END AS TieneStagingDisponible
             FROM dbo.carga c
             INNER JOIN dbo.catalogo_entidad_federativa ef
                 ON ef.id_entidad_federativa = c.id_entidad_federativa
@@ -187,6 +201,16 @@ public class InformesRechazosController : ControllerBase
                 esValido = false,
                 codigo = "INFORMES_SIN_PERMISO",
                 mensaje = "No tiene permiso para descargar archivos de otra entidad federativa."
+            });
+        }
+
+        if (!carga.TieneStagingDisponible)
+        {
+            return Conflict(new
+            {
+                esValido = false,
+                codigo = "INFORMES_RECHAZO_STAGING_NO_DISPONIBLE",
+                mensaje = "Los archivos reconstruidos ya no están disponibles porque el staging de este rechazo histórico fue depurado por mantenimiento."
             });
         }
 
