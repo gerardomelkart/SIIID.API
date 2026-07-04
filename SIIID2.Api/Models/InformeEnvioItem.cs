@@ -16,6 +16,8 @@ public class InformeEnvioItem
 
     public bool EsRechazadoAdministrador { get; set; }
 
+    public bool TieneStagingDisponible { get; set; }
+
     public string? MotivoRechazo { get; set; }
 
     public DateTime? FechaRechazo { get; set; }
