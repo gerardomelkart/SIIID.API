@@ -147,10 +147,10 @@ internal static class CargaAuditoriaSql
                 WHERE c.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
                   AND c.activo = 1
             ),
-            delitos_actuales AS (
+            candidatos AS (
                 SELECT
-                    de.*,
-                    ci.identificador_carpeta_fiscalia,
+                    de.id_delito,
+                    NULLIF(LTRIM(RTRIM(tmp.cp)), N'') AS codigo_postal_nuevo,
                     ROW_NUMBER() OVER (
                         PARTITION BY ci.identificador_carpeta_fiscalia, de.identificador_delito_fiscalia
                         ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, de.id_carga DESC, de.id_delito DESC
@@ -160,19 +160,18 @@ internal static class CargaAuditoriaSql
                     ON ci.id_carpeta_investigacion = de.id_carpeta_investigacion
                 INNER JOIN cargas_periodo cp
                     ON cp.id_carga = de.id_carga
-                WHERE de.activo = 1
-            ),
-            cambios_cp AS (
-                SELECT da.*
-                FROM delitos_actuales da
                 INNER JOIN dbo.carga_tmp_delito tmp
                     ON tmp.id_carga = @IdCarga
-                   AND tmp.id_ci = da.identificador_carpeta_fiscalia
-                   AND tmp.id_delito = da.identificador_delito_fiscalia
+                   AND tmp.id_ci = ci.identificador_carpeta_fiscalia
+                   AND tmp.id_delito = de.identificador_delito_fiscalia
                    AND tmp.activo = 1
-                WHERE da.rn = 1
-                  AND ISNULL(da.codigo_postal_fiscalia, N'') <> ISNULL(NULLIF(LTRIM(RTRIM(tmp.cp)), N''), N'')
+                WHERE de.activo = 1
             )
+            SELECT id_delito, codigo_postal_nuevo
+            INTO #cp_actuales
+            FROM candidatos
+            WHERE rn = 1;
+
             INSERT INTO dbo.delito_historico (
                 id_delito,
                 id_carpeta_investigacion,
@@ -205,128 +204,63 @@ internal static class CargaAuditoriaSql
                 activo
             )
             SELECT
-                c.id_delito,
-                c.id_carpeta_investigacion,
-                c.identificador_delito_fiscalia,
-                c.delito_fiscalia,
-                c.modalidad_delito_fiscalia,
-                c.id_forma_accion,
-                c.fecha_hechos,
-                c.id_instrumento_comision,
-                c.id_grado_consumacion,
-                c.id_modalidad_delito,
-                c.id_entidad_federativa,
-                c.id_municipio,
-                c.id_localidad_fiscalia,
-                c.localidad_fiscalia_nombre,
-                c.id_colonia_fiscalia,
-                c.colonia_fiscalia_nombre,
-                c.id_codigo_postal,
-                c.codigo_postal_fiscalia,
-                c.coordenada_x,
-                c.coordenada_y,
-                c.domicilio_hechos,
-                c.id_usuario_registro,
-                c.fecha_registro,
-                c.id_carga,
+                de.id_delito,
+                de.id_carpeta_investigacion,
+                de.identificador_delito_fiscalia,
+                de.delito_fiscalia,
+                de.modalidad_delito_fiscalia,
+                de.id_forma_accion,
+                de.fecha_hechos,
+                de.id_instrumento_comision,
+                de.id_grado_consumacion,
+                de.id_modalidad_delito,
+                de.id_entidad_federativa,
+                de.id_municipio,
+                de.id_localidad_fiscalia,
+                de.localidad_fiscalia_nombre,
+                de.id_colonia_fiscalia,
+                de.colonia_fiscalia_nombre,
+                de.id_codigo_postal,
+                de.codigo_postal_fiscalia,
+                de.coordenada_x,
+                de.coordenada_y,
+                de.domicilio_hechos,
+                de.id_usuario_registro,
+                de.fecha_registro,
+                de.id_carga,
                 @IdUsuario,
                 @IdCarga,
                 N'MODIFICADO',
                 SYSDATETIME(),
-                c.activo
-            FROM cambios_cp c
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM dbo.delito_historico dh
-                WHERE dh.id_delito = c.id_delito
-                  AND dh.id_carga_nueva = @IdCarga
-            );
+                de.activo
+            FROM dbo.delito de
+            INNER JOIN #cp_actuales cp
+                ON cp.id_delito = de.id_delito
+            WHERE de.id_carga <> @IdCarga
+              AND ISNULL(de.codigo_postal_fiscalia, N'') <> ISNULL(cp.codigo_postal_nuevo, N'')
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM dbo.delito_historico dh
+                  WHERE dh.id_delito = de.id_delito
+                    AND dh.id_carga_nueva = @IdCarga
+              );
 
-            ;WITH carga_actualizacion AS (
-                SELECT id_entidad_federativa, mes_corte, anio_corte
-                FROM dbo.carga
-                WHERE id_carga = @IdCarga
-            ),
-            cargas_periodo AS (
-                SELECT c.id_carga, c.fecha_confirmacion
-                FROM dbo.carga c
-                INNER JOIN carga_actualizacion ca
-                    ON ca.id_entidad_federativa = c.id_entidad_federativa
-                   AND ca.mes_corte = c.mes_corte
-                   AND ca.anio_corte = c.anio_corte
-                WHERE c.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-                  AND c.activo = 1
-            ),
-            delitos_actuales AS (
-                SELECT
-                    de.id_delito,
-                    de.codigo_postal_fiscalia,
-                    ci.identificador_carpeta_fiscalia,
-                    de.identificador_delito_fiscalia,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY ci.identificador_carpeta_fiscalia, de.identificador_delito_fiscalia
-                        ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, de.id_carga DESC, de.id_delito DESC
-                    ) AS rn
-                FROM dbo.delito de
-                INNER JOIN dbo.carpeta_investigacion ci
-                    ON ci.id_carpeta_investigacion = de.id_carpeta_investigacion
-                INNER JOIN cargas_periodo cp
-                    ON cp.id_carga = de.id_carga
-                WHERE de.activo = 1
-            )
             UPDATE dh
-            SET dh.codigo_postal_fiscalia = da.codigo_postal_fiscalia
+            SET dh.codigo_postal_fiscalia = de.codigo_postal_fiscalia
             FROM dbo.delito_historico dh
-            INNER JOIN delitos_actuales da
-                ON da.id_delito = dh.id_delito
-               AND da.rn = 1
+            INNER JOIN dbo.delito de
+                ON de.id_delito = dh.id_delito
             WHERE dh.id_carga_nueva = @IdCarga;
 
-            ;WITH carga_actualizacion AS (
-                SELECT id_entidad_federativa, mes_corte, anio_corte
-                FROM dbo.carga
-                WHERE id_carga = @IdCarga
-            ),
-            cargas_periodo AS (
-                SELECT c.id_carga, c.fecha_confirmacion
-                FROM dbo.carga c
-                INNER JOIN carga_actualizacion ca
-                    ON ca.id_entidad_federativa = c.id_entidad_federativa
-                   AND ca.mes_corte = c.mes_corte
-                   AND ca.anio_corte = c.anio_corte
-                WHERE c.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-                  AND c.activo = 1
-            ),
-            delitos_actuales AS (
-                SELECT
-                    de.id_delito,
-                    de.codigo_postal_fiscalia,
-                    ci.identificador_carpeta_fiscalia,
-                    de.identificador_delito_fiscalia,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY ci.identificador_carpeta_fiscalia, de.identificador_delito_fiscalia
-                        ORDER BY ISNULL(cp.fecha_confirmacion, '19000101') DESC, de.id_carga DESC, de.id_delito DESC
-                    ) AS rn
-                FROM dbo.delito de
-                INNER JOIN dbo.carpeta_investigacion ci
-                    ON ci.id_carpeta_investigacion = de.id_carpeta_investigacion
-                INNER JOIN cargas_periodo cp
-                    ON cp.id_carga = de.id_carga
-                WHERE de.activo = 1
-            )
             UPDATE de
-            SET de.codigo_postal_fiscalia = NULLIF(LTRIM(RTRIM(tmp.cp)), N''),
+            SET de.codigo_postal_fiscalia = cp.codigo_postal_nuevo,
                 de.id_carga = @IdCarga
             FROM dbo.delito de
-            INNER JOIN delitos_actuales da
-                ON da.id_delito = de.id_delito
-               AND da.rn = 1
-            INNER JOIN dbo.carga_tmp_delito tmp
-                ON tmp.id_carga = @IdCarga
-               AND tmp.id_ci = da.identificador_carpeta_fiscalia
-               AND tmp.id_delito = da.identificador_delito_fiscalia
-               AND tmp.activo = 1
-            WHERE ISNULL(de.codigo_postal_fiscalia, N'') <> ISNULL(NULLIF(LTRIM(RTRIM(tmp.cp)), N''), N'');
+            INNER JOIN #cp_actuales cp
+                ON cp.id_delito = de.id_delito
+            WHERE ISNULL(de.codigo_postal_fiscalia, N'') <> ISNULL(cp.codigo_postal_nuevo, N'');
+
+            DROP TABLE #cp_actuales;
             """;
 
         await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuario = idUsuario }, transaction);
