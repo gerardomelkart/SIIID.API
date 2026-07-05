@@ -76,9 +76,29 @@ public class InformesRechazosController : ControllerBase
                 c.fecha_confirmacion AS FechaRechazo,
                 urechazo.usuario AS UsuarioRechazo,
                 CASE
-                    WHEN EXISTS (SELECT 1 FROM dbo.carga_tmp_carpeta tc WHERE tc.id_carga = c.id_carga AND tc.activo = 1)
-                      OR EXISTS (SELECT 1 FROM dbo.carga_tmp_delito td WHERE td.id_carga = c.id_carga AND td.activo = 1)
-                      OR EXISTS (SELECT 1 FROM dbo.carga_tmp_victima tv WHERE tv.id_carga = c.id_carga AND tv.activo = 1)
+                    WHEN (
+                        EXISTS (SELECT 1 FROM dbo.carga_tmp_carpeta tc WHERE tc.id_carga = c.id_carga AND tc.activo = 1)
+                        OR EXISTS (SELECT 1 FROM dbo.carga_tmp_delito td WHERE td.id_carga = c.id_carga AND td.activo = 1)
+                        OR EXISTS (SELECT 1 FROM dbo.carga_tmp_victima tv WHERE tv.id_carga = c.id_carga AND tv.activo = 1)
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.carga c2
+                        WHERE ISNULL(c2.id_entidad_federativa, 0) = ISNULL(c.id_entidad_federativa, 0)
+                          AND c2.mes_corte = c.mes_corte
+                          AND c2.anio_corte = c.anio_corte
+                          AND ISNULL(c2.tipo_carga, N'') = ISNULL(c.tipo_carga, N'')
+                          AND c2.activo = 1
+                          AND c2.id_carga > c.id_carga
+                          AND c2.estado IN (
+                              N'VALIDADO_PENDIENTE',
+                              N'VALIDADO_PENDIENTE_ACTUALIZACION',
+                              N'PENDIENTE_APROBACION',
+                              N'RECHAZADO_ADMIN',
+                              N'CONFIRMADO',
+                              N'CONFIRMADO_ACTUALIZACION'
+                          )
+                    )
                     THEN CAST(1 AS bit)
                     ELSE CAST(0 AS bit)
                 END AS TieneStagingDisponible
@@ -168,9 +188,29 @@ public class InformesRechazosController : ControllerBase
                 c.mes_corte AS MesCorte,
                 c.anio_corte AS AnioCorte,
                 CASE
-                    WHEN EXISTS (SELECT 1 FROM dbo.carga_tmp_carpeta tc WHERE tc.id_carga = c.id_carga AND tc.activo = 1)
-                      OR EXISTS (SELECT 1 FROM dbo.carga_tmp_delito td WHERE td.id_carga = c.id_carga AND td.activo = 1)
-                      OR EXISTS (SELECT 1 FROM dbo.carga_tmp_victima tv WHERE tv.id_carga = c.id_carga AND tv.activo = 1)
+                    WHEN (
+                        EXISTS (SELECT 1 FROM dbo.carga_tmp_carpeta tc WHERE tc.id_carga = c.id_carga AND tc.activo = 1)
+                        OR EXISTS (SELECT 1 FROM dbo.carga_tmp_delito td WHERE td.id_carga = c.id_carga AND td.activo = 1)
+                        OR EXISTS (SELECT 1 FROM dbo.carga_tmp_victima tv WHERE tv.id_carga = c.id_carga AND tv.activo = 1)
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.carga c2
+                        WHERE ISNULL(c2.id_entidad_federativa, 0) = ISNULL(c.id_entidad_federativa, 0)
+                          AND c2.mes_corte = c.mes_corte
+                          AND c2.anio_corte = c.anio_corte
+                          AND ISNULL(c2.tipo_carga, N'') = ISNULL(c.tipo_carga, N'')
+                          AND c2.activo = 1
+                          AND c2.id_carga > c.id_carga
+                          AND c2.estado IN (
+                              N'VALIDADO_PENDIENTE',
+                              N'VALIDADO_PENDIENTE_ACTUALIZACION',
+                              N'PENDIENTE_APROBACION',
+                              N'RECHAZADO_ADMIN',
+                              N'CONFIRMADO',
+                              N'CONFIRMADO_ACTUALIZACION'
+                          )
+                    )
                     THEN CAST(1 AS bit)
                     ELSE CAST(0 AS bit)
                 END AS TieneStagingDisponible
@@ -210,7 +250,7 @@ public class InformesRechazosController : ControllerBase
             {
                 esValido = false,
                 codigo = "INFORMES_RECHAZO_STAGING_NO_DISPONIBLE",
-                mensaje = "Los archivos reconstruidos ya no están disponibles porque el staging de este rechazo histórico fue depurado por mantenimiento."
+                mensaje = "Los archivos reconstruidos ya no están disponibles porque este rechazo ya es histórico o su staging fue depurado por mantenimiento."
             });
         }
 
