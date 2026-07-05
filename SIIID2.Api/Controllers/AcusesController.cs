@@ -55,11 +55,10 @@ public class AcusesController : ControllerBase
             if (tipoNormalizado is "PREVIO_CARGA" or "PREVIO_ACTUALIZACION")
             {
                 var disponibilidad = await ObtenerDisponibilidadStagingRechazoAsync(codigoReferencia);
-                var esHistorico = disponibilidad.EsRechazoAdministrador && disponibilidad.IdCarga > 0 && await ExisteIntentoPosteriorAsync(disponibilidad.IdCarga);
 
-                if (disponibilidad.EsRechazoAdministrador && (!disponibilidad.TieneStagingDisponible || esHistorico))
+                if (disponibilidad.EsRechazoAdministrador && !disponibilidad.TieneStagingDisponible)
                 {
-                    throw new InvalidOperationException("El informe previo ya no está disponible porque este rechazo es histórico o su staging fue depurado por mantenimiento.");
+                    throw new InvalidOperationException("El informe previo ya no está disponible porque el staging de este rechazo histórico fue depurado por mantenimiento.");
                 }
             }
 
@@ -121,7 +120,6 @@ public class AcusesController : ControllerBase
     {
         const string sql = @"
             SELECT TOP 1
-                c.id_carga AS IdCarga,
                 CASE WHEN c.estado = N'RECHAZADO_ADMIN' THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS EsRechazoAdministrador,
                 CASE
                     WHEN EXISTS (SELECT 1 FROM dbo.carga_tmp_carpeta tc WHERE tc.id_carga = c.id_carga AND tc.activo = 1)
@@ -135,28 +133,8 @@ public class AcusesController : ControllerBase
               AND c.activo = 1;";
 
         using var connection = _dbConnectionFactory.CrearConexion();
+
         return await connection.QueryFirstOrDefaultAsync<DisponibilidadStagingRechazo>(sql, new { CodigoReferencia = codigoReferencia }) ?? new DisponibilidadStagingRechazo();
-    }
-
-    private async Task<bool> ExisteIntentoPosteriorAsync(long idCarga)
-    {
-        const string sql = @"
-            SELECT CASE WHEN EXISTS (
-                SELECT 1
-                FROM dbo.carga c
-                INNER JOIN dbo.carga c2
-                    ON ISNULL(c2.id_entidad_federativa, 0) = ISNULL(c.id_entidad_federativa, 0)
-                   AND c2.mes_corte = c.mes_corte
-                   AND c2.anio_corte = c.anio_corte
-                   AND ISNULL(c2.tipo_carga, N'') = ISNULL(c.tipo_carga, N'')
-                   AND c2.activo = 1
-                   AND c2.id_carga > c.id_carga
-                   AND c2.estado IN (N'VALIDADO_PENDIENTE', N'VALIDADO_PENDIENTE_ACTUALIZACION', N'PENDIENTE_APROBACION', N'RECHAZADO_ADMIN', N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-                WHERE c.id_carga = @IdCarga
-            ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END;";
-
-        using var connection = _dbConnectionFactory.CrearConexion();
-        return await connection.ExecuteScalarAsync<bool>(sql, new { IdCarga = idCarga });
     }
 
     private static string ObtenerNombreArchivo(CargaAcuseInfo carga, string tipo)
@@ -206,7 +184,6 @@ public class AcusesController : ControllerBase
 
     private sealed class DisponibilidadStagingRechazo
     {
-        public long IdCarga { get; set; }
         public bool EsRechazoAdministrador { get; set; }
         public bool TieneStagingDisponible { get; set; }
     }
