@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 using SIIID2.Api.Services;
 
@@ -12,11 +13,13 @@ public class ActualizacionesController : ControllerBase
 {
     private readonly IActualizacionArchivosService _actualizacionArchivosService;
     private readonly IAcusePdfService _acusePdfService;
+    private readonly IDbConnectionFactory _dbConnectionFactory;
 
-    public ActualizacionesController(IActualizacionArchivosService actualizacionArchivosService, IAcusePdfService acusePdfService)
+    public ActualizacionesController(IActualizacionArchivosService actualizacionArchivosService, IAcusePdfService acusePdfService, IDbConnectionFactory dbConnectionFactory)
     {
         _actualizacionArchivosService = actualizacionArchivosService;
         _acusePdfService = acusePdfService;
+        _dbConnectionFactory = dbConnectionFactory;
     }
 
     // Endpoint para validar archivos de actualización.
@@ -114,6 +117,8 @@ public class ActualizacionesController : ControllerBase
         {
             return BadRequest(resultado);
         }
+
+        await CodigoPostalActualizacionHelper.AplicarDetalleAsync(_dbConnectionFactory, codigoReferencia, resultado, limitePorSeccion);
 
         return Ok(resultado);
     }
