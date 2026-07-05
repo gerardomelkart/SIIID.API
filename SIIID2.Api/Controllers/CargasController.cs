@@ -4,7 +4,6 @@ using SIIID2.Api.Services;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using SIIID2.Api.Repositories;
-using SIIID2.Api.Data;
 
 namespace SIIID2.Api.Controllers;
 
@@ -17,16 +16,14 @@ public class CargasController : ControllerBase
     private readonly ICargaArchivosService _cargaArchivosService;
     private readonly IAcusePdfService _acusePdfService;
     private readonly ICargaRepository _cargaRepository;
-    private readonly IDbConnectionFactory _dbConnectionFactory;
     private readonly ILogger<CargasController> _logger;
 
     // ASP.NET inyecta aquí las implementaciones registradas en Program.cs.
-    public CargasController(ICargaArchivosService cargaArchivosService, IAcusePdfService acusePdfService, ICargaRepository cargaRepository, IDbConnectionFactory dbConnectionFactory, ILogger<CargasController> logger)
+    public CargasController(ICargaArchivosService cargaArchivosService, IAcusePdfService acusePdfService, ICargaRepository cargaRepository, ILogger<CargasController> logger)
     {
         _cargaArchivosService = cargaArchivosService;
         _acusePdfService = acusePdfService;
         _cargaRepository = cargaRepository;
-        _dbConnectionFactory = dbConnectionFactory;
         _logger = logger;
     }
 
@@ -168,22 +165,6 @@ public class CargasController : ControllerBase
                 Estado = "SOLICITUD_INVALIDA",
                 Mensaje = "Debe enviar el código de referencia."
             });
-        }
-
-        if (request.Aceptar && await CodigoPostalCatalogoHelper.EsSuperUsuarioAsync(_dbConnectionFactory, idUsuarioConfirmacion))
-        {
-            var resultadoCp = await CodigoPostalCatalogoHelper.AsegurarAsync(_dbConnectionFactory, request.CodigoReferencia);
-
-            if (resultadoCp?.CodigosSinPlantilla > 0)
-            {
-                return BadRequest(new
-                {
-                    esValido = false,
-                    codigo = "CODIGO_POSTAL_SIN_PLANTILLA_MUNICIPIO",
-                    mensaje = "Hay códigos postales válidos que no pudieron agregarse porque el municipio no tiene una referencia previa en el catálogo de códigos postales.",
-                    total = resultadoCp.CodigosSinPlantilla
-                });
-            }
         }
 
         var resultado = await _cargaRepository.ConfirmarCargaAsync(

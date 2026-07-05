@@ -1,7 +1,6 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 using SIIID2.Api.Services;
 
@@ -13,12 +12,10 @@ namespace SIIID2.Api.Controllers;
 public class AdministracionCargasController : ControllerBase
 {
     private readonly IAdministracionCargasService _administracionService;
-    private readonly IDbConnectionFactory _dbConnectionFactory;
 
-    public AdministracionCargasController(IAdministracionCargasService administracionService, IDbConnectionFactory dbConnectionFactory)
+    public AdministracionCargasController(IAdministracionCargasService administracionService)
     {
         _administracionService = administracionService;
-        _dbConnectionFactory = dbConnectionFactory;
     }
 
     [HttpGet]
@@ -31,7 +28,7 @@ public class AdministracionCargasController : ControllerBase
 
         var registros = await _administracionService.ObtenerPendientesAsync(idUsuario);
 
-        return Ok(new {esValido = true, total = registros.Count, registros});
+        return Ok( new {esValido = true, total = registros.Count, registros});
     }
 
     [HttpGet("{codigoReferencia}")]
@@ -89,19 +86,6 @@ public class AdministracionCargasController : ControllerBase
             return TokenSinUsuario();
         }
 
-        var resultadoCp = await CodigoPostalCatalogoHelper.AsegurarAsync(_dbConnectionFactory, codigoReferencia);
-
-        if (resultadoCp?.CodigosSinPlantilla > 0)
-        {
-            return BadRequest(new
-            {
-                esValido = false,
-                codigo = "CODIGO_POSTAL_SIN_PLANTILLA_MUNICIPIO",
-                mensaje = "Hay códigos postales válidos que no pudieron agregarse porque el municipio no tiene una referencia previa en el catálogo de códigos postales.",
-                total = resultadoCp.CodigosSinPlantilla
-            });
-        }
-
         var resultado = await _administracionService.AprobarAsync(idUsuario, codigoReferencia);
 
         if (resultado.EsValido)
@@ -152,7 +136,7 @@ public class AdministracionCargasController : ControllerBase
 
     private bool ObtenerIdUsuario(out int idUsuario)
     {
-        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var idUsuarioClaim = User.FindFirstValue( ClaimTypes.NameIdentifier);
 
         return int.TryParse(idUsuarioClaim, out idUsuario);
     }
@@ -160,7 +144,7 @@ public class AdministracionCargasController : ControllerBase
     private IActionResult TokenSinUsuario()
     {
         return Unauthorized(new {esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-            mensaje = "El token no contiene un id de usuario valido.", traceId = HttpContext.TraceIdentifier });
+            mensaje = "El token no contiene un id de usuario valido.", traceId =  HttpContext.TraceIdentifier });
     }
 
     private static bool EsCargaYaResuelta(string? estado)
