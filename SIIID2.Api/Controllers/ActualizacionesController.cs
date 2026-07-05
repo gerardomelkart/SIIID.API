@@ -1,7 +1,6 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 using SIIID2.Api.Services;
 
@@ -13,13 +12,11 @@ public class ActualizacionesController : ControllerBase
 {
     private readonly IActualizacionArchivosService _actualizacionArchivosService;
     private readonly IAcusePdfService _acusePdfService;
-    private readonly IDbConnectionFactory _dbConnectionFactory;
 
-    public ActualizacionesController(IActualizacionArchivosService actualizacionArchivosService, IAcusePdfService acusePdfService, IDbConnectionFactory dbConnectionFactory)
+    public ActualizacionesController(IActualizacionArchivosService actualizacionArchivosService, IAcusePdfService acusePdfService)
     {
         _actualizacionArchivosService = actualizacionArchivosService;
         _acusePdfService = acusePdfService;
-        _dbConnectionFactory = dbConnectionFactory;
     }
 
     // Endpoint para validar archivos de actualización.
@@ -136,22 +133,6 @@ public class ActualizacionesController : ControllerBase
                 mensaje = "El token no contiene un id de usuario válido.",
                 traceId = HttpContext.TraceIdentifier
             });
-        }
-
-        if (request.Aceptar && !string.IsNullOrWhiteSpace(request.CodigoReferencia) && await CodigoPostalCatalogoHelper.EsSuperUsuarioAsync(_dbConnectionFactory, idUsuarioConfirmacion))
-        {
-            var resultadoCp = await CodigoPostalCatalogoHelper.AsegurarAsync(_dbConnectionFactory, request.CodigoReferencia);
-
-            if (resultadoCp?.CodigosSinPlantilla > 0)
-            {
-                return BadRequest(new
-                {
-                    esValido = false,
-                    codigo = "CODIGO_POSTAL_SIN_PLANTILLA_MUNICIPIO",
-                    mensaje = "Hay códigos postales válidos que no pudieron agregarse porque el municipio no tiene una referencia previa en el catálogo de códigos postales.",
-                    total = resultadoCp.CodigosSinPlantilla
-                });
-            }
         }
 
         var resultado = await _actualizacionArchivosService.ConfirmarActualizacionAsync(
