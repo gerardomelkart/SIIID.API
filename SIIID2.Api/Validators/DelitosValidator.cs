@@ -167,7 +167,7 @@ public class DelitosValidator : IArchivoCargaValidator
                 fila,
                 "id_loc_hchos",
                 errores,
-                20,
+                250,
                 "DELITOS_ID_LOC_HCHOS_SIN_INFORMACION",
                 "Clave de localidad sin información");
 
