@@ -25,4 +25,6 @@ public class InformeReporteCargaItem
     public DateTime? FechaUltimaCarga { get; set; }
 
     public string FechaUltimaCargaTexto { get; set; } = string.Empty;
+
+    public DateTime? FechaCargaExitosa { get; set; }
 }

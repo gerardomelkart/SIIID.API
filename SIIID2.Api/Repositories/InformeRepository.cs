@@ -478,7 +478,8 @@ public class InformeRepository : IInformeRepository
         ultimo.codigo_referencia AS UltimoIntento,
         ultimo.tipo_carga AS TipoCargaUltimoIntento,
         ultimo.estado AS EstatusUltimoIntento,
-        ultimo.fecha_ultimo_movimiento AS FechaUltimaCarga
+        ultimo.fecha_ultimo_movimiento AS FechaUltimaCarga,
+        exitosa.fecha_carga_exitosa AS FechaCargaExitosa
         FROM periodos p
         INNER JOIN catalogo_entidad_federativa ef
         ON ef.id_entidad_federativa = p.id_entidad_federativa
@@ -498,6 +499,22 @@ public class InformeRepository : IInformeRepository
             COALESCE(c.fecha_confirmacion, c.fecha_validacion) DESC,
             c.id_carga DESC
         ) ultimo
+        OUTER APPLY (
+        SELECT
+            MIN(c.fecha_validacion) AS fecha_carga_exitosa
+        FROM carga c
+        WHERE c.activo = 1
+          AND c.id_entidad_federativa = p.id_entidad_federativa
+          AND c.mes_corte = p.mes_corte
+          AND c.anio_corte = p.anio_corte
+          AND c.estado IN (
+              'VALIDADO_PENDIENTE',
+              'VALIDADO_PENDIENTE_ACTUALIZACION',
+              'PENDIENTE_APROBACION',
+              'CONFIRMADO',
+              'CONFIRMADO_ACTUALIZACION'
+          )
+        ) exitosa
         ORDER BY
         p.anio_corte DESC,
         p.mes_corte DESC,
