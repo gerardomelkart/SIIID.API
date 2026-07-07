@@ -156,21 +156,29 @@ public class ArchivoReader : IArchivoReader
         }
 
         // Si Excel reconoce la celda como fecha/hora real,
-        // la convertimos nosotros a formato mexicano estable.
+        // intentamos convertirla a formato mexicano estable.
         //
-        // Esto evita que ClosedXML entregue fechas como "4/1/2026"
-        // cuando el archivo muestra "01/04/2026".
+        // Algunos archivos pueden traer identificadores numéricos con formato de fecha.
+        // En ese caso ClosedXML puede marcar la celda como DateTime aunque el valor
+        // no sea un serial de fecha válido. Si ocurre, conservamos el valor numérico original.
         if (celda.DataType == XLDataType.DateTime)
         {
-            var fecha = celda.GetDateTime();
-
-            // Si trae hora diferente de 00:00:00, conservamos fecha y hora.
-            if (fecha.TimeOfDay != TimeSpan.Zero)
+            try
             {
-                return fecha.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
-            }
+                var fecha = celda.GetDateTime();
 
-            return fecha.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+                if (fecha.TimeOfDay != TimeSpan.Zero)
+                {
+                    return fecha.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+                }
+
+                return fecha.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            }
+            catch (ArgumentException)
+            {
+                var numeroOriginal = celda.Value.GetUnifiedNumber();
+                return numeroOriginal.ToString("0.###############################", CultureInfo.InvariantCulture);
+            }
         }
 
         // Si la celda es numérica pero Excel le aplicó formato de fecha,
