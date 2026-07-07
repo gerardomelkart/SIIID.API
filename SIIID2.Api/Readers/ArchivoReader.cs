@@ -138,6 +138,7 @@ public class ArchivoReader : IArchivoReader
         return filas;
     }
 
+    private static bool EsColumnaFecha(string columna) => columna is "fha_de_ini" or "fha_de_hchos" or "fha_nac";
     private static string? ObtenerValorCeldaExcel(string columna, IXLCell celda)
     {
         // Si la celda está vacía, no regresamos texto.
@@ -155,14 +156,17 @@ public class ArchivoReader : IArchivoReader
             return numero.ToString("0.00", CultureInfo.InvariantCulture);
         }
 
-        // Si Excel reconoce la celda como fecha/hora real,
-        // intentamos convertirla a formato mexicano estable.
-        //
-        // Algunos archivos pueden traer identificadores numéricos con formato de fecha.
-        // En ese caso ClosedXML puede marcar la celda como DateTime aunque el valor
-        // no sea un serial de fecha válido. Si ocurre, conservamos el valor numérico original.
+        // Excel puede marcar como DateTime una celda numérica únicamente por su formato.
+        // Solo convertimos a fecha cuando la columna semánticamente corresponde a una fecha.
+        // Para otras columnas conservamos directamente el valor numérico subyacente.
         if (celda.DataType == XLDataType.DateTime)
         {
+            if (!EsColumnaFecha(columna))
+            {
+                var numeroOriginal = celda.Value.GetUnifiedNumber();
+                return numeroOriginal.ToString("0.###############################", CultureInfo.InvariantCulture);
+            }
+
             try
             {
                 var fecha = celda.GetDateTime();
@@ -186,7 +190,7 @@ public class ArchivoReader : IArchivoReader
         //
         // Esto cubre casos donde ClosedXML no marca DataType como DateTime,
         // pero el valor sigue siendo una fecha de Excel.
-        if (celda.DataType == XLDataType.Number && EsFormatoFechaExcel(celda))
+        if (EsColumnaFecha(columna) && celda.DataType == XLDataType.Number && EsFormatoFechaExcel(celda))
         {
             var numero = celda.GetDouble();
 
