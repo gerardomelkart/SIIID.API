@@ -256,7 +256,7 @@ public class ArchivoReader : IArchivoReader
     {
         if (string.IsNullOrWhiteSpace(valor))
         {
-            return null;
+            return columna == "id_loc_hchos" ? "NE (no se especifica)" : null;
         }
 
         valor = valor.Trim();
