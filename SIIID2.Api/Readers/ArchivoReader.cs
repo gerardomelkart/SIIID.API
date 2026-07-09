@@ -261,6 +261,18 @@ public class ArchivoReader : IArchivoReader
 
         valor = valor.Trim();
 
+        if (EsColumnaFecha(columna) && double.TryParse(valor, NumberStyles.Any, CultureInfo.InvariantCulture, out var numeroExcel) && numeroExcel > 0 && numeroExcel < 60000)
+        {
+            try
+            {
+                return DateTime.FromOADate(numeroExcel).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            }
+            catch (ArgumentException)
+            {
+                // Si no es un serial válido, continúa con el valor original.
+            }
+        }
+
         // Si clasf_de_dto viene como texto simple con un solo punto,
         // lo formateamos a dos decimales:
         // 7.1  -> 7.10
