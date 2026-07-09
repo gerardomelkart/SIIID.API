@@ -297,8 +297,8 @@ public class AcuseRepository : IAcuseRepository
                 s.delito_sabana AS TipoDelito,
                 s.clave3_sabana AS ClaveSubtipo,
                 s.subtipo_delito_sabana AS SubtipoDelito,
-                CONVERT(int, ISNULL(dr.TotalDelitos, 0)) AS TotalDelitos,
-                CONVERT(int, ISNULL(vr.TotalVictimas, 0)) AS TotalVictimas,
+                CONVERT(int, SUM(ISNULL(dr.TotalDelitos, 0))) AS TotalDelitos,
+                CONVERT(int, SUM(ISNULL(vr.TotalVictimas, 0))) AS TotalVictimas,
                 MIN(s.id_delito_sabana) AS Orden,
                 MIN(o.OrdenClave1) AS OrdenClave1,
                 MIN(o.OrdenClave2) AS OrdenClave2,
@@ -346,9 +346,7 @@ public class AcuseRepository : IAcuseRepository
                 s.clave2_sabana,
                 s.delito_sabana,
                 s.clave3_sabana,
-                s.subtipo_delito_sabana,
-                dr.TotalDelitos,
-                vr.TotalVictimas
+                s.subtipo_delito_sabana
             ORDER BY
                 OrdenClave1,
                 OrdenClave2,
