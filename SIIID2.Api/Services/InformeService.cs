@@ -117,7 +117,7 @@ public class InformeService : IInformeService
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = ObtenerNombreZipSabanas(tipo, anioCorte, idEntidadFederativaFiltro, modo)
+            NombreArchivo = $"ARCHIVOS_{NormalizarNombreArchivo(carga.EntidadFederativa)}_{carga.MesCorte:00}_{carga.AnioCorte}.zip"
         };
     }
 
