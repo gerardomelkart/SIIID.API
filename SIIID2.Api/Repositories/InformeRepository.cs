@@ -1851,40 +1851,55 @@ public class InformeRepository : IInformeRepository
         return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa, modoPlano, mesUltimoCorte);
     }
 
-    public async Task<InformeSabanaFirma> ObtenerFirmaSabanaAsync(int anioCorte, int? idEntidadFederativa, string modoPlano, int mesUltimoCorte)
+    public async Task<InformeSabanaFirma> ObtenerFirmaSabanaAsync(int anioCorte, int? idEntidadFederativa = null)
     {
         var sql = @"
-        SELECT
-            ISNULL(MAX(CASE
-                WHEN c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION', 'PENDIENTE_APROBACION')
-                THEN c.id_carga
-            END), 0) AS UltimoIdCarga,
-
-            SUM(CASE
-                WHEN (c.tipo_carga = 'CARGA_INICIAL' AND c.estado = 'CONFIRMADO')
+        WITH cargas_relevantes AS (
+            SELECT
+                c.id_carga,
+                c.tipo_carga,
+                c.estado,
+                c.mes_corte,
+                c.fecha_confirmacion,
+                c.fecha_validacion
+            FROM carga c
+            WHERE c.activo = 1
+              AND c.anio_corte = @AnioCorte
+              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
+              AND (
+                     (c.tipo_carga = 'CARGA_INICIAL' AND c.estado = 'CONFIRMADO')
                   OR (c.tipo_carga = 'ACTUALIZACION' AND c.estado = 'CONFIRMADO_ACTUALIZACION')
+                  OR c.estado = 'PENDIENTE_APROBACION'
+              )
+        ),
+        ultimo_corte AS (
+            SELECT MAX(mes_corte) AS MesUltimoCorte
+            FROM cargas_relevantes
+        )
+        SELECT
+            ISNULL(MAX(cr.id_carga), 0) AS UltimoIdCarga,
+
+            CONVERT(bigint, ISNULL(SUM(CASE
+                WHEN (cr.tipo_carga = 'CARGA_INICIAL' AND cr.estado = 'CONFIRMADO')
+                  OR (cr.tipo_carga = 'ACTUALIZACION' AND cr.estado = 'CONFIRMADO_ACTUALIZACION')
                 THEN 1 ELSE 0
-            END) AS TotalCargasConfirmadas,
+            END), 0)) AS TotalCargasConfirmadas,
 
-            SUM(CASE
-                WHEN c.estado = 'PENDIENTE_APROBACION'
+            CONVERT(bigint, ISNULL(SUM(CASE
+                WHEN cr.estado = 'PENDIENTE_APROBACION'
+                 AND cr.mes_corte = uc.MesUltimoCorte
                 THEN 1 ELSE 0
-            END) AS TotalCargasPendientes,
+            END), 0)) AS TotalCargasPendientes,
 
-            MAX(CASE
-                WHEN c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION', 'PENDIENTE_APROBACION')
-                THEN c.mes_corte
-            END) AS MesUltimoCorte,
+            uc.MesUltimoCorte AS MesUltimoCorte,
 
-            MAX(CASE
-                WHEN c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION', 'PENDIENTE_APROBACION')
-                THEN COALESCE(c.fecha_confirmacion, c.fecha_validacion)
-            END) AS UltimaFechaMovimiento
-        FROM carga c
-        WHERE c.activo = 1
-          AND c.anio_corte = @AnioCorte
-          AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa);
-           ";
+            MAX(COALESCE(cr.fecha_confirmacion, cr.fecha_validacion)) AS UltimaFechaMovimiento
+        FROM ultimo_corte uc
+        LEFT JOIN cargas_relevantes cr
+            ON 1 = 1
+        GROUP BY
+            uc.MesUltimoCorte;
+    ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
