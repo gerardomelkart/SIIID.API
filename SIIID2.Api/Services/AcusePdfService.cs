@@ -280,7 +280,7 @@ public class AcusePdfService : IAcusePdfService
                         .Text("Total");
 
                     table.Cell().ColumnSpan(4).Element(CeldaDescripcionDetalle)
-                        .Text("Carpetas de investigación iniciadas:");
+                        .Text("Carpetas:");
 
                     table.Cell().ColumnSpan(2).Element(CeldaNumeroDetalle)
                         .Text(carga.TotalCarpetasInvestigacion.ToString("N0", cultura));
