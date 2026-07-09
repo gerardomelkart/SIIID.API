@@ -22,9 +22,13 @@ public class InformeReporteCargaItem
 
     public string? EstatusUltimoIntento { get; set; }
 
-    public DateTime? FechaUltimaCarga { get; set; }
+    public DateTime? FechaCargaActualizacion { get; set; }
 
-    public string FechaUltimaCargaTexto { get; set; } = string.Empty;
+    public string FechaCargaActualizacionTexto { get; set; } = string.Empty;
+
+    public DateTime? FechaAprobacion { get; set; }
+
+    public string FechaAprobacionTexto { get; set; } = string.Empty;
 
     public DateTime? FechaCargaExitosa { get; set; }
 }

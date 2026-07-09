@@ -478,7 +478,8 @@ public class InformeRepository : IInformeRepository
         ultimo.codigo_referencia AS UltimoIntento,
         ultimo.tipo_carga AS TipoCargaUltimoIntento,
         ultimo.estado AS EstatusUltimoIntento,
-        ultimo.fecha_ultimo_movimiento AS FechaUltimaCarga,
+        ultimo.fecha_carga_actualizacion AS FechaCargaActualizacion,
+        ultimo.fecha_aprobacion AS FechaAprobacion,
         exitosa.fecha_carga_exitosa AS FechaCargaExitosa
         FROM periodos p
         INNER JOIN catalogo_entidad_federativa ef
@@ -489,7 +490,26 @@ public class InformeRepository : IInformeRepository
             c.codigo_referencia,
             c.tipo_carga,
             c.estado,
-            COALESCE(c.fecha_confirmacion, c.fecha_validacion) AS fecha_ultimo_movimiento
+            CASE
+                WHEN c.estado IN (
+                    'VALIDADO_PENDIENTE',
+                    'VALIDADO_PENDIENTE_ACTUALIZACION',
+                    'PENDIENTE_APROBACION',
+                    'CONFIRMADO',
+                    'CONFIRMADO_ACTUALIZACION',
+                    'RECHAZADO_ADMIN'
+                )
+                THEN c.fecha_validacion
+                ELSE NULL
+            END AS fecha_carga_actualizacion,
+            CASE
+                WHEN c.estado IN (
+                    'CONFIRMADO',
+                    'CONFIRMADO_ACTUALIZACION'
+                )
+                THEN c.fecha_confirmacion
+                ELSE NULL
+            END AS fecha_aprobacion
         FROM carga c
         WHERE c.activo = 1
           AND c.id_entidad_federativa = p.id_entidad_federativa
@@ -534,13 +554,17 @@ public class InformeRepository : IInformeRepository
             .Select(x =>
             {
                 x.Corte = $"{ObtenerNombreMes(x.MesCorte)} {x.AnioCorte}";
-                x.FechaUltimaCargaTexto = x.FechaUltimaCarga.HasValue
-                    ? x.FechaUltimaCarga.Value.ToString("yyyy-MM-dd HH:mm:ss")
+
+                x.FechaCargaActualizacionTexto = x.FechaCargaActualizacion.HasValue
+                    ? x.FechaCargaActualizacion.Value.ToString("yyyy-MM-dd HH:mm:ss")
+                    : string.Empty;
+
+                x.FechaAprobacionTexto = x.FechaAprobacion.HasValue
+                    ? x.FechaAprobacion.Value.ToString("yyyy-MM-dd HH:mm:ss")
                     : string.Empty;
 
                 return x;
-            })
-            .ToList();
+            }).ToList();
     }
 
     public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte, int? idEntidadFederativa = null)
