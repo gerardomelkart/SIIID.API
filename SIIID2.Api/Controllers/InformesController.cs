@@ -250,7 +250,7 @@ public class InformesController : ControllerBase
     // Ejemplo: GET /api/informes/sabanas?anioCorte=2026&tipo=COMPLETA
     [Authorize]
     [HttpGet("sabanas")]
-    public async Task<IActionResult> DescargarSabanas([FromQuery] int anioCorte, [FromQuery] string tipo = "COMPLETA")
+    public async Task<IActionResult> DescargarSabanas([FromQuery] int anioCorte, [FromQuery] string tipo = "COMPLETA", [FromQuery] string modo = "CONFIRMADO")
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -267,7 +267,7 @@ public class InformesController : ControllerBase
 
         try
         {
-            var zip = await _informeService.GenerarZipSabanasAsync(idUsuarioConsulta, anioCorte, tipo);
+            var zip = await _informeService.GenerarZipSabanasAsync(idUsuarioConsulta, anioCorte, tipo, modo);
 
             return File(zip.Archivo, "application/zip", zip.NombreArchivo);
         }
@@ -294,7 +294,7 @@ public class InformesController : ControllerBase
 
     [Authorize]
     [HttpPost("sabanas/ticket")]
-    public async Task<IActionResult> CrearTicketDescargaSabanas([FromQuery] int anioCorte, [FromQuery] string tipo = "COMPLETA")
+    public async Task<IActionResult> CrearTicketDescargaSabanas([FromQuery] int anioCorte, [FromQuery] string tipo = "COMPLETA", [FromQuery] string modo = "CONFIRMADO")
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -313,7 +313,7 @@ public class InformesController : ControllerBase
         {
             // Aquí se genera la sábana.
             // El front se queda con loading hasta que este proceso termine.
-            var zip = await _informeService.GenerarZipSabanasAsync(idUsuarioConsulta, anioCorte, tipo);
+            var zip = await _informeService.GenerarZipSabanasAsync(idUsuarioConsulta, anioCorte, tipo, modo);
 
             var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
             var cacheKey = $"SABANAS_DOWNLOAD_TICKET:{ticket}";

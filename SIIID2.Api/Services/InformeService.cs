@@ -117,7 +117,7 @@ public class InformeService : IInformeService
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = GenerarNombreArchivoZip(carga)
+            NombreArchivo = ObtenerNombreZipSabanas(tipo, anioCorte, idEntidadFederativaFiltro, modo)
         };
     }
 
@@ -193,7 +193,7 @@ public class InformeService : IInformeService
         };
     }
 
-    public async Task<InformeArchivoZipResponse> GenerarZipSabanasAsync(int idUsuarioConsulta, int anioCorte, string? tipoSabana)
+    public async Task<InformeArchivoZipResponse> GenerarZipSabanasAsync(int idUsuarioConsulta, int anioCorte, string? tipoSabana, string? modoPlano)
     {
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
 
@@ -229,21 +229,38 @@ public class InformeService : IInformeService
         }
 
         var tipo = NormalizarTipoSabana(tipoSabana);
+
+        var modo = NormalizarModoPlano(modoPlano);
+
+        if (!usuarioConsulta.EsSuperUsuario && modo != "CONFIRMADO")
+        {
+            throw new UnauthorizedAccessException("Sólo el SUPER_USUARIO puede generar planos previos o mixtos.");
+        }
         var firma = await _informeRepository.ObtenerFirmaSabanaAsync(anioCorte, idEntidadFederativaFiltro);
 
-        if (firma.TotalCargasConfirmadas == 0)
+        if (!firma.MesUltimoCorte.HasValue)
         {
-            throw new InvalidOperationException(
-                idEntidadFederativaFiltro.HasValue
-                    ? $"No existe información confirmada para la entidad del usuario en el año {anioCorte}."
-                    : $"No existe información confirmada para el año {anioCorte}.");
+            throw new InvalidOperationException($"No existe información disponible para el año {anioCorte}.");
         }
+
+        if (modo == "CONFIRMADO" && firma.TotalCargasConfirmadas == 0)
+        {
+            throw new InvalidOperationException($"No existe información confirmada para el año {anioCorte}.");
+        }
+
+        if (modo == "PREVIO" && firma.TotalCargasPendientes == 0)
+        {
+            throw new InvalidOperationException($"No existen cargas pendientes de aprobación para el último corte del año {anioCorte}.");
+        }
+
+        var mesUltimoCorte = firma.MesUltimoCorte.Value;
+
 
         var cacheScope = idEntidadFederativaFiltro.HasValue
             ? $"ENTIDAD:{idEntidadFederativaFiltro.Value}"
             : "NACIONAL";
 
-        var cacheKey = $"SABANAS:{cacheScope}:{tipo}:{anioCorte}:{firma.UltimoIdCarga}:{firma.TotalCargasConfirmadas}:{firma.UltimaFechaMovimiento:O}";
+        var cacheKey = $"SABANAS:{cacheScope}:{tipo}:{modo}:{anioCorte}:{mesUltimoCorte}:{firma.UltimoIdCarga}:{firma.TotalCargasConfirmadas}:{firma.TotalCargasPendientes}:{firma.UltimaFechaMovimiento:O}";
 
         if (_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var sabanasCacheadas))
         {
@@ -257,14 +274,14 @@ public class InformeService : IInformeService
 
         if (tipo is "COMPLETA" or "ESTATALES")
         {
-            tareas.Add(("estatal-delitos.xlsx", "estatal-delitos", _informeRepository.ObtenerSabanaEstatalDelitosAsync(anioCorte, idEntidadFederativaFiltro)));
-            tareas.Add(("estatal-victimas.xlsx", "estatal-victimas", _informeRepository.ObtenerSabanaEstatalVictimasAsync(anioCorte, idEntidadFederativaFiltro)));
+            tareas.Add(("estatal-delitos.xlsx", "estatal-delitos", _informeRepository.ObtenerSabanaEstatalDelitosAsync(anioCorte, idEntidadFederativaFiltro, modo, mesUltimoCorte)));
+            tareas.Add(("estatal-victimas.xlsx", "estatal-victimas", _informeRepository.ObtenerSabanaEstatalVictimasAsync(anioCorte, idEntidadFederativaFiltro, modo, mesUltimoCorte)));
         }
 
         if (tipo is "COMPLETA" or "MUNICIPALES")
         {
-            tareas.Add(("municipal-delitos.xlsx", "municipal-delitos", _informeRepository.ObtenerSabanaMunicipalDelitosAsync(anioCorte, idEntidadFederativaFiltro)));
-            tareas.Add(("municipal-victimas.xlsx", "municipal-victimas", _informeRepository.ObtenerSabanaMunicipalVictimasAsync(anioCorte, idEntidadFederativaFiltro)));
+            tareas.Add(("municipal-delitos.xlsx", "municipal-delitos", _informeRepository.ObtenerSabanaMunicipalDelitosAsync(anioCorte, idEntidadFederativaFiltro, modo, mesUltimoCorte)));
+            tareas.Add(("municipal-victimas.xlsx", "municipal-victimas", _informeRepository.ObtenerSabanaMunicipalVictimasAsync(anioCorte, idEntidadFederativaFiltro, modo, mesUltimoCorte)));
         }
 
         await Task.WhenAll(tareas.Select(x => x.Consulta));
@@ -556,6 +573,18 @@ public class InformeService : IInformeService
             anioCorte);
     }
 
+    private static string NormalizarModoPlano(string? modoPlano)
+    {
+        var modo = (modoPlano ?? "CONFIRMADO").Trim().ToUpperInvariant();
+
+        return modo switch
+        {
+            "PREVIO" => "PREVIO",
+            "MIXTO" => "MIXTO",
+            _ => "CONFIRMADO"
+        };
+    }
+
     private static string NormalizarTipoSabana(string? tipoSabana)
     {
         var tipo = (tipoSabana ?? "COMPLETA").Trim().ToUpperInvariant();
@@ -569,7 +598,7 @@ public class InformeService : IInformeService
         };
     }
 
-    private static string ObtenerNombreZipSabanas(string tipoSabana, int anioCorte, int? idEntidadFederativa)
+    private static string ObtenerNombreZipSabanas(string tipo, int anioCorte, int? idEntidadFederativa, string modo)
     {
         var sufijoEntidad = idEntidadFederativa.HasValue
             ? $"_ENTIDAD_{idEntidadFederativa.Value:00}"
