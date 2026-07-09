@@ -15,9 +15,6 @@ public interface ICargaRepository
     // Valida si ya existe una carga confirmada para la misma entidad y periodo.
     Task<bool> ExisteCargaConfirmadaAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
 
-    // Actualiza el estado del intento de carga.
-    Task ActualizarEstadoCargaAsync(long idCarga, string estado, string? mensajeError);
-
     // Confirma o rechaza una carga validada.
     // Si acepta, mueve staging a tablas finales.
     // Si rechaza, solo actualiza estados.

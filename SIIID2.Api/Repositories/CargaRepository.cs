@@ -786,26 +786,6 @@ public class CargaRepository : ICargaRepository
             transaction);
     }
 
-    public async Task ActualizarEstadoCargaAsync(long idCarga, string estado, string? mensajeError)
-    {
-        // Actualiza el estado del intento de carga.
-        var sql = @"
-            UPDATE carga
-            SET estado = @Estado,
-                mensaje_error = @MensajeError
-            WHERE id_carga = @IdCarga;
-        ";
-
-        using var connection = _dbConnectionFactory.CrearConexion();
-
-        await connection.ExecuteAsync(sql, new
-        {
-            IdCarga = idCarga,
-            Estado = estado,
-            MensajeError = mensajeError
-        });
-    }
-
     private static string? ObtenerValor(ArchivoFila fila, string columna)
     {
         fila.Columnas.TryGetValue(columna, out var valor);
