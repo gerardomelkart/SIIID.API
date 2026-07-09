@@ -13,11 +13,13 @@ public class InformeService : IInformeService
     private readonly IUsuarioRepository _usuarioRepository;
     private readonly ILogger<InformeService> _logger;
     private readonly IMemoryCache _cache;
+    private readonly IAcusePdfService _acusePdfService;
 
-    public InformeService(IInformeRepository informeRepository, IUsuarioRepository usuarioRepository, ILogger<InformeService> logger, IMemoryCache cache)
+    public InformeService(IInformeRepository informeRepository, IUsuarioRepository usuarioRepository, IAcusePdfService acusePdfService, ILogger<InformeService> logger, IMemoryCache cache)
     {
         _informeRepository = informeRepository;
         _usuarioRepository = usuarioRepository;
+        _acusePdfService = acusePdfService;
         _logger = logger;
         _cache = cache;
     }
@@ -116,6 +118,78 @@ public class InformeService : IInformeService
         {
             Archivo = zipStream.ToArray(),
             NombreArchivo = GenerarNombreArchivoZip(carga)
+        };
+    }
+
+    public async Task<InformeArchivoZipResponse> GenerarZipAcusesEnviosAsync(int idUsuarioConsulta, int mesCorte, int anioCorte)
+    {
+        if (mesCorte < 1 || mesCorte > 12)
+        {
+            throw new InvalidOperationException("El mes de corte no es válido.");
+        }
+
+        if (anioCorte < 2000 || anioCorte > 2100)
+        {
+            throw new InvalidOperationException("El año de corte no es válido.");
+        }
+
+        var envios = await ObtenerEnviosAsync(idUsuarioConsulta, null, mesCorte, anioCorte);
+
+        var enviosConAcuse = envios
+            .Where(x => x.Estado is
+                "VALIDADO_PENDIENTE" or
+                "VALIDADO_PENDIENTE_ACTUALIZACION" or
+                "PENDIENTE_APROBACION" or
+                "CONFIRMADO" or
+                "CONFIRMADO_ACTUALIZACION")
+            .ToList();
+
+        if (enviosConAcuse.Count == 0)
+        {
+            throw new InvalidOperationException($"No existen acuses disponibles para {ObtenerNombreMes(mesCorte)} de {anioCorte}.");
+        }
+
+        using var zipStream = new MemoryStream();
+
+        using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var envio in enviosConAcuse)
+            {
+                var esActualizacion = string.Equals(envio.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+                var esConfirmado = string.Equals(envio.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) ||
+                                   string.Equals(envio.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+
+                byte[] pdf;
+
+                if (esConfirmado)
+                {
+                    pdf = esActualizacion
+                        ? await _acusePdfService.GenerarAcuseConfirmadoActualizacionAsync(envio.CodigoReferencia, idUsuarioConsulta)
+                        : await _acusePdfService.GenerarAcuseConfirmadoAsync(envio.CodigoReferencia, idUsuarioConsulta);
+                }
+                else
+                {
+                    pdf = esActualizacion
+                        ? await _acusePdfService.GenerarAcusePrevioActualizacionAsync(envio.CodigoReferencia, idUsuarioConsulta)
+                        : await _acusePdfService.GenerarAcusePrevioAsync(envio.CodigoReferencia, idUsuarioConsulta);
+                }
+
+                var tipoDocumento = esConfirmado ? "ACUSE" : "INFORME_PREVIO";
+                var entidad = NormalizarNombreArchivo(envio.EntidadFederativa);
+                var nombreArchivo = $"{envio.ClaveEntidad}_{entidad}_{tipoDocumento}_{envio.CodigoReferencia}.pdf";
+                var entry = archive.CreateEntry(nombreArchivo, CompressionLevel.Fastest);
+
+                await using var entryStream = entry.Open();
+                await entryStream.WriteAsync(pdf);
+            }
+        }
+
+        var mes = NormalizarNombreArchivo(ObtenerNombreMes(mesCorte));
+
+        return new InformeArchivoZipResponse
+        {
+            Archivo = zipStream.ToArray(),
+            NombreArchivo = $"ACUSES_{mes}_{anioCorte}.zip"
         };
     }
 

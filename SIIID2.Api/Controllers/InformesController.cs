@@ -104,6 +104,97 @@ public class InformesController : ControllerBase
         }
     }
 
+    [Authorize]
+    [HttpPost("envios/acuses/ticket")]
+    public async Task<IActionResult> CrearTicketDescargaAcuses([FromQuery] int mesCorte, [FromQuery] int anioCorte)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        try
+        {
+            var zip = await _informeService.GenerarZipAcusesEnviosAsync(idUsuarioConsulta, mesCorte, anioCorte);
+            var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+            var cacheKey = $"ACUSES_ENVIO_DOWNLOAD_TICKET:{ticket}";
+
+            _cache.Set(
+                cacheKey,
+                zip,
+                new MemoryCacheEntryOptions
+                {
+                    SlidingExpiration = TimeSpan.FromMinutes(5),
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+                });
+
+            return Ok(new
+            {
+                esValido = true,
+                ticket
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "INFORMES_ACUSES_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "INFORMES_ACUSES_NO_DISPONIBLES",
+                mensaje = ex.Message
+            });
+        }
+    }
+
+    [AllowAnonymous]
+    [HttpGet("envios/acuses/descargar")]
+    public IActionResult DescargarAcusesPorTicket([FromQuery] string ticket)
+    {
+        if (string.IsNullOrWhiteSpace(ticket))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "INFORMES_ACUSES_TICKET_REQUERIDO",
+                mensaje = "Debe proporcionar un ticket de descarga válido."
+            });
+        }
+
+        var cacheKey = $"ACUSES_ENVIO_DOWNLOAD_TICKET:{ticket}";
+
+        if (!_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var zip) || zip == null)
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "INFORMES_ACUSES_TICKET_INVALIDO",
+                mensaje = "El ticket de descarga no existe o ya expiró."
+            });
+        }
+
+        _cache.Remove(cacheKey);
+        Response.Headers.CacheControl = "no-store";
+
+        return File(zip.Archivo, "application/zip", zip.NombreArchivo);
+    }
+
+
     // Reporte de intentos y cargas por entidad y corte.
     // Solo SUPER_USUARIO.
     // Ejemplo: GET /api/informes/reporte-cargas

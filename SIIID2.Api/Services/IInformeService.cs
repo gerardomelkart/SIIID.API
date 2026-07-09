@@ -11,4 +11,6 @@ public interface IInformeService
     Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? mesCorte, int? anioCorte);
 
     Task<InformeArchivoZipResponse> GenerarZipSabanasAsync(int idUsuarioConsulta, int anioCorte, string? tipoSabana);
+
+    Task<InformeArchivoZipResponse> GenerarZipAcusesEnviosAsync(int idUsuarioConsulta, int mesCorte, int anioCorte);
 }
