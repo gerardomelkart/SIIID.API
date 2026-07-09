@@ -817,7 +817,106 @@ public class InformeRepository : IInformeRepository
     public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte, int? idEntidadFederativa, string modoPlano, int mesUltimoCorte)
     {
         var sql = @"
-            WITH sabana AS (
+            WITH pendientes_rankeadas AS (
+            SELECT
+                c.id_carga,
+                c.id_entidad_federativa,
+                c.mes_corte,
+                c.anio_corte,
+                ROW_NUMBER() OVER (
+                    PARTITION BY c.id_entidad_federativa, c.mes_corte, c.anio_corte
+                    ORDER BY c.fecha_validacion DESC, c.id_carga DESC
+                ) AS rn
+            FROM carga c
+            WHERE c.activo = 1
+              AND c.estado = 'PENDIENTE_APROBACION'
+              AND c.anio_corte = @AnioCorte
+              AND c.mes_corte = @MesUltimoCorte
+              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
+        ),
+        pendientes AS (
+            SELECT
+                id_carga,
+                id_entidad_federativa,
+                mes_corte,
+                anio_corte
+            FROM pendientes_rankeadas
+            WHERE rn = 1
+        ),
+        fuente_delitos AS (
+            SELECT
+                c.anio_corte,
+                c.mes_corte,
+                c.id_entidad_federativa AS id_entidad_carga,
+                d.id_entidad_federativa AS id_entidad_hechos,
+                d.id_municipio,
+                d.id_modalidad_delito,
+                d.id_grado_consumacion,
+                d.id_instrumento_comision,
+                d.id_forma_accion
+            FROM delito d
+            INNER JOIN carga c
+                ON c.id_carga = d.id_carga
+               AND c.activo = 1
+               AND c.anio_corte = @AnioCorte
+               AND (
+                      (c.tipo_carga = 'CARGA_INICIAL' AND c.estado = 'CONFIRMADO')
+                   OR (c.tipo_carga = 'ACTUALIZACION' AND c.estado = 'CONFIRMADO_ACTUALIZACION')
+               )
+            WHERE d.activo = 1
+              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
+              AND (
+                  @ModoPlano = 'CONFIRMADO'
+                  OR c.mes_corte < @MesUltimoCorte
+                  OR (
+                      @ModoPlano = 'MIXTO'
+                      AND c.mes_corte = @MesUltimoCorte
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM pendientes p
+                          WHERE p.id_entidad_federativa = c.id_entidad_federativa
+                      )
+                  )
+              )
+
+            UNION ALL
+
+            SELECT
+                p.anio_corte,
+                p.mes_corte,
+                p.id_entidad_federativa,
+                ef.id_entidad_federativa,
+                mun.id_municipio,
+                md.id_modalidad_delito,
+                gc.id_grado_consumacion,
+                ic.id_instrumento_comision,
+                fa.id_forma_accion
+            FROM pendientes p
+            INNER JOIN carga_tmp_delito d
+                ON d.id_carga = p.id_carga
+               AND d.activo = 1
+            INNER JOIN catalogo_modalidad_delito md
+                ON md.clave4 = d.clasf_de_dto
+               AND md.activo = 1
+            INNER JOIN catalogo_forma_accion fa
+                ON fa.clave = TRY_CONVERT(tinyint, d.forma_acc)
+               AND fa.activo = 1
+            INNER JOIN catalogo_instrumento_comision ic
+                ON ic.clave = TRY_CONVERT(tinyint, d.emto_com_dto)
+               AND ic.activo = 1
+            INNER JOIN catalogo_grado_consumacion gc
+                ON gc.clave = TRY_CONVERT(tinyint, d.grdo_cons)
+               AND gc.activo = 1
+            INNER JOIN catalogo_entidad_federativa ef
+                ON ef.id_entidad_federativa = TRY_CONVERT(tinyint, d.id_ent_hchos)
+               AND ef.activo = 1
+            INNER JOIN catalogo_municipio mun
+                ON mun.id_entidad_federativa = ef.id_entidad_federativa
+               AND TRY_CONVERT(int, mun.clave) = TRY_CONVERT(int, d.id_mun_hchos)
+               AND mun.activo = 1
+            WHERE @ModoPlano IN ('PREVIO', 'MIXTO')
+        ),
+        sabana AS (
             SELECT
                 MIN(COALESCE(ol.orden_general, s.id_delito_sabana)) AS orden_sabana,
                 MIN(cd.id_delito) AS orden_delito,
@@ -1258,59 +1357,6 @@ public class InformeRepository : IInformeRepository
                         ELSE 'No especificado'
                     END
             )
-            INNER JOIN catalogo_entidad_federativa efh
-                ON efh.id_entidad_federativa = d.id_entidad_federativa
-               AND efh.activo = 1
-            INNER JOIN catalogo_tipo_victima tv
-                ON tv.id_tipo_victima = v.id_tipo_victima
-               AND tv.activo = 1
-            LEFT JOIN catalogo_sexo sx
-                ON sx.id_sexo = v.id_sexo
-               AND sx.activo = 1
-            INNER JOIN catalogo_delito_sabana s
-                ON s.id_modalidad_delito = d.id_modalidad_delito
-               AND s.id_grado_consumacion = d.id_grado_consumacion
-               AND s.id_instrumento_comision = d.id_instrumento_comision
-               AND s.id_forma_accion = d.id_forma_accion
-               AND s.activo = 1
-            INNER JOIN catalogo_modalidad_delito md
-                ON md.id_modalidad_delito = s.id_modalidad_delito
-               AND md.activo = 1
-            INNER JOIN catalogo_subtipo_delito sd
-                ON sd.id_subtipo_delito = md.id_subtipo_delito
-               AND sd.activo = 1
-            INNER JOIN catalogo_delito cd
-                ON cd.id_delito = sd.id_delito
-               AND cd.activo = 1
-            INNER JOIN catalogo_bien_juridico bj
-                ON bj.id_bien_juridico = cd.id_bien_juridico
-               AND bj.activo = 1
-            WHERE v.activo = 1
-            AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
-            AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
-            GROUP BY
-                c.anio_corte,
-                c.mes_corte,
-                TRY_CONVERT(int, efh.clave),
-                bj.bien_juridico,
-                s.delito_sabana,
-                s.subtipo_delito_sabana,
-                s.modalidad_delito_sabana,
-                CASE
-                    WHEN tv.clave = 1 AND sx.clave IN (1, 2, 3) THEN sx.descripcion
-                    ELSE 'No identificado'
-                END,
-                CASE
-                    WHEN tv.clave <> 1 THEN 'No especificado'
-                    WHEN TRY_CONVERT(int, v.edad) IS NULL THEN 'No especificado'
-                    WHEN TRY_CONVERT(int, v.edad) BETWEEN 0 AND 12 THEN '0 a 12 años'
-                    WHEN TRY_CONVERT(int, v.edad) BETWEEN 13 AND 17 THEN '13 a 17 años'
-                    WHEN TRY_CONVERT(int, v.edad) BETWEEN 18 AND 29 THEN '18 a 29 años'
-                    WHEN TRY_CONVERT(int, v.edad) BETWEEN 30 AND 60 THEN '30 a 60 años'
-                    WHEN TRY_CONVERT(int, v.edad) BETWEEN 61 AND 120 THEN 'Más de 60 años'
-                    ELSE 'No especificado'
-                END
-        )
         SELECT
             m.anio_corte AS [Año],
             RIGHT('00' + CONVERT(varchar(2), m.clave_ent), 2) AS [Clave_Ent],
@@ -1374,7 +1420,137 @@ public class InformeRepository : IInformeRepository
     public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(int anioCorte, int? idEntidadFederativa, string modoPlano, int mesUltimoCorte)
     {
         var sql = @"
-        WITH sabana AS (
+                WITH pendientes_rankeadas AS (
+            SELECT
+                c.id_carga,
+                c.id_entidad_federativa,
+                c.mes_corte,
+                c.anio_corte,
+                ROW_NUMBER() OVER (
+                    PARTITION BY c.id_entidad_federativa, c.mes_corte, c.anio_corte
+                    ORDER BY c.fecha_validacion DESC, c.id_carga DESC
+                ) AS rn
+            FROM carga c
+            WHERE c.activo = 1
+              AND c.estado = 'PENDIENTE_APROBACION'
+              AND c.anio_corte = @AnioCorte
+              AND c.mes_corte = @MesUltimoCorte
+              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
+        ),
+        pendientes AS (
+            SELECT
+                id_carga,
+                id_entidad_federativa,
+                mes_corte,
+                anio_corte
+            FROM pendientes_rankeadas
+            WHERE rn = 1
+        ),
+        fuente_victimas AS (
+            SELECT
+                c.anio_corte,
+                c.mes_corte,
+                c.id_entidad_federativa AS id_entidad_carga,
+                d.id_entidad_federativa AS id_entidad_hechos,
+                d.id_municipio,
+                d.id_modalidad_delito,
+                d.id_grado_consumacion,
+                d.id_instrumento_comision,
+                d.id_forma_accion,
+                tv.clave AS tipo_victima_clave,
+                sx.clave AS sexo_clave,
+                sx.descripcion AS sexo_descripcion,
+                TRY_CONVERT(int, v.edad) AS edad
+            FROM victima v
+            INNER JOIN delito d
+                ON d.id_delito = v.id_delito
+               AND d.activo = 1
+            INNER JOIN carga c
+                ON c.id_carga = v.id_carga
+               AND c.activo = 1
+               AND c.anio_corte = @AnioCorte
+               AND (
+                      (c.tipo_carga = 'CARGA_INICIAL' AND c.estado = 'CONFIRMADO')
+                   OR (c.tipo_carga = 'ACTUALIZACION' AND c.estado = 'CONFIRMADO_ACTUALIZACION')
+               )
+            INNER JOIN catalogo_tipo_victima tv
+                ON tv.id_tipo_victima = v.id_tipo_victima
+               AND tv.activo = 1
+            LEFT JOIN catalogo_sexo sx
+                ON sx.id_sexo = v.id_sexo
+               AND sx.activo = 1
+            WHERE v.activo = 1
+              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
+              AND (
+                  @ModoPlano = 'CONFIRMADO'
+                  OR c.mes_corte < @MesUltimoCorte
+                  OR (
+                      @ModoPlano = 'MIXTO'
+                      AND c.mes_corte = @MesUltimoCorte
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM pendientes p
+                          WHERE p.id_entidad_federativa = c.id_entidad_federativa
+                      )
+                  )
+              )
+
+            UNION ALL
+
+            SELECT
+                p.anio_corte,
+                p.mes_corte,
+                p.id_entidad_federativa,
+                ef.id_entidad_federativa,
+                mun.id_municipio,
+                md.id_modalidad_delito,
+                gc.id_grado_consumacion,
+                ic.id_instrumento_comision,
+                fa.id_forma_accion,
+                tv.clave,
+                sx.clave,
+                sx.descripcion,
+                CASE
+                    WHEN TRY_CONVERT(int, NULLIF(v.edad, '')) = 999 THEN NULL
+                    ELSE TRY_CONVERT(int, NULLIF(v.edad, ''))
+                END
+            FROM pendientes p
+            INNER JOIN carga_tmp_victima v
+                ON v.id_carga = p.id_carga
+               AND v.activo = 1
+            INNER JOIN carga_tmp_delito d
+                ON d.id_carga = v.id_carga
+               AND d.id_ci = v.id_ci
+               AND d.id_delito = v.id_delito
+               AND d.activo = 1
+            INNER JOIN catalogo_modalidad_delito md
+                ON md.clave4 = d.clasf_de_dto
+               AND md.activo = 1
+            INNER JOIN catalogo_forma_accion fa
+                ON fa.clave = TRY_CONVERT(tinyint, d.forma_acc)
+               AND fa.activo = 1
+            INNER JOIN catalogo_instrumento_comision ic
+                ON ic.clave = TRY_CONVERT(tinyint, d.emto_com_dto)
+               AND ic.activo = 1
+            INNER JOIN catalogo_grado_consumacion gc
+                ON gc.clave = TRY_CONVERT(tinyint, d.grdo_cons)
+               AND gc.activo = 1
+            INNER JOIN catalogo_entidad_federativa ef
+                ON ef.id_entidad_federativa = TRY_CONVERT(tinyint, d.id_ent_hchos)
+               AND ef.activo = 1
+            INNER JOIN catalogo_municipio mun
+                ON mun.id_entidad_federativa = ef.id_entidad_federativa
+               AND TRY_CONVERT(int, mun.clave) = TRY_CONVERT(int, d.id_mun_hchos)
+               AND mun.activo = 1
+            INNER JOIN catalogo_tipo_victima tv
+                ON tv.clave = TRY_CONVERT(tinyint, v.id_tv)
+               AND tv.activo = 1
+            LEFT JOIN catalogo_sexo sx
+                ON sx.clave = TRY_CONVERT(tinyint, NULLIF(v.sexo, ''))
+               AND sx.activo = 1
+            WHERE @ModoPlano IN ('PREVIO', 'MIXTO')
+        ),
+        sabana AS (
         SELECT
             MIN(COALESCE(ol.orden_municipal_victimas, ol.orden_general, s.id_delito_sabana)) AS orden_sabana,
                     MIN(cd.id_delito) AS orden_delito,
@@ -1550,74 +1726,7 @@ public class InformeRepository : IInformeRepository
                         WHEN fv.edad BETWEEN 61 AND 120 THEN 'Más de 60 años'
                         ELSE 'No especificado'
                     END
-            )
-            INNER JOIN catalogo_entidad_federativa efh
-                ON efh.id_entidad_federativa = d.id_entidad_federativa
-               AND efh.activo = 1
-            INNER JOIN catalogo_municipio mun
-                ON mun.id_municipio = d.id_municipio
-               AND mun.activo = 1
-            INNER JOIN catalogo_tipo_victima tv
-                ON tv.id_tipo_victima = v.id_tipo_victima
-               AND tv.activo = 1
-            LEFT JOIN catalogo_sexo sx
-                ON sx.id_sexo = v.id_sexo
-               AND sx.activo = 1
-            INNER JOIN catalogo_delito_sabana s
-                ON s.id_modalidad_delito = d.id_modalidad_delito
-               AND s.id_grado_consumacion = d.id_grado_consumacion
-               AND s.id_instrumento_comision = d.id_instrumento_comision
-               AND s.id_forma_accion = d.id_forma_accion
-               AND s.activo = 1
-            INNER JOIN catalogo_modalidad_delito md
-                ON md.id_modalidad_delito = s.id_modalidad_delito
-               AND md.activo = 1
-            INNER JOIN catalogo_subtipo_delito sd
-                ON sd.id_subtipo_delito = md.id_subtipo_delito
-               AND sd.activo = 1
-            INNER JOIN catalogo_delito cd
-                ON cd.id_delito = sd.id_delito
-               AND cd.activo = 1
-            INNER JOIN catalogo_bien_juridico bj
-                ON bj.id_bien_juridico = cd.id_bien_juridico
-               AND bj.activo = 1
-            LEFT JOIN dbo.catalogo_sabana_orden_legacy ol
-                ON ol.bien_juridico = bj.bien_juridico
-               AND ol.delito_sabana = s.delito_sabana
-               AND ol.subtipo_delito_sabana = s.subtipo_delito_sabana
-               AND ol.modalidad_delito_sabana = s.modalidad_delito_sabana
-               AND ol.activo = 1
-            WHERE v.activo = 1
-              AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
-              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
-            GROUP BY
-                c.anio_corte,
-                TRY_CONVERT(int, efh.clave),
-                efh.nombre,
-                TRY_CONVERT(int, CONCAT(
-                    TRY_CONVERT(int, efh.clave),
-                    RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
-                )),
-                mun.nombre,
-                bj.bien_juridico,
-                s.delito_sabana,
-                s.subtipo_delito_sabana,
-                s.modalidad_delito_sabana,
-                CASE
-                    WHEN tv.clave = 1 AND sx.clave = 1 THEN 'Hombre'
-                    WHEN tv.clave = 1 AND sx.clave = 2 THEN 'Mujer'
-                    ELSE 'No identificado'
-                END,
-                CASE
-                    WHEN tv.clave <> 1 THEN 'No especificado'
-                    WHEN TRY_CONVERT(int, v.edad) IS NULL THEN 'No especificado'
-                    WHEN TRY_CONVERT(int, v.edad) BETWEEN 0 AND 12 THEN '0 a 12 años'
-                    WHEN TRY_CONVERT(int, v.edad) BETWEEN 13 AND 17 THEN '13 a 17 años'
-                    WHEN TRY_CONVERT(int, v.edad) BETWEEN 18 AND 29 THEN '18 a 29 años'
-                    WHEN TRY_CONVERT(int, v.edad) BETWEEN 30 AND 60 THEN '30 a 60 años'
-                    WHEN TRY_CONVERT(int, v.edad) BETWEEN 61 AND 120 THEN 'Más de 60 años'
-                    ELSE 'No especificado'
-                END
+         
         ),
         municipios_con_conteo AS (
             SELECT DISTINCT
