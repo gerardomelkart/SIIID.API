@@ -764,39 +764,6 @@ public class InformeRepository : IInformeRepository
                 s.subtipo_delito_sabana,
                 s.modalidad_delito_sabana
         )
-            INNER JOIN catalogo_entidad_federativa efh
-                ON efh.id_entidad_federativa = d.id_entidad_federativa
-               AND efh.activo = 1
-            INNER JOIN catalogo_delito_sabana s
-                ON s.id_modalidad_delito = d.id_modalidad_delito
-               AND s.id_grado_consumacion = d.id_grado_consumacion
-               AND s.id_instrumento_comision = d.id_instrumento_comision
-               AND s.id_forma_accion = d.id_forma_accion
-               AND s.activo = 1
-            INNER JOIN catalogo_modalidad_delito md
-                ON md.id_modalidad_delito = s.id_modalidad_delito
-               AND md.activo = 1
-            INNER JOIN catalogo_subtipo_delito sd
-                ON sd.id_subtipo_delito = md.id_subtipo_delito
-               AND sd.activo = 1
-            INNER JOIN catalogo_delito cd
-                ON cd.id_delito = sd.id_delito
-               AND cd.activo = 1
-            INNER JOIN catalogo_bien_juridico bj
-                ON bj.id_bien_juridico = cd.id_bien_juridico
-               AND bj.activo = 1
-            WHERE d.activo = 1
-              AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
-              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
-            GROUP BY
-                c.anio_corte,
-                c.mes_corte,
-                TRY_CONVERT(int, efh.clave),
-                bj.bien_juridico,
-                s.delito_sabana,
-                s.subtipo_delito_sabana,
-                s.modalidad_delito_sabana
-        )
         SELECT
             m.anio_corte AS [Año],
             RIGHT('00' + CONVERT(varchar(2), m.clave_ent), 2) AS [Clave_Ent],
@@ -952,46 +919,6 @@ public class InformeRepository : IInformeRepository
             GROUP BY
                 fd.anio_corte,
                 fd.mes_corte,
-                TRY_CONVERT(int, efh.clave),
-                TRY_CONVERT(int, CONCAT(
-                    TRY_CONVERT(int, efh.clave),
-                    RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
-                )),
-                bj.bien_juridico,
-                s.delito_sabana,
-                s.subtipo_delito_sabana,
-                s.modalidad_delito_sabana
-        )
-            INNER JOIN catalogo_entidad_federativa efh
-                ON efh.id_entidad_federativa = d.id_entidad_federativa
-               AND efh.activo = 1
-            INNER JOIN catalogo_municipio mun
-                ON mun.id_municipio = d.id_municipio
-               AND mun.activo = 1
-            INNER JOIN catalogo_delito_sabana s
-                ON s.id_modalidad_delito = d.id_modalidad_delito
-               AND s.id_grado_consumacion = d.id_grado_consumacion
-               AND s.id_instrumento_comision = d.id_instrumento_comision
-               AND s.id_forma_accion = d.id_forma_accion
-               AND s.activo = 1
-            INNER JOIN catalogo_modalidad_delito md
-                ON md.id_modalidad_delito = s.id_modalidad_delito
-               AND md.activo = 1
-            INNER JOIN catalogo_subtipo_delito sd
-                ON sd.id_subtipo_delito = md.id_subtipo_delito
-               AND sd.activo = 1
-            INNER JOIN catalogo_delito cd
-                ON cd.id_delito = sd.id_delito
-               AND cd.activo = 1
-            INNER JOIN catalogo_bien_juridico bj
-                ON bj.id_bien_juridico = cd.id_bien_juridico
-               AND bj.activo = 1
-            WHERE d.activo = 1
-              AND TRY_CONVERT(int, efh.clave) BETWEEN 1 AND 32
-              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
-            GROUP BY
-                c.anio_corte,
-                c.mes_corte,
                 TRY_CONVERT(int, efh.clave),
                 TRY_CONVERT(int, CONCAT(
                     TRY_CONVERT(int, efh.clave),

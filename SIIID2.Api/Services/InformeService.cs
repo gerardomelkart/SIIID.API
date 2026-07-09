@@ -314,7 +314,7 @@ public class InformeService : IInformeService
         var response = new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = ObtenerNombreZipSabanas(tipo, anioCorte, idEntidadFederativaFiltro)
+            NombreArchivo = ObtenerNombreZipSabanas(tipo, anioCorte, idEntidadFederativaFiltro, modo)
         };
 
         _cache.Set(
@@ -600,15 +600,13 @@ public class InformeService : IInformeService
 
     private static string ObtenerNombreZipSabanas(string tipo, int anioCorte, int? idEntidadFederativa, string modo)
     {
-        var sufijoEntidad = idEntidadFederativa.HasValue
-            ? $"_ENTIDAD_{idEntidadFederativa.Value:00}"
-            : string.Empty;
+        var sufijoEntidad = idEntidadFederativa.HasValue ? $"_ENTIDAD_{idEntidadFederativa.Value:00}" : string.Empty;
 
-        return tipoSabana switch
+        return tipo switch
         {
-            "ESTATALES" => $"PLANO_ESTATAL{sufijoEntidad}_{anioCorte}.zip",
-            "MUNICIPALES" => $"PLANO_MUNICIPAL{sufijoEntidad}_{anioCorte}.zip",
-            _ => $"PLANO_ESTADISTICO{sufijoEntidad}_{anioCorte}.zip"
+            "ESTATALES" => $"PLANO_ESTATAL_{modo}{sufijoEntidad}_{anioCorte}.zip",
+            "MUNICIPALES" => $"PLANO_MUNICIPAL_{modo}{sufijoEntidad}_{anioCorte}.zip",
+            _ => $"PLANO_ESTADISTICO_{modo}{sufijoEntidad}_{anioCorte}.zip"
         };
     }
 }
