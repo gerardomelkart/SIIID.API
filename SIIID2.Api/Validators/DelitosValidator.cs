@@ -3,7 +3,7 @@ using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Validators;
 
-public class DelitosValidator : IArchivoCargaValidator
+public class DelitosValidator 
 {
     public string NombreArchivo => "delitos";
 

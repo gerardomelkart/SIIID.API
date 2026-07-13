@@ -366,11 +366,6 @@ public class AcusePdfService : IAcusePdfService
         return rutaFisica;
     }
 
-    private static string ObtenerFechaLarga(DateTime fecha)
-    {
-        return $"{fecha:dd} de {ObtenerNombreMes(fecha.Month)} de {fecha:yyyy}";
-    }
-
     private static string ObtenerNombreMes(int mes)
     {
         if (mes < 1 || mes > 12)

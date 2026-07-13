@@ -5,7 +5,7 @@ namespace SIIID2.Api.Validators;
 
 // Validador específico para el archivo de carpetas.
 // Aquí viven las reglas propias de carpetas, no las reglas generales de carga.
-public class CarpetasValidator : IArchivoCargaValidator
+public class CarpetasValidator 
 {
     public string NombreArchivo => "carpetas";
 

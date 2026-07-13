@@ -476,14 +476,6 @@ public class InformeService : IInformeService
         return valor.ToString() ?? string.Empty;
     }
 
-    private static string GenerarNombreArchivoZip(InformeArchivoCargaInfo carga)
-    {
-        var entidad = NormalizarNombreArchivo(carga.EntidadFederativa);
-        var mes = NormalizarNombreArchivo(ObtenerNombreMes(carga.MesCorte));
-
-        return $"ARCHIVOS_ENVIO_{entidad}_{mes}_{carga.AnioCorte}.zip";
-    }
-
     private static string NormalizarNombreArchivo(string valor)
     {
         if (string.IsNullOrWhiteSpace(valor))
