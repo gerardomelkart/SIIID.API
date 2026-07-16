@@ -250,7 +250,7 @@ public class InformeService : IInformeService
 
         if (modo == "PREVIO" && firma.TotalCargasPendientes == 0)
         {
-            throw new InvalidOperationException($"No existen cargas pendientes de aprobación para el último corte del año {anioCorte}.");
+            throw new InvalidOperationException($"No existen cargas pendientes de aprobación para el año {anioCorte}.");
         }
 
         var mesUltimoCorte = firma.MesUltimoCorte.Value;
