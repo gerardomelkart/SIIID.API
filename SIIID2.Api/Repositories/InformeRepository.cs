@@ -586,7 +586,6 @@ public class InformeRepository : IInformeRepository
                 WHERE c.activo = 1
                   AND c.estado = 'PENDIENTE_APROBACION'
                   AND c.anio_corte = @AnioCorte
-                  AND c.mes_corte = @MesUltimoCorte
                   AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
             ),
             pendientes AS (
@@ -620,19 +619,28 @@ public class InformeRepository : IInformeRepository
                    )
                 WHERE d.activo = 1
                   AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
-                  AND (
-                      @ModoPlano = 'CONFIRMADO'
-                      OR c.mes_corte < @MesUltimoCorte
-                      OR (
-                          @ModoPlano = 'MIXTO'
-                          AND c.mes_corte = @MesUltimoCorte
-                          AND NOT EXISTS (
-                              SELECT 1
-                              FROM pendientes p
-                              WHERE p.id_entidad_federativa = c.id_entidad_federativa
-                          )
-                      )
-                  )
+                    AND (
+                        @ModoPlano = 'CONFIRMADO'
+                        OR (
+                            @ModoPlano = 'PREVIO'
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM pendientes p
+                                WHERE p.anio_corte = c.anio_corte
+                                  AND p.mes_corte = c.mes_corte
+                            )
+                        )
+                        OR (
+                            @ModoPlano = 'MIXTO'
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM pendientes p
+                                WHERE p.id_entidad_federativa = c.id_entidad_federativa
+                                  AND p.anio_corte = c.anio_corte
+                                  AND p.mes_corte = c.mes_corte
+                            )
+                        )
+                    )
 
                 UNION ALL
 
@@ -831,7 +839,6 @@ public class InformeRepository : IInformeRepository
             WHERE c.activo = 1
               AND c.estado = 'PENDIENTE_APROBACION'
               AND c.anio_corte = @AnioCorte
-              AND c.mes_corte = @MesUltimoCorte
               AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
         ),
         pendientes AS (
@@ -865,19 +872,28 @@ public class InformeRepository : IInformeRepository
                )
             WHERE d.activo = 1
               AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
-              AND (
-                  @ModoPlano = 'CONFIRMADO'
-                  OR c.mes_corte < @MesUltimoCorte
-                  OR (
-                      @ModoPlano = 'MIXTO'
-                      AND c.mes_corte = @MesUltimoCorte
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM pendientes p
-                          WHERE p.id_entidad_federativa = c.id_entidad_federativa
-                      )
-                  )
-              )
+            AND (
+                @ModoPlano = 'CONFIRMADO'
+                OR (
+                    @ModoPlano = 'PREVIO'
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM pendientes p
+                        WHERE p.anio_corte = c.anio_corte
+                          AND p.mes_corte = c.mes_corte
+                    )
+                )
+                OR (
+                    @ModoPlano = 'MIXTO'
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM pendientes p
+                        WHERE p.id_entidad_federativa = c.id_entidad_federativa
+                          AND p.anio_corte = c.anio_corte
+                          AND p.mes_corte = c.mes_corte
+                    )
+                )
+            )
 
             UNION ALL
 
@@ -1101,7 +1117,6 @@ public class InformeRepository : IInformeRepository
                 WHERE c.activo = 1
                   AND c.estado = 'PENDIENTE_APROBACION'
                   AND c.anio_corte = @AnioCorte
-                  AND c.mes_corte = @MesUltimoCorte
                   AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
             ),
             pendientes AS (
@@ -1148,19 +1163,28 @@ public class InformeRepository : IInformeRepository
                    AND sx.activo = 1
                 WHERE v.activo = 1
                   AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
-                  AND (
-                      @ModoPlano = 'CONFIRMADO'
-                      OR c.mes_corte < @MesUltimoCorte
-                      OR (
-                          @ModoPlano = 'MIXTO'
-                          AND c.mes_corte = @MesUltimoCorte
-                          AND NOT EXISTS (
-                              SELECT 1
-                              FROM pendientes p
-                              WHERE p.id_entidad_federativa = c.id_entidad_federativa
-                          )
-                      )
-                  )
+                    AND (
+                        @ModoPlano = 'CONFIRMADO'
+                        OR (
+                            @ModoPlano = 'PREVIO'
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM pendientes p
+                                WHERE p.anio_corte = c.anio_corte
+                                  AND p.mes_corte = c.mes_corte
+                            )
+                        )
+                        OR (
+                            @ModoPlano = 'MIXTO'
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM pendientes p
+                                WHERE p.id_entidad_federativa = c.id_entidad_federativa
+                                  AND p.anio_corte = c.anio_corte
+                                  AND p.mes_corte = c.mes_corte
+                            )
+                        )
+                    )
 
                 UNION ALL
 
@@ -1434,7 +1458,6 @@ public class InformeRepository : IInformeRepository
             WHERE c.activo = 1
               AND c.estado = 'PENDIENTE_APROBACION'
               AND c.anio_corte = @AnioCorte
-              AND c.mes_corte = @MesUltimoCorte
               AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
         ),
         pendientes AS (
@@ -1481,19 +1504,28 @@ public class InformeRepository : IInformeRepository
                AND sx.activo = 1
             WHERE v.activo = 1
               AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
-              AND (
-                  @ModoPlano = 'CONFIRMADO'
-                  OR c.mes_corte < @MesUltimoCorte
-                  OR (
-                      @ModoPlano = 'MIXTO'
-                      AND c.mes_corte = @MesUltimoCorte
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM pendientes p
-                          WHERE p.id_entidad_federativa = c.id_entidad_federativa
-                      )
-                  )
-              )
+                AND (
+                    @ModoPlano = 'CONFIRMADO'
+                    OR (
+                        @ModoPlano = 'PREVIO'
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM pendientes p
+                            WHERE p.anio_corte = c.anio_corte
+                              AND p.mes_corte = c.mes_corte
+                        )
+                    )
+                    OR (
+                        @ModoPlano = 'MIXTO'
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM pendientes p
+                            WHERE p.id_entidad_federativa = c.id_entidad_federativa
+                              AND p.anio_corte = c.anio_corte
+                              AND p.mes_corte = c.mes_corte
+                        )
+                    )
+                )
 
             UNION ALL
 
@@ -1887,7 +1919,6 @@ public class InformeRepository : IInformeRepository
 
             CONVERT(bigint, ISNULL(SUM(CASE
                 WHEN cr.estado = 'PENDIENTE_APROBACION'
-                 AND cr.mes_corte = uc.MesUltimoCorte
                 THEN 1 ELSE 0
             END), 0)) AS TotalCargasPendientes,
 
