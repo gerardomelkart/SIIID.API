@@ -410,17 +410,7 @@ public class UsuarioRepository : IUsuarioRepository
                 },
                 transaction);
 
-            await GuardarPermisosModularesAsync(
-                    connection,
-                    transaction,
-                    idUsuario,
-                    request.HabilitaCarga,
-                    request.HabilitaModificacion,
-                    request.HabilitaSemanal,
-                    request.HabilitaCargaSemanal,
-                    request.HabilitaModificacionSemanal,
-                    request.AdministraDelitosSemanal,
-                    idUsuarioAlta);
+            await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaCarga, request.HabilitaModificacion, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.HabilitaModificacionSemanal, request.AdministraDelitosSemanal, idUsuarioAlta);
 
             await transaction.CommitAsync();
 
@@ -621,17 +611,7 @@ public class UsuarioRepository : IUsuarioRepository
                 },
                 transaction);
 
-            await GuardarPermisosModularesAsync(
-                    connection,
-                    transaction,
-                    idUsuario,
-                    request.HabilitaCarga,
-                    request.HabilitaModificacion,
-                    request.HabilitaSemanal,
-                    request.HabilitaCargaSemanal,
-                    request.HabilitaModificacionSemanal,
-                    request.AdministraDelitosSemanal,
-                    idUsuarioModificacion);
+            await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaCarga, request.HabilitaModificacion, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.HabilitaModificacionSemanal, request.AdministraDelitosSemanal, idUsuarioModificacion);
 
             await transaction.CommitAsync();
         }
@@ -864,17 +844,7 @@ public class UsuarioRepository : IUsuarioRepository
                 },
                 transaction);
 
-            await GuardarPermisosModularesAsync(
-                    connection,
-                    transaction,
-                    idUsuario,
-                    request.HabilitaCarga,
-                    request.HabilitaModificacion,
-                    null,
-                    null,
-                    null,
-                    null,
-                    idUsuarioModificacion);
+            await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaCarga, request.HabilitaModificacion, null, null, null, null, idUsuarioModificacion);
 
             await transaction.CommitAsync();
         }
