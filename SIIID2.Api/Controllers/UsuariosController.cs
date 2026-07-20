@@ -154,6 +154,35 @@ public class UsuariosController : ControllerBase
         return Ok(resultado);
     }
 
+    // Actualiza exclusivamente los permisos del módulo semanal.
+    // Ejemplo: PUT /api/usuarios/3/permisos-semanales
+    [Authorize]
+    [HttpPut("{idUsuario:int}/permisos-semanales")]
+    public async Task<IActionResult> ActualizarPermisosSemanales(int idUsuario, [FromBody] ActualizarPermisosSemanalesRequest request)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        var resultado = await _usuarioService.ActualizarPermisosSemanalesAsync(idUsuario, request, idUsuarioModificacion);
+
+        if (!resultado.EsValido)
+        {
+            return BadRequest(resultado);
+        }
+
+        return Ok(resultado);
+    }
+
     // Baja lógica de usuario.
     // No elimina físicamente para conservar auditoría.
     // Ejemplo: DELETE /api/usuarios/3

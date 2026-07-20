@@ -19,4 +19,6 @@ public interface IUsuarioService
     Task<UsuarioOperacionResponse> ReactivarUsuarioAsync(int idUsuario, ReactivarUsuarioRequest request, int idUsuarioModificacion);
 
     Task<UsuarioOperacionResponse> ValidarSuperUsuarioAsync(int idUsuario);
+
+    Task<UsuarioOperacionResponse> ActualizarPermisosSemanalesAsync(int idUsuario, ActualizarPermisosSemanalesRequest request, int idUsuarioModificacion);
 }

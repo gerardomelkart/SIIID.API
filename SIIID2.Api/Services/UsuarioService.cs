@@ -1,4 +1,5 @@
-﻿using SIIID2.Api.Models;
+﻿using SIIID2.Api.Data;
+using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 using System.Text.RegularExpressions;
 
@@ -395,6 +396,89 @@ public class UsuarioService : IUsuarioService
             EsValido = true,
             Codigo = "USUARIO_EDITADO",
             Mensaje = "Usuario editado correctamente.",
+            IdUsuario = idUsuario
+        };
+    }
+
+    public async Task<UsuarioOperacionResponse> ActualizarPermisosSemanalesAsync(int idUsuario, ActualizarPermisosSemanalesRequest request, int idUsuarioModificacion)
+    {
+        var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
+
+        if (usuarioModificacion == null)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_MODIFICACION_NO_VALIDO",
+                Mensaje = "El usuario autenticado no existe o no está activo.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        if (!usuarioModificacion.EsSuperUsuario)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_PERMISOS_SEMANALES_SIN_PERMISO",
+                Mensaje = "Solo un SUPER_USUARIO puede actualizar permisos semanales.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        var usuario = await _usuarioRepository.ObtenerUsuarioDetalleAsync(idUsuario);
+
+        if (usuario == null || !usuario.Activo)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_EXISTE",
+                Mensaje = "El usuario solicitado no existe o no está activo.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        if (idUsuario == idUsuarioModificacion && !request.HabilitaSemanal)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_PUEDE_DESHABILITAR_SU_ACCESO_SEMANAL",
+                Mensaje = "No puede deshabilitar su propio acceso al módulo semanal.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        var rol = usuario.Rol.Trim().ToUpperInvariant();
+
+        if (rol == "CONSULTA")
+        {
+            request.HabilitaCargaSemanal = false;
+            request.HabilitaModificacionSemanal = false;
+        }
+
+        if (rol != "SUPER_USUARIO")
+        {
+            request.AdministraDelitosSemanal = false;
+        }
+
+        if (!request.HabilitaSemanal)
+        {
+            request.HabilitaCargaSemanal = false;
+            request.HabilitaModificacionSemanal = false;
+            request.AdministraDelitosSemanal = false;
+        }
+
+        await _usuarioRepository.ActualizarPermisosSemanalesAsync(idUsuario, request, idUsuarioModificacion);
+
+        _logger.LogInformation("Permisos semanales actualizados. IdUsuario: {IdUsuario}, HabilitaSemanal: {HabilitaSemanal}, HabilitaCargaSemanal: {HabilitaCargaSemanal}, HabilitaModificacionSemanal: {HabilitaModificacionSemanal}, AdministraDelitosSemanal: {AdministraDelitosSemanal}, UsuarioModificacion: {IdUsuarioModificacion}", idUsuario, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.HabilitaModificacionSemanal, request.AdministraDelitosSemanal, idUsuarioModificacion);
+
+        return new UsuarioOperacionResponse
+        {
+            EsValido = true,
+            Codigo = "USUARIO_PERMISOS_SEMANALES_ACTUALIZADOS",
+            Mensaje = "Permisos semanales actualizados correctamente.",
             IdUsuario = idUsuario
         };
     }

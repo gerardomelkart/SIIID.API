@@ -621,6 +621,80 @@ public class UsuarioRepository : IUsuarioRepository
             throw;
         }
     }
+    public async Task ActualizarPermisosSemanalesAsync(int idUsuario, ActualizarPermisosSemanalesRequest request, int idUsuarioModificacion)
+    {
+        var sql = @"
+        DECLARE @IdModuloSemanal TINYINT =
+        (
+            SELECT id_modulo
+            FROM catalogo_modulo
+            WHERE clave = N'SEMANAL'
+              AND activo = 1
+        );
+
+        IF @IdModuloSemanal IS NULL
+        BEGIN
+            THROW 50010, 'No fue posible resolver el módulo SEMANAL.', 1;
+        END;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM usuario_modulo
+            WHERE id_usuario = @IdUsuario
+              AND id_modulo = @IdModuloSemanal
+        )
+        BEGIN
+            UPDATE usuario_modulo
+            SET habilitado = @HabilitaSemanal,
+                habilita_carga = @HabilitaCargaSemanal,
+                habilita_modificacion = @HabilitaModificacionSemanal,
+                administra_delitos = @AdministraDelitosSemanal,
+                fecha_modificacion = SYSDATETIME(),
+                id_usuario_modificacion = @IdUsuarioModificacion,
+                activo = 1
+            WHERE id_usuario = @IdUsuario
+              AND id_modulo = @IdModuloSemanal;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO usuario_modulo
+            (
+                id_usuario,
+                id_modulo,
+                habilitado,
+                habilita_carga,
+                habilita_modificacion,
+                administra_delitos,
+                id_usuario_modificacion,
+                activo
+            )
+            VALUES
+            (
+                @IdUsuario,
+                @IdModuloSemanal,
+                @HabilitaSemanal,
+                @HabilitaCargaSemanal,
+                @HabilitaModificacionSemanal,
+                @AdministraDelitosSemanal,
+                @IdUsuarioModificacion,
+                1
+            );
+        END;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        await connection.ExecuteAsync(sql, new
+        {
+            IdUsuario = idUsuario,
+            request.HabilitaSemanal,
+            request.HabilitaCargaSemanal,
+            request.HabilitaModificacionSemanal,
+            request.AdministraDelitosSemanal,
+            IdUsuarioModificacion = idUsuarioModificacion
+        });
+    }
 
     public async Task DesactivarUsuarioAsync(int idUsuario, int idUsuarioModificacion)
     {

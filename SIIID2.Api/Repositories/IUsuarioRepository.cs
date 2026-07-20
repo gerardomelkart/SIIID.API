@@ -56,4 +56,6 @@ public interface IUsuarioRepository
 
     // Cambia la contraseña del propio usuario y desactiva la bandera.
     Task<bool> ActualizarPasswordPropioAsync(int idUsuario, string passwordHash);
+
+    Task ActualizarPermisosSemanalesAsync(int idUsuario, ActualizarPermisosSemanalesRequest request, int idUsuarioModificacion);
 }
