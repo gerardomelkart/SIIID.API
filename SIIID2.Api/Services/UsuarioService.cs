@@ -146,6 +146,20 @@ public class UsuarioService : IUsuarioService
         {
             request.HabilitaCarga = false;
             request.HabilitaModificacion = false;
+            request.HabilitaCargaSemanal = false;
+            request.HabilitaModificacionSemanal = false;
+        }
+
+        if (rol != "SUPER_USUARIO")
+        {
+            request.AdministraDelitosSemanal = false;
+        }
+
+        if (!request.HabilitaSemanal)
+        {
+            request.HabilitaCargaSemanal = false;
+            request.HabilitaModificacionSemanal = false;
+            request.AdministraDelitosSemanal = false;
         }
 
         // Se validan duplicados de usuario, correo, RFC y CURP.
@@ -283,6 +297,20 @@ public class UsuarioService : IUsuarioService
         {
             request.HabilitaCarga = false;
             request.HabilitaModificacion = false;
+            request.HabilitaCargaSemanal = false;
+            request.HabilitaModificacionSemanal = false;
+        }
+
+        if (rol != "SUPER_USUARIO")
+        {
+            request.AdministraDelitosSemanal = false;
+        }
+
+        if (request.HabilitaSemanal == false)
+        {
+            request.HabilitaCargaSemanal = false;
+            request.HabilitaModificacionSemanal = false;
+            request.AdministraDelitosSemanal = false;
         }
 
         // Se valida que el rol exista en base.

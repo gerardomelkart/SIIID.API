@@ -25,6 +25,10 @@ public class UsuarioDetalle
     public string Rol { get; set; } = string.Empty;
     public bool HabilitaCarga { get; set; }
     public bool HabilitaModificacion { get; set; }
+    public bool HabilitaSemanal { get; set; }
+    public bool HabilitaCargaSemanal { get; set; }
+    public bool HabilitaModificacionSemanal { get; set; }
+    public bool AdministraDelitosSemanal { get; set; }
     public DateTime FechaAlta { get; set; }
     public DateTime FechaModificacion { get; set; }
     public bool Activo { get; set; }

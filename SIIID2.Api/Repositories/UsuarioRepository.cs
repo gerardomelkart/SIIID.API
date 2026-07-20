@@ -114,8 +114,6 @@ public class UsuarioRepository : IUsuarioRepository
 
     public async Task<List<UsuarioListadoItem>> ObtenerUsuariosAsync(bool incluirInactivos)
     {
-        // Lista usuarios para la tabla administrativa.
-        // Por defecto se muestran solo activos, pero el front puede pedir incluir inactivos.
         var sql = @"
         SELECT
             u.id_usuario AS IdUsuario,
@@ -133,6 +131,7 @@ public class UsuarioRepository : IUsuarioRepository
             ef.nombre AS EntidadFederativa,
             COALESCE(h.habilita_carga, 0) AS HabilitaCarga,
             COALESCE(h.habilita_modificacion, 0) AS HabilitaModificacion,
+            COALESCE(ums.habilitado, 0) AS HabilitaSemanal,
             u.activo AS Activo
         FROM usuario u
         INNER JOIN roles r
@@ -141,6 +140,11 @@ public class UsuarioRepository : IUsuarioRepository
             ON ef.id_entidad_federativa = u.id_entidad_federativa
         LEFT JOIN habilita_carga_modificacion h
             ON h.id_usuario = u.id_usuario
+        LEFT JOIN catalogo_modulo ms
+            ON ms.clave = N'SEMANAL'
+        LEFT JOIN usuario_modulo ums
+            ON ums.id_usuario = u.id_usuario
+           AND ums.id_modulo = ms.id_modulo
         WHERE (@IncluirInactivos = 1 OR u.activo = 1)
         ORDER BY
             u.activo DESC,
@@ -161,8 +165,6 @@ public class UsuarioRepository : IUsuarioRepository
 
     public async Task<UsuarioDetalle?> ObtenerUsuarioDetalleAsync(int idUsuario)
     {
-        // Obtiene detalle completo de un usuario.
-        // Este resultado sirve para llenar el formulario de edición.
         var sql = @"
         SELECT
             u.id_usuario AS IdUsuario,
@@ -180,6 +182,10 @@ public class UsuarioRepository : IUsuarioRepository
             r.rol AS Rol,
             COALESCE(h.habilita_carga, 0) AS HabilitaCarga,
             COALESCE(h.habilita_modificacion, 0) AS HabilitaModificacion,
+            COALESCE(ums.habilitado, 0) AS HabilitaSemanal,
+            COALESCE(ums.habilita_carga, 0) AS HabilitaCargaSemanal,
+            COALESCE(ums.habilita_modificacion, 0) AS HabilitaModificacionSemanal,
+            COALESCE(ums.administra_delitos, 0) AS AdministraDelitosSemanal,
             u.fecha_alta AS FechaAlta,
             u.fecha_modificacion AS FechaModificacion,
             u.activo AS Activo
@@ -190,6 +196,11 @@ public class UsuarioRepository : IUsuarioRepository
             ON ef.id_entidad_federativa = u.id_entidad_federativa
         LEFT JOIN habilita_carga_modificacion h
             ON h.id_usuario = u.id_usuario
+        LEFT JOIN catalogo_modulo ms
+            ON ms.clave = N'SEMANAL'
+        LEFT JOIN usuario_modulo ums
+            ON ums.id_usuario = u.id_usuario
+           AND ums.id_modulo = ms.id_modulo
         WHERE u.id_usuario = @IdUsuario;
     ";
 
@@ -399,6 +410,18 @@ public class UsuarioRepository : IUsuarioRepository
                 },
                 transaction);
 
+            await GuardarPermisosModularesAsync(
+                    connection,
+                    transaction,
+                    idUsuario,
+                    request.HabilitaCarga,
+                    request.HabilitaModificacion,
+                    request.HabilitaSemanal,
+                    request.HabilitaCargaSemanal,
+                    request.HabilitaModificacionSemanal,
+                    request.AdministraDelitosSemanal,
+                    idUsuarioAlta);
+
             await transaction.CommitAsync();
 
             return idUsuario;
@@ -598,6 +621,18 @@ public class UsuarioRepository : IUsuarioRepository
                 },
                 transaction);
 
+            await GuardarPermisosModularesAsync(
+                    connection,
+                    transaction,
+                    idUsuario,
+                    request.HabilitaCarga,
+                    request.HabilitaModificacion,
+                    request.HabilitaSemanal,
+                    request.HabilitaCargaSemanal,
+                    request.HabilitaModificacionSemanal,
+                    request.AdministraDelitosSemanal,
+                    idUsuarioModificacion);
+
             await transaction.CommitAsync();
         }
         catch
@@ -631,6 +666,12 @@ public class UsuarioRepository : IUsuarioRepository
                 habilita_modificacion = 0,
                 activo = 0
             WHERE id_usuario = @IdUsuario;
+
+            UPDATE usuario_modulo
+            SET activo = 0,
+                fecha_modificacion = SYSDATETIME(),
+                id_usuario_modificacion = @IdUsuarioModificacion
+            WHERE id_usuario = @IdUsuario;
         ";
 
             await connection.ExecuteAsync(
@@ -653,10 +694,9 @@ public class UsuarioRepository : IUsuarioRepository
 
     public async Task<int> ActualizarPermisosGlobalesAsync(bool habilitaCarga, bool habilitaModificacion)
     {
-        // Aplica permisos de carga/modificación a usuarios activos,
-        // excepto usuarios de CONSULTA.
-        // CONSULTA nunca debe poder cargar ni modificar, aunque se active globalmente.
         var sql = @"
+        SET NOCOUNT ON;
+
         UPDATE h
         SET h.habilita_carga = @HabilitaCarga,
             h.habilita_modificacion = @HabilitaModificacion
@@ -682,11 +722,54 @@ public class UsuarioRepository : IUsuarioRepository
           AND u.activo = 1
           AND r.activo = 1
           AND r.rol = 'CONSULTA';
+
+        UPDATE um
+        SET um.habilitado = 1,
+            um.habilita_carga = @HabilitaCarga,
+            um.habilita_modificacion = @HabilitaModificacion,
+            um.fecha_modificacion = SYSDATETIME(),
+            um.activo = 1
+        FROM usuario_modulo um
+        INNER JOIN catalogo_modulo m
+            ON m.id_modulo = um.id_modulo
+           AND m.clave = N'MENSUAL'
+        INNER JOIN usuario u
+            ON u.id_usuario = um.id_usuario
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+        WHERE u.activo = 1
+          AND r.activo = 1
+          AND r.rol <> 'CONSULTA';
+
+        UPDATE um
+        SET um.habilitado = 1,
+            um.habilita_carga = 0,
+            um.habilita_modificacion = 0,
+            um.fecha_modificacion = SYSDATETIME(),
+            um.activo = 1
+        FROM usuario_modulo um
+        INNER JOIN catalogo_modulo m
+            ON m.id_modulo = um.id_modulo
+           AND m.clave = N'MENSUAL'
+        INNER JOIN usuario u
+            ON u.id_usuario = um.id_usuario
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+        WHERE u.activo = 1
+          AND r.activo = 1
+          AND r.rol = 'CONSULTA';
+
+        SELECT COUNT(*)
+        FROM usuario u
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+           AND r.activo = 1
+        WHERE u.activo = 1;
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return await connection.ExecuteAsync(sql, new
+        return await connection.ExecuteScalarAsync<int>(sql, new
         {
             HabilitaCarga = habilitaCarga,
             HabilitaModificacion = habilitaModificacion
@@ -781,6 +864,18 @@ public class UsuarioRepository : IUsuarioRepository
                 },
                 transaction);
 
+            await GuardarPermisosModularesAsync(
+                    connection,
+                    transaction,
+                    idUsuario,
+                    request.HabilitaCarga,
+                    request.HabilitaModificacion,
+                    null,
+                    null,
+                    null,
+                    null,
+                    idUsuarioModificacion);
+
             await transaction.CommitAsync();
         }
         catch
@@ -854,5 +949,136 @@ public class UsuarioRepository : IUsuarioRepository
             });
 
         return registrosAfectados > 0;
+    }
+
+    private static async Task GuardarPermisosModularesAsync(SqlConnection connection, SqlTransaction transaction, int idUsuario, bool habilitaCargaMensual, bool habilitaModificacionMensual,    bool? habilitaSemanal, bool? habilitaCargaSemanal, bool? habilitaModificacionSemanal, bool? administraDelitosSemanal, int idUsuarioModificacion)
+    {
+        var sql = @"
+        DECLARE @IdModuloMensual TINYINT =
+        (
+            SELECT id_modulo
+            FROM catalogo_modulo
+            WHERE clave = N'MENSUAL'
+              AND activo = 1
+        );
+
+        DECLARE @IdModuloSemanal TINYINT =
+        (
+            SELECT id_modulo
+            FROM catalogo_modulo
+            WHERE clave = N'SEMANAL'
+              AND activo = 1
+        );
+
+        IF @IdModuloMensual IS NULL OR @IdModuloSemanal IS NULL
+        BEGIN
+            THROW 50010, 'No fue posible resolver los módulos MENSUAL y SEMANAL.', 1;
+        END;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM usuario_modulo
+            WHERE id_usuario = @IdUsuario
+              AND id_modulo = @IdModuloMensual
+        )
+        BEGIN
+            UPDATE usuario_modulo
+            SET habilitado = 1,
+                habilita_carga = @HabilitaCargaMensual,
+                habilita_modificacion = @HabilitaModificacionMensual,
+                administra_delitos = 0,
+                fecha_modificacion = SYSDATETIME(),
+                id_usuario_modificacion = @IdUsuarioModificacion,
+                activo = 1
+            WHERE id_usuario = @IdUsuario
+              AND id_modulo = @IdModuloMensual;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO usuario_modulo
+            (
+                id_usuario,
+                id_modulo,
+                habilitado,
+                habilita_carga,
+                habilita_modificacion,
+                administra_delitos,
+                id_usuario_modificacion,
+                activo
+            )
+            VALUES
+            (
+                @IdUsuario,
+                @IdModuloMensual,
+                1,
+                @HabilitaCargaMensual,
+                @HabilitaModificacionMensual,
+                0,
+                @IdUsuarioModificacion,
+                1
+            );
+        END;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM usuario_modulo
+            WHERE id_usuario = @IdUsuario
+              AND id_modulo = @IdModuloSemanal
+        )
+        BEGIN
+            UPDATE usuario_modulo
+            SET habilitado = COALESCE(@HabilitaSemanal, habilitado),
+                habilita_carga = COALESCE(@HabilitaCargaSemanal, habilita_carga),
+                habilita_modificacion = COALESCE(@HabilitaModificacionSemanal, habilita_modificacion),
+                administra_delitos = COALESCE(@AdministraDelitosSemanal, administra_delitos),
+                fecha_modificacion = SYSDATETIME(),
+                id_usuario_modificacion = @IdUsuarioModificacion,
+                activo = 1
+            WHERE id_usuario = @IdUsuario
+              AND id_modulo = @IdModuloSemanal;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO usuario_modulo
+            (
+                id_usuario,
+                id_modulo,
+                habilitado,
+                habilita_carga,
+                habilita_modificacion,
+                administra_delitos,
+                id_usuario_modificacion,
+                activo
+            )
+            VALUES
+            (
+                @IdUsuario,
+                @IdModuloSemanal,
+                COALESCE(@HabilitaSemanal, 0),
+                COALESCE(@HabilitaCargaSemanal, 0),
+                COALESCE(@HabilitaModificacionSemanal, 0),
+                COALESCE(@AdministraDelitosSemanal, 0),
+                @IdUsuarioModificacion,
+                1
+            );
+        END;
+    ";
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdUsuario = idUsuario,
+                HabilitaCargaMensual = habilitaCargaMensual,
+                HabilitaModificacionMensual = habilitaModificacionMensual,
+                HabilitaSemanal = habilitaSemanal,
+                HabilitaCargaSemanal = habilitaCargaSemanal,
+                HabilitaModificacionSemanal = habilitaModificacionSemanal,
+                AdministraDelitosSemanal = administraDelitosSemanal,
+                IdUsuarioModificacion = idUsuarioModificacion
+            },
+            transaction);
     }
 }

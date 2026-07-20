@@ -11,5 +11,6 @@ public class UsuarioListadoItem
     public string? EntidadFederativa { get; set; }
     public bool HabilitaCarga { get; set; }
     public bool HabilitaModificacion { get; set; }
+    public bool HabilitaSemanal { get; set; }
     public bool Activo { get; set; }
 }
