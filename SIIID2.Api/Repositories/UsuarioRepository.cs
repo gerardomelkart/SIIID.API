@@ -46,42 +46,70 @@ public class UsuarioRepository : IUsuarioRepository
 
     public async Task<UsuarioAuthInfo?> ObtenerUsuarioAuthAsync(string usuario)
     {
-        // Obtiene los datos necesarios para login.
-        // La contraseña en base debe estar hasheada con BCrypt.
         var sql = @"
-            SELECT
-                u.id_usuario AS IdUsuario,
-                u.usuario AS Usuario,
-                u.password AS PasswordHash,
-                u.requiere_cambio_password AS RequiereCambioPassword,
-                u.nombre AS Nombre,
-                u.primer_apellido AS PrimerApellido,
-                u.segundo_apellido AS SegundoApellido,
-                r.rol AS Rol,
-                u.id_entidad_federativa AS IdEntidadFederativa,
-                ef.nombre AS EntidadFederativa,
-                COALESCE(h.habilita_carga, 0) AS HabilitaCarga,
-                COALESCE(h.habilita_modificacion, 0) AS HabilitaModificacion
-            FROM usuario u
-            INNER JOIN roles r
-                ON r.id_rol = u.id_rol
-               AND r.activo = 1
-            LEFT JOIN catalogo_entidad_federativa ef
-                ON ef.id_entidad_federativa = u.id_entidad_federativa
-               AND ef.activo = 1
-            LEFT JOIN habilita_carga_modificacion h
-                ON h.id_usuario = u.id_usuario
-               AND h.activo = 1
-            WHERE u.usuario = @Usuario
-              AND u.activo = 1;
-        ";
+        SELECT
+            u.id_usuario AS IdUsuario,
+            u.usuario AS Usuario,
+            u.password AS PasswordHash,
+            u.requiere_cambio_password AS RequiereCambioPassword,
+            u.nombre AS Nombre,
+            u.primer_apellido AS PrimerApellido,
+            u.segundo_apellido AS SegundoApellido,
+            r.rol AS Rol,
+            u.id_entidad_federativa AS IdEntidadFederativa,
+            ef.nombre AS EntidadFederativa,
+            COALESCE(h.habilita_carga, 0) AS HabilitaCarga,
+            COALESCE(h.habilita_modificacion, 0) AS HabilitaModificacion
+        FROM usuario u
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+           AND r.activo = 1
+        LEFT JOIN catalogo_entidad_federativa ef
+            ON ef.id_entidad_federativa = u.id_entidad_federativa
+           AND ef.activo = 1
+        LEFT JOIN habilita_carga_modificacion h
+            ON h.id_usuario = u.id_usuario
+           AND h.activo = 1
+        WHERE u.usuario = @Usuario
+          AND u.activo = 1;
+
+        SELECT
+            m.id_modulo AS IdModulo,
+            m.clave AS Clave,
+            m.nombre AS Nombre,
+            COALESCE(um.habilita_carga, 0) AS HabilitaCarga,
+            COALESCE(um.habilita_modificacion, 0) AS HabilitaModificacion,
+            COALESCE(um.administra_delitos, 0) AS AdministraDelitos
+        FROM usuario u
+        INNER JOIN usuario_modulo um
+            ON um.id_usuario = u.id_usuario
+           AND um.habilitado = 1
+           AND um.activo = 1
+        INNER JOIN catalogo_modulo m
+            ON m.id_modulo = um.id_modulo
+           AND m.activo = 1
+        WHERE u.usuario = @Usuario
+          AND u.activo = 1
+        ORDER BY m.id_modulo;
+    ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return await connection.QueryFirstOrDefaultAsync<UsuarioAuthInfo>(sql, new
+        using var resultado = await connection.QueryMultipleAsync(sql, new
         {
             Usuario = usuario.Trim()
         });
+
+        var usuarioAuth = await resultado.ReadFirstOrDefaultAsync<UsuarioAuthInfo>();
+
+        if (usuarioAuth == null)
+        {
+            return null;
+        }
+
+        usuarioAuth.Modulos = (await resultado.ReadAsync<ModuloUsuarioInfo>()).ToList();
+
+        return usuarioAuth;
     }
 
     public async Task<List<UsuarioListadoItem>> ObtenerUsuariosAsync(bool incluirInactivos)
