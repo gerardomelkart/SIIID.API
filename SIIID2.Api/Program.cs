@@ -86,6 +86,7 @@ builder.Services.AddScoped<IActualizacionDiferenciasRepository, ActualizacionDif
 builder.Services.AddScoped<IActualizacionRepository, ActualizacionRepository>();
 builder.Services.AddScoped<IAdministracionCargasRepository, AdministracionCargasRepository>();
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+builder.Services.AddScoped<ISemanalDelitoRepository, SemanalDelitoRepository>();
 
 // Registro del servicio principal de carga.
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.
@@ -101,6 +102,7 @@ builder.Services.AddScoped<IAcusePdfService, AcusePdfService>();
 
 // Registro del servicio de usuarios.
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
+builder.Services.AddScoped<ISemanalDelitoService, SemanalDelitoService>();
 
 //para los informes
 builder.Services.AddScoped<IInformeRepository, InformeRepository>();
