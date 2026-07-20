@@ -1,5 +1,4 @@
-﻿using SIIID2.Api.Data;
-using SIIID2.Api.Models;
+﻿using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 using System.Text.RegularExpressions;
 
