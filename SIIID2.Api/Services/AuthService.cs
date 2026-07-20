@@ -104,7 +104,8 @@ public class AuthService : IAuthService
                 EntidadFederativa = usuario.EntidadFederativa,
                 HabilitaCarga = usuario.HabilitaCarga,
                 HabilitaModificacion = usuario.HabilitaModificacion,
-                RequiereCambioPassword = usuario.RequiereCambioPassword
+                RequiereCambioPassword = usuario.RequiereCambioPassword,
+                Modulos = usuario.Modulos
             }
         };
     }

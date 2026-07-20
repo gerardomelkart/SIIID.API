@@ -20,5 +20,6 @@ public class UsuarioLoginInfo
     public string? EntidadFederativa { get; set; }
     public bool HabilitaCarga { get; set; }
     public bool HabilitaModificacion { get; set; }
+    public List<ModuloUsuarioInfo> Modulos { get; set; } = new();
     public bool RequiereCambioPassword { get; set; }
 }

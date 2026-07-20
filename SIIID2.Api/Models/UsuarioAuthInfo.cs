@@ -26,6 +26,8 @@ public class UsuarioAuthInfo
 
     public bool HabilitaModificacion { get; set; }
 
+    public List<ModuloUsuarioInfo> Modulos { get; set; } = new();
+
     public string NombreCompleto
     {
         get
