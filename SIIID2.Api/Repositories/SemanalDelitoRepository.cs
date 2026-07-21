@@ -29,34 +29,41 @@ public class SemanalDelitoRepository : ISemanalDelitoRepository
         return await connection.ExecuteScalarAsync<int>(sql, new { IdUsuario = idUsuario }) > 0;
     }
 
-    public async Task<List<ConfiguracionDelitoSemanalItem>> ObtenerConfiguracionAsync()
+    public async Task<List<ConfiguracionModalidadSemanalItem>> ObtenerConfiguracionAsync()
     {
         const string sql = @"
         SELECT
-            cd.id_delito AS IdDelito,
-            cd.clave2 AS Clave,
-            cd.delito AS Delito,
+            bj.id_bien_juridico AS IdBienJuridico,
+            bj.clave1 AS ClaveBienJuridico,
             bj.bien_juridico AS BienJuridico,
+            cd.id_delito AS IdDelito,
+            cd.clave2 AS ClaveDelito,
+            cd.delito AS Delito,
+            sd.id_subtipo_delito AS IdSubtipoDelito,
+            sd.clave3 AS ClaveSubtipo,
+            sd.subtipo_delito AS Subtipo,
+            md.id_modalidad_delito AS IdModalidadDelito,
+            md.clave4 AS ClaveModalidad,
+            md.modalidad_delito AS Modalidad,
             CONVERT(bit, CASE WHEN configuracion.activo = 1 THEN 1 ELSE 0 END) AS Seleccionado,
             CONVERT(bit, ISNULL(configuracion.es_obligatorio, 0)) AS EsObligatorio,
             CONVERT(bit, ISNULL(configuracion.conservar_entre_periodos, 0)) AS ConservarEntrePeriodos,
             CONVERT(smallint, ISNULL(configuracion.orden, 0)) AS Orden
-        FROM dbo.catalogo_delito cd
+        FROM dbo.catalogo_modalidad_delito md
+        INNER JOIN dbo.catalogo_subtipo_delito sd ON sd.id_subtipo_delito = md.id_subtipo_delito AND sd.activo = 1
+        INNER JOIN dbo.catalogo_delito cd ON cd.id_delito = sd.id_delito AND cd.activo = 1
         INNER JOIN dbo.catalogo_bien_juridico bj ON bj.id_bien_juridico = cd.id_bien_juridico AND bj.activo = 1
-        LEFT JOIN dbo.semanal_configuracion_delito configuracion ON configuracion.id_delito = cd.id_delito
-        WHERE cd.activo = 1
-        ORDER BY
-            CASE WHEN configuracion.activo = 1 THEN 0 ELSE 1 END,
-            CASE WHEN configuracion.activo = 1 THEN configuracion.orden ELSE 32767 END,
-            cd.clave2;
+        LEFT JOIN dbo.semanal_configuracion_delito configuracion ON configuracion.id_modalidad_delito = md.id_modalidad_delito
+        WHERE md.activo = 1
+        ORDER BY bj.clave1, cd.clave2, sd.clave3, md.clave4;
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return (await connection.QueryAsync<ConfiguracionDelitoSemanalItem>(sql)).ToList();
+        return (await connection.QueryAsync<ConfiguracionModalidadSemanalItem>(sql)).ToList();
     }
 
-    public async Task GuardarConfiguracionAsync(List<ConfiguracionDelitoSemanalItem> delitos, int idUsuarioModificacion)
+    public async Task GuardarConfiguracionAsync(List<ConfiguracionModalidadSemanalItem> modalidades, int idUsuarioModificacion)
     {
         const string sqlDesactivar = @"
         UPDATE dbo.semanal_configuracion_delito
@@ -67,7 +74,7 @@ public class SemanalDelitoRepository : ISemanalDelitoRepository
     ";
 
         const string sqlGuardar = @"
-        IF EXISTS (SELECT 1 FROM dbo.semanal_configuracion_delito WHERE id_delito = @IdDelito)
+        IF EXISTS (SELECT 1 FROM dbo.semanal_configuracion_delito WHERE id_modalidad_delito = @IdModalidadDelito)
         BEGIN
             UPDATE dbo.semanal_configuracion_delito
             SET es_obligatorio = @EsObligatorio,
@@ -76,12 +83,12 @@ public class SemanalDelitoRepository : ISemanalDelitoRepository
                 fecha_modificacion = SYSDATETIME(),
                 id_usuario_modificacion = @IdUsuarioModificacion,
                 activo = 1
-            WHERE id_delito = @IdDelito;
+            WHERE id_modalidad_delito = @IdModalidadDelito;
         END
         ELSE
         BEGIN
-            INSERT INTO dbo.semanal_configuracion_delito (id_delito, es_obligatorio, conservar_entre_periodos, orden, id_usuario_modificacion, activo)
-            VALUES (@IdDelito, @EsObligatorio, @ConservarEntrePeriodos, @Orden, @IdUsuarioModificacion, 1);
+            INSERT INTO dbo.semanal_configuracion_delito (id_modalidad_delito, es_obligatorio, conservar_entre_periodos, orden, id_usuario_modificacion, activo)
+            VALUES (@IdModalidadDelito, @EsObligatorio, @ConservarEntrePeriodos, @Orden, @IdUsuarioModificacion, 1);
         END;
     ";
 
@@ -94,8 +101,7 @@ public class SemanalDelitoRepository : ISemanalDelitoRepository
         try
         {
             await connection.ExecuteAsync(sqlDesactivar, new { IdUsuarioModificacion = idUsuarioModificacion }, transaction);
-            await connection.ExecuteAsync(sqlGuardar, delitos.Select(x => new { x.IdDelito, x.EsObligatorio, x.ConservarEntrePeriodos, x.Orden, IdUsuarioModificacion = idUsuarioModificacion }), transaction);
-
+            await connection.ExecuteAsync(sqlGuardar, modalidades.Select(x => new { x.IdModalidadDelito, x.EsObligatorio, x.ConservarEntrePeriodos, x.Orden, IdUsuarioModificacion = idUsuarioModificacion }), transaction);
             await transaction.CommitAsync();
         }
         catch

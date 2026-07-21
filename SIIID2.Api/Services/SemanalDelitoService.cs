@@ -5,7 +5,7 @@ namespace SIIID2.Api.Services;
 
 public class SemanalDelitoService : ISemanalDelitoService
 {
-    private const string ClaveExtorsion = "4.04";
+    private const string ClaveDelitoExtorsion = "4.04";
 
     private readonly ISemanalDelitoRepository _semanalDelitoRepository;
     private readonly ILogger<SemanalDelitoService> _logger;
@@ -20,9 +20,9 @@ public class SemanalDelitoService : ISemanalDelitoService
     {
         if (!await _semanalDelitoRepository.PuedeAdministrarDelitosAsync(idUsuario)) return SinPermiso();
 
-        var delitos = await _semanalDelitoRepository.ObtenerConfiguracionAsync();
+        var modalidades = await _semanalDelitoRepository.ObtenerConfiguracionAsync();
 
-        return RespuestaCorrecta(delitos, "Configuración semanal consultada correctamente.");
+        return RespuestaCorrecta(modalidades, "Configuración semanal consultada correctamente.");
     }
 
     public async Task<ConfiguracionDelitosSemanalesResponse> GuardarConfiguracionAsync(ActualizarConfiguracionDelitosSemanalesRequest request, int idUsuario)
@@ -30,48 +30,44 @@ public class SemanalDelitoService : ISemanalDelitoService
         if (!await _semanalDelitoRepository.PuedeAdministrarDelitosAsync(idUsuario)) return SinPermiso();
 
         var catalogo = await _semanalDelitoRepository.ObtenerConfiguracionAsync();
-        var extorsiones = catalogo.Where(x => x.Clave == ClaveExtorsion).ToList();
+        var extorsiones = catalogo.Where(x => x.ClaveDelito == ClaveDelitoExtorsion).ToList();
 
-        if (extorsiones.Count != 1) return Error("SEMANAL_EXTORSION_NO_ENCONTRADA", "No se encontró una única definición activa de Extorsión con clave 4.04.");
+        if (extorsiones.Count == 0) return Error("SEMANAL_EXTORSION_NO_ENCONTRADA", "No se encontraron modalidades activas de Extorsión para la clave 4.04.");
 
-        var extorsion = extorsiones[0];
-        var solicitudes = request.Delitos ?? new List<ConfiguracionDelitoSemanalRequest>();
-        var duplicados = solicitudes.GroupBy(x => x.IdDelito).Where(x => x.Count() > 1).Select(x => x.Key).ToList();
+        var solicitudes = request.Modalidades ?? new List<ConfiguracionModalidadSemanalRequest>();
+        var duplicados = solicitudes.GroupBy(x => x.IdModalidadDelito).Where(x => x.Count() > 1).Select(x => x.Key).ToList();
 
-        if (duplicados.Count > 0) return Error("SEMANAL_DELITOS_DUPLICADOS", "La solicitud contiene delitos repetidos.");
+        if (duplicados.Count > 0) return Error("SEMANAL_MODALIDADES_DUPLICADAS", "La solicitud contiene modalidades repetidas.");
 
-        var catalogoPorId = catalogo.ToDictionary(x => x.IdDelito);
+        var catalogoPorId = catalogo.ToDictionary(x => x.IdModalidadDelito);
 
-        if (solicitudes.Any(x => !catalogoPorId.ContainsKey(x.IdDelito))) return Error("SEMANAL_DELITO_INVALIDO", "La solicitud contiene un delito inexistente o inactivo.");
+        if (solicitudes.Any(x => !catalogoPorId.ContainsKey(x.IdModalidadDelito))) return Error("SEMANAL_MODALIDAD_INVALIDA", "La solicitud contiene una modalidad inexistente o inactiva.");
 
-        var seleccionados = solicitudes
-            .Where(x => x.Seleccionado && x.IdDelito != extorsion.IdDelito)
-            .OrderBy(x => x.Orden <= 0 ? short.MaxValue : x.Orden)
-            .ThenBy(x => catalogoPorId[x.IdDelito].Clave)
-            .Select(x => new ConfiguracionDelitoSemanalItem
-            {
-                IdDelito = x.IdDelito,
-                Clave = catalogoPorId[x.IdDelito].Clave,
-                Delito = catalogoPorId[x.IdDelito].Delito,
-                BienJuridico = catalogoPorId[x.IdDelito].BienJuridico,
-                Seleccionado = true,
-                EsObligatorio = false,
-                ConservarEntrePeriodos = false
-            })
-            .ToList();
+        var idsExtorsion = extorsiones.Select(x => x.IdModalidadDelito).ToHashSet();
+        var seleccionadas = solicitudes.Where(x => x.Seleccionado && !idsExtorsion.Contains(x.IdModalidadDelito)).Select(x => catalogoPorId[x.IdModalidadDelito]).OrderBy(x => x.ClaveModalidad).ToList();
 
-        extorsion.Seleccionado = true;
-        extorsion.EsObligatorio = true;
-        extorsion.ConservarEntrePeriodos = true;
-        extorsion.Orden = 1;
+        foreach (var modalidad in seleccionadas)
+        {
+            modalidad.Seleccionado = true;
+            modalidad.EsObligatorio = false;
+            modalidad.ConservarEntrePeriodos = false;
+        }
 
-        for (var indice = 0; indice < seleccionados.Count; indice++) seleccionados[indice].Orden = checked((short)(indice + 2));
+        foreach (var extorsion in extorsiones)
+        {
+            extorsion.Seleccionado = true;
+            extorsion.EsObligatorio = true;
+            extorsion.ConservarEntrePeriodos = true;
+        }
 
-        seleccionados.Insert(0, extorsion);
+        seleccionadas.AddRange(extorsiones);
+        seleccionadas = seleccionadas.OrderBy(x => x.ClaveModalidad).ToList();
 
-        await _semanalDelitoRepository.GuardarConfiguracionAsync(seleccionados, idUsuario);
+        for (var indice = 0; indice < seleccionadas.Count; indice++) seleccionadas[indice].Orden = checked((short)(indice + 1));
 
-        _logger.LogInformation("Configuración semanal de delitos actualizada. Total: {Total}, UsuarioModificacion: {IdUsuario}", seleccionados.Count, idUsuario);
+        await _semanalDelitoRepository.GuardarConfiguracionAsync(seleccionadas, idUsuario);
+
+        _logger.LogInformation("Configuración semanal de modalidades actualizada. Total: {Total}, UsuarioModificacion: {IdUsuario}", seleccionadas.Count, idUsuario);
 
         var resultado = await _semanalDelitoRepository.ObtenerConfiguracionAsync();
 
@@ -87,12 +83,12 @@ public class SemanalDelitoService : ISemanalDelitoService
         Mensaje = mensaje
     };
 
-    private static ConfiguracionDelitosSemanalesResponse RespuestaCorrecta(List<ConfiguracionDelitoSemanalItem> delitos, string mensaje) => new()
+    private static ConfiguracionDelitosSemanalesResponse RespuestaCorrecta(List<ConfiguracionModalidadSemanalItem> modalidades, string mensaje) => new()
     {
         EsValido = true,
         Codigo = "SEMANAL_CONFIGURACION_DELITOS_OK",
         Mensaje = mensaje,
-        TotalSeleccionados = delitos.Count(x => x.Seleccionado),
-        Delitos = delitos
+        TotalSeleccionados = modalidades.Count(x => x.Seleccionado),
+        Modalidades = modalidades
     };
 }
