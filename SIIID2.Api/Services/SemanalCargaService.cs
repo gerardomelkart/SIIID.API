@@ -3,15 +3,134 @@ using SIIID2.Api.Models;
 using SIIID2.Api.Readers;
 using SIIID2.Api.Repositories;
 using SIIID2.Api.Validators;
+using System.Text.Json;
 
 namespace SIIID2.Api.Services;
 
 public class SemanalCargaService : ISemanalCargaService
 {
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
-    private const string CodigoExclusionFueraTramo = "FUERA_TRAMO_SEMANAL";
-    private static readonly HashSet<string> TiposContenidoPermitidos = new(StringComparer.OrdinalIgnoreCase) { "SOLO_SEMANA", "ACUMULADO_MES" };
-    private static readonly HashSet<string> ExtensionesPermitidas = new(StringComparer.OrdinalIgnoreCase) { ".csv", ".xlsx" };
+    private const string CodigoExclusionFueraPeriodo =
+        "FUERA_PERIODO_CARGA";
+    private const string CodigoExclusionYaCargado =
+        "YA_CARGADO_SIN_CAMBIOS";
+
+    private static readonly HashSet<string> TiposContenidoPermitidos =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+        "SOLO_SEMANA",
+        "ACUMULADO_MES"
+        };
+
+    private static readonly HashSet<string> ExtensionesPermitidas =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+        ".csv",
+        ".xlsx"
+        };
+
+    private static readonly string[] ColumnasCarpetasComparacion =
+    {
+    "id_ci",
+    "ntra_ci",
+    "fha_de_ini",
+    "hra_de_ini",
+    "rmen_de_hchos"
+};
+
+    private static readonly string[] ColumnasDelitosComparacion =
+    {
+    "id_ci",
+    "id_delito",
+    "dto",
+    "moda_dto",
+    "forma_acc",
+    "fha_de_hchos",
+    "hra_de_hchos",
+    "emto_com_dto",
+    "grdo_cons",
+    "clasf_de_dto",
+    "id_ent_hchos",
+    "id_mun_hchos",
+    "id_loc_hchos",
+    "nom_loc_hchos",
+    "id_col_hchos",
+    "nom_col_hchos",
+    "cp",
+    "coord_x",
+    "coord_y",
+    "dom_hchos"
+};
+
+    private static readonly string[] ColumnasVictimasComparacion =
+    {
+    "id_ci",
+    "id_delito",
+    "id_vicf",
+    "id_tv",
+    "id_tpm",
+    "sexo",
+    "genero",
+    "pob",
+    "disc",
+    "fha_nac",
+    "edad",
+    "nacional"
+};
+
+    private static readonly HashSet<string> ColumnasFechaComparacion =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+        "fha_de_ini",
+        "fha_de_hchos",
+        "fha_nac"
+        };
+
+    private static readonly HashSet<string> ColumnasHoraComparacion =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+        "hra_de_ini",
+        "hra_de_hchos"
+        };
+
+    private static readonly HashSet<string> ColumnasEnterasComparacion =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+        "forma_acc",
+        "emto_com_dto",
+        "grdo_cons",
+        "id_ent_hchos",
+        "id_mun_hchos",
+        "id_tv",
+        "id_tpm",
+        "sexo",
+        "genero",
+        "pob",
+        "disc",
+        "edad",
+        "nacional"
+        };
+
+    private static readonly HashSet<string> ColumnasDecimalesComparacion =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+        "coord_x",
+        "coord_y"
+        };
+
+    private sealed class SemanalDatosSemana
+    {
+        public List<ArchivoFila> Carpetas { get; } = new();
+        public List<ArchivoFila> Delitos { get; } = new();
+        public List<ArchivoFila> Victimas { get; } = new();
+    }
+
+    private sealed class SemanalSemanaPendiente
+    {
+        public DateTime Semana { get; set; }
+        public string CodigoReferencia { get; set; } = string.Empty;
+        public string Estado { get; set; } = string.Empty;
+    }
 
     private readonly IArchivoReader _archivoReader;
     private readonly CarpetasValidator _carpetasValidator;
@@ -38,27 +157,57 @@ public class SemanalCargaService : ISemanalCargaService
 
     public async Task<SemanalCargaValidacionResponse> ValidarArchivosAsync(SemanalCargaValidacionRequest request, int idUsuarioCarga)
     {
-        var response = new SemanalCargaValidacionResponse { CodigoReferencia = GenerarCodigoReferencia() };
-        var usuarioCarga = await _semanalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioCarga);
+        var response = new SemanalCargaValidacionResponse
+        {
+            CodigoReferencia = GenerarCodigoReferencia()
+        };
+
+        var usuarioCarga =
+            await _semanalCargaRepository.ObtenerUsuarioCargaAsync(
+                idUsuarioCarga);
 
         if (usuarioCarga == null)
         {
-            AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_ACCESO", "Usuario sin acceso semanal", "El usuario no existe, está inactivo o no tiene habilitado el módulo semanal.");
+            AgregarErrorGeneral(
+                response,
+                "SEMANAL_USUARIO_SIN_ACCESO",
+                "Usuario sin acceso semanal",
+                "El usuario no existe, está inactivo o no tiene habilitado el módulo semanal.");
+
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
         }
 
         if (!usuarioCarga.HabilitaCarga)
         {
-            AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_PERMISO_CARGA", "Usuario sin permiso de carga semanal", "El usuario no tiene habilitada la carga de información en el módulo semanal.");
+            AgregarErrorGeneral(
+                response,
+                "SEMANAL_USUARIO_SIN_PERMISO_CARGA",
+                "Usuario sin permiso de carga semanal",
+                "El usuario no tiene habilitada la carga de información en el módulo semanal.");
+
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
         }
 
-        response.Periodo = ValidarPeriodo(request, response.Errores);
-        ValidarArchivoBase(request.Carpetas, "carpetas", response.Errores);
-        ValidarArchivoBase(request.Delitos, "delitos", response.Errores);
-        ValidarArchivoBase(request.Victimas, "victimas", response.Errores);
+        response.Periodo = ValidarPeriodo(
+            request,
+            response.Errores);
+
+        ValidarArchivoBase(
+            request.Carpetas,
+            "carpetas",
+            response.Errores);
+
+        ValidarArchivoBase(
+            request.Delitos,
+            "delitos",
+            response.Errores);
+
+        ValidarArchivoBase(
+            request.Victimas,
+            "victimas",
+            response.Errores);
 
         if (response.Errores.Count > 0)
         {
@@ -66,7 +215,11 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
-        var erroresEstructura = await ValidarEstructuraArchivosAsync(request.Carpetas!, request.Delitos!, request.Victimas!);
+        var erroresEstructura =
+            await ValidarEstructuraArchivosAsync(
+                request.Carpetas!,
+                request.Delitos!,
+                request.Victimas!);
 
         if (erroresEstructura.Count > 0)
         {
@@ -76,109 +229,464 @@ public class SemanalCargaService : ISemanalCargaService
         }
 
         var periodo = response.Periodo!;
-        var filasCarpetas = await _archivoReader.LeerAsync(request.Carpetas!);
-        var filasDelitos = await _archivoReader.LeerAsync(request.Delitos!);
-        var filasVictimas = await _archivoReader.LeerAsync(request.Victimas!);
 
-        response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas, validarMesInmediatoAnterior: false));
-        response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
-        response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
+        var filasCarpetas =
+            await _archivoReader.LeerAsync(request.Carpetas!);
+
+        var filasDelitos =
+            await _archivoReader.LeerAsync(request.Delitos!);
+
+        var filasVictimas =
+            await _archivoReader.LeerAsync(request.Victimas!);
+
+        response.Errores.AddRange(
+            _carpetasValidator.Validar(
+                filasCarpetas,
+                validarMesInmediatoAnterior: false));
+
+        response.Errores.AddRange(
+            _delitosValidator.Validar(filasDelitos));
+
+        response.Errores.AddRange(
+            _victimasValidator.Validar(filasVictimas));
 
         if (response.Errores.Count > 0)
         {
-            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+            FinalizarRespuesta(
+                response,
+                filasCarpetas.Count,
+                filasDelitos.Count,
+                filasVictimas.Count);
+
             return response;
         }
 
-        var carpetasEtiquetadas = EtiquetarCarpetas(filasCarpetas, periodo);
-        var idsCarpetasExcluidas = carpetasEtiquetadas.Where(x => !x.Incluido).Select(x => ObtenerValor(x.Fila, "id_ci")?.Trim()).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var delitosEtiquetados = EtiquetarPorCarpeta(filasDelitos, idsCarpetasExcluidas);
-        var victimasEtiquetadas = EtiquetarPorCarpeta(filasVictimas, idsCarpetasExcluidas);
-        var carpetasIncluidas = carpetasEtiquetadas.Where(x => x.Incluido).Select(x => x.Fila).ToList();
-        var delitosIncluidos = delitosEtiquetados.Where(x => x.Incluido).Select(x => x.Fila).ToList();
-        var victimasIncluidas = victimasEtiquetadas.Where(x => x.Incluido).Select(x => x.Fila).ToList();
+        var carpetasEtiquetadas =
+            EtiquetarCarpetas(filasCarpetas, periodo);
 
-        ActualizarTotales(response, carpetasEtiquetadas, delitosEtiquetados, victimasEtiquetadas);
+        var exclusionesPorCarpeta =
+            ObtenerExclusionesPorCarpeta(
+                carpetasEtiquetadas);
 
-        if (carpetasIncluidas.Count == 0)
+        var delitosEtiquetados =
+            EtiquetarPorCarpeta(
+                filasDelitos,
+                exclusionesPorCarpeta);
+
+        var victimasEtiquetadas =
+            EtiquetarPorCarpeta(
+                filasVictimas,
+                exclusionesPorCarpeta);
+
+        var carpetasPeriodo = carpetasEtiquetadas
+            .Where(x => x.Incluido)
+            .Select(x => x.Fila)
+            .ToList();
+
+        var delitosPeriodo = delitosEtiquetados
+            .Where(x => x.Incluido)
+            .Select(x => x.Fila)
+            .ToList();
+
+        var victimasPeriodo = victimasEtiquetadas
+            .Where(x => x.Incluido)
+            .Select(x => x.Fila)
+            .ToList();
+
+        ActualizarTotales(
+            response,
+            carpetasEtiquetadas,
+            delitosEtiquetados,
+            victimasEtiquetadas);
+
+        if (carpetasPeriodo.Count == 0)
         {
-            AgregarErrorGeneral(response, "SEMANAL_SIN_CARPETAS_EN_TRAMO", "Sin carpetas en el tramo semanal", $"No existen carpetas cuya fecha de inicio esté entre {periodo.FechaInicioTramo:dd/MM/yyyy} y {periodo.FechaFinTramo:dd/MM/yyyy}.");
-            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+            var fechaInicioPeriodo =
+                ObtenerFechaInicioPeriodo(periodo);
+
+            AgregarErrorGeneral(
+                response,
+                "SEMANAL_SIN_CARPETAS_EN_PERIODO",
+                "Sin carpetas en el periodo de carga",
+                $"No existen carpetas cuya fecha de inicio esté entre {fechaInicioPeriodo:dd/MM/yyyy} y {periodo.FechaFinTramo:dd/MM/yyyy}.");
+
+            FinalizarRespuesta(
+                response,
+                filasCarpetas.Count,
+                filasDelitos.Count,
+                filasVictimas.Count);
+
             return response;
         }
 
-        var erroresIntegridad = _cargaIntegridadValidator.Validar(carpetasIncluidas, delitosIncluidos, victimasIncluidas);
+        response.Errores.AddRange(
+            ValidarEntidadUsuarioCarga(
+                usuarioCarga,
+                delitosPeriodo));
 
-        if (usuarioCarga.EsSuperUsuario)
+        var idEntidadFederativa =
+            ObtenerEntidadFederativaCarga(
+                usuarioCarga,
+                delitosPeriodo,
+                response.Errores);
+
+        if (response.Errores.Count > 0 ||
+            !idEntidadFederativa.HasValue)
         {
-            response.Advertencias.AddRange(erroresIntegridad.Where(x => x.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO"));
-            erroresIntegridad = erroresIntegridad.Where(x => x.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO").ToList();
+            FinalizarRespuesta(
+                response,
+                filasCarpetas.Count,
+                filasDelitos.Count,
+                filasVictimas.Count);
+
+            return response;
         }
 
-        response.Errores.AddRange(erroresIntegridad);
-        response.Errores.AddRange(await _catalogosValidator.ValidarAsync(carpetasIncluidas, delitosIncluidos, victimasIncluidas));
-        ValidarLongitudIdentificadorDelito(delitosIncluidos, response.Errores);
+        var datosComparacion =
+            await _semanalCargaRepository
+                .ObtenerDatosComparacionAsync(
+                    idEntidadFederativa.Value,
+                    periodo.MesCorte,
+                    periodo.AnioCorte);
 
-        var configuracion = await _semanalDelitoRepository.ObtenerConfiguracionAsync();
-        var modalidadesConfiguradas = configuracion.Where(x => x.Seleccionado).OrderBy(x => x.Orden).ThenBy(x => x.ClaveModalidad).ToList();
+        var fechaInicioComparacion =
+            ObtenerFechaInicioPeriodo(periodo);
 
-        if (modalidadesConfiguradas.Count == 0)
+        var semanasPendientes =
+            ObtenerSemanasPendientes(
+                datosComparacion.CargasPendientes,
+                fechaInicioComparacion,
+                periodo.FechaFinTramo);
+
+        foreach (var pendiente in semanasPendientes
+                     .GroupBy(x => x.Semana)
+                     .Select(x => x.First())
+                     .OrderBy(x => x.Semana))
         {
-            AgregarErrorGeneral(response, "SEMANAL_SIN_MODALIDADES_CONFIGURADAS", "Sin modalidades semanales configuradas", "No existen modalidades activas habilitadas para la carga semanal.");
+            var numeroSemana =
+                ISOWeek.GetWeekOfYear(pendiente.Semana);
+
+            var anioSemana =
+                ISOWeek.GetYear(pendiente.Semana);
+
+            AgregarErrorGeneral(
+                response.Errores,
+                "SEMANAL_SEMANA_CON_CARGA_PENDIENTE",
+                "Semana con una carga pendiente",
+                $"La semana {numeroSemana}/{anioSemana} ya forma parte de una carga en estado {pendiente.Estado}. Código de referencia: {pendiente.CodigoReferencia}.",
+                "semana",
+                $"{anioSemana}-W{numeroSemana:00}");
+        }
+
+        if (response.Errores.Count > 0)
+        {
+            FinalizarRespuesta(
+                response,
+                filasCarpetas.Count,
+                filasDelitos.Count,
+                filasVictimas.Count);
+
+            return response;
+        }
+
+        var datosArchivoPorSemana =
+            AgruparDatosArchivoPorSemana(
+                carpetasPeriodo,
+                delitosPeriodo,
+                victimasPeriodo);
+
+        var datosConfirmadosPorSemana =
+            AgruparDatosConfirmadosPorSemana(
+                datosComparacion);
+
+        var semanasConfirmadasEnPeriodo =
+            datosConfirmadosPorSemana.Keys
+                .Where(semana =>
+                    semana <= periodo.FechaFinTramo &&
+                    semana.AddDays(6) >= fechaInicioComparacion)
+                .OrderBy(semana => semana)
+                .ToList();
+
+        var semanasYaCargadasIdenticas =
+            new HashSet<DateTime>();
+
+        if (string.Equals(
+                periodo.TipoContenido,
+                "SOLO_SEMANA",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var semanaObjetivo =
+                ObtenerInicioSemana(
+                    periodo.FechaInicioSemana);
+
+            if (datosConfirmadosPorSemana.ContainsKey(
+                    semanaObjetivo))
+            {
+                AgregarErrorGeneral(
+                    response,
+                    "SEMANAL_SEMANA_YA_CARGADA",
+                    "La semana ya tiene información cargada",
+                    $"La semana {periodo.NumeroSemana}/{periodo.AnioSemana} ya tiene registros confirmados. Para modificarlos deberá utilizarse el módulo de actualización semanal.");
+            }
         }
         else
         {
-            ValidarModalidadesConfiguradas(filasDelitos, configuracion, response.Errores);
+            foreach (var semana in semanasConfirmadasEnPeriodo)
+            {
+                datosArchivoPorSemana.TryGetValue(
+                    semana,
+                    out var datosArchivoSemana);
+
+                var datosConfirmadosSemana =
+                    datosConfirmadosPorSemana[semana];
+
+                var archivosDiferentes =
+                    new List<string>();
+
+                if (datosArchivoSemana == null)
+                {
+                    archivosDiferentes.AddRange(
+                        new[]
+                        {
+                        "carpetas",
+                        "delitos",
+                        "víctimas"
+                        });
+                }
+                else if (CoincidenDatosSemana(
+                             datosArchivoSemana,
+                             datosConfirmadosSemana,
+                             out archivosDiferentes))
+                {
+                    semanasYaCargadasIdenticas.Add(semana);
+
+                    var numeroSemana =
+                        ISOWeek.GetWeekOfYear(semana);
+
+                    var anioSemana =
+                        ISOWeek.GetYear(semana);
+
+                    response.Advertencias.Add(
+                        new CargaValidacionError
+                        {
+                            Archivo = "general",
+                            Columna = "semana",
+                            Campo = "semana",
+                            Valor =
+                                $"{anioSemana}-W{numeroSemana:00}",
+                            Codigo =
+                                "SEMANAL_ACUMULADO_SEMANA_YA_CARGADA_SIN_CAMBIOS",
+                            DescripcionResumen =
+                                "Semana ya cargada sin cambios",
+                            Mensaje =
+                                $"La semana {numeroSemana}/{anioSemana} coincide con la base y sus registros se omitirán."
+                        });
+
+                    continue;
+                }
+
+                if (archivosDiferentes.Count > 0)
+                {
+                    var numeroSemana =
+                        ISOWeek.GetWeekOfYear(semana);
+
+                    var anioSemana =
+                        ISOWeek.GetYear(semana);
+
+                    AgregarErrorGeneral(
+                        response.Errores,
+                        "SEMANAL_ACUMULADO_DIFIERE_SEMANA_CARGADA",
+                        "El acumulado modifica una semana ya cargada",
+                        $"El acumulado no coincide con la información confirmada de la semana {numeroSemana}/{anioSemana}. Diferencias en: {string.Join(", ", archivosDiferentes)}. Los cambios deberán realizarse desde el módulo de actualización semanal.",
+                        "semana",
+                        $"{anioSemana}-W{numeroSemana:00}");
+                }
+            }
         }
 
-        response.Errores.AddRange(ValidarEntidadUsuarioCarga(usuarioCarga, delitosIncluidos));
-        var idEntidadFederativa = ObtenerEntidadFederativaCarga(usuarioCarga, delitosIncluidos, response.Errores);
-
-        if (response.Errores.Count == 0 && idEntidadFederativa.HasValue)
+        if (response.Errores.Count > 0)
         {
-            var cargaExistente = await _semanalCargaRepository.ObtenerCargaActivaAsync(idEntidadFederativa.Value, periodo);
+            FinalizarRespuesta(
+                response,
+                filasCarpetas.Count,
+                filasDelitos.Count,
+                filasVictimas.Count);
 
-            if (cargaExistente != null)
-            {
-                response.Errores.Add(new CargaValidacionError
-                {
-                    Archivo = "general",
-                    Codigo = "SEMANAL_CARGA_EXISTENTE",
-                    DescripcionResumen = "Ya existe una carga para el tramo semanal",
-                    Valor = cargaExistente.CodigoReferencia,
-                    Mensaje = $"Ya existe una carga semanal en estado {cargaExistente.Estado} para la entidad y tramo seleccionados. Código de referencia: {cargaExistente.CodigoReferencia}."
-                });
-            }
+            return response;
+        }
+
+        if (semanasYaCargadasIdenticas.Count > 0)
+        {
+            ExcluirSemanasYaCargadas(
+                carpetasEtiquetadas,
+                semanasYaCargadasIdenticas);
+
+            exclusionesPorCarpeta =
+                ObtenerExclusionesPorCarpeta(
+                    carpetasEtiquetadas);
+
+            delitosEtiquetados =
+                EtiquetarPorCarpeta(
+                    filasDelitos,
+                    exclusionesPorCarpeta);
+
+            victimasEtiquetadas =
+                EtiquetarPorCarpeta(
+                    filasVictimas,
+                    exclusionesPorCarpeta);
+
+            ActualizarTotales(
+                response,
+                carpetasEtiquetadas,
+                delitosEtiquetados,
+                victimasEtiquetadas);
+        }
+
+        var carpetasIncluidas = carpetasEtiquetadas
+            .Where(x => x.Incluido)
+            .Select(x => x.Fila)
+            .ToList();
+
+        var delitosIncluidos = delitosEtiquetados
+            .Where(x => x.Incluido)
+            .Select(x => x.Fila)
+            .ToList();
+
+        var victimasIncluidas = victimasEtiquetadas
+            .Where(x => x.Incluido)
+            .Select(x => x.Fila)
+            .ToList();
+
+        if (carpetasIncluidas.Count == 0)
+        {
+            AgregarErrorGeneral(
+                response,
+                "SEMANAL_ACUMULADO_SIN_REGISTROS_NUEVOS",
+                "El acumulado no contiene registros nuevos",
+                "Todos los registros del acumulado corresponden a semanas ya cargadas y coinciden con la base. No existe una semana nueva para integrar.");
+
+            FinalizarRespuesta(
+                response,
+                filasCarpetas.Count,
+                filasDelitos.Count,
+                filasVictimas.Count);
+
+            return response;
+        }
+
+        var erroresIntegridad =
+            _cargaIntegridadValidator.Validar(
+                carpetasIncluidas,
+                delitosIncluidos,
+                victimasIncluidas);
+
+        if (usuarioCarga.EsSuperUsuario)
+        {
+            response.Advertencias.AddRange(
+                erroresIntegridad.Where(x =>
+                    x.Codigo ==
+                    "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO"));
+
+            erroresIntegridad = erroresIntegridad
+                .Where(x =>
+                    x.Codigo !=
+                    "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
+                .ToList();
+        }
+
+        response.Errores.AddRange(erroresIntegridad);
+
+        response.Errores.AddRange(
+            await _catalogosValidator.ValidarAsync(
+                carpetasIncluidas,
+                delitosIncluidos,
+                victimasIncluidas));
+
+        ValidarLongitudIdentificadorDelito(
+            delitosIncluidos,
+            response.Errores);
+
+        var configuracion =
+            await _semanalDelitoRepository
+                .ObtenerConfiguracionAsync();
+
+        var modalidadesConfiguradas = configuracion
+            .Where(x => x.Seleccionado)
+            .OrderBy(x => x.Orden)
+            .ThenBy(x => x.ClaveModalidad)
+            .ToList();
+
+        if (modalidadesConfiguradas.Count == 0)
+        {
+            AgregarErrorGeneral(
+                response,
+                "SEMANAL_SIN_MODALIDADES_CONFIGURADAS",
+                "Sin modalidades semanales configuradas",
+                "No existen modalidades activas habilitadas para la carga semanal.");
+        }
+        else
+        {
+            ValidarModalidadesConfiguradas(
+                delitosIncluidos,
+                configuracion,
+                response.Errores);
         }
 
         if (response.Errores.Count == 0)
         {
-            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(delitosIncluidos, victimasIncluidas));
+            response.Advertencias.AddRange(
+                _cargaIntegridadValidator.ValidarAdvertencias(
+                    delitosIncluidos,
+                    victimasIncluidas));
         }
 
-        FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+        FinalizarRespuesta(
+            response,
+            filasCarpetas.Count,
+            filasDelitos.Count,
+            filasVictimas.Count);
 
-        if (!response.EsValido || !idEntidadFederativa.HasValue) return response;
-
-        await _semanalCargaRepository.GuardarIntentoCargaAsync(new SemanalCargaPersistencia
+        if (!response.EsValido)
         {
-            IdUsuarioCarga = idUsuarioCarga,
-            IdEntidadFederativa = idEntidadFederativa.Value,
-            CodigoReferencia = response.CodigoReferencia,
-            Periodo = periodo,
-            TotalCarpetasIncluidas = response.TotalCarpetasIncluidas,
-            TotalDelitosIncluidos = response.TotalDelitosIncluidos,
-            TotalVictimasIncluidas = response.TotalVictimasIncluidas,
-            TotalCarpetasExcluidas = response.TotalCarpetasExcluidas,
-            TotalDelitosExcluidos = response.TotalDelitosExcluidos,
-            TotalVictimasExcluidas = response.TotalVictimasExcluidas,
-            ModalidadesConfiguradas = modalidadesConfiguradas,
-            Carpetas = carpetasEtiquetadas,
-            Delitos = delitosEtiquetados,
-            Victimas = victimasEtiquetadas
-        });
+            return response;
+        }
 
-        _logger.LogInformation("Carga semanal validada. Referencia: {CodigoReferencia}, Entidad: {IdEntidad}, Semana: {NumeroSemana}/{AnioSemana}, Tramo: {FechaInicioTramo:yyyy-MM-dd} a {FechaFinTramo:yyyy-MM-dd}", response.CodigoReferencia, idEntidadFederativa.Value, periodo.NumeroSemana, periodo.AnioSemana, periodo.FechaInicioTramo, periodo.FechaFinTramo);
+        await _semanalCargaRepository.GuardarIntentoCargaAsync(
+            new SemanalCargaPersistencia
+            {
+                IdUsuarioCarga = idUsuarioCarga,
+                IdEntidadFederativa =
+                    idEntidadFederativa.Value,
+                CodigoReferencia =
+                    response.CodigoReferencia,
+                Periodo = periodo,
+                TotalCarpetasIncluidas =
+                    response.TotalCarpetasIncluidas,
+                TotalDelitosIncluidos =
+                    response.TotalDelitosIncluidos,
+                TotalVictimasIncluidas =
+                    response.TotalVictimasIncluidas,
+                TotalCarpetasExcluidas =
+                    response.TotalCarpetasExcluidas,
+                TotalDelitosExcluidos =
+                    response.TotalDelitosExcluidos,
+                TotalVictimasExcluidas =
+                    response.TotalVictimasExcluidas,
+                ModalidadesConfiguradas =
+                    modalidadesConfiguradas,
+                Carpetas = carpetasEtiquetadas,
+                Delitos = delitosEtiquetados,
+                Victimas = victimasEtiquetadas
+            });
+
+        _logger.LogInformation(
+            "Carga semanal validada. Referencia: {CodigoReferencia}, Entidad: {IdEntidad}, Semana: {NumeroSemana}/{AnioSemana}, Tramo: {FechaInicioTramo:yyyy-MM-dd} a {FechaFinTramo:yyyy-MM-dd}",
+            response.CodigoReferencia,
+            idEntidadFederativa.Value,
+            periodo.NumeroSemana,
+            periodo.AnioSemana,
+            periodo.FechaInicioTramo,
+            periodo.FechaFinTramo);
 
         return response;
     }
@@ -206,10 +714,64 @@ public class SemanalCargaService : ISemanalCargaService
             AgregarErrorGeneral(errores, "SEMANAL_FECHA_INICIO_INVALIDA", "Fecha de inicio semanal inválida", "La fecha de inicio de la semana debe estar entre 01/01/2000 y 25/12/2100.", "fechaInicioSemana", request.FechaInicioSemana.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         }
 
-        if (errores.Count > 0) return null;
+        if (errores.Count > 0)
+        {
+            return null;
+        }
 
-        var fechaFinSemana = fechaInicioSemana.AddDays(6);
-        var fechaInicioMes = new DateTime(request.AnioCorte, request.MesCorte, 1);
+        var fechaFinSemana =
+            fechaInicioSemana.AddDays(6);
+
+        if (fechaInicioSemana.DayOfWeek != DayOfWeek.Monday ||
+            ISOWeek.GetYear(fechaInicioSemana) != request.AnioSemana ||
+            ISOWeek.GetWeekOfYear(fechaInicioSemana) !=
+                request.NumeroSemana)
+        {
+            AgregarErrorGeneral(
+                errores,
+                "SEMANAL_SEMANA_NO_COINCIDE_FECHA",
+                "La semana no coincide con la fecha calculada",
+                "La fecha inicial debe ser el lunes correspondiente al año y número de semana enviados.",
+                "fechaInicioSemana",
+                request.FechaInicioSemana.ToString(
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture));
+
+            return null;
+        }
+
+        if (string.Equals(
+                tipoContenido,
+                "ACUMULADO_MES",
+                StringComparison.OrdinalIgnoreCase) &&
+            fechaInicioSemana != ObtenerInicioSemana(DateTime.Today))
+        {
+            AgregarErrorGeneral(
+                errores,
+                "SEMANAL_ACUMULADO_NO_CORRESPONDE_SEMANA_ACTUAL",
+                "El acumulado no corresponde a la semana en curso",
+                "El acumulado mensual únicamente puede procesarse para la semana en curso.",
+                "fechaInicioSemana",
+                request.FechaInicioSemana.ToString(
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture));
+
+            return null;
+        }
+
+        if (fechaFinSemana.Month != request.MesCorte ||
+            fechaFinSemana.Year != request.AnioCorte)
+        {
+            AgregarErrorGeneral(
+                errores,
+                "SEMANAL_CORTE_NO_CORRESPONDE_FIN_SEMANA",
+                "El corte no corresponde al último día de la semana",
+                "El mes y año de corte deben corresponder al mes donde cae el último día de la semana.",
+                "mesCorte",
+                $"{request.MesCorte:00}/{request.AnioCorte}");
+
+            return null;
+        }
         var fechaFinMes = fechaInicioMes.AddMonths(1).AddDays(-1);
         var fechaInicioTramo = fechaInicioSemana > fechaInicioMes ? fechaInicioSemana : fechaInicioMes;
         var fechaFinTramo = fechaFinSemana < fechaFinMes ? fechaFinSemana : fechaFinMes;
@@ -270,23 +832,655 @@ public class SemanalCargaService : ISemanalCargaService
         }
     }
 
-    private static List<SemanalArchivoFilaCarga> EtiquetarCarpetas(List<ArchivoFila> filas, SemanalPeriodoCarga periodo)
+    private static List<SemanalArchivoFilaCarga> EtiquetarCarpetas(
+        List<ArchivoFila> filas,
+        SemanalPeriodoCarga periodo)
     {
+        var fechaInicioPeriodo =
+            ObtenerFechaInicioPeriodo(periodo);
+
         return filas.Select(fila =>
         {
-            var incluido = IntentarConvertirFecha(ObtenerValor(fila, "fha_de_ini"), out var fechaInicio) && fechaInicio.Date >= periodo.FechaInicioTramo && fechaInicio.Date <= periodo.FechaFinTramo;
-            return new SemanalArchivoFilaCarga { Fila = fila, Incluido = incluido, CodigoExclusion = incluido ? null : CodigoExclusionFueraTramo };
+            var incluido =
+                IntentarConvertirFecha(
+                    ObtenerValor(fila, "fha_de_ini"),
+                    out var fechaInicio) &&
+                fechaInicio.Date >= fechaInicioPeriodo &&
+                fechaInicio.Date <= periodo.FechaFinTramo;
+
+            return new SemanalArchivoFilaCarga
+            {
+                Fila = fila,
+                Incluido = incluido,
+                CodigoExclusion = incluido
+                    ? null
+                    : CodigoExclusionFueraPeriodo
+            };
         }).ToList();
     }
 
-    private static List<SemanalArchivoFilaCarga> EtiquetarPorCarpeta(List<ArchivoFila> filas, HashSet<string> idsCarpetasExcluidas)
+    private static DateTime ObtenerFechaInicioPeriodo(
+        SemanalPeriodoCarga periodo)
+    {
+        return string.Equals(
+            periodo.TipoContenido,
+            "ACUMULADO_MES",
+            StringComparison.OrdinalIgnoreCase)
+            ? new DateTime(
+                periodo.AnioCorte,
+                periodo.MesCorte,
+                1)
+            : periodo.FechaInicioTramo;
+    }
+
+    private static Dictionary<string, string>
+        ObtenerExclusionesPorCarpeta(
+            List<SemanalArchivoFilaCarga> carpetas)
+    {
+        var exclusiones =
+            new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var carpeta in carpetas.Where(x => !x.Incluido))
+        {
+            var idCi =
+                ObtenerValor(carpeta.Fila, "id_ci")?.Trim();
+
+            if (string.IsNullOrWhiteSpace(idCi))
+            {
+                continue;
+            }
+
+            exclusiones[idCi] =
+                carpeta.CodigoExclusion ??
+                CodigoExclusionFueraPeriodo;
+        }
+
+        return exclusiones;
+    }
+
+    private static List<SemanalArchivoFilaCarga>
+        EtiquetarPorCarpeta(
+            List<ArchivoFila> filas,
+            Dictionary<string, string> exclusionesPorCarpeta)
     {
         return filas.Select(fila =>
         {
-            var idCi = ObtenerValor(fila, "id_ci")?.Trim();
-            var incluido = string.IsNullOrWhiteSpace(idCi) || !idsCarpetasExcluidas.Contains(idCi);
-            return new SemanalArchivoFilaCarga { Fila = fila, Incluido = incluido, CodigoExclusion = incluido ? null : CodigoExclusionFueraTramo };
+            var idCi =
+                ObtenerValor(fila, "id_ci")?.Trim();
+
+            string? codigoExclusion = null;
+
+            var excluido =
+                !string.IsNullOrWhiteSpace(idCi) &&
+                exclusionesPorCarpeta.TryGetValue(
+                    idCi,
+                    out codigoExclusion);
+
+            return new SemanalArchivoFilaCarga
+            {
+                Fila = fila,
+                Incluido = !excluido,
+                CodigoExclusion = excluido
+                    ? codigoExclusion
+                    : null
+            };
         }).ToList();
+    }
+
+    private static void ExcluirSemanasYaCargadas(
+        List<SemanalArchivoFilaCarga> carpetas,
+        HashSet<DateTime> semanasYaCargadas)
+    {
+        foreach (var carpeta in carpetas.Where(x => x.Incluido))
+        {
+            if (!IntentarConvertirFecha(
+                    ObtenerValor(carpeta.Fila, "fha_de_ini"),
+                    out var fechaInicio))
+            {
+                continue;
+            }
+
+            if (!semanasYaCargadas.Contains(
+                    ObtenerInicioSemana(fechaInicio)))
+            {
+                continue;
+            }
+
+            carpeta.Incluido = false;
+            carpeta.CodigoExclusion =
+                CodigoExclusionYaCargado;
+        }
+    }
+
+    private static List<SemanalSemanaPendiente>
+        ObtenerSemanasPendientes(
+            List<SemanalCargaPendienteComparacion> cargasPendientes,
+            DateTime fechaInicio,
+            DateTime fechaFin)
+    {
+        var resultado =
+            new List<SemanalSemanaPendiente>();
+
+        foreach (var carga in cargasPendientes)
+        {
+            var fechaCarpeta =
+                IntentarConvertirFecha(
+                    carga.FechaInicioCarpeta,
+                    out var fechaConvertida)
+                    ? fechaConvertida.Date
+                    : carga.FechaInicioSemana.Date;
+
+            if (fechaCarpeta < fechaInicio ||
+                fechaCarpeta > fechaFin)
+            {
+                continue;
+            }
+
+            resultado.Add(
+                new SemanalSemanaPendiente
+                {
+                    Semana =
+                        ObtenerInicioSemana(fechaCarpeta),
+                    CodigoReferencia =
+                        carga.CodigoReferencia,
+                    Estado = carga.Estado
+                });
+        }
+
+        return resultado;
+    }
+
+    private static Dictionary<DateTime, SemanalDatosSemana>
+        AgruparDatosArchivoPorSemana(
+            List<ArchivoFila> carpetas,
+            List<ArchivoFila> delitos,
+            List<ArchivoFila> victimas)
+    {
+        var resultado =
+            new Dictionary<DateTime, SemanalDatosSemana>();
+
+        var semanaPorCarpeta =
+            new Dictionary<string, DateTime>(
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var carpeta in carpetas)
+        {
+            var idCi =
+                ObtenerValor(carpeta, "id_ci")?.Trim();
+
+            if (string.IsNullOrWhiteSpace(idCi) ||
+                !IntentarConvertirFecha(
+                    ObtenerValor(carpeta, "fha_de_ini"),
+                    out var fechaInicio))
+            {
+                continue;
+            }
+
+            var semana =
+                ObtenerInicioSemana(fechaInicio);
+
+            semanaPorCarpeta[idCi] = semana;
+
+            ObtenerDatosSemana(resultado, semana)
+                .Carpetas.Add(carpeta);
+        }
+
+        foreach (var delito in delitos)
+        {
+            var idCi =
+                ObtenerValor(delito, "id_ci")?.Trim();
+
+            if (string.IsNullOrWhiteSpace(idCi) ||
+                !semanaPorCarpeta.TryGetValue(
+                    idCi,
+                    out var semana))
+            {
+                continue;
+            }
+
+            ObtenerDatosSemana(resultado, semana)
+                .Delitos.Add(delito);
+        }
+
+        foreach (var victima in victimas)
+        {
+            var idCi =
+                ObtenerValor(victima, "id_ci")?.Trim();
+
+            if (string.IsNullOrWhiteSpace(idCi) ||
+                !semanaPorCarpeta.TryGetValue(
+                    idCi,
+                    out var semana))
+            {
+                continue;
+            }
+
+            ObtenerDatosSemana(resultado, semana)
+                .Victimas.Add(victima);
+        }
+
+        return resultado;
+    }
+
+    private static Dictionary<DateTime, SemanalDatosSemana>
+        AgruparDatosConfirmadosPorSemana(
+            SemanalDatosComparacion datosComparacion)
+    {
+        var resultado =
+            new Dictionary<DateTime, SemanalDatosSemana>();
+
+        var semanaPorCarpeta =
+            new Dictionary<string, DateTime>(
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in
+                 datosComparacion.CarpetasConfirmadas)
+        {
+            var fila =
+                ConvertirFilaComparacion(item);
+
+            if (!IntentarConvertirFecha(
+                    ObtenerValor(fila, "fha_de_ini"),
+                    out var fechaInicio))
+            {
+                continue;
+            }
+
+            var semana =
+                ObtenerInicioSemana(fechaInicio);
+
+            semanaPorCarpeta[
+                CrearLlaveCargaCarpeta(
+                    item.IdSemanalCarga,
+                    item.IdCi)] = semana;
+
+            ObtenerDatosSemana(resultado, semana)
+                .Carpetas.Add(fila);
+        }
+
+        foreach (var item in
+                 datosComparacion.DelitosConfirmados)
+        {
+            if (!semanaPorCarpeta.TryGetValue(
+                    CrearLlaveCargaCarpeta(
+                        item.IdSemanalCarga,
+                        item.IdCi),
+                    out var semana))
+            {
+                continue;
+            }
+
+            ObtenerDatosSemana(resultado, semana)
+                .Delitos.Add(
+                    ConvertirFilaComparacion(item));
+        }
+
+        foreach (var item in
+                 datosComparacion.VictimasConfirmadas)
+        {
+            if (!semanaPorCarpeta.TryGetValue(
+                    CrearLlaveCargaCarpeta(
+                        item.IdSemanalCarga,
+                        item.IdCi),
+                    out var semana))
+            {
+                continue;
+            }
+
+            ObtenerDatosSemana(resultado, semana)
+                .Victimas.Add(
+                    ConvertirFilaComparacion(item));
+        }
+
+        return resultado;
+    }
+
+    private static SemanalDatosSemana ObtenerDatosSemana(
+        Dictionary<DateTime, SemanalDatosSemana> datosPorSemana,
+        DateTime semana)
+    {
+        if (datosPorSemana.TryGetValue(
+                semana,
+                out var datos))
+        {
+            return datos;
+        }
+
+        datos = new SemanalDatosSemana();
+        datosPorSemana[semana] = datos;
+
+        return datos;
+    }
+
+    private static ArchivoFila ConvertirFilaComparacion(
+        SemanalFilaComparacion item)
+    {
+        var columnas =
+            JsonSerializer.Deserialize<
+                Dictionary<string, string?>>(
+                item.Datos) ??
+            new Dictionary<string, string?>();
+
+        return new ArchivoFila
+        {
+            Columnas =
+                new Dictionary<string, string?>(
+                    columnas,
+                    StringComparer.OrdinalIgnoreCase)
+        };
+    }
+
+    private static string CrearLlaveCargaCarpeta(
+        long idSemanalCarga,
+        string idCi)
+    {
+        return
+            $"{idSemanalCarga}|{idCi.Trim().ToUpperInvariant()}";
+    }
+
+    private static DateTime ObtenerInicioSemana(DateTime fecha)
+    {
+        var diasDesdeLunes =
+            ((int)fecha.DayOfWeek + 6) % 7;
+
+        return fecha.Date.AddDays(-diasDesdeLunes);
+    }
+
+    private static bool CoincidenDatosSemana(
+        SemanalDatosSemana archivo,
+        SemanalDatosSemana confirmados,
+        out List<string> archivosDiferentes)
+    {
+        archivosDiferentes = new List<string>();
+
+        if (!CoincidenFirmas(
+                archivo.Carpetas,
+                confirmados.Carpetas,
+                ColumnasCarpetasComparacion))
+        {
+            archivosDiferentes.Add("carpetas");
+        }
+
+        if (!CoincidenFirmas(
+                archivo.Delitos,
+                confirmados.Delitos,
+                ColumnasDelitosComparacion))
+        {
+            archivosDiferentes.Add("delitos");
+        }
+
+        if (!CoincidenFirmas(
+                archivo.Victimas,
+                confirmados.Victimas,
+                ColumnasVictimasComparacion))
+        {
+            archivosDiferentes.Add("víctimas");
+        }
+
+        return archivosDiferentes.Count == 0;
+    }
+
+    private static bool CoincidenFirmas(
+        List<ArchivoFila> archivo,
+        List<ArchivoFila> confirmados,
+        IReadOnlyCollection<string> columnas)
+    {
+        var firmasArchivo = archivo
+            .Select(fila =>
+                CrearFirma(fila, columnas))
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToList();
+
+        var firmasConfirmadas = confirmados
+            .Select(fila =>
+                CrearFirma(fila, columnas))
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToList();
+
+        return firmasArchivo.SequenceEqual(
+            firmasConfirmadas,
+            StringComparer.Ordinal);
+    }
+
+    private static string CrearFirma(
+        ArchivoFila fila,
+        IReadOnlyCollection<string> columnas)
+    {
+        return string.Join(
+            "|",
+            columnas.Select(columna =>
+            {
+                var valor =
+                    NormalizarValorComparacion(
+                        columna,
+                        ObtenerValor(fila, columna));
+
+                return $"{valor.Length}:{valor}";
+            }));
+    }
+
+    private static string NormalizarValorComparacion(
+        string columna,
+        string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor))
+        {
+            return string.Empty;
+        }
+
+        valor = valor.Trim();
+
+        if (ColumnasFechaComparacion.Contains(columna) &&
+            IntentarConvertirFechaHoraComparacion(
+                valor,
+                out var fecha))
+        {
+            return fecha.TimeOfDay == TimeSpan.Zero
+                ? fecha.ToString(
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture)
+                : fecha.ToString(
+                    "yyyy-MM-dd HH:mm:ss",
+                    CultureInfo.InvariantCulture);
+        }
+
+        if (ColumnasHoraComparacion.Contains(columna) &&
+            IntentarConvertirHora(valor, out var hora))
+        {
+            return hora.ToString(
+                @"hh\:mm\:ss",
+                CultureInfo.InvariantCulture);
+        }
+
+        if (ColumnasEnterasComparacion.Contains(columna) &&
+            long.TryParse(
+                valor,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var entero))
+        {
+            return entero.ToString(
+                CultureInfo.InvariantCulture);
+        }
+
+        if (ColumnasDecimalesComparacion.Contains(columna) &&
+            IntentarConvertirDecimal(
+                valor,
+                out var decimalNormalizado))
+        {
+            return decimalNormalizado.ToString(
+                "0.######",
+                CultureInfo.InvariantCulture);
+        }
+
+        if (string.Equals(
+                columna,
+                "cp",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var digitos =
+                new string(
+                    valor.Where(char.IsDigit).ToArray());
+
+            if (long.TryParse(
+                    digitos,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var codigoPostal))
+            {
+                return codigoPostal == 0
+                    ? string.Empty
+                    : codigoPostal
+                        .ToString(
+                            CultureInfo.InvariantCulture)
+                        .PadLeft(5, '0');
+            }
+        }
+
+        return valor
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .ToUpperInvariant();
+    }
+
+    private static bool IntentarConvertirDecimal(
+        string valor,
+        out decimal numero)
+    {
+        return decimal.TryParse(
+                   valor,
+                   NumberStyles.Any,
+                   CultureInfo.InvariantCulture,
+                   out numero)
+            || decimal.TryParse(
+                   valor,
+                   NumberStyles.Any,
+                   new CultureInfo("es-MX"),
+                   out numero);
+    }
+
+    private static bool IntentarConvertirFechaHoraComparacion(
+        string valor,
+        out DateTime fecha)
+    {
+        var formatos = new[]
+        {
+        "dd/MM/yyyy",
+        "d/M/yyyy",
+        "dd-MM-yyyy",
+        "d-M-yyyy",
+        "yyyy-MM-dd",
+        "yyyy/MM/dd",
+        "yyyyMMdd",
+        "dd/MM/yyyy HH:mm:ss",
+        "d/M/yyyy H:mm:ss",
+        "dd-MM-yyyy HH:mm:ss",
+        "d-M-yyyy H:mm:ss",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy/MM/dd HH:mm:ss"
+    };
+
+        if (DateTime.TryParseExact(
+                valor,
+                formatos,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out fecha))
+        {
+            return true;
+        }
+
+        if (DateTime.TryParse(
+                valor,
+                new CultureInfo("es-MX"),
+                DateTimeStyles.None,
+                out fecha))
+        {
+            return true;
+        }
+
+        if (double.TryParse(
+                valor,
+                NumberStyles.Any,
+                CultureInfo.InvariantCulture,
+                out var numeroExcel) &&
+            numeroExcel > 0 &&
+            numeroExcel < 60000)
+        {
+            try
+            {
+                fecha =
+                    DateTime.FromOADate(numeroExcel);
+
+                return true;
+            }
+            catch
+            {
+                fecha = default;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IntentarConvertirHora(
+        string? valor,
+        out TimeSpan hora)
+    {
+        hora = default;
+
+        if (string.IsNullOrWhiteSpace(valor))
+        {
+            return false;
+        }
+
+        valor = valor.Trim();
+
+        if (double.TryParse(
+                valor,
+                NumberStyles.Any,
+                CultureInfo.InvariantCulture,
+                out var fraccionDia) &&
+            fraccionDia >= 0 &&
+            fraccionDia < 1)
+        {
+            hora = TimeSpan.FromSeconds(
+                Math.Min(
+                    86399,
+                    Math.Round(fraccionDia * 86400)));
+
+            return true;
+        }
+
+        var formatos = new[]
+        {
+        @"h\:mm",
+        @"hh\:mm",
+        @"h\:mm\:ss",
+        @"hh\:mm\:ss"
+    };
+
+        if (TimeSpan.TryParseExact(
+                valor,
+                formatos,
+                CultureInfo.InvariantCulture,
+                out hora))
+        {
+            return true;
+        }
+
+        if (DateTime.TryParse(
+                valor,
+                new CultureInfo("es-MX"),
+                DateTimeStyles.None,
+                out var fechaHora))
+        {
+            hora = fechaHora.TimeOfDay;
+            return true;
+        }
+
+        return false;
     }
 
     private static void ActualizarTotales(SemanalCargaValidacionResponse response, List<SemanalArchivoFilaCarga> carpetas, List<SemanalArchivoFilaCarga> delitos, List<SemanalArchivoFilaCarga> victimas)

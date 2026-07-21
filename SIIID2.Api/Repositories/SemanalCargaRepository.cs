@@ -50,36 +50,164 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return await connection.QueryFirstOrDefaultAsync<UsuarioCargaInfo>(sql, new { IdUsuario = idUsuario });
     }
 
-    public async Task<SemanalCargaExistenteInfo?> ObtenerCargaActivaAsync(int idEntidadFederativa, SemanalPeriodoCarga periodo)
+    public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(int idEntidadFederativa, int mesCorte,  int anioCorte)
     {
         const string sql = @"
-        SELECT TOP (1)
-            codigo_referencia AS CodigoReferencia,
-            estado AS Estado
-        FROM dbo.semanal_carga
-        WHERE id_entidad_federativa = @IdEntidadFederativa
-          AND anio_semana = @AnioSemana
-          AND numero_semana = @NumeroSemana
-          AND fecha_inicio_semana = @FechaInicioSemana
-          AND mes_corte = @MesCorte
-          AND anio_corte = @AnioCorte
-          AND tipo_carga = N'CARGA_INICIAL'
-          AND estado IN (N'VALIDADO_PENDIENTE', N'PENDIENTE_APROBACION', N'CONFIRMADO')
-          AND activo = 1
-        ORDER BY id_semanal_carga DESC;
+        SELECT
+            sc.id_semanal_carga AS IdSemanalCarga,
+            c.id_ci AS IdCi,
+            (
+                SELECT
+                    c.id_ci AS id_ci,
+                    c.ntra_ci AS ntra_ci,
+                    c.fha_de_ini AS fha_de_ini,
+                    c.hra_de_ini AS hra_de_ini,
+                    c.rmen_de_hchos AS rmen_de_hchos
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
+            ) AS Datos
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.semanal_carga_tmp_carpeta c
+            ON c.id_semanal_carga = sc.id_semanal_carga
+           AND c.incluido = 1
+           AND c.activo = 1
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.mes_corte = @MesCorte
+          AND sc.anio_corte = @AnioCorte
+          AND sc.tipo_carga = N'CARGA_INICIAL'
+          AND sc.estado = N'CONFIRMADO'
+          AND sc.activo = 1;
+
+        SELECT
+            sc.id_semanal_carga AS IdSemanalCarga,
+            d.id_ci AS IdCi,
+            (
+                SELECT
+                    d.id_ci AS id_ci,
+                    d.id_delito AS id_delito,
+                    d.dto AS dto,
+                    d.moda_dto AS moda_dto,
+                    d.forma_acc AS forma_acc,
+                    d.fha_de_hchos AS fha_de_hchos,
+                    d.hra_de_hchos AS hra_de_hchos,
+                    d.emto_com_dto AS emto_com_dto,
+                    d.grdo_cons AS grdo_cons,
+                    d.clasf_de_dto AS clasf_de_dto,
+                    d.id_ent_hchos AS id_ent_hchos,
+                    d.id_mun_hchos AS id_mun_hchos,
+                    d.id_loc_hchos AS id_loc_hchos,
+                    d.nom_loc_hchos AS nom_loc_hchos,
+                    d.id_col_hchos AS id_col_hchos,
+                    d.nom_col_hchos AS nom_col_hchos,
+                    d.cp AS cp,
+                    d.coord_x AS coord_x,
+                    d.coord_y AS coord_y,
+                    d.dom_hchos AS dom_hchos
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
+            ) AS Datos
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.semanal_carga_tmp_delito d
+            ON d.id_semanal_carga = sc.id_semanal_carga
+           AND d.incluido = 1
+           AND d.activo = 1
+        INNER JOIN dbo.semanal_carga_tmp_carpeta c
+            ON c.id_semanal_carga = d.id_semanal_carga
+           AND c.id_ci = d.id_ci
+           AND c.incluido = 1
+           AND c.activo = 1
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.mes_corte = @MesCorte
+          AND sc.anio_corte = @AnioCorte
+          AND sc.tipo_carga = N'CARGA_INICIAL'
+          AND sc.estado = N'CONFIRMADO'
+          AND sc.activo = 1;
+
+        SELECT
+            sc.id_semanal_carga AS IdSemanalCarga,
+            v.id_ci AS IdCi,
+            (
+                SELECT
+                    v.id_ci AS id_ci,
+                    v.id_delito AS id_delito,
+                    v.id_vicf AS id_vicf,
+                    v.id_tv AS id_tv,
+                    v.id_tpm AS id_tpm,
+                    v.sexo AS sexo,
+                    v.genero AS genero,
+                    v.pob AS pob,
+                    v.disc AS disc,
+                    v.fha_nac AS fha_nac,
+                    v.edad AS edad,
+                    v.nacional AS nacional
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
+            ) AS Datos
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.semanal_carga_tmp_victima v
+            ON v.id_semanal_carga = sc.id_semanal_carga
+           AND v.incluido = 1
+           AND v.activo = 1
+        INNER JOIN dbo.semanal_carga_tmp_carpeta c
+            ON c.id_semanal_carga = v.id_semanal_carga
+           AND c.id_ci = v.id_ci
+           AND c.incluido = 1
+           AND c.activo = 1
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.mes_corte = @MesCorte
+          AND sc.anio_corte = @AnioCorte
+          AND sc.tipo_carga = N'CARGA_INICIAL'
+          AND sc.estado = N'CONFIRMADO'
+          AND sc.activo = 1;
+
+        SELECT DISTINCT
+            sc.codigo_referencia AS CodigoReferencia,
+            sc.estado AS Estado,
+            sc.fecha_inicio_semana AS FechaInicioSemana,
+            c.fha_de_ini AS FechaInicioCarpeta
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.semanal_carga_tmp_carpeta c
+            ON c.id_semanal_carga = sc.id_semanal_carga
+           AND c.incluido = 1
+           AND c.activo = 1
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.mes_corte = @MesCorte
+          AND sc.anio_corte = @AnioCorte
+          AND sc.tipo_carga = N'CARGA_INICIAL'
+          AND sc.estado IN
+          (
+              N'VALIDADO_PENDIENTE',
+              N'PENDIENTE_APROBACION'
+          )
+          AND sc.activo = 1;
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return await connection.QueryFirstOrDefaultAsync<SemanalCargaExistenteInfo>(sql, new
+        using var resultados = await connection.QueryMultipleAsync(
+            sql,
+            new
+            {
+                IdEntidadFederativa = idEntidadFederativa,
+                MesCorte = mesCorte,
+                AnioCorte = anioCorte
+            });
+
+        return new SemanalDatosComparacion
         {
-            IdEntidadFederativa = idEntidadFederativa,
-            periodo.AnioSemana,
-            periodo.NumeroSemana,
-            FechaInicioSemana = periodo.FechaInicioSemana.Date,
-            periodo.MesCorte,
-            periodo.AnioCorte
-        });
+            CarpetasConfirmadas =
+                (await resultados.ReadAsync<SemanalFilaComparacion>())
+                .ToList(),
+
+            DelitosConfirmados =
+                (await resultados.ReadAsync<SemanalFilaComparacion>())
+                .ToList(),
+
+            VictimasConfirmadas =
+                (await resultados.ReadAsync<SemanalFilaComparacion>())
+                .ToList(),
+
+            CargasPendientes =
+                (await resultados.ReadAsync<SemanalCargaPendienteComparacion>())
+                .ToList()
+        };
     }
 
     public async Task<long> GuardarIntentoCargaAsync(SemanalCargaPersistencia carga)

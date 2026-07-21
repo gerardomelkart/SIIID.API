@@ -62,8 +62,25 @@ public class SemanalCargaPersistencia
     public List<SemanalArchivoFilaCarga> Victimas { get; set; } = new();
 }
 
-public class SemanalCargaExistenteInfo
+public class SemanalFilaComparacion
+{
+    public long IdSemanalCarga { get; set; }
+    public string IdCi { get; set; } = string.Empty;
+    public string Datos { get; set; } = "{}";
+}
+
+public class SemanalCargaPendienteComparacion
 {
     public string CodigoReferencia { get; set; } = string.Empty;
     public string Estado { get; set; } = string.Empty;
+    public DateTime FechaInicioSemana { get; set; }
+    public string FechaInicioCarpeta { get; set; } = string.Empty;
+}
+
+public class SemanalDatosComparacion
+{
+    public List<SemanalFilaComparacion> CarpetasConfirmadas { get; set; } = new();
+    public List<SemanalFilaComparacion> DelitosConfirmados { get; set; } = new();
+    public List<SemanalFilaComparacion> VictimasConfirmadas { get; set; } = new();
+    public List<SemanalCargaPendienteComparacion> CargasPendientes { get; set; } = new();
 }
