@@ -41,6 +41,32 @@ public class SemanalCargasController : ControllerBase
             : BadRequest(resultado);
     }
 
+    [HttpGet("{codigoReferencia}/diferencias")]
+    public async Task<IActionResult> ObtenerDiferencias(
+    string codigoReferencia,
+    [FromQuery] int limitePorSeccion = 100)
+    {
+        if (!ObtenerIdUsuario(out var idUsuario))
+        {
+            return TokenSinUsuario();
+        }
+
+        limitePorSeccion = Math.Clamp(
+            limitePorSeccion,
+            1,
+            200);
+
+        var resultado =
+            await _semanalCargaService.ObtenerDiferenciasAsync(
+                codigoReferencia,
+                idUsuario,
+                limitePorSeccion);
+
+        return resultado.EsValido
+            ? Ok(resultado)
+            : BadRequest(resultado);
+    }
+
     [HttpGet("{codigoReferencia}/acuse")]
     public async Task<IActionResult> DescargarAcuse(string codigoReferencia)
     {

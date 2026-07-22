@@ -10,16 +10,11 @@ namespace SIIID2.Api.Services;
 public class SemanalCargaService : ISemanalCargaService
 {
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
-    private const string CodigoExclusionFueraPeriodo =
-        "FUERA_PERIODO_CARGA";
-    private const string CodigoExclusionYaCargado =
-        "YA_CARGADO_SIN_CAMBIOS";
 
     private static readonly HashSet<string> TiposContenidoPermitidos =
         new(StringComparer.OrdinalIgnoreCase)
         {
-        "SOLO_SEMANA",
-        "ACUMULADO_MES"
+        "SOLO_SEMANA"
         };
 
     private static readonly HashSet<string> TiposCargaPermitidos =
@@ -425,138 +420,46 @@ public class SemanalCargaService : ISemanalCargaService
             AgruparDatosConfirmadosPorSemana(
                 datosComparacion);
 
-        var semanasConfirmadasEnPeriodo =
-            datosConfirmadosPorSemana.Keys
-                .Where(semana =>
-                    semana <= periodo.FechaFinTramo &&
-                    semana.AddDays(6) >= fechaInicioComparacion)
-                .OrderBy(semana => semana)
-                .ToList();
-
-        var semanasYaCargadasIdenticas =
-            new HashSet<DateTime>();
-
         if (esActualizacion)
         {
             var semanaObjetivo = ObtenerInicioSemana(periodo.FechaInicioSemana);
 
             if (!datosConfirmadosPorSemana.TryGetValue(semanaObjetivo, out var datosConfirmadosSemana))
             {
-                AgregarErrorGeneral(response, "SEMANAL_ACTUALIZACION_SIN_CARGA_CONFIRMADA", "La semana no tiene información confirmada", $"La semana {periodo.NumeroSemana}/{periodo.AnioSemana} todavía no tiene información semanal confirmada para actualizar.");
+                AgregarErrorGeneral(
+                    response,
+                    "SEMANAL_ACTUALIZACION_SIN_CARGA_CONFIRMADA",
+                    "La semana no tiene información confirmada",
+                    $"La semana {periodo.NumeroSemana}/{periodo.AnioSemana} todavía no tiene información semanal confirmada para actualizar.");
             }
             else if (!datosArchivoPorSemana.TryGetValue(semanaObjetivo, out var datosArchivoSemana))
             {
-                AgregarErrorGeneral(response, "SEMANAL_ACTUALIZACION_SIN_REGISTROS", "La actualización no contiene registros de la semana", $"Los archivos no contienen carpetas correspondientes a la semana {periodo.NumeroSemana}/{periodo.AnioSemana}.");
+                AgregarErrorGeneral(
+                    response,
+                    "SEMANAL_ACTUALIZACION_SIN_REGISTROS",
+                    "La actualización no contiene registros de la semana",
+                    $"Los archivos no contienen carpetas correspondientes a la semana {periodo.NumeroSemana}/{periodo.AnioSemana}.");
             }
             else if (CoincidenDatosSemana(datosArchivoSemana, datosConfirmadosSemana, out _))
             {
-                AgregarErrorGeneral(response, "SEMANAL_ACTUALIZACION_SIN_CAMBIOS", "La actualización no contiene cambios", $"Los tres archivos coinciden con la información confirmada de la semana {periodo.NumeroSemana}/{periodo.AnioSemana}.");
-            }
-            else
-            {
-                response.Advertencias.Add(new CargaValidacionError
-                {
-                    Archivo = "general",
-                    Columna = "semana",
-                    Campo = "semana",
-                    Valor = $"{periodo.AnioSemana}-W{periodo.NumeroSemana:00}",
-                    Codigo = "SEMANAL_ACTUALIZACION_REEMPLAZA_SEMANA",
-                    DescripcionResumen = "La semana confirmada será reemplazada",
-                    Mensaje = $"Al aprobarse, esta actualización sustituirá la versión confirmada de la semana {periodo.NumeroSemana}/{periodo.AnioSemana} y conservará la versión anterior en el histórico."
-                });
+                AgregarErrorGeneral(
+                    response,
+                    "SEMANAL_ACTUALIZACION_SIN_CAMBIOS",
+                    "La actualización no contiene cambios",
+                    $"Los tres archivos coinciden con la información confirmada de la semana {periodo.NumeroSemana}/{periodo.AnioSemana}.");
             }
         }
-        else if (string.Equals(
-                periodo.TipoContenido,
-                "SOLO_SEMANA",
-                StringComparison.OrdinalIgnoreCase))
+        else
         {
-            var semanaObjetivo =
-                ObtenerInicioSemana(
-                    periodo.FechaInicioSemana);
+            var semanaObjetivo = ObtenerInicioSemana(periodo.FechaInicioSemana);
 
-            if (datosConfirmadosPorSemana.ContainsKey(
-                    semanaObjetivo))
+            if (datosConfirmadosPorSemana.ContainsKey(semanaObjetivo))
             {
                 AgregarErrorGeneral(
                     response,
                     "SEMANAL_SEMANA_YA_CARGADA",
                     "La semana ya tiene información cargada",
                     $"La semana {periodo.NumeroSemana}/{periodo.AnioSemana} ya tiene registros confirmados. Para modificarlos deberá utilizarse el módulo de actualización semanal.");
-            }
-        }
-        else
-        {
-            foreach (var semana in semanasConfirmadasEnPeriodo)
-            {
-                datosArchivoPorSemana.TryGetValue(
-                    semana,
-                    out var datosArchivoSemana);
-
-                var datosConfirmadosSemana =
-                    datosConfirmadosPorSemana[semana];
-
-                var archivosDiferentes =
-                    new List<string>();
-
-                if (datosArchivoSemana == null)
-                {
-                    archivosDiferentes.AddRange(
-                        new[]
-                        {
-                        "carpetas",
-                        "delitos",
-                        "víctimas"
-                        });
-                }
-                else if (CoincidenDatosSemana(
-                             datosArchivoSemana,
-                             datosConfirmadosSemana,
-                             out archivosDiferentes))
-                {
-                    semanasYaCargadasIdenticas.Add(semana);
-
-                    var numeroSemana =
-                        ISOWeek.GetWeekOfYear(semana);
-
-                    var anioSemana =
-                        ISOWeek.GetYear(semana);
-
-                    response.Advertencias.Add(
-                        new CargaValidacionError
-                        {
-                            Archivo = "general",
-                            Columna = "semana",
-                            Campo = "semana",
-                            Valor =
-                                $"{anioSemana}-W{numeroSemana:00}",
-                            Codigo =
-                                "SEMANAL_ACUMULADO_SEMANA_YA_CARGADA_SIN_CAMBIOS",
-                            DescripcionResumen =
-                                "Semana ya cargada sin cambios",
-                            Mensaje =
-                                $"La semana {numeroSemana}/{anioSemana} coincide con la base y sus registros se omitirán."
-                        });
-
-                    continue;
-                }
-
-                if (archivosDiferentes.Count > 0)
-                {
-                    var numeroSemana =
-                        ISOWeek.GetWeekOfYear(semana);
-
-                    var anioSemana =
-                        ISOWeek.GetYear(semana);
-
-                    AgregarErrorGeneral(
-                        response.Errores,
-                        "SEMANAL_ACUMULADO_DIFIERE_SEMANA_CARGADA",
-                        "El acumulado modifica una semana ya cargada",
-                        $"El acumulado no coincide con la información confirmada de la semana {numeroSemana}/{anioSemana}. Diferencias en: {string.Join(", ", archivosDiferentes)}. Los cambios deberán realizarse desde el módulo de actualización semanal.",
-                        "semana",
-                        $"{anioSemana}-W{numeroSemana:00}");
-                }
             }
         }
 
@@ -569,33 +472,6 @@ public class SemanalCargaService : ISemanalCargaService
                 filasVictimas.Count);
 
             return response;
-        }
-
-        if (!esActualizacion && semanasYaCargadasIdenticas.Count > 0)
-        {
-            ExcluirSemanasYaCargadas(
-                carpetasEtiquetadas,
-                semanasYaCargadasIdenticas);
-
-            exclusionesPorCarpeta =
-                ObtenerExclusionesPorCarpeta(
-                    carpetasEtiquetadas);
-
-            delitosEtiquetados =
-                EtiquetarPorCarpeta(
-                    filasDelitos,
-                    exclusionesPorCarpeta);
-
-            victimasEtiquetadas =
-                EtiquetarPorCarpeta(
-                    filasVictimas,
-                    exclusionesPorCarpeta);
-
-            ActualizarTotales(
-                response,
-                carpetasEtiquetadas,
-                delitosEtiquetados,
-                victimasEtiquetadas);
         }
 
         var carpetasIncluidas = carpetasEtiquetadas
@@ -617,9 +493,9 @@ public class SemanalCargaService : ISemanalCargaService
         {
             AgregarErrorGeneral(
                 response,
-                esActualizacion ? "SEMANAL_ACTUALIZACION_SIN_REGISTROS" : "SEMANAL_ACUMULADO_SIN_REGISTROS_NUEVOS",
-                esActualizacion ? "La actualización no contiene registros" : "El acumulado no contiene registros nuevos",
-                esActualizacion ? "No existen registros de la semana seleccionada para actualizar." : "Todos los registros del acumulado corresponden a semanas ya cargadas y coinciden con la base. No existe una semana nueva para integrar.");
+                esActualizacion ? "SEMANAL_ACTUALIZACION_SIN_REGISTROS" : "SEMANAL_CARGA_SIN_REGISTROS",
+                esActualizacion ? "La actualización no contiene registros" : "La carga no contiene registros",
+                esActualizacion ? "No existen registros de la semana seleccionada para actualizar." : "No existen registros correspondientes a la semana seleccionada para cargar.");
 
             FinalizarRespuesta(
                 response,
@@ -750,6 +626,130 @@ public class SemanalCargaService : ISemanalCargaService
         return response;
     }
 
+    public async Task<ActualizacionDiferenciasResponse> ObtenerDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta, int limitePorSeccion)
+    {
+        var codigoLimpio = codigoReferencia?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(codigoLimpio))
+        {
+            return ErrorDiferencias(
+                codigoLimpio,
+                "Debe proporcionar el código de referencia de la actualización semanal.");
+        }
+
+        var usuario = await _semanalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuario == null)
+        {
+            return ErrorDiferencias(
+                codigoLimpio,
+                "El usuario no existe, está inactivo o no tiene acceso al módulo semanal.");
+        }
+
+        var carga = await _semanalCargaRepository.ObtenerCargaParaDiferenciasAsync(codigoLimpio);
+
+        if (carga == null)
+        {
+            return ErrorDiferencias(
+                codigoLimpio,
+                "No se encontró una actualización semanal pendiente con ese código de referencia.");
+        }
+
+        if (!usuario.EsSuperUsuario &&
+            (carga.IdUsuarioCarga != idUsuarioConsulta ||
+             usuario.IdEntidadFederativa != carga.IdEntidadFederativa))
+        {
+            return ErrorDiferencias(
+                codigoLimpio,
+                "El usuario no tiene permiso para consultar las diferencias de esta actualización semanal.");
+        }
+
+        var datosComparacion = await _semanalCargaRepository.ObtenerDatosComparacionAsync(
+            carga.IdEntidadFederativa,
+            carga.MesCorte,
+            carga.AnioCorte);
+
+        var datosConfirmadosPorSemana = AgruparDatosConfirmadosPorSemana(datosComparacion);
+        var semanaObjetivo = ObtenerInicioSemana(carga.FechaInicioSemana);
+
+        if (!datosConfirmadosPorSemana.TryGetValue(semanaObjetivo, out var datosConfirmados))
+        {
+            return ErrorDiferencias(
+                codigoLimpio,
+                $"No se encontró la versión confirmada de la semana {carga.NumeroSemana}/{carga.AnioSemana}.");
+        }
+
+        var datosNuevos = new SemanalDatosSemana();
+
+        datosNuevos.Carpetas.AddRange(
+            carga.Carpetas.Select(ConvertirFilaComparacion));
+
+        datosNuevos.Delitos.AddRange(
+            carga.Delitos.Select(ConvertirFilaComparacion));
+
+        datosNuevos.Victimas.AddRange(
+            carga.Victimas.Select(ConvertirFilaComparacion));
+
+        var response = new ActualizacionDiferenciasResponse
+        {
+            EsValido = true,
+            CodigoReferencia = codigoLimpio,
+            LimitePorSeccion = limitePorSeccion
+        };
+
+        AgregarDiferenciasSeccion(
+            datosNuevos.Carpetas,
+            datosConfirmados.Carpetas,
+            new[] { "id_ci" },
+            ColumnasCarpetasComparacion,
+            response.Carpetas);
+
+        AgregarDiferenciasSeccion(
+            datosNuevos.Delitos,
+            datosConfirmados.Delitos,
+            new[] { "id_ci", "id_delito" },
+            ColumnasDelitosComparacion,
+            response.Delitos);
+
+        AgregarDiferenciasSeccion(
+            datosNuevos.Victimas,
+            datosConfirmados.Victimas,
+            new[] { "id_ci", "id_delito", "id_vicf" },
+            ColumnasVictimasComparacion,
+            response.Victimas);
+
+        response.TotalCarpetas = response.Carpetas.Count;
+        response.TotalDelitos = response.Delitos.Count;
+        response.TotalVictimas = response.Victimas.Count;
+        response.TotalDiferencias =
+            response.TotalCarpetas +
+            response.TotalDelitos +
+            response.TotalVictimas;
+
+        response.DetalleLimitado =
+            response.TotalCarpetas > limitePorSeccion ||
+            response.TotalDelitos > limitePorSeccion ||
+            response.TotalVictimas > limitePorSeccion;
+
+        response.Carpetas = response.Carpetas
+            .Take(limitePorSeccion)
+            .ToList();
+
+        response.Delitos = response.Delitos
+            .Take(limitePorSeccion)
+            .ToList();
+
+        response.Victimas = response.Victimas
+            .Take(limitePorSeccion)
+            .ToList();
+
+        response.Mensaje = response.TotalDiferencias == 0
+            ? "No se detectaron diferencias entre la actualización y la versión confirmada."
+            : "Revise los registros nuevos, modificados y eliminados antes de continuar al informe previo.";
+
+        return response;
+    }
+
     public Task<ConfirmarCargaResponse> ConfirmarCargaAsync(ConfirmarCargaRequest request, int idUsuarioConfirmacion) => _semanalCargaRepository.ConfirmarCargaAsync(request.CodigoReferencia.Trim(), request.Aceptar, idUsuarioConfirmacion);
 
     private static SemanalPeriodoCarga? ValidarPeriodo(SemanalCargaValidacionRequest request, List<CargaValidacionError> errores)
@@ -759,12 +759,13 @@ public class SemanalCargaService : ISemanalCargaService
 
         if (!TiposContenidoPermitidos.Contains(tipoContenido))
         {
-            AgregarErrorGeneral(errores, "SEMANAL_TIPO_CONTENIDO_INVALIDO", "Tipo de contenido inválido", "El tipo de contenido debe ser SOLO_SEMANA o ACUMULADO_MES.", "tipoContenido", request.TipoContenido);
-        }
-
-        if (string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) && !string.Equals(tipoContenido, "SOLO_SEMANA", StringComparison.OrdinalIgnoreCase))
-        {
-            AgregarErrorGeneral(errores, "SEMANAL_ACTUALIZACION_REQUIERE_UNA_SEMANA", "La actualización debe corresponder a una semana", "La actualización semanal no admite el tipo ACUMULADO_MES; seleccione una sola semana.", "tipoContenido", request.TipoContenido);
+            AgregarErrorGeneral(
+                errores,
+                "SEMANAL_TIPO_CONTENIDO_INVALIDO",
+                "Tipo de contenido inválido",
+                "El módulo semanal únicamente admite información de una semana puntual.",
+                "tipoContenido",
+                request.TipoContenido);
         }
 
         if (request.AnioSemana < 2000 || request.AnioSemana > 2100) AgregarErrorGeneral(errores, "SEMANAL_ANIO_SEMANA_INVALIDO", "Año de semana inválido", "El año de la semana debe estar entre 2000 y 2100.", "anioSemana", request.AnioSemana.ToString(CultureInfo.InvariantCulture));
@@ -831,21 +832,6 @@ public class SemanalCargaService : ISemanalCargaService
                 "SEMANAL_MES_ANTERIOR_CONSOLIDADO",
                 "El mes de la semana ya fue consolidado",
                 "El último día de la semana seleccionada corresponde a un mes anterior al mes en curso. Seleccione una semana del periodo actual.",
-                "fechaInicioSemana",
-                request.FechaInicioSemana.ToString(
-                    "yyyy-MM-dd",
-                    CultureInfo.InvariantCulture));
-
-            return null;
-        }
-
-        if (string.Equals(tipoContenido, "ACUMULADO_MES", StringComparison.OrdinalIgnoreCase) && fechaInicioSemana != fechaInicioSemanaActual)
-        {
-            AgregarErrorGeneral(
-                errores,
-                "SEMANAL_ACUMULADO_NO_CORRESPONDE_SEMANA_ACTUAL",
-                "El acumulado no corresponde a la semana en curso",
-                "El acumulado mensual únicamente puede procesarse para la semana en curso.",
                 "fechaInicioSemana",
                 request.FechaInicioSemana.ToString(
                     "yyyy-MM-dd",
@@ -954,19 +940,7 @@ public class SemanalCargaService : ISemanalCargaService
         }).ToList();
     }
 
-    private static DateTime ObtenerFechaInicioPeriodo(
-        SemanalPeriodoCarga periodo)
-    {
-        return string.Equals(
-            periodo.TipoContenido,
-            "ACUMULADO_MES",
-            StringComparison.OrdinalIgnoreCase)
-            ? new DateTime(
-                periodo.AnioCorte,
-                periodo.MesCorte,
-                1)
-            : periodo.FechaInicioTramo;
-    }
+    private static DateTime ObtenerFechaInicioPeriodo(SemanalPeriodoCarga periodo) => periodo.FechaInicioTramo;
 
     private static Dictionary<string, string>
         ObtenerExclusionesPorCarpeta(
@@ -1021,31 +995,6 @@ public class SemanalCargaService : ISemanalCargaService
                     : null
             };
         }).ToList();
-    }
-
-    private static void ExcluirSemanasYaCargadas(
-        List<SemanalArchivoFilaCarga> carpetas,
-        HashSet<DateTime> semanasYaCargadas)
-    {
-        foreach (var carpeta in carpetas.Where(x => x.Incluido))
-        {
-            if (!IntentarConvertirFecha(
-                    ObtenerValor(carpeta.Fila, "fha_de_ini"),
-                    out var fechaInicio))
-            {
-                continue;
-            }
-
-            if (!semanasYaCargadas.Contains(
-                    ObtenerInicioSemana(fechaInicio)))
-            {
-                continue;
-            }
-
-            carpeta.Incluido = false;
-            carpeta.CodigoExclusion =
-                CodigoExclusionYaCargado;
-        }
     }
 
     private static List<SemanalSemanaPendiente>
@@ -1592,6 +1541,116 @@ public class SemanalCargaService : ISemanalCargaService
         }
 
         return false;
+    }
+
+    private static void AgregarDiferenciasSeccion(List<ArchivoFila> nuevas, List<ArchivoFila> confirmadas, IReadOnlyCollection<string> camposIdentificador, IReadOnlyCollection<string> columnas, List<ActualizacionDiferenciaRegistro> destino)
+    {
+        var nuevasPorIdentificador = CrearIndiceDiferencias(nuevas, camposIdentificador);
+        var confirmadasPorIdentificador = CrearIndiceDiferencias(confirmadas, camposIdentificador);
+        var identificadores = nuevasPorIdentificador.Keys.Union(confirmadasPorIdentificador.Keys, StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        var campoIdentificador = string.Join("+", camposIdentificador);
+        var camposIdentificadorSet = camposIdentificador.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var identificador in identificadores)
+        {
+            nuevasPorIdentificador.TryGetValue(identificador, out var filaNueva);
+            confirmadasPorIdentificador.TryGetValue(identificador, out var filaAnterior);
+
+            if (filaAnterior == null && filaNueva != null)
+            {
+                destino.Add(new ActualizacionDiferenciaRegistro
+                {
+                    TipoMovimiento = "NUEVO",
+                    CampoIdentificador = campoIdentificador,
+                    IdentificadorFiscalia = identificador,
+                    CamposModificados = columnas.Select(columna => new ActualizacionCampoDiferencia
+                    {
+                        Campo = columna,
+                        ValorAnterior = null,
+                        ValorNuevo = ObtenerValor(filaNueva, columna)
+                    }).ToList()
+                });
+
+                continue;
+            }
+
+            if (filaAnterior != null && filaNueva == null)
+            {
+                destino.Add(new ActualizacionDiferenciaRegistro
+                {
+                    TipoMovimiento = "ELIMINADO",
+                    CampoIdentificador = campoIdentificador,
+                    IdentificadorFiscalia = identificador,
+                    CamposModificados = columnas.Select(columna => new ActualizacionCampoDiferencia
+                    {
+                        Campo = columna,
+                        ValorAnterior = ObtenerValor(filaAnterior, columna),
+                        ValorNuevo = null
+                    }).ToList()
+                });
+
+                continue;
+            }
+
+            if (filaAnterior == null || filaNueva == null) continue;
+
+            var camposModificados = new List<ActualizacionCampoDiferencia>();
+
+            foreach (var columna in columnas.Where(columna => !camposIdentificadorSet.Contains(columna)))
+            {
+                var valorAnterior = ObtenerValor(filaAnterior, columna);
+                var valorNuevo = ObtenerValor(filaNueva, columna);
+                var comparacionAnterior = NormalizarValorComparacion(columna, valorAnterior);
+                var comparacionNueva = NormalizarValorComparacion(columna, valorNuevo);
+
+                if (string.Equals(comparacionAnterior, comparacionNueva, StringComparison.Ordinal)) continue;
+
+                camposModificados.Add(new ActualizacionCampoDiferencia
+                {
+                    Campo = columna,
+                    ValorAnterior = valorAnterior,
+                    ValorNuevo = valorNuevo
+                });
+            }
+
+            if (camposModificados.Count == 0) continue;
+
+            destino.Add(new ActualizacionDiferenciaRegistro
+            {
+                TipoMovimiento = "MODIFICADO",
+                CampoIdentificador = campoIdentificador,
+                IdentificadorFiscalia = identificador,
+                CamposModificados = camposModificados
+            });
+        }
+    }
+
+    private static Dictionary<string, ArchivoFila> CrearIndiceDiferencias(IEnumerable<ArchivoFila> filas, IReadOnlyCollection<string> camposIdentificador)
+    {
+        return filas
+            .Select(fila => new
+            {
+                Identificador = CrearIdentificadorDiferencias(fila, camposIdentificador),
+                Fila = fila
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Identificador))
+            .GroupBy(item => item.Identificador, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(grupo => grupo.Key, grupo => grupo.First().Fila, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string CrearIdentificadorDiferencias(ArchivoFila fila, IEnumerable<string> camposIdentificador)
+    {
+        return string.Join("|", camposIdentificador.Select(campo => ObtenerValor(fila, campo)?.Trim() ?? string.Empty));
+    }
+
+    private static ActualizacionDiferenciasResponse ErrorDiferencias(string codigoReferencia, string mensaje)
+    {
+        return new ActualizacionDiferenciasResponse
+        {
+            EsValido = false,
+            CodigoReferencia = codigoReferencia,
+            Mensaje = mensaje
+        };
     }
 
     private static void ActualizarTotales(SemanalCargaValidacionResponse response, List<SemanalArchivoFilaCarga> carpetas, List<SemanalArchivoFilaCarga> delitos, List<SemanalArchivoFilaCarga> victimas)

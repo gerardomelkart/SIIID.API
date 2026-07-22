@@ -359,6 +359,133 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         };
     }
 
+    public async Task<SemanalCargaDiferenciasInfo?> ObtenerCargaParaDiferenciasAsync(string codigoReferencia)
+    {
+        const string sqlContexto = @"
+        SELECT TOP (1)
+            sc.id_semanal_carga AS IdSemanalCarga,
+            sc.codigo_referencia AS CodigoReferencia,
+            sc.id_usuario_carga AS IdUsuarioCarga,
+            sc.id_entidad_federativa AS IdEntidadFederativa,
+            sc.tipo_carga AS TipoCarga,
+            sc.estado AS Estado,
+            sc.mes_corte AS MesCorte,
+            sc.anio_corte AS AnioCorte,
+            sc.anio_semana AS AnioSemana,
+            sc.numero_semana AS NumeroSemana,
+            sc.fecha_inicio_semana AS FechaInicioSemana,
+            sc.fecha_fin_semana AS FechaFinSemana
+        FROM dbo.semanal_carga sc
+        WHERE sc.codigo_referencia = @CodigoReferencia
+          AND sc.tipo_carga = N'ACTUALIZACION'
+          AND sc.estado IN
+          (
+              N'VALIDADO_PENDIENTE_ACTUALIZACION',
+              N'PENDIENTE_APROBACION'
+          )
+          AND sc.activo = 1;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var contexto = await connection.QueryFirstOrDefaultAsync<SemanalCargaDiferenciasInfo>(
+            sqlContexto,
+            new { CodigoReferencia = codigoReferencia });
+
+        if (contexto == null) return null;
+
+        const string sqlDatos = @"
+        SELECT
+            c.id_semanal_carga AS IdSemanalCarga,
+            GETDATE() AS FechaConfirmacion,
+            c.id_ci AS IdCi,
+            (
+                SELECT
+                    c.id_ci AS id_ci,
+                    c.ntra_ci AS ntra_ci,
+                    c.fha_de_ini AS fha_de_ini,
+                    c.hra_de_ini AS hra_de_ini,
+                    c.rmen_de_hchos AS rmen_de_hchos
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
+            ) AS Datos
+        FROM dbo.semanal_carga_tmp_carpeta c
+        WHERE c.id_semanal_carga = @IdSemanalCarga
+          AND c.incluido = 1
+          AND c.activo = 1
+        ORDER BY c.numero_fila;
+
+        SELECT
+            d.id_semanal_carga AS IdSemanalCarga,
+            GETDATE() AS FechaConfirmacion,
+            d.id_ci AS IdCi,
+            (
+                SELECT
+                    d.id_ci AS id_ci,
+                    d.id_delito AS id_delito,
+                    d.dto AS dto,
+                    d.moda_dto AS moda_dto,
+                    d.forma_acc AS forma_acc,
+                    d.fha_de_hchos AS fha_de_hchos,
+                    d.hra_de_hchos AS hra_de_hchos,
+                    d.emto_com_dto AS emto_com_dto,
+                    d.grdo_cons AS grdo_cons,
+                    d.clasf_de_dto AS clasf_de_dto,
+                    d.id_ent_hchos AS id_ent_hchos,
+                    d.id_mun_hchos AS id_mun_hchos,
+                    d.id_loc_hchos AS id_loc_hchos,
+                    d.nom_loc_hchos AS nom_loc_hchos,
+                    d.id_col_hchos AS id_col_hchos,
+                    d.nom_col_hchos AS nom_col_hchos,
+                    d.cp AS cp,
+                    d.coord_x AS coord_x,
+                    d.coord_y AS coord_y,
+                    d.dom_hchos AS dom_hchos
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
+            ) AS Datos
+        FROM dbo.semanal_carga_tmp_delito d
+        WHERE d.id_semanal_carga = @IdSemanalCarga
+          AND d.incluido = 1
+          AND d.activo = 1
+        ORDER BY d.numero_fila;
+
+        SELECT
+            v.id_semanal_carga AS IdSemanalCarga,
+            GETDATE() AS FechaConfirmacion,
+            v.id_ci AS IdCi,
+            (
+                SELECT
+                    v.id_ci AS id_ci,
+                    v.id_delito AS id_delito,
+                    v.id_vicf AS id_vicf,
+                    v.id_tv AS id_tv,
+                    v.id_tpm AS id_tpm,
+                    v.sexo AS sexo,
+                    v.genero AS genero,
+                    v.pob AS pob,
+                    v.disc AS disc,
+                    v.fha_nac AS fha_nac,
+                    v.edad AS edad,
+                    v.nacional AS nacional
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
+            ) AS Datos
+        FROM dbo.semanal_carga_tmp_victima v
+        WHERE v.id_semanal_carga = @IdSemanalCarga
+          AND v.incluido = 1
+          AND v.activo = 1
+        ORDER BY v.numero_fila;
+    ";
+
+        using var resultados = await connection.QueryMultipleAsync(
+            sqlDatos,
+            new { contexto.IdSemanalCarga });
+
+        contexto.Carpetas = (await resultados.ReadAsync<SemanalFilaComparacion>()).ToList();
+        contexto.Delitos = (await resultados.ReadAsync<SemanalFilaComparacion>()).ToList();
+        contexto.Victimas = (await resultados.ReadAsync<SemanalFilaComparacion>()).ToList();
+
+        return contexto;
+    }
+
     public async Task<long> GuardarIntentoCargaAsync(SemanalCargaPersistencia carga)
     {
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
