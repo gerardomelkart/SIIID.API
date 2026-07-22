@@ -41,6 +41,10 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                 StringComparison.OrdinalIgnoreCase) ||
             string.Equals(
                 carga.Estado,
+                "VALIDADO_PENDIENTE_ACTUALIZACION",
+                StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(
+                carga.Estado,
                 "PENDIENTE_APROBACION",
                 StringComparison.OrdinalIgnoreCase);
 
@@ -70,13 +74,10 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             codigoReferencia,
             idUsuarioConsulta);
 
-        if (!string.Equals(
-                carga.Estado,
-                "CONFIRMADO",
-                StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(carga.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) && !string.Equals(carga.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                "El acuse semanal confirmado solo puede generarse para cargas en estado CONFIRMADO.");
+                "El acuse semanal confirmado solo puede generarse para operaciones semanales confirmadas.");
         }
 
         var resumen =
@@ -295,6 +296,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
         var fechaAcuse = carga.FechaConfirmacion ?? carga.FechaValidacion;
         var entidad = carga.EntidadFederativa.Trim();
         var entidadMayusculas = entidad.ToUpper(cultura);
+        var esActualizacion = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
 
         container.Column(column =>
         {
@@ -303,7 +305,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             column.Item()
                 .PaddingTop(4)
                 .AlignCenter()
-                .Text($"ACUSE DE ENTREGA DE INFORMACIÓN SEMANAL DEL ESTADO DE {entidadMayusculas}")
+                .Text($"ACUSE DE {(esActualizacion ? "ACTUALIZACIÓN" : "ENTREGA")} DE INFORMACIÓN SEMANAL DEL ESTADO DE {entidadMayusculas}")
                 .FontSize(11.5f)
                 .Bold();
 
@@ -317,7 +319,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                     text.Span($"Fiscalía General del Estado de {entidad}").Bold();
                     text.Span(" al ");
                     text.Span("Registro Nacional de Incidencia Delictiva (RNID)").Bold();
-                    text.Span(" del Sistema Nacional de Seguridad Pública, ha sido enviada de manera satisfactoria a través de la plataforma web, mediante este acuse se confirma la entrega formal de la estadística delictiva del ");
+                    text.Span(esActualizacion ? " del Sistema Nacional de Seguridad Pública, ha sido actualizada de manera satisfactoria a través de la plataforma web; mediante este acuse se confirma la actualización formal de la estadística delictiva del " : " del Sistema Nacional de Seguridad Pública, ha sido enviada de manera satisfactoria a través de la plataforma web; mediante este acuse se confirma la entrega formal de la estadística delictiva del ");
                     text.Span($"Estado de {entidad}").Bold();
                     text.Span(" el día ");
                     text.Span(ObtenerFechaLargaTexto(fechaAcuse)).Bold();

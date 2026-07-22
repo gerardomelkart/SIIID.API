@@ -128,5 +128,6 @@ public class SemanalAdministracionCargasController : ControllerBase
 
     private static bool EsCargaYaResuelta(string? estado) =>
         string.Equals(estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(estado, "RECHAZADO_ADMIN", StringComparison.OrdinalIgnoreCase);
 }

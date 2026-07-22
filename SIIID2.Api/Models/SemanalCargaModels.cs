@@ -5,6 +5,7 @@ public class SemanalCargaValidacionRequest
     public IFormFile? Carpetas { get; set; }
     public IFormFile? Delitos { get; set; }
     public IFormFile? Victimas { get; set; }
+    public string TipoCarga { get; set; } = "CARGA_INICIAL";
     public string TipoContenido { get; set; } = string.Empty;
     public int AnioSemana { get; set; }
     public int NumeroSemana { get; set; }
@@ -28,6 +29,7 @@ public class SemanalPeriodoCarga
 
 public class SemanalCargaValidacionResponse : CargaValidacionResponse
 {
+    public string TipoCarga { get; set; } = "CARGA_INICIAL";
     public SemanalPeriodoCarga? Periodo { get; set; }
     public int TotalCarpetasIncluidas { get; set; }
     public int TotalDelitosIncluidos { get; set; }
@@ -49,6 +51,7 @@ public class SemanalCargaPersistencia
     public int IdUsuarioCarga { get; set; }
     public int IdEntidadFederativa { get; set; }
     public string CodigoReferencia { get; set; } = string.Empty;
+    public string TipoCarga { get; set; } = "CARGA_INICIAL";
     public SemanalPeriodoCarga Periodo { get; set; } = new();
     public int TotalCarpetasIncluidas { get; set; }
     public int TotalDelitosIncluidos { get; set; }
@@ -66,6 +69,7 @@ public class SemanalCargaPersistencia
 public class SemanalFilaComparacion
 {
     public long IdSemanalCarga { get; set; }
+    public DateTime FechaConfirmacion { get; set; }
     public string IdCi { get; set; } = string.Empty;
     public string Datos { get; set; } = "{}";
 }

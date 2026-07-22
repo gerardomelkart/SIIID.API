@@ -22,6 +22,13 @@ public class SemanalCargaService : ISemanalCargaService
         "ACUMULADO_MES"
         };
 
+    private static readonly HashSet<string> TiposCargaPermitidos =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+        "CARGA_INICIAL",
+        "ACTUALIZACION"
+        };
+
     private static readonly HashSet<string> ExtensionesPermitidas =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -157,10 +164,22 @@ public class SemanalCargaService : ISemanalCargaService
 
     public async Task<SemanalCargaValidacionResponse> ValidarArchivosAsync(SemanalCargaValidacionRequest request, int idUsuarioCarga)
     {
+        var tipoCarga = (request.TipoCarga ?? string.Empty).Trim().ToUpperInvariant();
+
         var response = new SemanalCargaValidacionResponse
         {
-            CodigoReferencia = GenerarCodigoReferencia()
+            CodigoReferencia = GenerarCodigoReferencia(),
+            TipoCarga = tipoCarga
         };
+
+        if (!TiposCargaPermitidos.Contains(tipoCarga))
+        {
+            AgregarErrorGeneral(response, "SEMANAL_TIPO_CARGA_INVALIDO", "Tipo de operación inválido", "El tipo de operación debe ser CARGA_INICIAL o ACTUALIZACION.");
+            FinalizarRespuesta(response, 0, 0, 0);
+            return response;
+        }
+
+        var esActualizacion = string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
 
         var usuarioCarga =
             await _semanalCargaRepository.ObtenerUsuarioCargaAsync(
@@ -178,7 +197,7 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
-        if (!usuarioCarga.HabilitaCarga)
+        if (!esActualizacion && !usuarioCarga.HabilitaCarga)
         {
             AgregarErrorGeneral(
                 response,
@@ -186,6 +205,13 @@ public class SemanalCargaService : ISemanalCargaService
                 "Usuario sin permiso de carga semanal",
                 "El usuario no tiene habilitada la carga de información en el módulo semanal.");
 
+            FinalizarRespuesta(response, 0, 0, 0);
+            return response;
+        }
+
+        if (esActualizacion && !usuarioCarga.HabilitaModificacion)
+        {
+            AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_PERMISO_MODIFICACION", "Usuario sin permiso de actualización semanal", "El usuario no tiene habilitada la modificación de información en el módulo semanal.");
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
         }
@@ -410,7 +436,37 @@ public class SemanalCargaService : ISemanalCargaService
         var semanasYaCargadasIdenticas =
             new HashSet<DateTime>();
 
-        if (string.Equals(
+        if (esActualizacion)
+        {
+            var semanaObjetivo = ObtenerInicioSemana(periodo.FechaInicioSemana);
+
+            if (!datosConfirmadosPorSemana.TryGetValue(semanaObjetivo, out var datosConfirmadosSemana))
+            {
+                AgregarErrorGeneral(response, "SEMANAL_ACTUALIZACION_SIN_CARGA_CONFIRMADA", "La semana no tiene información confirmada", $"La semana {periodo.NumeroSemana}/{periodo.AnioSemana} todavía no tiene información semanal confirmada para actualizar.");
+            }
+            else if (!datosArchivoPorSemana.TryGetValue(semanaObjetivo, out var datosArchivoSemana))
+            {
+                AgregarErrorGeneral(response, "SEMANAL_ACTUALIZACION_SIN_REGISTROS", "La actualización no contiene registros de la semana", $"Los archivos no contienen carpetas correspondientes a la semana {periodo.NumeroSemana}/{periodo.AnioSemana}.");
+            }
+            else if (CoincidenDatosSemana(datosArchivoSemana, datosConfirmadosSemana, out _))
+            {
+                AgregarErrorGeneral(response, "SEMANAL_ACTUALIZACION_SIN_CAMBIOS", "La actualización no contiene cambios", $"Los tres archivos coinciden con la información confirmada de la semana {periodo.NumeroSemana}/{periodo.AnioSemana}.");
+            }
+            else
+            {
+                response.Advertencias.Add(new CargaValidacionError
+                {
+                    Archivo = "general",
+                    Columna = "semana",
+                    Campo = "semana",
+                    Valor = $"{periodo.AnioSemana}-W{periodo.NumeroSemana:00}",
+                    Codigo = "SEMANAL_ACTUALIZACION_REEMPLAZA_SEMANA",
+                    DescripcionResumen = "La semana confirmada será reemplazada",
+                    Mensaje = $"Al aprobarse, esta actualización sustituirá la versión confirmada de la semana {periodo.NumeroSemana}/{periodo.AnioSemana} y conservará la versión anterior en el histórico."
+                });
+            }
+        }
+        else if (string.Equals(
                 periodo.TipoContenido,
                 "SOLO_SEMANA",
                 StringComparison.OrdinalIgnoreCase))
@@ -515,7 +571,7 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
-        if (semanasYaCargadasIdenticas.Count > 0)
+        if (!esActualizacion && semanasYaCargadasIdenticas.Count > 0)
         {
             ExcluirSemanasYaCargadas(
                 carpetasEtiquetadas,
@@ -561,9 +617,9 @@ public class SemanalCargaService : ISemanalCargaService
         {
             AgregarErrorGeneral(
                 response,
-                "SEMANAL_ACUMULADO_SIN_REGISTROS_NUEVOS",
-                "El acumulado no contiene registros nuevos",
-                "Todos los registros del acumulado corresponden a semanas ya cargadas y coinciden con la base. No existe una semana nueva para integrar.");
+                esActualizacion ? "SEMANAL_ACTUALIZACION_SIN_REGISTROS" : "SEMANAL_ACUMULADO_SIN_REGISTROS_NUEVOS",
+                esActualizacion ? "La actualización no contiene registros" : "El acumulado no contiene registros nuevos",
+                esActualizacion ? "No existen registros de la semana seleccionada para actualizar." : "Todos los registros del acumulado corresponden a semanas ya cargadas y coinciden con la base. No existe una semana nueva para integrar.");
 
             FinalizarRespuesta(
                 response,
@@ -659,6 +715,7 @@ public class SemanalCargaService : ISemanalCargaService
                     idEntidadFederativa.Value,
                 CodigoReferencia =
                     response.CodigoReferencia,
+                TipoCarga = tipoCarga,
                 Periodo = periodo,
                 TotalCarpetasIncluidas =
                     response.TotalCarpetasIncluidas,
@@ -681,7 +738,8 @@ public class SemanalCargaService : ISemanalCargaService
             });
 
         _logger.LogInformation(
-            "Carga semanal validada. Referencia: {CodigoReferencia}, Entidad: {IdEntidad}, Semana: {NumeroSemana}/{AnioSemana}, Tramo: {FechaInicioTramo:yyyy-MM-dd} a {FechaFinTramo:yyyy-MM-dd}",
+            "Operación semanal validada. Tipo: {TipoCarga}, Referencia: {CodigoReferencia}, Entidad: {IdEntidad}, Semana: {NumeroSemana}/{AnioSemana}, Tramo: {FechaInicioTramo:yyyy-MM-dd} a {FechaFinTramo:yyyy-MM-dd}",
+            tipoCarga,
             response.CodigoReferencia,
             idEntidadFederativa.Value,
             periodo.NumeroSemana,
@@ -696,11 +754,17 @@ public class SemanalCargaService : ISemanalCargaService
 
     private static SemanalPeriodoCarga? ValidarPeriodo(SemanalCargaValidacionRequest request, List<CargaValidacionError> errores)
     {
-        var tipoContenido = request.TipoContenido.Trim().ToUpperInvariant();
+        var tipoCarga = (request.TipoCarga ?? string.Empty).Trim().ToUpperInvariant();
+        var tipoContenido = (request.TipoContenido ?? string.Empty).Trim().ToUpperInvariant();
 
         if (!TiposContenidoPermitidos.Contains(tipoContenido))
         {
             AgregarErrorGeneral(errores, "SEMANAL_TIPO_CONTENIDO_INVALIDO", "Tipo de contenido inválido", "El tipo de contenido debe ser SOLO_SEMANA o ACUMULADO_MES.", "tipoContenido", request.TipoContenido);
+        }
+
+        if (string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) && !string.Equals(tipoContenido, "SOLO_SEMANA", StringComparison.OrdinalIgnoreCase))
+        {
+            AgregarErrorGeneral(errores, "SEMANAL_ACTUALIZACION_REQUIERE_UNA_SEMANA", "La actualización debe corresponder a una semana", "La actualización semanal no admite el tipo ACUMULADO_MES; seleccione una sola semana.", "tipoContenido", request.TipoContenido);
         }
 
         if (request.AnioSemana < 2000 || request.AnioSemana > 2100) AgregarErrorGeneral(errores, "SEMANAL_ANIO_SEMANA_INVALIDO", "Año de semana inválido", "El año de la semana debe estar entre 2000 y 2100.", "anioSemana", request.AnioSemana.ToString(CultureInfo.InvariantCulture));
@@ -775,7 +839,7 @@ public class SemanalCargaService : ISemanalCargaService
             return null;
         }
 
-        if (string.Equals(tipoContenido, "ACUMULADO_MES",StringComparison.OrdinalIgnoreCase) && fechaInicioSemana != fechaInicioSemanaActual)
+        if (string.Equals(tipoContenido, "ACUMULADO_MES", StringComparison.OrdinalIgnoreCase) && fechaInicioSemana != fechaInicioSemanaActual)
         {
             AgregarErrorGeneral(
                 errores,
@@ -790,7 +854,7 @@ public class SemanalCargaService : ISemanalCargaService
             return null;
         }
 
-        if (fechaFinSemana.Month != request.MesCorte ||  fechaFinSemana.Year != request.AnioCorte)
+        if (fechaFinSemana.Month != request.MesCorte || fechaFinSemana.Year != request.AnioCorte)
         {
             AgregarErrorGeneral(
                 errores,
@@ -1101,6 +1165,20 @@ public class SemanalCargaService : ISemanalCargaService
         var resultado =
             new Dictionary<DateTime, SemanalDatosSemana>();
 
+        var cargaMasRecientePorSemana =
+            new Dictionary<DateTime, SemanalFilaComparacion>();
+
+        foreach (var item in datosComparacion.CarpetasConfirmadas)
+        {
+            var fila = ConvertirFilaComparacion(item);
+
+            if (!IntentarConvertirFecha(ObtenerValor(fila, "fha_de_ini"), out var fechaInicio)) continue;
+
+            var semana = ObtenerInicioSemana(fechaInicio);
+
+            if (!cargaMasRecientePorSemana.TryGetValue(semana, out var actual) || item.FechaConfirmacion > actual.FechaConfirmacion || (item.FechaConfirmacion == actual.FechaConfirmacion && item.IdSemanalCarga > actual.IdSemanalCarga)) cargaMasRecientePorSemana[semana] = item;
+        }
+
         var semanaPorCarpeta =
             new Dictionary<string, DateTime>(
                 StringComparer.OrdinalIgnoreCase);
@@ -1120,6 +1198,8 @@ public class SemanalCargaService : ISemanalCargaService
 
             var semana =
                 ObtenerInicioSemana(fechaInicio);
+
+            if (!cargaMasRecientePorSemana.TryGetValue(semana, out var cargaMasReciente) || cargaMasReciente.IdSemanalCarga != item.IdSemanalCarga) continue;
 
             semanaPorCarpeta[
                 CrearLlaveCargaCarpeta(
@@ -1633,11 +1713,14 @@ public class SemanalCargaService : ISemanalCargaService
         resumen.AddRange(response.Advertencias.Where(x => !string.IsNullOrWhiteSpace(x.Codigo) && !string.IsNullOrWhiteSpace(x.DescripcionResumen)).GroupBy(x => new { x.Archivo, x.Codigo, x.DescripcionResumen }).Select(x => new CargaValidacionResumenItem { Archivo = x.Key.Archivo, Codigo = x.Key.Codigo, Descripcion = x.Key.DescripcionResumen, TotalRegistros = x.Count(), EsError = false }).OrderBy(x => x.Archivo).ThenBy(x => x.Codigo));
         response.ResumenValidacion = resumen;
 
+        var esActualizacion = string.Equals(response.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+        var operacion = esActualizacion ? "actualización" : "carga";
+
         response.Mensaje = response.EsValido
             ? response.Advertencias.Count > 0
-                ? "La información semanal fue validada con advertencias. Revise el detalle antes de continuar."
-                : "La información semanal fue validada correctamente. Puede confirmar la carga."
-            : "La información semanal contiene errores de validación.";
+                ? $"La {operacion} semanal fue validada con advertencias. Revise el detalle antes de continuar."
+                : $"La {operacion} semanal fue validada correctamente. Puede confirmarla."
+            : $"La {operacion} semanal contiene errores de validación.";
     }
 
     private static CargaValidacionResumenItem CrearResumen(string archivo, string codigo, string descripcion, int total) => new() { Archivo = archivo, Codigo = codigo, Descripcion = descripcion, TotalRegistros = total, EsError = false };

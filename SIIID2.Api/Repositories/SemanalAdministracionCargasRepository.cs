@@ -16,6 +16,7 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
             SELECT
                 sc.id_semanal_carga AS IdSemanalCarga,
                 sc.codigo_referencia AS CodigoReferencia,
+                sc.tipo_carga AS TipoCarga,
                 sc.tipo_contenido AS TipoContenido,
                 sc.id_entidad_federativa AS IdEntidadFederativa,
                 ISNULL(ef.nombre, N'') AS EntidadFederativa,
@@ -56,7 +57,7 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
                 ON u.id_usuario = sc.id_usuario_carga
             LEFT JOIN dbo.catalogo_entidad_federativa ef
                 ON ef.id_entidad_federativa = sc.id_entidad_federativa
-            WHERE sc.tipo_carga = N'CARGA_INICIAL'
+            WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
               AND sc.estado = N'PENDIENTE_APROBACION'
               AND sc.activo = 1
             ORDER BY
@@ -74,6 +75,7 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
             SELECT TOP (1)
                 sc.id_semanal_carga AS IdSemanalCarga,
                 sc.codigo_referencia AS CodigoReferencia,
+                sc.tipo_carga AS TipoCarga,
                 sc.tipo_contenido AS TipoContenido,
                 sc.id_entidad_federativa AS IdEntidadFederativa,
                 ISNULL(ef.nombre, N'') AS EntidadFederativa,
@@ -115,7 +117,7 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
             LEFT JOIN dbo.catalogo_entidad_federativa ef
                 ON ef.id_entidad_federativa = sc.id_entidad_federativa
             WHERE sc.codigo_referencia = @CodigoReferencia
-              AND sc.tipo_carga = N'CARGA_INICIAL'
+              AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
               AND sc.estado = N'PENDIENTE_APROBACION'
               AND sc.activo = 1;
         ";
@@ -161,7 +163,7 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
                 sc.estado AS Estado
             FROM dbo.semanal_carga sc
             WHERE sc.codigo_referencia = @CodigoReferencia
-              AND sc.tipo_carga = N'CARGA_INICIAL'
+              AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
               AND sc.activo = 1;
         ";
 

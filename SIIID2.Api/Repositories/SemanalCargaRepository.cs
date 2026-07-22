@@ -20,8 +20,12 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         public bool EsSuperUsuario { get; set; }
         public bool HabilitaSemanal { get; set; }
         public bool HabilitaCarga { get; set; }
+        public bool HabilitaModificacion { get; set; }
+        public string TipoCarga { get; set; } = string.Empty;
         public int MesCorte { get; set; }
         public int AnioCorte { get; set; }
+        public DateTime FechaInicioTramo { get; set; }
+        public DateTime FechaFinTramo { get; set; }
         public int TotalCarpetasIncluidas { get; set; }
         public int TotalDelitosIncluidos { get; set; }
         public int TotalVictimasIncluidas { get; set; }
@@ -60,6 +64,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         sc.codigo_referencia AS CodigoReferencia,
         sc.id_entidad_federativa AS IdEntidadFederativa,
         ISNULL(e.nombre, N'') AS EntidadFederativa,
+        sc.tipo_carga AS TipoCarga,
         sc.tipo_contenido AS TipoContenido,
         sc.anio_semana AS AnioSemana,
         sc.numero_semana AS NumeroSemana,
@@ -86,7 +91,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     LEFT JOIN dbo.catalogo_entidad_federativa e
         ON e.id_entidad_federativa = sc.id_entidad_federativa
     WHERE sc.codigo_referencia = @CodigoReferencia
-      AND sc.tipo_carga = N'CARGA_INICIAL'
+      AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
       AND sc.activo = 1;
 ";
 
@@ -190,11 +195,12 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             new { IdSemanalCarga = idSemanalCarga })).ToList();
     }
 
-    public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(int idEntidadFederativa, int mesCorte,  int anioCorte)
+    public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
     {
         const string sql = @"
         SELECT
             sc.id_semanal_carga AS IdSemanalCarga,
+            sc.fecha_confirmacion AS FechaConfirmacion,
             c.id_ci AS IdCi,
             (
                 SELECT
@@ -213,12 +219,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.mes_corte = @MesCorte
           AND sc.anio_corte = @AnioCorte
-          AND sc.tipo_carga = N'CARGA_INICIAL'
-          AND sc.estado = N'CONFIRMADO'
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1;
 
         SELECT
             sc.id_semanal_carga AS IdSemanalCarga,
+            sc.fecha_confirmacion AS FechaConfirmacion,
             d.id_ci AS IdCi,
             (
                 SELECT
@@ -257,12 +264,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.mes_corte = @MesCorte
           AND sc.anio_corte = @AnioCorte
-          AND sc.tipo_carga = N'CARGA_INICIAL'
-          AND sc.estado = N'CONFIRMADO'
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1;
 
         SELECT
             sc.id_semanal_carga AS IdSemanalCarga,
+            sc.fecha_confirmacion AS FechaConfirmacion,
             v.id_ci AS IdCi,
             (
                 SELECT
@@ -293,8 +301,8 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.mes_corte = @MesCorte
           AND sc.anio_corte = @AnioCorte
-          AND sc.tipo_carga = N'CARGA_INICIAL'
-          AND sc.estado = N'CONFIRMADO'
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1;
 
         SELECT DISTINCT
@@ -310,10 +318,11 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.mes_corte = @MesCorte
           AND sc.anio_corte = @AnioCorte
-          AND sc.tipo_carga = N'CARGA_INICIAL'
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN
           (
               N'VALIDADO_PENDIENTE',
+              N'VALIDADO_PENDIENTE_ACTUALIZACION',
               N'PENDIENTE_APROBACION'
           )
           AND sc.activo = 1;
@@ -390,10 +399,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 return Error(codigoReferencia, "NO_ENCONTRADA", "No se encontró una carga semanal válida para continuar.");
             }
 
-            if (!string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase))
+            var esActualizacion = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+            var estadoEsperado = esActualizacion ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "VALIDADO_PENDIENTE";
+
+            if (!string.Equals(carga.Estado, estadoEsperado, StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
-                return Error(codigoReferencia, carga.Estado, "La carga semanal no se encuentra en estado VALIDADO_PENDIENTE.");
+                return Error(codigoReferencia, carga.Estado, $"La operación semanal no se encuentra en estado {estadoEsperado}.");
             }
 
             if (carga.IdUsuarioCarga != idUsuarioConfirmacion)
@@ -402,17 +414,17 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 return Error(codigoReferencia, carga.Estado, "Solo el usuario que realizó la carga puede aceptarla o rechazarla.");
             }
 
-            if (!carga.HabilitaSemanal || !carga.HabilitaCarga)
+            if (!carga.HabilitaSemanal || (esActualizacion ? !carga.HabilitaModificacion : !carga.HabilitaCarga))
             {
                 await transaction.RollbackAsync();
-                return Error(codigoReferencia, carga.Estado, "El usuario no tiene habilitada la carga de información en el módulo semanal.");
+                return Error(codigoReferencia, carga.Estado, esActualizacion ? "El usuario no tiene habilitada la modificación de información en el módulo semanal." : "El usuario no tiene habilitada la carga de información en el módulo semanal.");
             }
 
             if (carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
             {
-                await ActualizarCargaExpiradaAsync(connection, transaction, carga.IdSemanalCarga);
+                await ActualizarCargaExpiradaAsync(connection, transaction, carga.IdSemanalCarga, esActualizacion);
                 await transaction.CommitAsync();
-                return Error(codigoReferencia, "EXPIRADO", "La carga semanal expiró. Debe validar nuevamente los archivos.");
+                return Error(codigoReferencia, esActualizacion ? "EXPIRADO_ACTUALIZACION" : "EXPIRADO", "La operación semanal expiró. Debe validar nuevamente los archivos.");
             }
 
             if (!carga.EsSuperUsuario && carga.IdEntidadFederativaUsuario != carga.IdEntidadFederativaCarga)
@@ -429,9 +441,9 @@ public class SemanalCargaRepository : ISemanalCargaRepository
 
             if (!aceptar)
             {
-                await RechazarCargaAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
+                await RechazarCargaAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion, esActualizacion);
                 await transaction.CommitAsync();
-                return Exito(codigoReferencia, "RECHAZADO_VALIDACION", "La carga semanal fue rechazada correctamente.");
+                return Exito(codigoReferencia, esActualizacion ? "RECHAZADO_VALIDACION_ACTUALIZACION" : "RECHAZADO_VALIDACION", esActualizacion ? "La actualización semanal fue rechazada correctamente." : "La carga semanal fue rechazada correctamente.");
             }
 
             await SemanalCargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
@@ -440,8 +452,10 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             {
                 await EnviarCargaAprobacionAsync(connection, transaction, carga.IdSemanalCarga);
                 await transaction.CommitAsync();
-                return Exito(codigoReferencia, "PENDIENTE_APROBACION", "La carga semanal fue enviada correctamente a revisión administrativa.");
+                return Exito(codigoReferencia, "PENDIENTE_APROBACION", esActualizacion ? "La actualización semanal fue enviada correctamente a revisión administrativa." : "La carga semanal fue enviada correctamente a revisión administrativa.");
             }
+
+            if (esActualizacion) await PrepararActualizacionSemanalAsync(connection, transaction, carga, idUsuarioConfirmacion);
 
             var totalCarpetas = await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
             var totalDelitos = await InsertarDelitosFinalesAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
@@ -452,9 +466,9 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 throw new InvalidOperationException($"Los totales insertados no coinciden con la validación semanal. Carpetas {totalCarpetas}/{carga.TotalCarpetasIncluidas}, delitos {totalDelitos}/{carga.TotalDelitosIncluidos}, víctimas {totalVictimas}/{carga.TotalVictimasIncluidas}.");
             }
 
-            await ConfirmarCargaFinalAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
+            await ConfirmarCargaFinalAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion, esActualizacion);
             await transaction.CommitAsync();
-            return Exito(codigoReferencia, "CONFIRMADO", "La carga semanal fue confirmada correctamente.");
+            return Exito(codigoReferencia, esActualizacion ? "CONFIRMADO_ACTUALIZACION" : "CONFIRMADO", esActualizacion ? "La actualización semanal fue confirmada correctamente." : "La carga semanal fue confirmada correctamente.");
         }
         catch
         {
@@ -497,6 +511,10 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 return Error(codigoReferencia, "PERIODO_CONSOLIDADO", "La carga corresponde a un mes anterior al mes en curso y ya no puede aprobarse porque ese periodo pertenece al consolidado.");
             }
 
+            var esActualizacion = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+
+            if (esActualizacion) await PrepararActualizacionSemanalAsync(connection, transaction, carga, idUsuarioAprobacion);
+
             var totalCarpetas = await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
             var totalDelitos = await InsertarDelitosFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
             var totalVictimas = await InsertarVictimasFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
@@ -506,10 +524,10 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 throw new InvalidOperationException($"Los totales insertados no coinciden con la validación semanal. Carpetas {totalCarpetas}/{carga.TotalCarpetasIncluidas}, delitos {totalDelitos}/{carga.TotalDelitosIncluidos}, víctimas {totalVictimas}/{carga.TotalVictimasIncluidas}.");
             }
 
-            await ConfirmarCargaFinalAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioAprobacion);
+            await ConfirmarCargaFinalAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioAprobacion, esActualizacion);
             await transaction.CommitAsync();
 
-            return Exito(codigoReferencia, "CONFIRMADO", "La carga semanal fue aprobada y confirmada correctamente.");
+            return Exito(codigoReferencia, esActualizacion ? "CONFIRMADO_ACTUALIZACION" : "CONFIRMADO", esActualizacion ? "La actualización semanal fue aprobada y confirmada correctamente." : "La carga semanal fue aprobada y confirmada correctamente.");
         }
         catch
         {
@@ -593,7 +611,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             @IdUsuarioCarga,
             @IdEntidadFederativa,
             @CodigoReferencia,
-            N'CARGA_INICIAL',
+            @TipoCarga,
             @TipoContenido,
             @AnioSemana,
             @NumeroSemana,
@@ -609,7 +627,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             @TotalCarpetasExcluidas,
             @TotalDelitosExcluidos,
             @TotalVictimasExcluidas,
-            N'VALIDADO_PENDIENTE',
+            @EstadoInicial,
             SYSDATETIME(),
             DATEADD(HOUR, 48, SYSDATETIME()),
             1
@@ -621,6 +639,8 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             carga.IdUsuarioCarga,
             carga.IdEntidadFederativa,
             carga.CodigoReferencia,
+            carga.TipoCarga,
+            EstadoInicial = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "VALIDADO_PENDIENTE",
             carga.Periodo.TipoContenido,
             carga.Periodo.AnioSemana,
             carga.Periodo.NumeroSemana,
@@ -758,8 +778,12 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 ELSE 0 END) AS EsSuperUsuario,
             CONVERT(bit, CASE WHEN um.habilitado = 1 AND um.activo = 1 THEN 1 ELSE 0 END) AS HabilitaSemanal,
             CONVERT(bit, ISNULL(um.habilita_carga, 0)) AS HabilitaCarga,
+            CONVERT(bit, ISNULL(um.habilita_modificacion, 0)) AS HabilitaModificacion,
+            sc.tipo_carga AS TipoCarga,
             sc.mes_corte AS MesCorte,
             sc.anio_corte AS AnioCorte,
+            sc.fecha_inicio_tramo AS FechaInicioTramo,
+            sc.fecha_fin_tramo AS FechaFinTramo,
             sc.total_carpetas_incluidas AS TotalCarpetasIncluidas,
             sc.total_delitos_incluidos AS TotalDelitosIncluidos,
             sc.total_victimas_incluidas AS TotalVictimasIncluidas
@@ -769,7 +793,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         INNER JOIN dbo.catalogo_modulo m ON m.clave = N'SEMANAL' AND m.activo = 1
         LEFT JOIN dbo.usuario_modulo um ON um.id_usuario = u.id_usuario AND um.id_modulo = m.id_modulo
         WHERE sc.codigo_referencia = @CodigoReferencia
-          AND sc.tipo_carga = N'CARGA_INICIAL'
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.activo = 1;
     ";
 
@@ -782,30 +806,30 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return anioCorte < fechaActual.Year || (anioCorte == fechaActual.Year && mesCorte < fechaActual.Month);
     }
 
-    private static async Task ActualizarCargaExpiradaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga)
+    private static async Task ActualizarCargaExpiradaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, bool esActualizacion)
     {
         const string sql = @"
-        UPDATE dbo.semanal_carga SET estado = N'EXPIRADO', mensaje_error = N'La carga semanal expiró antes de ser confirmada.' WHERE id_semanal_carga = @IdSemanalCarga;
-        UPDATE dbo.semanal_carga_tmp_carpeta SET estado = N'EXPIRADO', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
-        UPDATE dbo.semanal_carga_tmp_delito SET estado = N'EXPIRADO', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
-        UPDATE dbo.semanal_carga_tmp_victima SET estado = N'EXPIRADO', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
+        UPDATE dbo.semanal_carga SET estado = @Estado, mensaje_error = N'La operación semanal expiró antes de ser confirmada.' WHERE id_semanal_carga = @IdSemanalCarga;
+        UPDATE dbo.semanal_carga_tmp_carpeta SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
+        UPDATE dbo.semanal_carga_tmp_delito SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
+        UPDATE dbo.semanal_carga_tmp_victima SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
     ";
 
-        await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga }, transaction);
+        await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, Estado = esActualizacion ? "EXPIRADO_ACTUALIZACION" : "EXPIRADO" }, transaction);
     }
 
-    private static async Task RechazarCargaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioConfirmacion)
+    private static async Task RechazarCargaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioConfirmacion, bool esActualizacion)
     {
         const string sql = @"
         UPDATE dbo.semanal_carga
-        SET estado = N'RECHAZADO_VALIDACION', fecha_confirmacion = SYSDATETIME(), id_usuario_confirmacion = @IdUsuarioConfirmacion, mensaje_error = N'La carga semanal fue rechazada por el usuario.'
+        SET estado = @Estado, fecha_confirmacion = SYSDATETIME(), id_usuario_confirmacion = @IdUsuarioConfirmacion, mensaje_error = N'La operación semanal fue rechazada por el usuario.'
         WHERE id_semanal_carga = @IdSemanalCarga;
-        UPDATE dbo.semanal_carga_tmp_carpeta SET estado = N'RECHAZADO_VALIDACION', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
-        UPDATE dbo.semanal_carga_tmp_delito SET estado = N'RECHAZADO_VALIDACION', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
-        UPDATE dbo.semanal_carga_tmp_victima SET estado = N'RECHAZADO_VALIDACION', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
+        UPDATE dbo.semanal_carga_tmp_carpeta SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
+        UPDATE dbo.semanal_carga_tmp_delito SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
+        UPDATE dbo.semanal_carga_tmp_victima SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
     ";
 
-        await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
+        await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion, Estado = esActualizacion ? "RECHAZADO_VALIDACION_ACTUALIZACION" : "RECHAZADO_VALIDACION" }, transaction);
     }
 
     private static async Task EnviarCargaAprobacionAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga)
@@ -848,6 +872,240 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     ";
 
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioRechazo = idUsuarioRechazo, Motivo = motivo }, transaction);
+    }
+
+    private static async Task PrepararActualizacionSemanalAsync(SqlConnection connection, SqlTransaction transaction, SemanalCargaConfirmacionInfo carga, int idUsuarioModificacion)
+    {
+        const string sql = @"
+        SELECT ci.id_semanal_carpeta_investigacion
+        INTO #CarpetasVersionAnterior
+        FROM dbo.semanal_carpeta_investigacion ci WITH (UPDLOCK, HOLDLOCK)
+        INNER JOIN dbo.semanal_carga sc ON sc.id_semanal_carga = ci.id_semanal_carga
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND ci.fecha_inicio >= @FechaInicioTramo
+          AND ci.fecha_inicio < DATEADD(DAY, 1, @FechaFinTramo)
+          AND ci.activo = 1
+          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+          AND sc.activo = 1;
+
+        IF NOT EXISTS (SELECT 1 FROM #CarpetasVersionAnterior)
+        BEGIN
+            THROW 50040, 'No existe una versión semanal confirmada activa para reemplazar.', 1;
+        END;
+
+        SELECT d.id_semanal_delito
+        INTO #DelitosVersionAnterior
+        FROM dbo.semanal_delito d
+        INNER JOIN #CarpetasVersionAnterior c ON c.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
+        WHERE d.activo = 1;
+
+        SELECT v.id_semanal_victima
+        INTO #VictimasVersionAnterior
+        FROM dbo.semanal_victima v
+        INNER JOIN #DelitosVersionAnterior d ON d.id_semanal_delito = v.id_semanal_delito
+        WHERE v.activo = 1;
+
+        INSERT INTO dbo.semanal_victima_historico
+        (
+            id_semanal_victima,
+            id_semanal_delito,
+            id_semanal_carga,
+            identificador_victima_fiscalia,
+            id_tipo_victima,
+            id_tipo_victima_moral,
+            id_sexo,
+            id_genero,
+            id_nacionalidad,
+            id_pertenece_poblacion_indigena,
+            id_presenta_discapacidad,
+            fecha_nacimiento,
+            edad,
+            id_usuario_registro,
+            fecha_registro,
+            id_usuario_modificacion,
+            id_semanal_carga_nueva,
+            tipo_movimiento,
+            fecha_modificacion,
+            activo
+        )
+        SELECT
+            v.id_semanal_victima,
+            v.id_semanal_delito,
+            v.id_semanal_carga,
+            v.identificador_victima_fiscalia,
+            v.id_tipo_victima,
+            v.id_tipo_victima_moral,
+            v.id_sexo,
+            v.id_genero,
+            v.id_nacionalidad,
+            v.id_pertenece_poblacion_indigena,
+            v.id_presenta_discapacidad,
+            v.fecha_nacimiento,
+            v.edad,
+            v.id_usuario_registro,
+            v.fecha_registro,
+            @IdUsuarioModificacion,
+            @IdSemanalCargaNueva,
+            CASE WHEN EXISTS
+            (
+                SELECT 1
+                FROM dbo.semanal_delito d
+                INNER JOIN dbo.semanal_carpeta_investigacion ci ON ci.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
+                INNER JOIN dbo.semanal_carga_tmp_victima nv
+                    ON nv.id_semanal_carga = @IdSemanalCargaNueva
+                   AND nv.id_ci = ci.identificador_carpeta_fiscalia
+                   AND nv.id_delito = d.identificador_delito_fiscalia
+                   AND nv.id_vicf = v.identificador_victima_fiscalia
+                   AND nv.incluido = 1
+                   AND nv.activo = 1
+                WHERE d.id_semanal_delito = v.id_semanal_delito
+            ) THEN N'MODIFICADO' ELSE N'ELIMINADO' END,
+            SYSDATETIME(),
+            1
+        FROM dbo.semanal_victima v
+        INNER JOIN #VictimasVersionAnterior objetivo ON objetivo.id_semanal_victima = v.id_semanal_victima;
+
+        INSERT INTO dbo.semanal_delito_historico
+        (
+            id_semanal_delito,
+            id_semanal_carpeta_investigacion,
+            id_semanal_carga,
+            identificador_delito_fiscalia,
+            delito_fiscalia,
+            modalidad_delito_fiscalia,
+            id_catalogo_delito,
+            id_forma_accion,
+            fecha_hechos,
+            id_instrumento_comision,
+            id_grado_consumacion,
+            id_modalidad_delito,
+            id_entidad_federativa,
+            id_municipio,
+            id_localidad_fiscalia,
+            localidad_fiscalia_nombre,
+            id_colonia_fiscalia,
+            colonia_fiscalia_nombre,
+            id_codigo_postal,
+            coordenada_x,
+            coordenada_y,
+            domicilio_hechos,
+            id_usuario_registro,
+            fecha_registro,
+            id_usuario_modificacion,
+            id_semanal_carga_nueva,
+            tipo_movimiento,
+            fecha_modificacion,
+            activo
+        )
+        SELECT
+            d.id_semanal_delito,
+            d.id_semanal_carpeta_investigacion,
+            d.id_semanal_carga,
+            d.identificador_delito_fiscalia,
+            d.delito_fiscalia,
+            d.modalidad_delito_fiscalia,
+            d.id_catalogo_delito,
+            d.id_forma_accion,
+            d.fecha_hechos,
+            d.id_instrumento_comision,
+            d.id_grado_consumacion,
+            d.id_modalidad_delito,
+            d.id_entidad_federativa,
+            d.id_municipio,
+            d.id_localidad_fiscalia,
+            d.localidad_fiscalia_nombre,
+            d.id_colonia_fiscalia,
+            d.colonia_fiscalia_nombre,
+            d.id_codigo_postal,
+            d.coordenada_x,
+            d.coordenada_y,
+            d.domicilio_hechos,
+            d.id_usuario_registro,
+            d.fecha_registro,
+            @IdUsuarioModificacion,
+            @IdSemanalCargaNueva,
+            CASE WHEN EXISTS
+            (
+                SELECT 1
+                FROM dbo.semanal_carpeta_investigacion ci
+                INNER JOIN dbo.semanal_carga_tmp_delito nd
+                    ON nd.id_semanal_carga = @IdSemanalCargaNueva
+                   AND nd.id_ci = ci.identificador_carpeta_fiscalia
+                   AND nd.id_delito = d.identificador_delito_fiscalia
+                   AND nd.incluido = 1
+                   AND nd.activo = 1
+                WHERE ci.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
+            ) THEN N'MODIFICADO' ELSE N'ELIMINADO' END,
+            SYSDATETIME(),
+            1
+        FROM dbo.semanal_delito d
+        INNER JOIN #DelitosVersionAnterior objetivo ON objetivo.id_semanal_delito = d.id_semanal_delito;
+
+        INSERT INTO dbo.semanal_carpeta_investigacion_historico
+        (
+            id_semanal_carpeta_investigacion,
+            id_semanal_carga,
+            identificador_carpeta_fiscalia,
+            nomenclatura_carpeta_fiscalia,
+            fecha_inicio,
+            resumen_hechos,
+            id_usuario_registro,
+            fecha_registro,
+            id_usuario_modificacion,
+            id_semanal_carga_nueva,
+            tipo_movimiento,
+            fecha_modificacion,
+            activo
+        )
+        SELECT
+            ci.id_semanal_carpeta_investigacion,
+            ci.id_semanal_carga,
+            ci.identificador_carpeta_fiscalia,
+            ci.nomenclatura_carpeta_fiscalia,
+            ci.fecha_inicio,
+            ci.resumen_hechos,
+            ci.id_usuario_registro,
+            ci.fecha_registro,
+            @IdUsuarioModificacion,
+            @IdSemanalCargaNueva,
+            CASE WHEN EXISTS
+            (
+                SELECT 1
+                FROM dbo.semanal_carga_tmp_carpeta nc
+                WHERE nc.id_semanal_carga = @IdSemanalCargaNueva
+                  AND nc.id_ci = ci.identificador_carpeta_fiscalia
+                  AND nc.incluido = 1
+                  AND nc.activo = 1
+            ) THEN N'MODIFICADO' ELSE N'ELIMINADO' END,
+            SYSDATETIME(),
+            1
+        FROM dbo.semanal_carpeta_investigacion ci
+        INNER JOIN #CarpetasVersionAnterior objetivo ON objetivo.id_semanal_carpeta_investigacion = ci.id_semanal_carpeta_investigacion;
+
+        UPDATE v
+        SET activo = 0
+        FROM dbo.semanal_victima v
+        INNER JOIN #VictimasVersionAnterior objetivo ON objetivo.id_semanal_victima = v.id_semanal_victima;
+
+        UPDATE d
+        SET activo = 0
+        FROM dbo.semanal_delito d
+        INNER JOIN #DelitosVersionAnterior objetivo ON objetivo.id_semanal_delito = d.id_semanal_delito;
+
+        UPDATE ci
+        SET activo = 0
+        FROM dbo.semanal_carpeta_investigacion ci
+        INNER JOIN #CarpetasVersionAnterior objetivo ON objetivo.id_semanal_carpeta_investigacion = ci.id_semanal_carpeta_investigacion;
+    ";
+
+        await connection.ExecuteAsync(sql, new
+        {
+            IdSemanalCargaNueva = carga.IdSemanalCarga,
+            IdEntidadFederativa = carga.IdEntidadFederativaCarga,
+            carga.FechaInicioTramo,
+            carga.FechaFinTramo,
+            IdUsuarioModificacion = idUsuarioModificacion
+        }, transaction);
     }
 
     private static async Task<int> InsertarCarpetasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioRegistro)
@@ -1031,18 +1289,18 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioRegistro = idUsuarioRegistro }, transaction);
     }
 
-    private static async Task ConfirmarCargaFinalAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioConfirmacion)
+    private static async Task ConfirmarCargaFinalAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioConfirmacion, bool esActualizacion)
     {
         const string sql = @"
         UPDATE dbo.semanal_carga
-        SET estado = N'CONFIRMADO', fecha_confirmacion = SYSDATETIME(), fecha_expiracion = NULL, id_usuario_confirmacion = @IdUsuarioConfirmacion, mensaje_error = NULL
+        SET estado = @EstadoConfirmado, fecha_confirmacion = SYSDATETIME(), fecha_expiracion = NULL, id_usuario_confirmacion = @IdUsuarioConfirmacion, mensaje_error = NULL
         WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_carpeta SET estado = N'PROCESADO', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_delito SET estado = N'PROCESADO', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_victima SET estado = N'PROCESADO', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
     ";
 
-        await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
+        await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion, EstadoConfirmado = esActualizacion ? "CONFIRMADO_ACTUALIZACION" : "CONFIRMADO" }, transaction);
     }
 
     private static string? ObtenerValor(ArchivoFila fila, string columna)
