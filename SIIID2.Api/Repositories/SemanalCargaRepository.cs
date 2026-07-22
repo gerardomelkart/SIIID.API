@@ -361,6 +361,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             await GuardarTmpCarpetasAsync(connection, transaction, idSemanalCarga, carga.Carpetas);
             await GuardarTmpDelitosAsync(connection, transaction, idSemanalCarga, carga.Delitos);
             await GuardarTmpVictimasAsync(connection, transaction, idSemanalCarga, carga.Victimas);
+            await SemanalCargaAuditoriaSql.GuardarAdvertenciasAsync(connection, transaction, idSemanalCarga, carga.Advertencias);
             await transaction.CommitAsync();
             return idSemanalCarga;
         }
@@ -425,6 +426,8 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 return Exito(codigoReferencia, "RECHAZADO_VALIDACION", "La carga semanal fue rechazada correctamente.");
             }
 
+            await SemanalCargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
+
             if (!carga.EsSuperUsuario)
             {
                 await EnviarCargaAprobacionAsync(connection, transaction, carga.IdSemanalCarga);
@@ -444,6 +447,95 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             await ConfirmarCargaFinalAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
             await transaction.CommitAsync();
             return Exito(codigoReferencia, "CONFIRMADO", "La carga semanal fue confirmada correctamente.");
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<ConfirmarCargaResponse> AprobarCargaPendienteAsync(string codigoReferencia, int idUsuarioAprobacion)
+    {
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+        await connection.OpenAsync();
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioAprobacion);
+
+            if (carga == null)
+            {
+                await transaction.RollbackAsync();
+                return Error(codigoReferencia, "NO_ENCONTRADA", "No se encontró la carga semanal pendiente de aprobación.");
+            }
+
+            if (!carga.EsSuperUsuario || !carga.HabilitaSemanal)
+            {
+                await transaction.RollbackAsync();
+                return Error(codigoReferencia, carga.Estado, "Solo un superusuario con acceso al módulo semanal puede aprobar cargas.");
+            }
+
+            if (!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
+            {
+                await transaction.RollbackAsync();
+                return Error(codigoReferencia, carga.Estado, "La carga semanal ya no se encuentra pendiente de aprobación.");
+            }
+
+            var totalCarpetas = await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
+            var totalDelitos = await InsertarDelitosFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
+            var totalVictimas = await InsertarVictimasFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
+
+            if (totalCarpetas != carga.TotalCarpetasIncluidas || totalDelitos != carga.TotalDelitosIncluidos || totalVictimas != carga.TotalVictimasIncluidas)
+            {
+                throw new InvalidOperationException($"Los totales insertados no coinciden con la validación semanal. Carpetas {totalCarpetas}/{carga.TotalCarpetasIncluidas}, delitos {totalDelitos}/{carga.TotalDelitosIncluidos}, víctimas {totalVictimas}/{carga.TotalVictimasIncluidas}.");
+            }
+
+            await ConfirmarCargaFinalAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioAprobacion);
+            await transaction.CommitAsync();
+
+            return Exito(codigoReferencia, "CONFIRMADO", "La carga semanal fue aprobada y confirmada correctamente.");
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<ConfirmarCargaResponse> RechazarCargaPendienteAsync(string codigoReferencia, int idUsuarioRechazo, string motivo)
+    {
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+        await connection.OpenAsync();
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioRechazo);
+
+            if (carga == null)
+            {
+                await transaction.RollbackAsync();
+                return Error(codigoReferencia, "NO_ENCONTRADA", "No se encontró la carga semanal pendiente de aprobación.");
+            }
+
+            if (!carga.EsSuperUsuario || !carga.HabilitaSemanal)
+            {
+                await transaction.RollbackAsync();
+                return Error(codigoReferencia, carga.Estado, "Solo un superusuario con acceso al módulo semanal puede rechazar cargas.");
+            }
+
+            if (!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
+            {
+                await transaction.RollbackAsync();
+                return Error(codigoReferencia, carga.Estado, "La carga semanal ya no se encuentra pendiente de aprobación.");
+            }
+
+            await RechazarCargaAdministracionAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioRechazo, motivo);
+            await transaction.CommitAsync();
+
+            return Exito(codigoReferencia, "RECHAZADO_ADMIN", "La carga semanal fue rechazada por el administrador.");
         }
         catch
         {
@@ -704,6 +796,36 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     ";
 
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga }, transaction);
+    }
+
+    private static async Task RechazarCargaAdministracionAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioRechazo, string motivo)
+    {
+        const string sql = @"
+        UPDATE dbo.semanal_carga
+        SET estado = N'RECHAZADO_ADMIN',
+            fecha_confirmacion = SYSDATETIME(),
+            fecha_expiracion = NULL,
+            id_usuario_confirmacion = @IdUsuarioRechazo,
+            mensaje_error = @Motivo
+        WHERE id_semanal_carga = @IdSemanalCarga;
+
+        UPDATE dbo.semanal_carga_tmp_carpeta
+        SET estado = N'RECHAZADO_ADMIN',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_semanal_carga = @IdSemanalCarga;
+
+        UPDATE dbo.semanal_carga_tmp_delito
+        SET estado = N'RECHAZADO_ADMIN',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_semanal_carga = @IdSemanalCarga;
+
+        UPDATE dbo.semanal_carga_tmp_victima
+        SET estado = N'RECHAZADO_ADMIN',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_semanal_carga = @IdSemanalCarga;
+    ";
+
+        await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioRechazo = idUsuarioRechazo, Motivo = motivo }, transaction);
     }
 
     private static async Task<int> InsertarCarpetasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioRegistro)

@@ -56,6 +56,7 @@ public class SemanalCargaPersistencia
     public int TotalCarpetasExcluidas { get; set; }
     public int TotalDelitosExcluidos { get; set; }
     public int TotalVictimasExcluidas { get; set; }
+    public List<CargaValidacionError> Advertencias { get; set; } = new();
     public List<ConfiguracionModalidadSemanalItem> ModalidadesConfiguradas { get; set; } = new();
     public List<SemanalArchivoFilaCarga> Carpetas { get; set; } = new();
     public List<SemanalArchivoFilaCarga> Delitos { get; set; } = new();

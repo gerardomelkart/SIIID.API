@@ -672,6 +672,7 @@ public class SemanalCargaService : ISemanalCargaService
                     response.TotalDelitosExcluidos,
                 TotalVictimasExcluidas =
                     response.TotalVictimasExcluidas,
+                Advertencias = response.Advertencias,
                 ModalidadesConfiguradas =
                     modalidadesConfiguradas,
                 Carpetas = carpetasEtiquetadas,
