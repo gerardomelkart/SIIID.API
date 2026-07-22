@@ -24,8 +24,7 @@ public class SemanalCargasController : ControllerBase
 
     [HttpPost("validar")]
     [Consumes("multipart/form-data")]
-    public async Task<IActionResult> ValidarArchivos(
-        [FromForm] SemanalCargaValidacionRequest request)
+    public async Task<IActionResult> ValidarArchivos([FromForm] SemanalCargaValidacionRequest request)
     {
         if (!ObtenerIdUsuario(out var idUsuario))
         {
@@ -43,8 +42,7 @@ public class SemanalCargasController : ControllerBase
     }
 
     [HttpGet("{codigoReferencia}/acuse")]
-    public async Task<IActionResult> DescargarAcuse(
-        string codigoReferencia)
+    public async Task<IActionResult> DescargarAcuse(string codigoReferencia)
     {
         if (!ObtenerIdUsuario(out var idUsuario))
         {
@@ -87,8 +85,7 @@ public class SemanalCargasController : ControllerBase
     }
 
     [HttpPost("confirmar")]
-    public async Task<IActionResult> ConfirmarCarga(
-        [FromBody] ConfirmarCargaRequest request)
+    public async Task<IActionResult> ConfirmarCarga([FromBody] ConfirmarCargaRequest request)
     {
         if (!ObtenerIdUsuario(out var idUsuario))
         {
@@ -108,9 +105,7 @@ public class SemanalCargasController : ControllerBase
         }
 
         var resultado =
-            await _semanalCargaService.ConfirmarCargaAsync(
-                request,
-                idUsuario);
+            await _semanalCargaService.ConfirmarCargaAsync(request, idUsuario);
 
         return resultado.EsValido
             ? Ok(resultado)
@@ -118,8 +113,7 @@ public class SemanalCargasController : ControllerBase
     }
 
     [HttpGet("{codigoReferencia}/acuse-confirmado")]
-    public async Task<IActionResult> DescargarAcuseConfirmado(
-        string codigoReferencia)
+    public async Task<IActionResult> DescargarAcuseConfirmado(string codigoReferencia)
     {
         if (!ObtenerIdUsuario(out var idUsuario))
         {
@@ -128,10 +122,7 @@ public class SemanalCargasController : ControllerBase
 
         try
         {
-            var pdf =
-                await _semanalAcusePdfService.GenerarAcuseConfirmadoAsync(
-                    codigoReferencia,
-                    idUsuario);
+            var pdf = await _semanalAcusePdfService.GenerarAcuseConfirmadoAsync(codigoReferencia, idUsuario);
 
             return File(
                 pdf,
@@ -161,12 +152,9 @@ public class SemanalCargasController : ControllerBase
         }
     }
 
-    private bool ObtenerIdUsuario(
-        out int idUsuario)
+    private bool ObtenerIdUsuario(out int idUsuario)
     {
-        return int.TryParse(
-            User.FindFirstValue(
-                ClaimTypes.NameIdentifier),
+        return int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier),
             out idUsuario);
     }
 

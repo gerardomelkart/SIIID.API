@@ -289,30 +289,12 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
         });
     }
 
-    private static void ConstruirLeyendaAcuse(
-        IContainer container,
-        SemanalCargaAcuseInfo carga)
+    private static void ConstruirLeyendaAcuse(IContainer container, SemanalCargaAcuseInfo carga)
     {
-        var cultura =
-            new CultureInfo("es-MX");
-
-        var fechaAcuse =
-            carga.FechaConfirmacion ??
-            carga.FechaValidacion;
-
-        var entidad =
-            carga.EntidadFederativa.Trim();
-
-        var entidadMayusculas =
-            entidad.ToUpper(cultura);
-
-        var tipoContenido =
-            string.Equals(
-                carga.TipoContenido,
-                "ACUMULADO_MES",
-                StringComparison.OrdinalIgnoreCase)
-                ? "Acumulado mensual"
-                : "Solo semana";
+        var cultura = new CultureInfo("es-MX");
+        var fechaAcuse = carga.FechaConfirmacion ?? carga.FechaValidacion;
+        var entidad = carga.EntidadFederativa.Trim();
+        var entidadMayusculas = entidad.ToUpper(cultura);
 
         container.Column(column =>
         {
@@ -321,96 +303,38 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             column.Item()
                 .PaddingTop(4)
                 .AlignCenter()
-                .Text(
-                    $"ACUSE DE ENTREGA DE INFORMACIÓN SEMANAL DEL ESTADO DE {entidadMayusculas}")
+                .Text($"ACUSE DE ENTREGA DE INFORMACIÓN SEMANAL DEL ESTADO DE {entidadMayusculas}")
                 .FontSize(11.5f)
                 .Bold();
 
-            column.Item().Text(text =>
-            {
-                text.Justify();
+            column.Item()
+                .Text(text =>
+                {
+                    text.Justify();
+                    text.DefaultTextStyle(x => x.FontSize(8.5f));
 
-                text.DefaultTextStyle(
-                    x => x.FontSize(8.5f));
+                    text.Span("El presente acuse de recepción hace constar que la estadística delictiva reportada por la ");
+                    text.Span($"Fiscalía General del Estado de {entidad}").Bold();
+                    text.Span(" al ");
+                    text.Span("Registro Nacional de Incidencia Delictiva (RNID)").Bold();
+                    text.Span(" del Sistema Nacional de Seguridad Pública, ha sido enviada de manera satisfactoria a través de la plataforma web, mediante este acuse se confirma la entrega formal de la estadística delictiva del ");
+                    text.Span($"Estado de {entidad}").Bold();
+                    text.Span(" el día ");
+                    text.Span(ObtenerFechaLargaTexto(fechaAcuse)).Bold();
+                    text.Span(" a las ");
+                    text.Span(fechaAcuse.ToString("HH:mm:ss", cultura)).Bold();
+                    text.Span(" horas (Tiempo del centro de México).");
+                });
 
-                text.Span(
-                    "El presente acuse de recepción hace constar que la estadística delictiva de seguimiento semanal reportada por la ");
+            column.Item()
+                .PaddingTop(2)
+                .Text(text =>
+                {
+                    text.DefaultTextStyle(x => x.FontSize(8.5f));
 
-                text.Span(
-                    $"Fiscalía General del Estado de {entidad}")
-                    .Bold();
-
-                text.Span(" al ");
-
-                text.Span(
-                    "Registro Nacional de Incidencia Delictiva (RNID)")
-                    .Bold();
-
-                text.Span(
-                    " del Sistema Nacional de Seguridad Pública, ha sido enviada de manera satisfactoria a través de la plataforma web el día ");
-
-                text.Span(
-                    ObtenerFechaLargaTexto(
-                        fechaAcuse))
-                    .Bold();
-
-                text.Span(" a las ");
-
-                text.Span(
-                    fechaAcuse.ToString(
-                        "HH:mm:ss",
-                        cultura))
-                    .Bold();
-
-                text.Span(
-                    " horas (Tiempo del centro de México).");
-            });
-
-            column.Item().Text(text =>
-            {
-                text.DefaultTextStyle(
-                    x => x.FontSize(8.2f));
-
-                text.Span(
-                    "Semana reportada: ");
-
-                text.Span(
-                    $"{carga.NumeroSemana} de {carga.AnioSemana}, del {carga.FechaInicioSemana:dd/MM/yyyy} al {carga.FechaFinSemana:dd/MM/yyyy}")
-                    .Bold();
-            });
-
-            column.Item().Text(text =>
-            {
-                text.DefaultTextStyle(
-                    x => x.FontSize(8.2f));
-
-                text.Span(
-                    "Tramo correspondiente al corte: ");
-
-                text.Span(
-                    $"del {carga.FechaInicioTramo:dd/MM/yyyy} al {carga.FechaFinTramo:dd/MM/yyyy}")
-                    .Bold();
-            });
-
-            column.Item().Text(text =>
-            {
-                text.DefaultTextStyle(
-                    x => x.FontSize(8.2f));
-
-                text.Span(
-                    "Mes de corte estadístico: ");
-
-                text.Span(
-                    $"{ObtenerNombreMes(carga.MesCorte)} de {carga.AnioCorte}")
-                    .Bold();
-
-                text.Span(
-                    " · Tipo de contenido: ");
-
-                text.Span(
-                    tipoContenido)
-                    .Bold();
-            });
+                    text.Span("Semana correspondiente: ");
+                    text.Span($"{carga.NumeroSemana} de {carga.AnioSemana}, del {carga.FechaInicioSemana:dd/MM/yyyy} al {carga.FechaFinSemana:dd/MM/yyyy}").Bold();
+                });
         });
     }
 
