@@ -10,6 +10,7 @@ namespace SIIID2.Api.Services;
 public class SemanalCargaService : ISemanalCargaService
 {
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
+    private const string CodigoExclusionFueraPeriodo = "FUERA_PERIODO_CARGA";
 
     private static readonly HashSet<string> TiposContenidoPermitidos =
         new(StringComparer.OrdinalIgnoreCase)
