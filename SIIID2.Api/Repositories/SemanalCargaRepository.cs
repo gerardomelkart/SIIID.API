@@ -20,6 +20,8 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         public bool EsSuperUsuario { get; set; }
         public bool HabilitaSemanal { get; set; }
         public bool HabilitaCarga { get; set; }
+        public int MesCorte { get; set; }
+        public int AnioCorte { get; set; }
         public int TotalCarpetasIncluidas { get; set; }
         public int TotalDelitosIncluidos { get; set; }
         public int TotalVictimasIncluidas { get; set; }
@@ -419,6 +421,12 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 return Error(codigoReferencia, carga.Estado, "El usuario no puede procesar cargas semanales de otra entidad federativa.");
             }
 
+            if (aceptar && EsPeriodoAnteriorAlMesActual(carga.MesCorte, carga.AnioCorte))
+            {
+                await transaction.RollbackAsync();
+                return Error(codigoReferencia, "PERIODO_CONSOLIDADO", "La carga corresponde a un mes anterior al mes en curso y ya no puede confirmarse porque ese periodo pertenece al consolidado.");
+            }
+
             if (!aceptar)
             {
                 await RechazarCargaAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
@@ -481,6 +489,12 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, carga.Estado, "La carga semanal ya no se encuentra pendiente de aprobación.");
+            }
+
+            if (EsPeriodoAnteriorAlMesActual(carga.MesCorte, carga.AnioCorte))
+            {
+                await transaction.RollbackAsync();
+                return Error(codigoReferencia, "PERIODO_CONSOLIDADO", "La carga corresponde a un mes anterior al mes en curso y ya no puede aprobarse porque ese periodo pertenece al consolidado.");
             }
 
             var totalCarpetas = await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
@@ -744,6 +758,8 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 ELSE 0 END) AS EsSuperUsuario,
             CONVERT(bit, CASE WHEN um.habilitado = 1 AND um.activo = 1 THEN 1 ELSE 0 END) AS HabilitaSemanal,
             CONVERT(bit, ISNULL(um.habilita_carga, 0)) AS HabilitaCarga,
+            sc.mes_corte AS MesCorte,
+            sc.anio_corte AS AnioCorte,
             sc.total_carpetas_incluidas AS TotalCarpetasIncluidas,
             sc.total_delitos_incluidos AS TotalDelitosIncluidos,
             sc.total_victimas_incluidas AS TotalVictimasIncluidas
@@ -758,6 +774,12 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     ";
 
         return await connection.QueryFirstOrDefaultAsync<SemanalCargaConfirmacionInfo>(sql, new { CodigoReferencia = codigoReferencia, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
+    }
+
+    private static bool EsPeriodoAnteriorAlMesActual(int mesCorte, int anioCorte)
+    {
+        var fechaActual = DateTime.Today;
+        return anioCorte < fechaActual.Year || (anioCorte == fechaActual.Year && mesCorte < fechaActual.Month);
     }
 
     private static async Task ActualizarCargaExpiradaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga)
