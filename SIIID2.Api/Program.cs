@@ -106,6 +106,8 @@ builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<ISemanalDelitoService, SemanalDelitoService>();
 builder.Services.AddScoped<ISemanalCargaService, SemanalCargaService>();
 
+builder.Services.AddScoped<ISemanalAcusePdfService, SemanalAcusePdfService>();
+
 //para los informes
 builder.Services.AddScoped<IInformeRepository, InformeRepository>();
 builder.Services.AddScoped<IInformeService, InformeService>();

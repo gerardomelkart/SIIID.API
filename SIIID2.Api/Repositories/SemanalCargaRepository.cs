@@ -50,6 +50,144 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return await connection.QueryFirstOrDefaultAsync<UsuarioCargaInfo>(sql, new { IdUsuario = idUsuario });
     }
 
+    public async Task<SemanalCargaAcuseInfo?> ObtenerCargaParaAcuseAsync(string codigoReferencia)
+    {
+        const string sql = @"
+    SELECT
+        sc.id_semanal_carga AS IdSemanalCarga,
+        sc.codigo_referencia AS CodigoReferencia,
+        sc.id_entidad_federativa AS IdEntidadFederativa,
+        ISNULL(e.nombre, N'') AS EntidadFederativa,
+        sc.tipo_contenido AS TipoContenido,
+        sc.anio_semana AS AnioSemana,
+        sc.numero_semana AS NumeroSemana,
+        sc.fecha_inicio_semana AS FechaInicioSemana,
+        sc.fecha_fin_semana AS FechaFinSemana,
+        sc.fecha_inicio_tramo AS FechaInicioTramo,
+        sc.fecha_fin_tramo AS FechaFinTramo,
+        sc.mes_corte AS MesCorte,
+        sc.anio_corte AS AnioCorte,
+        sc.total_carpetas_incluidas AS TotalCarpetasIncluidas,
+        sc.total_delitos_incluidos AS TotalDelitosIncluidos,
+        sc.total_victimas_incluidas AS TotalVictimasIncluidas,
+        sc.total_carpetas_excluidas AS TotalCarpetasExcluidas,
+        sc.total_delitos_excluidos AS TotalDelitosExcluidos,
+        sc.total_victimas_excluidas AS TotalVictimasExcluidas,
+        sc.estado AS Estado,
+        sc.fecha_validacion AS FechaValidacion,
+        sc.fecha_confirmacion AS FechaConfirmacion,
+        sc.id_usuario_carga AS IdUsuarioCarga,
+        u.usuario AS UsuarioCarga
+    FROM dbo.semanal_carga sc
+    INNER JOIN dbo.usuario u
+        ON u.id_usuario = sc.id_usuario_carga
+    LEFT JOIN dbo.catalogo_entidad_federativa e
+        ON e.id_entidad_federativa = sc.id_entidad_federativa
+    WHERE sc.codigo_referencia = @CodigoReferencia
+      AND sc.tipo_carga = N'CARGA_INICIAL'
+      AND sc.activo = 1;
+";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.QueryFirstOrDefaultAsync<SemanalCargaAcuseInfo>(
+            sql,
+            new { CodigoReferencia = codigoReferencia });
+    }
+
+    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idSemanalCarga)
+    {
+        const string sql = @"
+    SELECT
+        cd.clave2 AS ClaveDelito,
+        cd.delito AS TipoDelito,
+        sd.clave3 AS ClaveSubtipo,
+        sd.subtipo_delito AS SubtipoDelito,
+        COUNT(DISTINCT d.id_semanal_carga_tmp_delito) AS TotalDelitos,
+        COUNT(DISTINCT v.id_semanal_carga_tmp_victima) AS TotalVictimas,
+        MIN(configuracion.orden) AS Orden
+    FROM dbo.semanal_carga_delito_configurado configuracion
+    INNER JOIN dbo.catalogo_modalidad_delito md
+        ON md.id_modalidad_delito = configuracion.id_modalidad_delito
+    INNER JOIN dbo.catalogo_subtipo_delito sd
+        ON sd.id_subtipo_delito = md.id_subtipo_delito
+    INNER JOIN dbo.catalogo_delito cd
+        ON cd.id_delito = sd.id_delito
+    LEFT JOIN dbo.semanal_carga_tmp_delito d
+        ON d.id_semanal_carga = configuracion.id_semanal_carga
+       AND LTRIM(RTRIM(d.clasf_de_dto)) = LTRIM(RTRIM(md.clave4))
+       AND d.incluido = 1
+       AND d.activo = 1
+    LEFT JOIN dbo.semanal_carga_tmp_victima v
+        ON v.id_semanal_carga = d.id_semanal_carga
+       AND v.id_ci = d.id_ci
+       AND v.id_delito = d.id_delito
+       AND v.incluido = 1
+       AND v.activo = 1
+    WHERE configuracion.id_semanal_carga = @IdSemanalCarga
+    GROUP BY
+        cd.clave2,
+        cd.delito,
+        sd.clave3,
+        sd.subtipo_delito
+    ORDER BY
+        Orden,
+        cd.clave2,
+        sd.clave3;
+";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return (await connection.QueryAsync<CargaAcuseResumenItem>(
+            sql,
+            new { IdSemanalCarga = idSemanalCarga })).ToList();
+    }
+
+    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idSemanalCarga)
+    {
+        const string sql = @"
+    SELECT
+        cd.clave2 AS ClaveDelito,
+        cd.delito AS TipoDelito,
+        sd.clave3 AS ClaveSubtipo,
+        sd.subtipo_delito AS SubtipoDelito,
+        COUNT(DISTINCT d.id_semanal_delito) AS TotalDelitos,
+        COUNT(DISTINCT v.id_semanal_victima) AS TotalVictimas,
+        MIN(configuracion.orden) AS Orden
+    FROM dbo.semanal_carga_delito_configurado configuracion
+    INNER JOIN dbo.catalogo_modalidad_delito md
+        ON md.id_modalidad_delito = configuracion.id_modalidad_delito
+    INNER JOIN dbo.catalogo_subtipo_delito sd
+        ON sd.id_subtipo_delito = md.id_subtipo_delito
+    INNER JOIN dbo.catalogo_delito cd
+        ON cd.id_delito = sd.id_delito
+    LEFT JOIN dbo.semanal_delito d
+        ON d.id_semanal_carga = configuracion.id_semanal_carga
+       AND d.id_modalidad_delito = configuracion.id_modalidad_delito
+       AND d.activo = 1
+    LEFT JOIN dbo.semanal_victima v
+        ON v.id_semanal_carga = d.id_semanal_carga
+       AND v.id_semanal_delito = d.id_semanal_delito
+       AND v.activo = 1
+    WHERE configuracion.id_semanal_carga = @IdSemanalCarga
+    GROUP BY
+        cd.clave2,
+        cd.delito,
+        sd.clave3,
+        sd.subtipo_delito
+    ORDER BY
+        Orden,
+        cd.clave2,
+        sd.clave3;
+";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return (await connection.QueryAsync<CargaAcuseResumenItem>(
+            sql,
+            new { IdSemanalCarga = idSemanalCarga })).ToList();
+    }
+
     public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(int idEntidadFederativa, int mesCorte,  int anioCorte)
     {
         const string sql = @"

@@ -772,6 +772,7 @@ public class SemanalCargaService : ISemanalCargaService
 
             return null;
         }
+        var fechaInicioMes = new DateTime(request.AnioCorte, request.MesCorte, 1);
         var fechaFinMes = fechaInicioMes.AddMonths(1).AddDays(-1);
         var fechaInicioTramo = fechaInicioSemana > fechaInicioMes ? fechaInicioSemana : fechaInicioMes;
         var fechaFinTramo = fechaFinSemana < fechaFinMes ? fechaFinSemana : fechaFinMes;
