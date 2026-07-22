@@ -741,11 +741,41 @@ public class SemanalCargaService : ISemanalCargaService
             return null;
         }
 
-        if (string.Equals(
-                tipoContenido,
-                "ACUMULADO_MES",
-                StringComparison.OrdinalIgnoreCase) &&
-            fechaInicioSemana != ObtenerInicioSemana(DateTime.Today))
+        var fechaActual = DateTime.Today;
+        var fechaInicioSemanaActual = ObtenerInicioSemana(fechaActual);
+        var fechaInicioMesActual = new DateTime(fechaActual.Year, fechaActual.Month, 1);
+
+        if (fechaInicioSemana > fechaInicioSemanaActual)
+        {
+            AgregarErrorGeneral(
+                errores,
+                "SEMANAL_SEMANA_FUTURA",
+                "Semana futura no permitida",
+                "Solo puede cargar la semana en curso o una semana anterior cuyo mes de corte siga vigente.",
+                "fechaInicioSemana",
+                request.FechaInicioSemana.ToString(
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture));
+
+            return null;
+        }
+
+        if (fechaFinSemana < fechaInicioMesActual)
+        {
+            AgregarErrorGeneral(
+                errores,
+                "SEMANAL_MES_ANTERIOR_CONSOLIDADO",
+                "El mes de la semana ya fue consolidado",
+                "El último día de la semana seleccionada corresponde a un mes anterior al mes en curso. Seleccione una semana del periodo actual.",
+                "fechaInicioSemana",
+                request.FechaInicioSemana.ToString(
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture));
+
+            return null;
+        }
+
+        if (string.Equals(tipoContenido, "ACUMULADO_MES",StringComparison.OrdinalIgnoreCase) && fechaInicioSemana != fechaInicioSemanaActual)
         {
             AgregarErrorGeneral(
                 errores,
@@ -760,8 +790,7 @@ public class SemanalCargaService : ISemanalCargaService
             return null;
         }
 
-        if (fechaFinSemana.Month != request.MesCorte ||
-            fechaFinSemana.Year != request.AnioCorte)
+        if (fechaFinSemana.Month != request.MesCorte ||  fechaFinSemana.Year != request.AnioCorte)
         {
             AgregarErrorGeneral(
                 errores,
