@@ -35,23 +35,16 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             idUsuarioConsulta);
 
         var estadoPermitido =
-            string.Equals(
-                carga.Estado,
-                "VALIDADO_PENDIENTE",
-                StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(
-                carga.Estado,
-                "VALIDADO_PENDIENTE_ACTUALIZACION",
-                StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(
-                carga.Estado,
-                "PENDIENTE_APROBACION",
-                StringComparison.OrdinalIgnoreCase);
+            string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(carga.Estado, "VALIDADO_PENDIENTE_ACTUALIZACION", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(carga.Estado, "RECHAZADO", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(carga.Estado, "RECHAZADO_ADMIN", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(carga.Estado, "EXPIRADO", StringComparison.OrdinalIgnoreCase);
 
         if (!estadoPermitido)
         {
-            throw new InvalidOperationException(
-                "El informe previo semanal solo puede generarse para cargas validadas o pendientes de aprobación.");
+            throw new InvalidOperationException("El informe previo semanal no está disponible para el estado actual de la operación.");
         }
 
         var resumen =

@@ -89,6 +89,7 @@ builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<ISemanalDelitoRepository, SemanalDelitoRepository>();
 builder.Services.AddScoped<ISemanalCargaRepository, SemanalCargaRepository>();
 builder.Services.AddScoped<ISemanalAdministracionCargasRepository, SemanalAdministracionCargasRepository>();
+builder.Services.AddScoped<ISemanalEnviosRepository, SemanalEnviosRepository>();
 
 // Registro del servicio principal de carga.
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.
@@ -108,6 +109,7 @@ builder.Services.AddScoped<ISemanalDelitoService, SemanalDelitoService>();
 builder.Services.AddScoped<ISemanalCargaService, SemanalCargaService>();
 
 builder.Services.AddScoped<ISemanalAdministracionCargasService, SemanalAdministracionCargasService>();
+builder.Services.AddScoped<ISemanalEnviosService, SemanalEnviosService>();
 
 builder.Services.AddScoped<ISemanalAcusePdfService, SemanalAcusePdfService>();
 
