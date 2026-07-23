@@ -158,6 +158,93 @@ public class SemanalCargaService : ISemanalCargaService
         _logger = logger;
     }
 
+    public async Task<SemanalSemanaActualizacionResponse> ValidarSemanaActualizacionAsync(int anioSemana, int numeroSemana, int idUsuario)
+    {
+        if (anioSemana < 2000 || anioSemana > 9999 || numeroSemana < 1 || numeroSemana > 53)
+        {
+            return new SemanalSemanaActualizacionResponse
+            {
+                EsValido = false,
+                Disponible = false,
+                Codigo = "SEMANAL_SEMANA_INVALIDA",
+                Mensaje = "La semana seleccionada no es válida."
+            };
+        }
+
+        var usuario = await _semanalCargaRepository.ObtenerUsuarioCargaAsync(idUsuario);
+
+        if (usuario == null)
+        {
+            return new SemanalSemanaActualizacionResponse
+            {
+                EsValido = false,
+                Disponible = false,
+                Codigo = "SEMANAL_USUARIO_SIN_ACCESO",
+                Mensaje = "El usuario no tiene acceso al módulo semanal."
+            };
+        }
+
+        if (!usuario.HabilitaModificacion)
+        {
+            return new SemanalSemanaActualizacionResponse
+            {
+                EsValido = false,
+                Disponible = false,
+                Codigo = "SEMANAL_USUARIO_SIN_PERMISO_MODIFICACION",
+                Mensaje = "El usuario no tiene habilitada la actualización de información semanal."
+            };
+        }
+
+        if (!usuario.IdEntidadFederativa.HasValue)
+        {
+            return new SemanalSemanaActualizacionResponse
+            {
+                EsValido = false,
+                Disponible = false,
+                Codigo = "SEMANAL_USUARIO_SIN_ENTIDAD",
+                Mensaje = "No fue posible determinar la entidad federativa del usuario."
+            };
+        }
+
+        var estado = await _semanalCargaRepository.ObtenerEstadoSemanaActualizacionAsync(usuario.IdEntidadFederativa.Value, anioSemana, numeroSemana);
+
+        if (!string.IsNullOrWhiteSpace(estado.EstadoPendiente))
+        {
+            var pendienteAprobacion = string.Equals(estado.EstadoPendiente, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
+
+            return new SemanalSemanaActualizacionResponse
+            {
+                EsValido = true,
+                Disponible = false,
+                Codigo = pendienteAprobacion ? "SEMANAL_SEMANA_PENDIENTE_APROBACION" : "SEMANAL_SEMANA_CON_OPERACION_PENDIENTE",
+                Mensaje = pendienteAprobacion
+                    ? $"La semana {numeroSemana}/{anioSemana} tiene una operación pendiente de aprobación administrativa. Debe aprobarse o rechazarse antes de realizar otra actualización."
+                    : $"La semana {numeroSemana}/{anioSemana} ya tiene una operación en proceso con estado {estado.EstadoPendiente}. Debe concluirse antes de realizar otra actualización.",
+                CodigoReferenciaPendiente = estado.CodigoReferenciaPendiente,
+                EstadoPendiente = estado.EstadoPendiente
+            };
+        }
+
+        if (!estado.TieneCargaConfirmada)
+        {
+            return new SemanalSemanaActualizacionResponse
+            {
+                EsValido = true,
+                Disponible = false,
+                Codigo = "SEMANAL_ACTUALIZACION_SIN_CARGA_CONFIRMADA",
+                Mensaje = $"La semana {numeroSemana}/{anioSemana} no tiene información semanal confirmada para actualizar."
+            };
+        }
+
+        return new SemanalSemanaActualizacionResponse
+        {
+            EsValido = true,
+            Disponible = true,
+            Codigo = "SEMANAL_SEMANA_DISPONIBLE_ACTUALIZACION",
+            Mensaje = $"La semana {numeroSemana}/{anioSemana} está disponible para actualización."
+        };
+    }
+
     public async Task<SemanalCargaValidacionResponse> ValidarArchivosAsync(SemanalCargaValidacionRequest request, int idUsuarioCarga)
     {
         var tipoCarga = (request.TipoCarga ?? string.Empty).Trim().ToUpperInvariant();

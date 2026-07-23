@@ -9,6 +9,7 @@ public interface ISemanalCargaRepository
     Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idSemanalCarga);
     Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idSemanalCarga);
     Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
+    Task<SemanalSemanaActualizacionEstadoInfo> ObtenerEstadoSemanaActualizacionAsync(int idEntidadFederativa, int anioSemana, int numeroSemana);
     Task<SemanalCargaDiferenciasInfo?> ObtenerCargaParaDiferenciasAsync(string codigoReferencia);
     Task<long> GuardarIntentoCargaAsync(SemanalCargaPersistencia carga);
     Task<ConfirmarCargaResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion);

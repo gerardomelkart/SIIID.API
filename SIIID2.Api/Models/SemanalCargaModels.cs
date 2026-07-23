@@ -89,3 +89,20 @@ public class SemanalDatosComparacion
     public List<SemanalFilaComparacion> VictimasConfirmadas { get; set; } = new();
     public List<SemanalCargaPendienteComparacion> CargasPendientes { get; set; } = new();
 }
+
+public class SemanalSemanaActualizacionEstadoInfo
+{
+    public bool TieneCargaConfirmada { get; set; }
+    public string? CodigoReferenciaPendiente { get; set; }
+    public string? EstadoPendiente { get; set; }
+}
+
+public class SemanalSemanaActualizacionResponse
+{
+    public bool EsValido { get; set; }
+    public bool Disponible { get; set; }
+    public string Codigo { get; set; } = string.Empty;
+    public string Mensaje { get; set; } = string.Empty;
+    public string? CodigoReferenciaPendiente { get; set; }
+    public string? EstadoPendiente { get; set; }
+}

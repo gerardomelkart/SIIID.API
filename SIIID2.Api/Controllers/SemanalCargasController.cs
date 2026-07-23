@@ -14,12 +14,19 @@ public class SemanalCargasController : ControllerBase
     private readonly ISemanalCargaService _semanalCargaService;
     private readonly ISemanalAcusePdfService _semanalAcusePdfService;
 
-    public SemanalCargasController(
-        ISemanalCargaService semanalCargaService,
-        ISemanalAcusePdfService semanalAcusePdfService)
+    public SemanalCargasController(ISemanalCargaService semanalCargaService, ISemanalAcusePdfService semanalAcusePdfService)
     {
         _semanalCargaService = semanalCargaService;
         _semanalAcusePdfService = semanalAcusePdfService;
+    }
+
+    [HttpGet("actualizacion/disponibilidad")]
+    public async Task<IActionResult> ValidarSemanaActualizacion([FromQuery] int anioSemana, [FromQuery] int numeroSemana)
+    {
+        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
+
+        var resultado = await _semanalCargaService.ValidarSemanaActualizacionAsync(anioSemana, numeroSemana, idUsuario);
+        return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
     }
 
     [HttpPost("validar")]

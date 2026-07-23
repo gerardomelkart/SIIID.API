@@ -194,6 +194,45 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             sql,
             new { IdSemanalCarga = idSemanalCarga })).ToList();
     }
+    public async Task<SemanalSemanaActualizacionEstadoInfo> ObtenerEstadoSemanaActualizacionAsync(int idEntidadFederativa, int anioSemana, int numeroSemana)
+    {
+        const string sql = @"
+        SELECT
+            CONVERT(bit, CASE WHEN EXISTS
+            (
+                SELECT 1
+                FROM dbo.semanal_carga sc
+                INNER JOIN dbo.semanal_carpeta_investigacion ci ON ci.id_semanal_carga = sc.id_semanal_carga AND ci.activo = 1
+                WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+                  AND sc.anio_semana = @AnioSemana
+                  AND sc.numero_semana = @NumeroSemana
+                  AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+                  AND sc.activo = 1
+            ) THEN 1 ELSE 0 END) AS TieneCargaConfirmada,
+            pendiente.codigo_referencia AS CodigoReferenciaPendiente,
+            pendiente.estado AS EstadoPendiente
+        FROM (VALUES (1)) base(valor)
+        OUTER APPLY
+        (
+            SELECT TOP (1) sc.codigo_referencia, sc.estado
+            FROM dbo.semanal_carga sc
+            WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+              AND sc.anio_semana = @AnioSemana
+              AND sc.numero_semana = @NumeroSemana
+              AND sc.estado IN
+              (
+                  N'VALIDADO_PENDIENTE',
+                  N'VALIDADO_PENDIENTE_ACTUALIZACION',
+                  N'PENDIENTE_APROBACION'
+              )
+              AND sc.activo = 1
+            ORDER BY sc.fecha_validacion DESC, sc.id_semanal_carga DESC
+        ) pendiente;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+        return await connection.QuerySingleAsync<SemanalSemanaActualizacionEstadoInfo>(sql, new { IdEntidadFederativa = idEntidadFederativa, AnioSemana = anioSemana, NumeroSemana = numeroSemana });
+    }
 
     public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
     {
