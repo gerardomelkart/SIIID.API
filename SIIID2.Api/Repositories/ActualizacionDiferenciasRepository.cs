@@ -78,6 +78,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
 
         var response = new ActualizacionDiferenciasResponse
         {
+            IdCarga = contexto.IdCarga,
             EsValido = true,
             CodigoReferencia = codigoReferencia,
             Mensaje = filas.Count == 0

@@ -914,6 +914,16 @@ public class SemanalCargaService : ISemanalCargaService
             ColumnasVictimasComparacion,
             response.Victimas);
 
+        response.ResumenCarpetas = CrearResumenMovimientos(response.Carpetas);
+        response.ResumenDelitos = CrearResumenMovimientos(response.Delitos);
+        response.ResumenVictimas = CrearResumenMovimientos(response.Victimas);
+        response.ResumenTotal = new ActualizacionDiferenciasResumen
+        {
+            Nuevos = response.ResumenCarpetas.Nuevos + response.ResumenDelitos.Nuevos + response.ResumenVictimas.Nuevos,
+            Modificados = response.ResumenCarpetas.Modificados + response.ResumenDelitos.Modificados + response.ResumenVictimas.Modificados,
+            Eliminados = response.ResumenCarpetas.Eliminados + response.ResumenDelitos.Eliminados + response.ResumenVictimas.Eliminados
+        };
+
         response.TotalCarpetas = response.Carpetas.Count;
         response.TotalDelitos = response.Delitos.Count;
         response.TotalVictimas = response.Victimas.Count;
@@ -1737,6 +1747,22 @@ public class SemanalCargaService : ISemanalCargaService
         }
 
         return false;
+    }
+
+    private static ActualizacionDiferenciasResumen CrearResumenMovimientos(IEnumerable<ActualizacionDiferenciaRegistro> registros)
+    {
+        var resumen = new ActualizacionDiferenciasResumen();
+
+        foreach (var registro in registros)
+        {
+            var tipoMovimiento = (registro.TipoMovimiento ?? string.Empty).Trim().ToUpperInvariant();
+
+            if (tipoMovimiento == "NUEVO") resumen.Nuevos++;
+            else if (tipoMovimiento == "MODIFICADO") resumen.Modificados++;
+            else if (tipoMovimiento == "ELIMINADO" || tipoMovimiento == "BAJA") resumen.Eliminados++;
+        }
+
+        return resumen;
     }
 
     private static void AgregarDiferenciasSeccion(List<ArchivoFila> nuevas, List<ArchivoFila> confirmadas, IReadOnlyCollection<string> camposIdentificador, IReadOnlyCollection<string> columnas, List<ActualizacionDiferenciaRegistro> destino)

@@ -985,7 +985,38 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
+        var resumen = await _actualizacionCargaRepository.ObtenerResumenDiferenciasActualizacionAsync(detalle.IdCarga);
+
+        AplicarResumenMovimientos(detalle, resumen);
+
         return detalle;
+    }
+
+    private static void AplicarResumenMovimientos(ActualizacionDiferenciasResponse response, IEnumerable<CargaValidacionResumenItem> resumen)
+    {
+        foreach (var item in resumen)
+        {
+            ActualizacionDiferenciasResumen? destino = item.Archivo.Trim().ToLowerInvariant() switch
+            {
+                "carpetas" => response.ResumenCarpetas,
+                "delitos" => response.ResumenDelitos,
+                "victimas" => response.ResumenVictimas,
+                _ => null
+            };
+
+            if (destino == null) continue;
+
+            if (item.Codigo.EndsWith("_NUEVO", StringComparison.OrdinalIgnoreCase)) destino.Nuevos += item.TotalRegistros;
+            else if (item.Codigo.EndsWith("_MODIFICADO", StringComparison.OrdinalIgnoreCase)) destino.Modificados += item.TotalRegistros;
+            else if (item.Codigo.EndsWith("_ELIMINADO", StringComparison.OrdinalIgnoreCase)) destino.Eliminados += item.TotalRegistros;
+        }
+
+        response.ResumenTotal = new ActualizacionDiferenciasResumen
+        {
+            Nuevos = response.ResumenCarpetas.Nuevos + response.ResumenDelitos.Nuevos + response.ResumenVictimas.Nuevos,
+            Modificados = response.ResumenCarpetas.Modificados + response.ResumenDelitos.Modificados + response.ResumenVictimas.Modificados,
+            Eliminados = response.ResumenCarpetas.Eliminados + response.ResumenDelitos.Eliminados + response.ResumenVictimas.Eliminados
+        };
     }
 
     public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(ConfirmarCargaRequest request, int idUsuarioConfirmacion)
