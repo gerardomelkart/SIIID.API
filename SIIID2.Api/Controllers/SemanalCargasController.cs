@@ -20,12 +20,12 @@ public class SemanalCargasController : ControllerBase
         _semanalAcusePdfService = semanalAcusePdfService;
     }
 
-    [HttpGet("actualizacion/disponibilidad")]
-    public async Task<IActionResult> ValidarSemanaActualizacion([FromQuery] int anioSemana, [FromQuery] int numeroSemana)
+    [HttpGet("semana/disponibilidad")]
+    public async Task<IActionResult> ValidarSemana([FromQuery] string tipoCarga, [FromQuery] int anioSemana, [FromQuery] int numeroSemana)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
-        var resultado = await _semanalCargaService.ValidarSemanaActualizacionAsync(anioSemana, numeroSemana, idUsuario);
+        var resultado = await _semanalCargaService.ValidarSemanaAsync(tipoCarga, anioSemana, numeroSemana, idUsuario);
         return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
     }
 

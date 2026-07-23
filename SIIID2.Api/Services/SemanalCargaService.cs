@@ -158,14 +158,25 @@ public class SemanalCargaService : ISemanalCargaService
         _logger = logger;
     }
 
-    public async Task<SemanalSemanaActualizacionResponse> ValidarSemanaActualizacionAsync(int anioSemana, int numeroSemana, int idUsuario)
+    public async Task<SemanalSemanaDisponibilidadResponse> ValidarSemanaAsync(string tipoCarga, int anioSemana, int numeroSemana, int idUsuario)
     {
-        if (anioSemana < 2000 || anioSemana > 9999 || numeroSemana < 1 || numeroSemana > 53)
+        var tipoCargaNormalizado = (tipoCarga ?? string.Empty).Trim().ToUpperInvariant();
+
+        if (!TiposCargaPermitidos.Contains(tipoCargaNormalizado))
         {
-            return new SemanalSemanaActualizacionResponse
+            return new SemanalSemanaDisponibilidadResponse
             {
                 EsValido = false,
-                Disponible = false,
+                Codigo = "SEMANAL_TIPO_CARGA_INVALIDO",
+                Mensaje = "El tipo de operación semanal no es válido."
+            };
+        }
+
+        if (anioSemana < 2000 || anioSemana > 9999 || numeroSemana < 1 || numeroSemana > 53)
+        {
+            return new SemanalSemanaDisponibilidadResponse
+            {
+                EsValido = false,
                 Codigo = "SEMANAL_SEMANA_INVALIDA",
                 Mensaje = "La semana seleccionada no es válida."
             };
@@ -175,21 +186,31 @@ public class SemanalCargaService : ISemanalCargaService
 
         if (usuario == null)
         {
-            return new SemanalSemanaActualizacionResponse
+            return new SemanalSemanaDisponibilidadResponse
             {
                 EsValido = false,
-                Disponible = false,
                 Codigo = "SEMANAL_USUARIO_SIN_ACCESO",
                 Mensaje = "El usuario no tiene acceso al módulo semanal."
             };
         }
 
-        if (!usuario.HabilitaModificacion)
+        var esActualizacion = string.Equals(tipoCargaNormalizado, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+
+        if (!esActualizacion && !usuario.HabilitaCarga)
         {
-            return new SemanalSemanaActualizacionResponse
+            return new SemanalSemanaDisponibilidadResponse
             {
                 EsValido = false,
-                Disponible = false,
+                Codigo = "SEMANAL_USUARIO_SIN_PERMISO_CARGA",
+                Mensaje = "El usuario no tiene habilitada la carga de información semanal."
+            };
+        }
+
+        if (esActualizacion && !usuario.HabilitaModificacion)
+        {
+            return new SemanalSemanaDisponibilidadResponse
+            {
+                EsValido = false,
                 Codigo = "SEMANAL_USUARIO_SIN_PERMISO_MODIFICACION",
                 Mensaje = "El usuario no tiene habilitada la actualización de información semanal."
             };
@@ -197,37 +218,84 @@ public class SemanalCargaService : ISemanalCargaService
 
         if (!usuario.IdEntidadFederativa.HasValue)
         {
-            return new SemanalSemanaActualizacionResponse
+            return new SemanalSemanaDisponibilidadResponse
             {
                 EsValido = false,
-                Disponible = false,
                 Codigo = "SEMANAL_USUARIO_SIN_ENTIDAD",
                 Mensaje = "No fue posible determinar la entidad federativa del usuario."
             };
         }
 
-        var estado = await _semanalCargaRepository.ObtenerEstadoSemanaActualizacionAsync(usuario.IdEntidadFederativa.Value, anioSemana, numeroSemana);
+        var estado = await _semanalCargaRepository.ObtenerEstadoSemanaAsync(usuario.IdEntidadFederativa.Value, anioSemana, numeroSemana);
+        var existePendiente = !string.IsNullOrWhiteSpace(estado.EstadoPendiente);
+        var pendientePropia = existePendiente && estado.IdUsuarioCargaPendiente == idUsuario;
+        var pendienteMismoFlujo = string.Equals(estado.TipoCargaPendiente, tipoCargaNormalizado, StringComparison.OrdinalIgnoreCase);
+        var estadoPendienteResoluble = esActualizacion ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "VALIDADO_PENDIENTE";
+        var puedeResolverPendiente = pendientePropia && pendienteMismoFlujo && string.Equals(estado.EstadoPendiente, estadoPendienteResoluble, StringComparison.OrdinalIgnoreCase);
 
-        if (!string.IsNullOrWhiteSpace(estado.EstadoPendiente))
+        if (existePendiente)
         {
-            var pendienteAprobacion = string.Equals(estado.EstadoPendiente, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
+            if (puedeResolverPendiente)
+            {
+                return new SemanalSemanaDisponibilidadResponse
+                {
+                    EsValido = true,
+                    Disponible = false,
+                    TieneCargaConfirmada = estado.TieneCargaConfirmada,
+                    ExisteOperacionPendiente = true,
+                    Codigo = esActualizacion ? "SEMANAL_ACTUALIZACION_PENDIENTE_RESOLUBLE" : "SEMANAL_CARGA_PENDIENTE_RESOLUBLE",
+                    Mensaje = esActualizacion
+                        ? $"Existe una actualización validada pendiente de aceptar o rechazar para la semana {numeroSemana}/{anioSemana}."
+                        : $"Existe una carga validada pendiente de aceptar o rechazar para la semana {numeroSemana}/{anioSemana}.",
+                    CodigoReferenciaPendiente = estado.CodigoReferenciaPendiente,
+                    EstadoPendiente = estado.EstadoPendiente,
+                    TipoCargaPendiente = estado.TipoCargaPendiente,
+                    PendientePropia = true,
+                    PuedeResolverPendiente = true
+                };
+            }
 
-            return new SemanalSemanaActualizacionResponse
+            var enRevisionAdministrativa = string.Equals(estado.EstadoPendiente, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
+            var pendienteActualizacion = string.Equals(estado.TipoCargaPendiente, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+            var puedeIrActualizacion = !esActualizacion && pendientePropia && pendienteActualizacion && !enRevisionAdministrativa;
+
+            return new SemanalSemanaDisponibilidadResponse
             {
                 EsValido = true,
                 Disponible = false,
-                Codigo = pendienteAprobacion ? "SEMANAL_SEMANA_PENDIENTE_APROBACION" : "SEMANAL_SEMANA_CON_OPERACION_PENDIENTE",
-                Mensaje = pendienteAprobacion
-                    ? $"La semana {numeroSemana}/{anioSemana} tiene una operación pendiente de aprobación administrativa. Debe aprobarse o rechazarse antes de realizar otra actualización."
-                    : $"La semana {numeroSemana}/{anioSemana} ya tiene una operación en proceso con estado {estado.EstadoPendiente}. Debe concluirse antes de realizar otra actualización.",
+                TieneCargaConfirmada = estado.TieneCargaConfirmada,
+                ExisteOperacionPendiente = true,
+                Codigo = enRevisionAdministrativa ? "SEMANAL_SEMANA_PENDIENTE_APROBACION" : "SEMANAL_SEMANA_CON_OPERACION_PENDIENTE",
+                Mensaje = enRevisionAdministrativa
+                    ? $"La semana {numeroSemana}/{anioSemana} tiene una operación pendiente de aprobación administrativa. Debe aprobarse o rechazarse antes de registrar otra operación."
+                    : pendientePropia
+                        ? $"La semana {numeroSemana}/{anioSemana} tiene una operación pendiente de tipo {estado.TipoCargaPendiente}. Debe resolverse desde el flujo correspondiente."
+                        : $"La semana {numeroSemana}/{anioSemana} tiene una operación pendiente registrada por otro usuario.",
                 CodigoReferenciaPendiente = estado.CodigoReferenciaPendiente,
-                EstadoPendiente = estado.EstadoPendiente
+                EstadoPendiente = estado.EstadoPendiente,
+                TipoCargaPendiente = estado.TipoCargaPendiente,
+                PendientePropia = pendientePropia,
+                PuedeResolverPendiente = false,
+                DebeUsarActualizacion = puedeIrActualizacion
             };
         }
 
-        if (!estado.TieneCargaConfirmada)
+        if (!esActualizacion && estado.TieneCargaConfirmada)
         {
-            return new SemanalSemanaActualizacionResponse
+            return new SemanalSemanaDisponibilidadResponse
+            {
+                EsValido = true,
+                Disponible = false,
+                TieneCargaConfirmada = true,
+                Codigo = "SEMANAL_SEMANA_YA_CONFIRMADA",
+                Mensaje = $"La semana {numeroSemana}/{anioSemana} ya tiene información confirmada. Para modificarla debe utilizar el flujo de actualización semanal.",
+                DebeUsarActualizacion = true
+            };
+        }
+
+        if (esActualizacion && !estado.TieneCargaConfirmada)
+        {
+            return new SemanalSemanaDisponibilidadResponse
             {
                 EsValido = true,
                 Disponible = false,
@@ -236,12 +304,15 @@ public class SemanalCargaService : ISemanalCargaService
             };
         }
 
-        return new SemanalSemanaActualizacionResponse
+        return new SemanalSemanaDisponibilidadResponse
         {
             EsValido = true,
             Disponible = true,
-            Codigo = "SEMANAL_SEMANA_DISPONIBLE_ACTUALIZACION",
-            Mensaje = $"La semana {numeroSemana}/{anioSemana} está disponible para actualización."
+            TieneCargaConfirmada = estado.TieneCargaConfirmada,
+            Codigo = esActualizacion ? "SEMANAL_SEMANA_DISPONIBLE_ACTUALIZACION" : "SEMANAL_SEMANA_DISPONIBLE_CARGA",
+            Mensaje = esActualizacion
+                ? $"La semana {numeroSemana}/{anioSemana} está disponible para actualización."
+                : $"La semana {numeroSemana}/{anioSemana} está disponible para carga."
         };
     }
 

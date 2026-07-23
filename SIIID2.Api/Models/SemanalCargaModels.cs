@@ -90,19 +90,27 @@ public class SemanalDatosComparacion
     public List<SemanalCargaPendienteComparacion> CargasPendientes { get; set; } = new();
 }
 
-public class SemanalSemanaActualizacionEstadoInfo
+public class SemanalSemanaEstadoInfo
 {
     public bool TieneCargaConfirmada { get; set; }
     public string? CodigoReferenciaPendiente { get; set; }
     public string? EstadoPendiente { get; set; }
+    public string? TipoCargaPendiente { get; set; }
+    public int? IdUsuarioCargaPendiente { get; set; }
 }
 
-public class SemanalSemanaActualizacionResponse
+public class SemanalSemanaDisponibilidadResponse
 {
     public bool EsValido { get; set; }
     public bool Disponible { get; set; }
+    public bool TieneCargaConfirmada { get; set; }
+    public bool ExisteOperacionPendiente { get; set; }
     public string Codigo { get; set; } = string.Empty;
     public string Mensaje { get; set; } = string.Empty;
     public string? CodigoReferenciaPendiente { get; set; }
     public string? EstadoPendiente { get; set; }
+    public string? TipoCargaPendiente { get; set; }
+    public bool PendientePropia { get; set; }
+    public bool PuedeResolverPendiente { get; set; }
+    public bool DebeUsarActualizacion { get; set; }
 }

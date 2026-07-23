@@ -194,7 +194,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             sql,
             new { IdSemanalCarga = idSemanalCarga })).ToList();
     }
-    public async Task<SemanalSemanaActualizacionEstadoInfo> ObtenerEstadoSemanaActualizacionAsync(int idEntidadFederativa, int anioSemana, int numeroSemana)
+    public async Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int anioSemana, int numeroSemana)
     {
         const string sql = @"
         SELECT
@@ -210,11 +210,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                   AND sc.activo = 1
             ) THEN 1 ELSE 0 END) AS TieneCargaConfirmada,
             pendiente.codigo_referencia AS CodigoReferenciaPendiente,
-            pendiente.estado AS EstadoPendiente
+            pendiente.estado AS EstadoPendiente,
+            pendiente.tipo_carga AS TipoCargaPendiente,
+            pendiente.id_usuario_carga AS IdUsuarioCargaPendiente
         FROM (VALUES (1)) base(valor)
         OUTER APPLY
         (
-            SELECT TOP (1) sc.codigo_referencia, sc.estado
+            SELECT TOP (1) sc.codigo_referencia, sc.estado, sc.tipo_carga, sc.id_usuario_carga
             FROM dbo.semanal_carga sc
             WHERE sc.id_entidad_federativa = @IdEntidadFederativa
               AND sc.anio_semana = @AnioSemana
@@ -231,7 +233,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
-        return await connection.QuerySingleAsync<SemanalSemanaActualizacionEstadoInfo>(sql, new { IdEntidadFederativa = idEntidadFederativa, AnioSemana = anioSemana, NumeroSemana = numeroSemana });
+        return await connection.QuerySingleAsync<SemanalSemanaEstadoInfo>(sql, new { IdEntidadFederativa = idEntidadFederativa, AnioSemana = anioSemana, NumeroSemana = numeroSemana });
     }
 
     public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
