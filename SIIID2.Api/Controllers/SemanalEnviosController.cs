@@ -2,6 +2,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SIIID2.Api.Services;
+using Microsoft.Extensions.Caching.Memory;
+using SIIID2.Api.Models;
+using System.Security.Cryptography;
 
 namespace SIIID2.Api.Controllers;
 
@@ -11,8 +14,13 @@ namespace SIIID2.Api.Controllers;
 public class SemanalEnviosController : ControllerBase
 {
     private readonly ISemanalEnviosService _semanalEnviosService;
+    private readonly IMemoryCache _cache;
 
-    public SemanalEnviosController(ISemanalEnviosService semanalEnviosService) => _semanalEnviosService = semanalEnviosService;
+    public SemanalEnviosController(ISemanalEnviosService semanalEnviosService, IMemoryCache cache)
+    {
+        _semanalEnviosService = semanalEnviosService;
+        _cache = cache;
+    }
 
     [HttpGet]
     public async Task<IActionResult> ObtenerEnvios([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? anioSemana = null, [FromQuery] int? numeroSemana = null, [FromQuery] string? tipoCarga = null, [FromQuery] string? estado = null)
@@ -72,6 +80,84 @@ public class SemanalEnviosController : ControllerBase
                 mensaje = ex.Message
             });
         }
+    }
+
+    [HttpPost("acuses/ticket")]
+    public async Task<IActionResult> CrearTicketDescargaAcuses([FromQuery] int anioSemana, [FromQuery] int numeroSemana)
+    {
+        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
+
+        try
+        {
+            var zip = await _semanalEnviosService.GenerarZipAcusesAsync(idUsuario, anioSemana, numeroSemana);
+            var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+            var cacheKey = $"ACUSES_SEMANALES_DOWNLOAD_TICKET:{ticket}";
+
+            _cache.Set(
+                cacheKey,
+                zip,
+                new MemoryCacheEntryOptions
+                {
+                    SlidingExpiration = TimeSpan.FromMinutes(5),
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+                });
+
+            return Ok(new
+            {
+                esValido = true,
+                ticket
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "SEMANAL_ACUSES_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "SEMANAL_ACUSES_NO_DISPONIBLES",
+                mensaje = ex.Message
+            });
+        }
+    }
+
+    [AllowAnonymous]
+    [HttpGet("acuses/descargar")]
+    public IActionResult DescargarAcusesPorTicket([FromQuery] string ticket)
+    {
+        if (string.IsNullOrWhiteSpace(ticket))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "SEMANAL_ACUSES_TICKET_REQUERIDO",
+                mensaje = "Debe proporcionar un ticket de descarga válido."
+            });
+        }
+
+        var cacheKey = $"ACUSES_SEMANALES_DOWNLOAD_TICKET:{ticket}";
+
+        if (!_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var zip) || zip == null)
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "SEMANAL_ACUSES_TICKET_INVALIDO",
+                mensaje = "El ticket de descarga no existe o ya expiró."
+            });
+        }
+
+        _cache.Remove(cacheKey);
+        Response.Headers.CacheControl = "no-store";
+
+        return File(zip.Archivo, "application/zip", zip.NombreArchivo);
     }
 
     private bool ObtenerIdUsuario(out int idUsuario) => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out idUsuario);

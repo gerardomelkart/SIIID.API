@@ -36,6 +36,12 @@ public class SemanalEnvioItem
     public bool PuedeResolverPendiente { get; set; }
     public string EndpointAcuse { get; set; } = string.Empty;
     public string EndpointArchivos { get; set; } = string.Empty;
+
+    public string FechaEnvioTexto { get; set; } = string.Empty;
+    public string Semana { get; set; } = string.Empty;
+    public bool EsRechazadoAdministrador { get; set; }
+    public bool TieneStagingDisponible { get; set; }
+    public string FechaRechazoTexto { get; set; } = string.Empty;
 }
 
 public class SemanalEnvioReferenciaInfo

@@ -10,12 +10,14 @@ public class SemanalEnviosService : ISemanalEnviosService
     private readonly ISemanalEnviosRepository _semanalEnviosRepository;
     private readonly ISemanalCargaRepository _semanalCargaRepository;
     private readonly ISemanalAdministracionCargasRepository _administracionRepository;
+    private readonly ISemanalAcusePdfService _acusePdfService;
 
-    public SemanalEnviosService(ISemanalEnviosRepository semanalEnviosRepository, ISemanalCargaRepository semanalCargaRepository, ISemanalAdministracionCargasRepository administracionRepository)
+    public SemanalEnviosService(ISemanalEnviosRepository semanalEnviosRepository, ISemanalCargaRepository semanalCargaRepository, ISemanalAdministracionCargasRepository administracionRepository, ISemanalAcusePdfService acusePdfService)
     {
         _semanalEnviosRepository = semanalEnviosRepository;
         _semanalCargaRepository = semanalCargaRepository;
         _administracionRepository = administracionRepository;
+        _acusePdfService = acusePdfService;
     }
 
     public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? anioSemana, int? numeroSemana, string? tipoCarga, string? estado)
@@ -40,15 +42,35 @@ public class SemanalEnviosService : ISemanalEnviosService
 
             registro.EsConfirmado = estadoRegistro is "CONFIRMADO" or "CONFIRMADO_ACTUALIZACION";
             registro.EsPendiente = estadoRegistro is "VALIDADO_PENDIENTE" or "VALIDADO_PENDIENTE_ACTUALIZACION" or "PENDIENTE_APROBACION";
+            registro.EsRechazadoAdministrador = estadoRegistro == "RECHAZADO_ADMIN";
             registro.EstadoTexto = ObtenerEstadoTexto(estadoRegistro, esActualizacion);
-            registro.EndpointAcuse = registro.EsConfirmado
-                ? $"/api/semanal/cargas/{registro.CodigoReferencia}/acuse-confirmado"
-                : $"/api/semanal/cargas/{registro.CodigoReferencia}/acuse";
-            registro.EndpointArchivos = $"/api/semanal/envios/{registro.CodigoReferencia}/archivos";
+            registro.FechaEnvioTexto = registro.FechaMovimiento.ToString("dd-MM-yyyy");
+            registro.Semana = $"Semana {registro.NumeroSemana}/{registro.AnioSemana}";
+            registro.FechaRechazoTexto = registro.EsRechazadoAdministrador
+                ? registro.FechaConfirmacion?.ToString("dd-MM-yyyy HH:mm") ?? string.Empty
+                : string.Empty;
+
+            if (registro.EsConfirmado)
+            {
+                registro.EndpointAcuse = $"/api/semanal/cargas/{registro.CodigoReferencia}/acuse-confirmado";
+                registro.EndpointArchivos = $"/api/semanal/envios/{registro.CodigoReferencia}/archivos";
+            }
+            else if (registro.EsPendiente || registro.EsRechazadoAdministrador && registro.TieneStagingDisponible)
+            {
+                registro.EndpointAcuse = $"/api/semanal/cargas/{registro.CodigoReferencia}/acuse";
+                registro.EndpointArchivos = registro.TieneStagingDisponible
+                    ? $"/api/semanal/envios/{registro.CodigoReferencia}/archivos"
+                    : string.Empty;
+            }
+            else
+            {
+                registro.EndpointAcuse = string.Empty;
+                registro.EndpointArchivos = string.Empty;
+            }
 
             var pendienteResoluble =
-                (!esActualizacion && estadoRegistro == "VALIDADO_PENDIENTE") ||
-                (esActualizacion && estadoRegistro == "VALIDADO_PENDIENTE_ACTUALIZACION");
+                !esActualizacion && estadoRegistro == "VALIDADO_PENDIENTE" ||
+                esActualizacion && estadoRegistro == "VALIDADO_PENDIENTE_ACTUALIZACION";
 
             var permisoOperacion = esActualizacion
                 ? usuario.HabilitaModificacion
@@ -103,6 +125,58 @@ public class SemanalEnviosService : ISemanalEnviosService
         {
             Archivo = zipStream.ToArray(),
             NombreArchivo = $"ARCHIVOS_SEMANA_{referencia.NumeroSemana}_{referencia.AnioSemana}_{NormalizarNombreArchivo(referencia.EntidadFederativa)}_{codigoLimpio}.zip"
+        };
+    }
+
+    public async Task<InformeArchivoZipResponse> GenerarZipAcusesAsync(int idUsuarioConsulta, int anioSemana, int numeroSemana)
+    {
+        if (anioSemana < 2000 || anioSemana > 2100) throw new InvalidOperationException("El año de la semana no es válido.");
+        if (numeroSemana < 1 || numeroSemana > 53) throw new InvalidOperationException("El número de semana no es válido.");
+
+        var envios = await ObtenerEnviosAsync(idUsuarioConsulta, null, anioSemana, numeroSemana, null, null);
+
+        var enviosConAcuse = envios
+            .Where(envio => envio.Estado is
+                "VALIDADO_PENDIENTE" or
+                "VALIDADO_PENDIENTE_ACTUALIZACION" or
+                "PENDIENTE_APROBACION" or
+                "CONFIRMADO" or
+                "CONFIRMADO_ACTUALIZACION")
+            .ToList();
+
+        if (enviosConAcuse.Count == 0)
+        {
+            throw new InvalidOperationException($"No existen acuses disponibles para la semana {numeroSemana}/{anioSemana}.");
+        }
+
+        using var zipStream = new MemoryStream();
+
+        using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var envio in enviosConAcuse)
+            {
+                var esConfirmado =
+                    string.Equals(envio.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(envio.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+
+                var pdf = esConfirmado
+                    ? await _acusePdfService.GenerarAcuseConfirmadoAsync(envio.CodigoReferencia, idUsuarioConsulta)
+                    : await _acusePdfService.GenerarAcusePrevioAsync(envio.CodigoReferencia, idUsuarioConsulta);
+
+                var tipoDocumento = esConfirmado ? "ACUSE" : "INFORME_PREVIO";
+                var entidad = NormalizarNombreArchivo(envio.EntidadFederativa);
+                var nombreArchivo = $"{envio.ClaveEntidad}_{entidad}_{tipoDocumento}_{envio.CodigoReferencia}.pdf";
+                var entry = archive.CreateEntry(nombreArchivo, CompressionLevel.Fastest);
+
+                await using var entryStream = entry.Open();
+                await entryStream.WriteAsync(pdf);
+            }
+        }
+
+        return new InformeArchivoZipResponse
+        {
+            Archivo = zipStream.ToArray(),
+            NombreArchivo = $"ACUSES_SEMANA_{numeroSemana}_{anioSemana}.zip"
         };
     }
 
