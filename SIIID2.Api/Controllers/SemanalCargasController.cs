@@ -21,11 +21,11 @@ public class SemanalCargasController : ControllerBase
     }
 
     [HttpGet("semana/disponibilidad")]
-    public async Task<IActionResult> ValidarSemana([FromQuery] string tipoCarga, [FromQuery] int anioSemana, [FromQuery] int numeroSemana)
+    public async Task<IActionResult> ValidarSemana([FromQuery] string tipoCarga, [FromQuery] int anioSemana, [FromQuery] int numeroSemana, [FromQuery] int? idEntidadFederativa)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
-        var resultado = await _semanalCargaService.ValidarSemanaAsync(tipoCarga, anioSemana, numeroSemana, idUsuario);
+        var resultado = await _semanalCargaService.ValidarSemanaAsync(tipoCarga, anioSemana, numeroSemana, idEntidadFederativa, idUsuario);
         return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
     }
 

@@ -12,6 +12,7 @@ public class SemanalCargaValidacionRequest
     public DateTime FechaInicioSemana { get; set; }
     public int MesCorte { get; set; }
     public int AnioCorte { get; set; }
+    public int? IdEntidadFederativa { get; set; }
 }
 
 public class SemanalPeriodoCarga

@@ -158,7 +158,7 @@ public class SemanalCargaService : ISemanalCargaService
         _logger = logger;
     }
 
-    public async Task<SemanalSemanaDisponibilidadResponse> ValidarSemanaAsync(string tipoCarga, int anioSemana, int numeroSemana, int idUsuario)
+    public async Task<SemanalSemanaDisponibilidadResponse> ValidarSemanaAsync(string tipoCarga, int anioSemana, int numeroSemana, int? idEntidadFederativa, int idUsuario)
     {
         var tipoCargaNormalizado = (tipoCarga ?? string.Empty).Trim().ToUpperInvariant();
 
@@ -216,19 +216,53 @@ public class SemanalCargaService : ISemanalCargaService
             };
         }
 
-        if (!usuario.IdEntidadFederativa.HasValue)
+        int? idEntidadConsulta;
+
+        if (usuario.EsSuperUsuario)
         {
-            return new SemanalSemanaDisponibilidadResponse
+            if (!esActualizacion)
             {
-                EsValido = false,
-                Codigo = "SEMANAL_USUARIO_SIN_ENTIDAD",
-                Mensaje = "No fue posible determinar la entidad federativa del usuario."
-            };
+                return new SemanalSemanaDisponibilidadResponse
+                {
+                    EsValido = true,
+                    Disponible = true,
+                    Codigo = "SEMANAL_CARGA_ENTIDAD_DESDE_ARCHIVOS",
+                    Mensaje = $"La semana {numeroSemana}/{anioSemana} está disponible para captura. La entidad se determinará al validar el archivo de delitos."
+                };
+            }
+
+            if (!idEntidadFederativa.HasValue || idEntidadFederativa.Value <= 0)
+            {
+                return new SemanalSemanaDisponibilidadResponse
+                {
+                    EsValido = false,
+                    Disponible = false,
+                    Codigo = "SEMANAL_ENTIDAD_SELECCIONADA_OBLIGATORIA",
+                    Mensaje = "Debe seleccionar la entidad federativa que desea actualizar."
+                };
+            }
+
+            idEntidadConsulta = idEntidadFederativa.Value;
+        }
+        else
+        {
+            if (!usuario.IdEntidadFederativa.HasValue)
+            {
+                return new SemanalSemanaDisponibilidadResponse
+                {
+                    EsValido = false,
+                    Disponible = false,
+                    Codigo = "SEMANAL_USUARIO_SIN_ENTIDAD",
+                    Mensaje = "No fue posible determinar la entidad federativa del usuario."
+                };
+            }
+
+            idEntidadConsulta = usuario.IdEntidadFederativa.Value;
         }
 
-        var estado = await _semanalCargaRepository.ObtenerEstadoSemanaAsync(usuario.IdEntidadFederativa.Value, anioSemana, numeroSemana);
+        var estado = await _semanalCargaRepository.ObtenerEstadoSemanaAsync(idEntidadConsulta.Value, anioSemana, numeroSemana);
         var existePendiente = !string.IsNullOrWhiteSpace(estado.EstadoPendiente);
-        var pendientePropia = existePendiente && estado.IdUsuarioCargaPendiente == idUsuario;
+        var pendientePropia = existePendiente && (usuario.EsSuperUsuario || estado.IdUsuarioCargaPendiente == idUsuario);
         var pendienteMismoFlujo = string.Equals(estado.TipoCargaPendiente, tipoCargaNormalizado, StringComparison.OrdinalIgnoreCase);
         var estadoPendienteResoluble = esActualizacion ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "VALIDADO_PENDIENTE";
         var puedeResolverPendiente = pendientePropia && pendienteMismoFlujo && string.Equals(estado.EstadoPendiente, estadoPendienteResoluble, StringComparison.OrdinalIgnoreCase);
@@ -370,6 +404,13 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
+        if (esActualizacion && usuarioCarga.EsSuperUsuario && (!request.IdEntidadFederativa.HasValue || request.IdEntidadFederativa.Value <= 0))
+        {
+            AgregarErrorGeneral(response, "SEMANAL_ENTIDAD_SELECCIONADA_OBLIGATORIA", "Entidad federativa obligatoria", "Debe seleccionar la entidad federativa que desea actualizar.");
+            FinalizarRespuesta(response, 0, 0, 0);
+            return response;
+        }
+
         response.Periodo = ValidarPeriodo(
             request,
             response.Errores);
@@ -504,11 +545,7 @@ public class SemanalCargaService : ISemanalCargaService
                 usuarioCarga,
                 delitosPeriodo));
 
-        var idEntidadFederativa =
-            ObtenerEntidadFederativaCarga(
-                usuarioCarga,
-                delitosPeriodo,
-                response.Errores);
+        var idEntidadFederativa = ObtenerEntidadFederativaCarga(usuarioCarga, delitosPeriodo, esActualizacion, request.IdEntidadFederativa, response.Errores);
 
         if (response.Errores.Count > 0 ||
             !idEntidadFederativa.HasValue)
@@ -1892,24 +1929,41 @@ public class SemanalCargaService : ISemanalCargaService
         return errores;
     }
 
-    private static int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    private static int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos, bool esActualizacion, int? idEntidadFederativaSeleccionada, List<CargaValidacionError> errores)
     {
         if (!usuarioCarga.EsSuperUsuario) return usuarioCarga.IdEntidadFederativa;
 
         var entidades = filasDelitos.Select(fila => ObtenerValor(fila, "id_ent_hchos")?.Trim()).Where(valor => int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)).Select(valor => int.Parse(valor!, NumberStyles.Integer, CultureInfo.InvariantCulture)).ToHashSet();
 
-        if (entidades.Count == 1) return entidades.First();
-
         if (entidades.Count == 0)
         {
             AgregarErrorGeneral(errores, "SEMANAL_ENTIDAD_NO_DETECTADA", "No se pudo determinar la entidad de la carga", "No se pudo determinar la entidad federativa a partir del archivo de delitos.", "id_ent_hchos", null);
-        }
-        else
-        {
-            AgregarErrorGeneral(errores, "SEMANAL_ENTIDADES_MULTIPLES", "La carga contiene múltiples entidades", "Una carga semanal solo puede corresponder a una entidad federativa.", "id_ent_hchos", string.Join(", ", entidades.OrderBy(x => x)));
+            return null;
         }
 
-        return null;
+        if (entidades.Count > 1)
+        {
+            AgregarErrorGeneral(errores, "SEMANAL_ENTIDADES_MULTIPLES", "La carga contiene múltiples entidades", "Una operación semanal solo puede corresponder a una entidad federativa.", "id_ent_hchos", string.Join(", ", entidades.OrderBy(x => x)));
+            return null;
+        }
+
+        var idEntidadExcel = entidades.First();
+
+        if (!esActualizacion) return idEntidadExcel;
+
+        if (!idEntidadFederativaSeleccionada.HasValue || idEntidadFederativaSeleccionada.Value <= 0)
+        {
+            AgregarErrorGeneral(errores, "SEMANAL_ENTIDAD_SELECCIONADA_OBLIGATORIA", "Entidad federativa obligatoria", "Debe seleccionar la entidad federativa que desea actualizar.", "idEntidadFederativa", null);
+            return null;
+        }
+
+        if (idEntidadExcel != idEntidadFederativaSeleccionada.Value)
+        {
+            AgregarErrorGeneral(errores, "SEMANAL_ENTIDAD_NO_CORRESPONDE_SELECCIONADA", "Entidad del Excel distinta a la entidad seleccionada", $"La entidad del Excel ({idEntidadExcel}) no corresponde con la entidad seleccionada ({idEntidadFederativaSeleccionada.Value}).", "id_ent_hchos", idEntidadExcel.ToString(CultureInfo.InvariantCulture));
+            return null;
+        }
+
+        return idEntidadFederativaSeleccionada.Value;
     }
 
     private static void FinalizarRespuesta(SemanalCargaValidacionResponse response, int totalCarpetas, int totalDelitos, int totalVictimas)
