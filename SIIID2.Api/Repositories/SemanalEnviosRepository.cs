@@ -329,7 +329,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
               AND
               (
                   @ModoPlano = N'CONFIRMADO' AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-                  OR @ModoPlano IN (N'PREVIO', N'MIXTO') AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION', N'PENDIENTE_APROBACION')
+                  OR @ModoPlano = N'PREVIO' AND sc.estado = N'PENDIENTE_APROBACION'
+                  OR @ModoPlano = N'MIXTO' AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION', N'PENDIENTE_APROBACION')
               )
         ) THEN 1 ELSE 0 END);
         ";
@@ -427,17 +428,6 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             WHERE @ModoPlano = N'CONFIRMADO'
                OR
                (
-                   @ModoPlano = N'PREVIO'
-                   AND NOT EXISTS
-                   (
-                       SELECT 1
-                       FROM pendientes pendiente
-                       WHERE pendiente.anio_semana = confirmada.anio_semana
-                         AND pendiente.numero_semana = confirmada.numero_semana
-                   )
-               )
-               OR
-               (
                    @ModoPlano = N'MIXTO'
                    AND NOT EXISTS
                    (
@@ -499,6 +489,16 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             WHERE ef.activo = 1
               AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
               AND (@IdEntidadFederativa IS NULL OR ef.id_entidad_federativa = @IdEntidadFederativa)
+              AND
+              (
+                  @ModoPlano <> N'PREVIO'
+                  OR EXISTS
+                  (
+                      SELECT 1
+                      FROM pendientes pendiente
+                      WHERE pendiente.id_entidad_federativa = ef.id_entidad_federativa
+                  )
+              )
         ),
         fuente_delitos AS
         (
@@ -789,6 +789,16 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             WHERE ef.activo = 1
               AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
               AND (@IdEntidadFederativa IS NULL OR ef.id_entidad_federativa = @IdEntidadFederativa)
+              AND
+              (
+                  @ModoPlano <> N'PREVIO'
+                  OR EXISTS
+                  (
+                      SELECT 1
+                      FROM pendientes pendiente
+                      WHERE pendiente.id_entidad_federativa = ef.id_entidad_federativa
+                  )
+              )
         ),
         fuente_victimas AS
         (
@@ -1164,6 +1174,16 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             WHERE entidad.activo = 1
               AND TRY_CONVERT(int, entidad.clave) BETWEEN 1 AND 32
               AND (@IdEntidadFederativa IS NULL OR entidad.id_entidad_federativa = @IdEntidadFederativa)
+              AND
+              (
+                  @ModoPlano <> N'PREVIO'
+                  OR EXISTS
+                  (
+                      SELECT 1
+                      FROM pendientes pendiente
+                      WHERE pendiente.id_entidad_federativa = entidad.id_entidad_federativa
+                  )
+              )
         ),
         conteos AS
         (
