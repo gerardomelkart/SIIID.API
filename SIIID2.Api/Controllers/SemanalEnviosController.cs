@@ -43,6 +43,40 @@ public class SemanalEnviosController : ControllerBase
         }
     }
 
+    [HttpGet("reporte-cargas")]
+    public async Task<IActionResult> ObtenerReporteCargas([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? anioSemana = null, [FromQuery] int? numeroSemana = null)
+    {
+        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
+
+        try
+        {
+            var registros = await _semanalEnviosService.ObtenerReporteCargasAsync(
+                idUsuario,
+                idEntidadFederativa,
+                anioSemana,
+                numeroSemana);
+
+            return Ok(new
+            {
+                esValido = true,
+                idEntidadFederativa,
+                anioSemana,
+                numeroSemana,
+                total = registros.Count,
+                registros
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "SEMANAL_REPORTE_CARGAS_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+    }
+
     [HttpGet("{codigoReferencia}/archivos")]
     public async Task<IActionResult> DescargarArchivos(string codigoReferencia)
     {

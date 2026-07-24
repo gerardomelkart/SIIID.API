@@ -186,6 +186,133 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         return await connection.QueryFirstOrDefaultAsync<SemanalEnvioReferenciaInfo>(sql, new { CodigoReferencia = codigoReferencia });
     }
 
+    public async Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int? anioSemana, int? numeroSemana)
+    {
+        const string sql = @"
+        WITH semanas AS
+        (
+            SELECT
+                sc.id_entidad_federativa,
+                sc.anio_semana,
+                sc.numero_semana,
+                COUNT(1) AS intentos
+            FROM dbo.semanal_carga sc
+            WHERE sc.activo = 1
+              AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+              AND sc.id_entidad_federativa IS NOT NULL
+              AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
+              AND (@AnioSemana IS NULL OR sc.anio_semana = @AnioSemana)
+              AND (@NumeroSemana IS NULL OR sc.numero_semana = @NumeroSemana)
+            GROUP BY
+                sc.id_entidad_federativa,
+                sc.anio_semana,
+                sc.numero_semana
+        )
+        SELECT
+            ef.id_entidad_federativa AS IdEntidadFederativa,
+            ef.nombre AS EntidadFederativa,
+            ef.clave AS ClaveEntidad,
+            s.anio_semana AS AnioSemana,
+            s.numero_semana AS NumeroSemana,
+            s.intentos AS Intentos,
+            ultimo.codigo_referencia AS UltimoIntento,
+            ultimo.tipo_carga AS TipoCargaUltimoIntento,
+            ultimo.estado AS EstatusUltimoIntento,
+            ultimo.fecha_carga_actualizacion AS FechaCargaActualizacion,
+            ultimo.fecha_aprobacion AS FechaAprobacion,
+            exitosa.fecha_carga_exitosa AS FechaCargaExitosa
+        FROM semanas s
+        INNER JOIN dbo.catalogo_entidad_federativa ef
+            ON ef.id_entidad_federativa = s.id_entidad_federativa
+           AND ef.activo = 1
+        OUTER APPLY
+        (
+            SELECT TOP (1)
+                sc.codigo_referencia,
+                sc.tipo_carga,
+                sc.estado,
+                CASE
+                    WHEN sc.estado IN
+                    (
+                        N'VALIDADO_PENDIENTE',
+                        N'VALIDADO_PENDIENTE_ACTUALIZACION',
+                        N'PENDIENTE_APROBACION',
+                        N'CONFIRMADO',
+                        N'CONFIRMADO_ACTUALIZACION',
+                        N'RECHAZADO_ADMIN'
+                    )
+                    THEN sc.fecha_validacion
+                    ELSE NULL
+                END AS fecha_carga_actualizacion,
+                CASE
+                    WHEN sc.estado IN
+                    (
+                        N'CONFIRMADO',
+                        N'CONFIRMADO_ACTUALIZACION'
+                    )
+                    THEN sc.fecha_confirmacion
+                    ELSE NULL
+                END AS fecha_aprobacion
+            FROM dbo.semanal_carga sc
+            WHERE sc.id_entidad_federativa = s.id_entidad_federativa
+              AND sc.anio_semana = s.anio_semana
+              AND sc.numero_semana = s.numero_semana
+              AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+              AND sc.activo = 1
+            ORDER BY
+                COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) DESC,
+                sc.id_semanal_carga DESC
+        ) ultimo
+        OUTER APPLY
+        (
+            SELECT
+                MIN(sc.fecha_validacion) AS fecha_carga_exitosa
+            FROM dbo.semanal_carga sc
+            WHERE sc.id_entidad_federativa = s.id_entidad_federativa
+              AND sc.anio_semana = s.anio_semana
+              AND sc.numero_semana = s.numero_semana
+              AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+              AND sc.estado IN
+              (
+                  N'VALIDADO_PENDIENTE',
+                  N'VALIDADO_PENDIENTE_ACTUALIZACION',
+                  N'PENDIENTE_APROBACION',
+                  N'CONFIRMADO',
+                  N'CONFIRMADO_ACTUALIZACION'
+              )
+              AND sc.activo = 1
+        ) exitosa
+        ORDER BY
+            s.anio_semana DESC,
+            s.numero_semana DESC,
+            ef.nombre;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var registros = (await connection.QueryAsync<SemanalReporteCargaItem>(sql, new
+        {
+            IdEntidadFederativa = idEntidadFederativa,
+            AnioSemana = anioSemana,
+            NumeroSemana = numeroSemana
+        })).ToList();
+
+        foreach (var registro in registros)
+        {
+            registro.Semana = $"Semana {registro.NumeroSemana}/{registro.AnioSemana}";
+
+            registro.FechaCargaActualizacionTexto = registro.FechaCargaActualizacion.HasValue
+                ? registro.FechaCargaActualizacion.Value.ToString("yyyy-MM-dd HH:mm:ss")
+                : string.Empty;
+
+            registro.FechaAprobacionTexto = registro.FechaAprobacion.HasValue
+                ? registro.FechaAprobacion.Value.ToString("yyyy-MM-dd HH:mm:ss")
+                : string.Empty;
+        }
+
+        return registros;
+    }
+
     public Task<List<IDictionary<string, object?>>> ObtenerCarpetasConfirmadasSemanaAsync(SemanalEnvioReferenciaInfo referencia)
     {
         const string sql = @"

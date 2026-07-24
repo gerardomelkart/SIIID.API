@@ -85,6 +85,21 @@ public class SemanalEnviosService : ISemanalEnviosService
         return registros;
     }
 
+    public async Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? anioSemana, int? numeroSemana)
+    {
+        var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
+
+        if (!usuario.EsSuperUsuario)
+        {
+            throw new UnauthorizedAccessException("Únicamente el superusuario puede consultar el reporte de cargas semanales.");
+        }
+
+        return await _semanalEnviosRepository.ObtenerReporteCargasAsync(
+            idEntidadFederativa,
+            anioSemana,
+            numeroSemana);
+    }
+
     public async Task<InformeArchivoZipResponse> GenerarZipArchivosAsync(int idUsuarioConsulta, string codigoReferencia)
     {
         var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
