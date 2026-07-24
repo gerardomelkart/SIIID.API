@@ -29,48 +29,18 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 ) AS rn
             FROM dbo.semanal_carga sc
             WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-              AND sc.estado NOT LIKE N'RECHAZADO%'
-              AND sc.activo = 1
-        ),
-        rechazo_visible AS
-        (
-            SELECT
-                sc.id_semanal_carga
-            FROM dbo.semanal_carga sc
-            WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-              AND sc.estado = N'RECHAZADO_ADMIN'
-              AND sc.activo = 1
-              AND NOT EXISTS
+              AND
               (
-                  SELECT 1
-                  FROM dbo.semanal_carga posterior
-                  WHERE ISNULL(posterior.id_entidad_federativa, 0) = ISNULL(sc.id_entidad_federativa, 0)
-                    AND posterior.anio_semana = sc.anio_semana
-                    AND posterior.numero_semana = sc.numero_semana
-                    AND ISNULL(posterior.tipo_carga, N'') = ISNULL(sc.tipo_carga, N'')
-                    AND posterior.id_semanal_carga > sc.id_semanal_carga
-                    AND posterior.activo = 1
-                    AND posterior.estado IN
-                    (
-                        N'VALIDADO_PENDIENTE',
-                        N'VALIDADO_PENDIENTE_ACTUALIZACION',
-                        N'PENDIENTE_APROBACION',
-                        N'RECHAZADO_ADMIN',
-                        N'CONFIRMADO',
-                        N'CONFIRMADO_ACTUALIZACION'
-                    )
+                  sc.estado NOT LIKE N'RECHAZADO%'
+                  OR sc.estado = N'RECHAZADO_ADMIN'
               )
+              AND sc.activo = 1
         ),
         cargas_visibles AS
         (
             SELECT id_semanal_carga
             FROM ultimo_visible
             WHERE rn = 1
-
-            UNION ALL
-
-            SELECT id_semanal_carga
-            FROM rechazo_visible
         )
         SELECT
             sc.id_semanal_carga AS IdSemanalCarga,
