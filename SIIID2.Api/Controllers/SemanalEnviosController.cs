@@ -195,13 +195,13 @@ public class SemanalEnviosController : ControllerBase
     }
 
     [HttpPost("planos/ticket")]
-    public async Task<IActionResult> CrearTicketDescargaPlanos([FromQuery] int anioCorte, [FromQuery] int mesCorte, [FromQuery] string tipo = "COMPLETA")
+    public async Task<IActionResult> CrearTicketDescargaPlanos([FromQuery] int anioCorte, [FromQuery] int mesCorte, [FromQuery] string tipo = "COMPLETA", [FromQuery] string modo = "CONFIRMADO")
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
         try
         {
-            var zip = await _semanalEnviosService.GenerarZipPlanosAsync(idUsuario, anioCorte, mesCorte, tipo);
+            var zip = await _semanalEnviosService.GenerarZipPlanosAsync(idUsuario, anioCorte, mesCorte, tipo, modo);
             var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
             var cacheKey = $"PLANOS_SEMANALES_DOWNLOAD_TICKET:{ticket}";
 

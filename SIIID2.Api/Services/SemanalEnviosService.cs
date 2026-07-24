@@ -216,7 +216,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         };
     }
 
-    public async Task<InformeArchivoZipResponse> GenerarZipPlanosAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, string? tipoPlano)
+    public async Task<InformeArchivoZipResponse> GenerarZipPlanosAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, string? tipoPlano, string? modoPlano)
     {
         var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
 
@@ -224,31 +224,33 @@ public class SemanalEnviosService : ISemanalEnviosService
         if (mesCorte < 1 || mesCorte > 12) throw new InvalidOperationException("El mes de corte no es válido.");
 
         var tipo = (tipoPlano ?? "COMPLETA").Trim().ToUpperInvariant();
+        var modo = NormalizarModoPlano(modoPlano);
 
         if (tipo is not "COMPLETA" and not "ESTATALES" and not "MUNICIPALES") throw new InvalidOperationException("El tipo de plano debe ser COMPLETA, ESTATALES o MUNICIPALES.");
+        if (!usuario.EsSuperUsuario && modo != "CONFIRMADO") throw new UnauthorizedAccessException("Únicamente el superusuario puede generar planos previos o mixtos.");
 
         var idEntidadFederativa = usuario.EsSuperUsuario ? null : usuario.IdEntidadFederativa;
 
-        if (!await _semanalEnviosRepository.ExisteInformacionConfirmadaPlanoAsync(anioCorte, mesCorte, idEntidadFederativa))
+        if (!await _semanalEnviosRepository.ExisteInformacionPlanoAsync(anioCorte, mesCorte, idEntidadFederativa, modo))
         {
-            throw new InvalidOperationException($"No existe información semanal confirmada para {ObtenerNombreMes(mesCorte)} de {anioCorte}.");
+            throw new InvalidOperationException($"No existe información semanal disponible para {ObtenerNombreMes(mesCorte)} de {anioCorte} en modo {modo.ToLowerInvariant()}.");
         }
 
         var tareas = new List<(string Archivo, string Hoja, Task<List<IDictionary<string, object?>>> Consulta)>();
 
         if (tipo is "COMPLETA" or "ESTATALES")
         {
-            tareas.Add(("estatal-delitos.xlsx", "estatal-delitos", _semanalEnviosRepository.ObtenerPlanoEstatalDelitosAsync(anioCorte, mesCorte, idEntidadFederativa)));
-            tareas.Add(("estatal-victimas.xlsx", "estatal-victimas", _semanalEnviosRepository.ObtenerPlanoEstatalVictimasAsync(anioCorte, mesCorte, idEntidadFederativa)));
+            tareas.Add(("estatal-delitos.xlsx", "estatal-delitos", _semanalEnviosRepository.ObtenerPlanoEstatalDelitosAsync(anioCorte, mesCorte, idEntidadFederativa, modo)));
+            tareas.Add(("estatal-victimas.xlsx", "estatal-victimas", _semanalEnviosRepository.ObtenerPlanoEstatalVictimasAsync(anioCorte, mesCorte, idEntidadFederativa, modo)));
         }
 
         if (tipo is "COMPLETA" or "MUNICIPALES")
         {
-            tareas.Add(("municipal-delitos.xlsx", "municipal-delitos", _semanalEnviosRepository.ObtenerPlanoMunicipalDelitosAsync(anioCorte, mesCorte, idEntidadFederativa)));
-            tareas.Add(("municipal-victimas.xlsx", "municipal-victimas", _semanalEnviosRepository.ObtenerPlanoMunicipalVictimasAsync(anioCorte, mesCorte, idEntidadFederativa)));
+            tareas.Add(("municipal-delitos.xlsx", "municipal-delitos", _semanalEnviosRepository.ObtenerPlanoMunicipalDelitosAsync(anioCorte, mesCorte, idEntidadFederativa, modo)));
+            tareas.Add(("municipal-victimas.xlsx", "municipal-victimas", _semanalEnviosRepository.ObtenerPlanoMunicipalVictimasAsync(anioCorte, mesCorte, idEntidadFederativa, modo)));
         }
 
-        await Task.WhenAll(tareas.Select(x => x.Consulta));
+        await Task.WhenAll(tareas.Select(tarea => tarea.Consulta));
 
         using var zipStream = new MemoryStream();
 
@@ -257,12 +259,10 @@ public class SemanalEnviosService : ISemanalEnviosService
             foreach (var tarea in tareas) AgregarExcelAlZip(archive, tarea.Archivo, tarea.Hoja, tarea.Consulta.Result);
         }
 
-        var mes = NormalizarNombreArchivo(ObtenerNombreMes(mesCorte));
-
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = $"PLANOS_SEMANALES_{mes}_{anioCorte}.zip"
+            NombreArchivo = $"PLANOS_SEMANALES_{modo}_{NormalizarNombreArchivo(ObtenerNombreMes(mesCorte))}_{anioCorte}.zip"
         };
     }
 
@@ -285,6 +285,15 @@ public class SemanalEnviosService : ISemanalEnviosService
         }
 
         return usuario;
+    }
+
+    private static string NormalizarModoPlano(string? modoPlano)
+    {
+        var modo = (modoPlano ?? "CONFIRMADO").Trim().ToUpperInvariant();
+
+        return modo is "CONFIRMADO" or "PREVIO" or "MIXTO"
+            ? modo
+            : throw new InvalidOperationException("El modo del plano debe ser CONFIRMADO, PREVIO o MIXTO.");
     }
 
     private static string ObtenerNombreMes(int mes)
