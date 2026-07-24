@@ -103,13 +103,34 @@ public class SemanalEnviosService : ISemanalEnviosService
             throw new UnauthorizedAccessException("No tiene permiso para descargar archivos de otra entidad federativa.");
         }
 
-        var carpetas = await _administracionRepository.ObtenerCarpetasPendientesAsync(referencia.IdSemanalCarga);
-        var delitos = await _administracionRepository.ObtenerDelitosPendientesAsync(referencia.IdSemanalCarga);
-        var victimas = await _administracionRepository.ObtenerVictimasPendientesAsync(referencia.IdSemanalCarga);
+        var esConfirmada =
+            string.Equals(referencia.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(referencia.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+
+        List<IDictionary<string, object?>> carpetas;
+        List<IDictionary<string, object?>> delitos;
+        List<IDictionary<string, object?>> victimas;
+
+        if (esConfirmada)
+        {
+            carpetas = await _semanalEnviosRepository.ObtenerCarpetasConfirmadasSemanaAsync(referencia);
+            delitos = await _semanalEnviosRepository.ObtenerDelitosConfirmadosSemanaAsync(referencia);
+            victimas = await _semanalEnviosRepository.ObtenerVictimasConfirmadasSemanaAsync(referencia);
+        }
+        else
+        {
+            carpetas = await _administracionRepository.ObtenerCarpetasPendientesAsync(referencia.IdSemanalCarga);
+            delitos = await _administracionRepository.ObtenerDelitosPendientesAsync(referencia.IdSemanalCarga);
+            victimas = await _administracionRepository.ObtenerVictimasPendientesAsync(referencia.IdSemanalCarga);
+        }
 
         if (carpetas.Count == 0 && delitos.Count == 0 && victimas.Count == 0)
         {
-            throw new InvalidOperationException("La operación ya no conserva archivos temporales disponibles para descarga.");
+            var mensaje = esConfirmada
+                ? "La operación confirmada no contiene registros finales disponibles para descarga."
+                : "La operación ya no conserva archivos temporales disponibles para descarga.";
+
+            throw new InvalidOperationException(mensaje);
         }
 
         using var zipStream = new MemoryStream();
