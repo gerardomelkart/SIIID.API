@@ -696,17 +696,6 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             WHERE @ModoPlano = N'CONFIRMADO'
                OR
                (
-                   @ModoPlano = N'PREVIO'
-                   AND NOT EXISTS
-                   (
-                       SELECT 1
-                       FROM pendientes pendiente
-                       WHERE pendiente.anio_semana = confirmada.anio_semana
-                         AND pendiente.numero_semana = confirmada.numero_semana
-                   )
-               )
-               OR
-               (
                    @ModoPlano = N'MIXTO'
                    AND NOT EXISTS
                    (
@@ -1016,17 +1005,6 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             SELECT confirmada.*
             FROM cargas_confirmadas confirmada
             WHERE @ModoPlano = N'CONFIRMADO'
-               OR
-               (
-                   @ModoPlano = N'PREVIO'
-                   AND NOT EXISTS
-                   (
-                       SELECT 1
-                       FROM pendientes pendiente
-                       WHERE pendiente.anio_semana = confirmada.anio_semana
-                         AND pendiente.numero_semana = confirmada.numero_semana
-                   )
-               )
                OR
                (
                    @ModoPlano = N'MIXTO'
