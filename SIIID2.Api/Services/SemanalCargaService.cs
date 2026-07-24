@@ -144,8 +144,9 @@ public class SemanalCargaService : ISemanalCargaService
     private readonly ISemanalDelitoRepository _semanalDelitoRepository;
     private readonly ISemanalCargaRepository _semanalCargaRepository;
     private readonly ILogger<SemanalCargaService> _logger;
+    private readonly IUltimosArchivosEntidadService _ultimosArchivosEntidadService;
 
-    public SemanalCargaService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ISemanalDelitoRepository semanalDelitoRepository, ISemanalCargaRepository semanalCargaRepository, ILogger<SemanalCargaService> logger)
+    public SemanalCargaService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ISemanalDelitoRepository semanalDelitoRepository, ISemanalCargaRepository semanalCargaRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService, ILogger<SemanalCargaService> logger)
     {
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
@@ -155,6 +156,7 @@ public class SemanalCargaService : ISemanalCargaService
         _catalogosValidator = catalogosValidator;
         _semanalDelitoRepository = semanalDelitoRepository;
         _semanalCargaRepository = semanalCargaRepository;
+        _ultimosArchivosEntidadService = ultimosArchivosEntidadService;
         _logger = logger;
     }
 
@@ -808,6 +810,15 @@ public class SemanalCargaService : ISemanalCargaService
                 Delitos = delitosEtiquetados,
                 Victimas = victimasEtiquetadas
             });
+
+        await _ultimosArchivosEntidadService.GuardarSemanalAsync(
+                idEntidadFederativa.Value,
+                response.CodigoReferencia,
+                tipoCarga,
+                periodo,
+                request.Carpetas!,
+                request.Delitos!,
+                request.Victimas!);
 
         _logger.LogInformation(
             "Operación semanal validada. Tipo: {TipoCarga}, Referencia: {CodigoReferencia}, Entidad: {IdEntidad}, Semana: {NumeroSemana}/{AnioSemana}, Tramo: {FechaInicioTramo:yyyy-MM-dd} a {FechaFinTramo:yyyy-MM-dd}",
