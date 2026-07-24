@@ -242,109 +242,131 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         SELECT
             sc.id_semanal_carga AS IdSemanalCarga,
             sc.fecha_confirmacion AS FechaConfirmacion,
-            c.id_ci AS IdCi,
+            ci.identificador_carpeta_fiscalia AS IdCi,
             (
                 SELECT
-                    c.id_ci AS id_ci,
-                    c.ntra_ci AS ntra_ci,
-                    c.fha_de_ini AS fha_de_ini,
-                    c.hra_de_ini AS hra_de_ini,
-                    c.rmen_de_hchos AS rmen_de_hchos
+                    ci.identificador_carpeta_fiscalia AS id_ci,
+                    ci.nomenclatura_carpeta_fiscalia AS ntra_ci,
+                    CONVERT(varchar(10), ci.fecha_inicio, 23) AS fha_de_ini,
+                    CONVERT(varchar(8), ci.fecha_inicio, 108) AS hra_de_ini,
+                    ci.resumen_hechos AS rmen_de_hchos
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
             ) AS Datos
-        FROM dbo.semanal_carga sc
-        INNER JOIN dbo.semanal_carga_tmp_carpeta c
-            ON c.id_semanal_carga = sc.id_semanal_carga
-           AND c.incluido = 1
-           AND c.activo = 1
+        FROM dbo.semanal_carpeta_investigacion ci
+        INNER JOIN dbo.semanal_carga sc
+            ON sc.id_semanal_carga = ci.id_semanal_carga
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.mes_corte = @MesCorte
           AND sc.anio_corte = @AnioCorte
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-          AND sc.activo = 1;
+          AND sc.activo = 1
+          AND ci.activo = 1;
 
         SELECT
             sc.id_semanal_carga AS IdSemanalCarga,
             sc.fecha_confirmacion AS FechaConfirmacion,
-            d.id_ci AS IdCi,
+            ci.identificador_carpeta_fiscalia AS IdCi,
             (
                 SELECT
-                    d.id_ci AS id_ci,
-                    d.id_delito AS id_delito,
-                    d.dto AS dto,
-                    d.moda_dto AS moda_dto,
-                    d.forma_acc AS forma_acc,
-                    d.fha_de_hchos AS fha_de_hchos,
-                    d.hra_de_hchos AS hra_de_hchos,
-                    d.emto_com_dto AS emto_com_dto,
-                    d.grdo_cons AS grdo_cons,
-                    d.clasf_de_dto AS clasf_de_dto,
-                    d.id_ent_hchos AS id_ent_hchos,
-                    d.id_mun_hchos AS id_mun_hchos,
-                    d.id_loc_hchos AS id_loc_hchos,
-                    d.nom_loc_hchos AS nom_loc_hchos,
-                    d.id_col_hchos AS id_col_hchos,
-                    d.nom_col_hchos AS nom_col_hchos,
-                    d.cp AS cp,
-                    d.coord_x AS coord_x,
-                    d.coord_y AS coord_y,
-                    d.dom_hchos AS dom_hchos
+                    ci.identificador_carpeta_fiscalia AS id_ci,
+                    d.identificador_delito_fiscalia AS id_delito,
+                    d.delito_fiscalia AS dto,
+                    d.modalidad_delito_fiscalia AS moda_dto,
+                    CONVERT(varchar(10), fa.clave) AS forma_acc,
+                    CONVERT(varchar(10), d.fecha_hechos, 23) AS fha_de_hchos,
+                    CONVERT(varchar(8), d.fecha_hechos, 108) AS hra_de_hchos,
+                    CONVERT(varchar(10), ic.clave) AS emto_com_dto,
+                    CONVERT(varchar(10), gc.clave) AS grdo_cons,
+                    md.clave4 AS clasf_de_dto,
+                    CONVERT(varchar(10), d.id_entidad_federativa) AS id_ent_hchos,
+                    CONVERT(varchar(20), mun.clave) AS id_mun_hchos,
+                    d.id_localidad_fiscalia AS id_loc_hchos,
+                    d.localidad_fiscalia_nombre AS nom_loc_hchos,
+                    d.id_colonia_fiscalia AS id_col_hchos,
+                    d.colonia_fiscalia_nombre AS nom_col_hchos,
+                    cp.codigo_postal AS cp,
+                    CONVERT(varchar(50), d.coordenada_x) AS coord_x,
+                    CONVERT(varchar(50), d.coordenada_y) AS coord_y,
+                    d.domicilio_hechos AS dom_hchos
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
             ) AS Datos
-        FROM dbo.semanal_carga sc
-        INNER JOIN dbo.semanal_carga_tmp_delito d
-            ON d.id_semanal_carga = sc.id_semanal_carga
-           AND d.incluido = 1
+        FROM dbo.semanal_delito d
+        INNER JOIN dbo.semanal_carpeta_investigacion ci
+            ON ci.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
+           AND ci.activo = 1
+        INNER JOIN dbo.semanal_carga sc
+            ON sc.id_semanal_carga = d.id_semanal_carga
+        INNER JOIN dbo.catalogo_forma_accion fa
+            ON fa.id_forma_accion = d.id_forma_accion
+        INNER JOIN dbo.catalogo_instrumento_comision ic
+            ON ic.id_instrumento_comision = d.id_instrumento_comision
+        INNER JOIN dbo.catalogo_grado_consumacion gc
+            ON gc.id_grado_consumacion = d.id_grado_consumacion
+        INNER JOIN dbo.catalogo_modalidad_delito md
+            ON md.id_modalidad_delito = d.id_modalidad_delito
+        INNER JOIN dbo.catalogo_municipio mun
+            ON mun.id_municipio = d.id_municipio
+        LEFT JOIN dbo.catalogo_codigo_postal cp
+            ON cp.id_codigo_postal = d.id_codigo_postal
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.mes_corte = @MesCorte
+          AND sc.anio_corte = @AnioCorte
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+          AND sc.activo = 1
+          AND d.activo = 1;
+
+        SELECT
+            sc.id_semanal_carga AS IdSemanalCarga,
+            sc.fecha_confirmacion AS FechaConfirmacion,
+            ci.identificador_carpeta_fiscalia AS IdCi,
+            (
+                SELECT
+                    ci.identificador_carpeta_fiscalia AS id_ci,
+                    d.identificador_delito_fiscalia AS id_delito,
+                    v.identificador_victima_fiscalia AS id_vicf,
+                    CONVERT(varchar(10), tv.clave) AS id_tv,
+                    CONVERT(varchar(10), tvm.clave) AS id_tpm,
+                    CONVERT(varchar(10), sx.clave) AS sexo,
+                    CONVERT(varchar(10), gen.clave) AS genero,
+                    CONVERT(varchar(10), pob.clave) AS pob,
+                    CONVERT(varchar(10), disc.clave) AS disc,
+                    CONVERT(varchar(10), v.fecha_nacimiento, 23) AS fha_nac,
+                    CONVERT(varchar(10), v.edad) AS edad,
+                    CONVERT(varchar(20), nac.clave) AS nacional
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
+            ) AS Datos
+        FROM dbo.semanal_victima v
+        INNER JOIN dbo.semanal_delito d
+            ON d.id_semanal_delito = v.id_semanal_delito
            AND d.activo = 1
-        INNER JOIN dbo.semanal_carga_tmp_carpeta c
-            ON c.id_semanal_carga = d.id_semanal_carga
-           AND c.id_ci = d.id_ci
-           AND c.incluido = 1
-           AND c.activo = 1
+        INNER JOIN dbo.semanal_carpeta_investigacion ci
+            ON ci.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
+           AND ci.activo = 1
+        INNER JOIN dbo.semanal_carga sc
+            ON sc.id_semanal_carga = v.id_semanal_carga
+        INNER JOIN dbo.catalogo_tipo_victima tv
+            ON tv.id_tipo_victima = v.id_tipo_victima
+        LEFT JOIN dbo.catalogo_tipo_victima_moral tvm
+            ON tvm.id_tipo_victima_moral = v.id_tipo_victima_moral
+        LEFT JOIN dbo.catalogo_sexo sx
+            ON sx.id_sexo = v.id_sexo
+        LEFT JOIN dbo.catalogo_genero gen
+            ON gen.id_genero = v.id_genero
+        LEFT JOIN dbo.catalogo_nacionalidad nac
+            ON nac.id_nacionalidad = v.id_nacionalidad
+        LEFT JOIN dbo.catalogo_pertenece_poblacion_indigena pob
+            ON pob.id_pertenece_poblacion_indigena = v.id_pertenece_poblacion_indigena
+        LEFT JOIN dbo.catalogo_presenta_discapacidad disc
+            ON disc.id_presenta_discapacidad = v.id_presenta_discapacidad
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.mes_corte = @MesCorte
           AND sc.anio_corte = @AnioCorte
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-          AND sc.activo = 1;
-
-        SELECT
-            sc.id_semanal_carga AS IdSemanalCarga,
-            sc.fecha_confirmacion AS FechaConfirmacion,
-            v.id_ci AS IdCi,
-            (
-                SELECT
-                    v.id_ci AS id_ci,
-                    v.id_delito AS id_delito,
-                    v.id_vicf AS id_vicf,
-                    v.id_tv AS id_tv,
-                    v.id_tpm AS id_tpm,
-                    v.sexo AS sexo,
-                    v.genero AS genero,
-                    v.pob AS pob,
-                    v.disc AS disc,
-                    v.fha_nac AS fha_nac,
-                    v.edad AS edad,
-                    v.nacional AS nacional
-                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
-            ) AS Datos
-        FROM dbo.semanal_carga sc
-        INNER JOIN dbo.semanal_carga_tmp_victima v
-            ON v.id_semanal_carga = sc.id_semanal_carga
-           AND v.incluido = 1
-           AND v.activo = 1
-        INNER JOIN dbo.semanal_carga_tmp_carpeta c
-            ON c.id_semanal_carga = v.id_semanal_carga
-           AND c.id_ci = v.id_ci
-           AND c.incluido = 1
-           AND c.activo = 1
-        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.mes_corte = @MesCorte
-          AND sc.anio_corte = @AnioCorte
-          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-          AND sc.activo = 1;
+          AND sc.activo = 1
+          AND v.activo = 1;
 
         SELECT DISTINCT
             sc.codigo_referencia AS CodigoReferencia,

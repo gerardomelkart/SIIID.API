@@ -1,0 +1,38 @@
+{
+  "idEntidadFederativa": 2,
+  "codigoReferencia": "sem-63eb194c0b634",
+  "tipoMovimiento": "CARGA_INICIAL",
+  "tipoContenido": "SOLO_SEMANA",
+  "anioSemana": 2026,
+  "numeroSemana": 30,
+  "fechaInicioSemana": "2026-07-20T00:00:00",
+  "fechaFinSemana": "2026-07-26T00:00:00",
+  "fechaInicioTramo": "2026-07-20T00:00:00",
+  "fechaFinTramo": "2026-07-26T00:00:00",
+  "mesCorte": 7,
+  "anioCorte": 2026,
+  "fechaGuardado": "2026-07-24T10:22:58.7455819-06:00",
+  "archivos": [
+    {
+      "tipo": "carpetas",
+      "nombreOriginal": "carpetas.xlsx",
+      "rutaRelativa": "carpetas/carpetas.xlsx",
+      "tamanioBytes": 228539,
+      "sha256": "a39ed8eeeb1593fdd32a7de1bb9a87ea53b70a7588ca532863c8ce84fd36fdab"
+    },
+    {
+      "tipo": "delitos",
+      "nombreOriginal": "delitos.xlsx",
+      "rutaRelativa": "delitos/delitos.xlsx",
+      "tamanioBytes": 1014012,
+      "sha256": "2f6e5e0e62129bf580f75db36b6561bc1a2a57d3dbb21fe81e24c26efdbe389b"
+    },
+    {
+      "tipo": "victimas",
+      "nombreOriginal": "victimas.xlsx",
+      "rutaRelativa": "victimas/victimas.xlsx",
+      "tamanioBytes": 406217,
+      "sha256": "8835fd79b5fd6e90d07a50042a1afb66e6985aa7e299f7c00919b19cca377b4a"
+    }
+  ]
+}

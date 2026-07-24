@@ -114,6 +114,18 @@ public class SemanalCargaService : ISemanalCargaService
         "nacional"
         };
 
+    private static readonly HashSet<string> ColumnasCeroEquivaleVacioComparacion =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+        "id_tpm",
+        "sexo",
+        "genero",
+        "pob",
+        "disc",
+        "fha_nac",
+        "nacional"
+        };
+
     private static readonly HashSet<string> ColumnasDecimalesComparacion =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -1537,9 +1549,7 @@ public class SemanalCargaService : ISemanalCargaService
             }));
     }
 
-    private static string NormalizarValorComparacion(
-        string columna,
-        string? valor)
+    private static string NormalizarValorComparacion(string columna, string? valor)
     {
         if (string.IsNullOrWhiteSpace(valor))
         {
@@ -1547,6 +1557,25 @@ public class SemanalCargaService : ISemanalCargaService
         }
 
         valor = valor.Trim();
+
+        if (ColumnasCeroEquivaleVacioComparacion.Contains(columna) && valor.All(caracter => caracter == '0'))
+        {
+            return string.Empty;
+        }
+
+        if (string.Equals(
+                columna,
+                "edad",
+                StringComparison.OrdinalIgnoreCase) &&
+            long.TryParse(
+                valor,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var edad) &&
+            edad == 999)
+        {
+            return string.Empty;
+        }
 
         if (ColumnasFechaComparacion.Contains(columna) &&
             IntentarConvertirFechaHoraComparacion(
