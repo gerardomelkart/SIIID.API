@@ -216,6 +216,56 @@ public class SemanalEnviosService : ISemanalEnviosService
         };
     }
 
+    public async Task<InformeArchivoZipResponse> GenerarZipPlanosAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, string? tipoPlano)
+    {
+        var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
+
+        if (anioCorte < 2000 || anioCorte > 2100) throw new InvalidOperationException("El año de corte no es válido.");
+        if (mesCorte < 1 || mesCorte > 12) throw new InvalidOperationException("El mes de corte no es válido.");
+
+        var tipo = (tipoPlano ?? "COMPLETA").Trim().ToUpperInvariant();
+
+        if (tipo is not "COMPLETA" and not "ESTATALES" and not "MUNICIPALES") throw new InvalidOperationException("El tipo de plano debe ser COMPLETA, ESTATALES o MUNICIPALES.");
+
+        var idEntidadFederativa = usuario.EsSuperUsuario ? null : usuario.IdEntidadFederativa;
+
+        if (!await _semanalEnviosRepository.ExisteInformacionConfirmadaPlanoAsync(anioCorte, mesCorte, idEntidadFederativa))
+        {
+            throw new InvalidOperationException($"No existe información semanal confirmada para {ObtenerNombreMes(mesCorte)} de {anioCorte}.");
+        }
+
+        var tareas = new List<(string Archivo, string Hoja, Task<List<IDictionary<string, object?>>> Consulta)>();
+
+        if (tipo is "COMPLETA" or "ESTATALES")
+        {
+            tareas.Add(("estatal-delitos.xlsx", "estatal-delitos", _semanalEnviosRepository.ObtenerPlanoEstatalDelitosAsync(anioCorte, mesCorte, idEntidadFederativa)));
+            tareas.Add(("estatal-victimas.xlsx", "estatal-victimas", _semanalEnviosRepository.ObtenerPlanoEstatalVictimasAsync(anioCorte, mesCorte, idEntidadFederativa)));
+        }
+
+        if (tipo is "COMPLETA" or "MUNICIPALES")
+        {
+            tareas.Add(("municipal-delitos.xlsx", "municipal-delitos", _semanalEnviosRepository.ObtenerPlanoMunicipalDelitosAsync(anioCorte, mesCorte, idEntidadFederativa)));
+            tareas.Add(("municipal-victimas.xlsx", "municipal-victimas", _semanalEnviosRepository.ObtenerPlanoMunicipalVictimasAsync(anioCorte, mesCorte, idEntidadFederativa)));
+        }
+
+        await Task.WhenAll(tareas.Select(x => x.Consulta));
+
+        using var zipStream = new MemoryStream();
+
+        using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var tarea in tareas) AgregarExcelAlZip(archive, tarea.Archivo, tarea.Hoja, tarea.Consulta.Result);
+        }
+
+        var mes = NormalizarNombreArchivo(ObtenerNombreMes(mesCorte));
+
+        return new InformeArchivoZipResponse
+        {
+            Archivo = zipStream.ToArray(),
+            NombreArchivo = $"PLANOS_SEMANALES_{mes}_{anioCorte}.zip"
+        };
+    }
+
     private async Task<UsuarioCargaInfo> ObtenerUsuarioAutorizadoAsync(int idUsuario)
     {
         var usuario = await _semanalCargaRepository.ObtenerUsuarioCargaAsync(idUsuario);
@@ -235,6 +285,26 @@ public class SemanalEnviosService : ISemanalEnviosService
         }
 
         return usuario;
+    }
+
+    private static string ObtenerNombreMes(int mes)
+    {
+        return mes switch
+        {
+            1 => "Enero",
+            2 => "Febrero",
+            3 => "Marzo",
+            4 => "Abril",
+            5 => "Mayo",
+            6 => "Junio",
+            7 => "Julio",
+            8 => "Agosto",
+            9 => "Septiembre",
+            10 => "Octubre",
+            11 => "Noviembre",
+            12 => "Diciembre",
+            _ => string.Empty
+        };
     }
 
     private static string? NormalizarFiltro(string? valor)

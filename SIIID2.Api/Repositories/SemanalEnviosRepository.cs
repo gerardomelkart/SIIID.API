@@ -313,6 +313,429 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         return registros;
     }
 
+    public async Task<bool> ExisteInformacionConfirmadaPlanoAsync(int anioCorte, int mesCorte, int? idEntidadFederativa)
+    {
+        const string sql = @"
+        SELECT CONVERT(bit, CASE WHEN EXISTS
+        (
+            SELECT 1
+            FROM dbo.semanal_carga sc
+            WHERE sc.anio_corte = @AnioCorte
+              AND sc.mes_corte = @MesCorte
+              AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
+              AND sc.activo = 1
+              AND
+              (
+                  sc.tipo_carga = N'CARGA_INICIAL' AND sc.estado = N'CONFIRMADO'
+                  OR sc.tipo_carga = N'ACTUALIZACION' AND sc.estado = N'CONFIRMADO_ACTUALIZACION'
+              )
+        ) THEN 1 ELSE 0 END);
+        ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+        return await connection.ExecuteScalarAsync<bool>(sql, new { AnioCorte = anioCorte, MesCorte = mesCorte, IdEntidadFederativa = idEntidadFederativa });
+    }
+
+    public Task<List<IDictionary<string, object?>>> ObtenerPlanoEstatalDelitosAsync(int anioCorte, int mesCorte, int? idEntidadFederativa) => ObtenerPlanoDelitosAsync(anioCorte, mesCorte, idEntidadFederativa, false);
+
+    public Task<List<IDictionary<string, object?>>> ObtenerPlanoMunicipalDelitosAsync(int anioCorte, int mesCorte, int? idEntidadFederativa) => ObtenerPlanoDelitosAsync(anioCorte, mesCorte, idEntidadFederativa, true);
+
+    public Task<List<IDictionary<string, object?>>> ObtenerPlanoEstatalVictimasAsync(int anioCorte, int mesCorte, int? idEntidadFederativa) => ObtenerPlanoVictimasAsync(anioCorte, mesCorte, idEntidadFederativa, false);
+
+    public Task<List<IDictionary<string, object?>>> ObtenerPlanoMunicipalVictimasAsync(int anioCorte, int mesCorte, int? idEntidadFederativa) => ObtenerPlanoVictimasAsync(anioCorte, mesCorte, idEntidadFederativa, true);
+
+    private Task<List<IDictionary<string, object?>>> ObtenerPlanoDelitosAsync(int anioCorte, int mesCorte, int? idEntidadFederativa, bool municipal)
+    {
+        var columnasMatrizMunicipio = municipal
+            ? @",
+                TRY_CONVERT(int, CONCAT(TRY_CONVERT(int, ef.clave), RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun_matriz.clave)), 3))) AS clave_municipio_compuesta,
+                mun_matriz.nombre AS municipio"
+            : string.Empty;
+
+        var joinMatrizMunicipio = municipal
+            ? @"
+            INNER JOIN dbo.catalogo_municipio mun_matriz ON mun_matriz.id_entidad_federativa = ef.id_entidad_federativa AND mun_matriz.activo = 1"
+            : string.Empty;
+
+        var columnasConteoMunicipio = municipal
+            ? @",
+                TRY_CONVERT(int, CONCAT(TRY_CONVERT(int, efh.clave), RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3))) AS clave_municipio_compuesta"
+            : string.Empty;
+
+        var agrupacionConteoMunicipio = municipal
+            ? @",
+                TRY_CONVERT(int, CONCAT(TRY_CONVERT(int, efh.clave), RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)))"
+            : string.Empty;
+
+        var columnasFinalMunicipio = municipal
+            ? @",
+            m.clave_municipio_compuesta AS [Cve. Municipio],
+            m.municipio AS [Municipio]"
+            : string.Empty;
+
+        var unionFinalMunicipio = municipal ? "AND c.clave_municipio_compuesta = m.clave_municipio_compuesta" : string.Empty;
+        var ordenFinalMunicipio = municipal ? ", m.clave_municipio_compuesta" : string.Empty;
+
+        var sql = $@"
+        WITH cargas_confirmadas AS
+        (
+            SELECT sc.id_semanal_carga, sc.id_entidad_federativa, sc.fecha_inicio_tramo, sc.fecha_fin_tramo
+            FROM dbo.semanal_carga sc
+            WHERE sc.anio_corte = @AnioCorte
+              AND sc.mes_corte = @MesCorte
+              AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
+              AND sc.activo = 1
+              AND
+              (
+                  sc.tipo_carga = N'CARGA_INICIAL' AND sc.estado = N'CONFIRMADO'
+                  OR sc.tipo_carga = N'ACTUALIZACION' AND sc.estado = N'CONFIRMADO_ACTUALIZACION'
+              )
+        ),
+        modalidades_configuradas AS
+        (
+            SELECT DISTINCT configuracion.id_modalidad_delito
+            FROM dbo.semanal_carga_delito_configurado configuracion
+            INNER JOIN cargas_confirmadas carga ON carga.id_semanal_carga = configuracion.id_semanal_carga
+        ),
+        sabana AS
+        (
+            SELECT
+                MIN(COALESCE(orden_legacy.orden_general, sabana.id_delito_sabana)) AS orden_sabana,
+                MIN(delito.id_delito) AS orden_delito,
+                bien.bien_juridico,
+                sabana.delito_sabana,
+                sabana.subtipo_delito_sabana,
+                sabana.modalidad_delito_sabana
+            FROM dbo.catalogo_delito_sabana sabana
+            INNER JOIN modalidades_configuradas configuracion ON configuracion.id_modalidad_delito = sabana.id_modalidad_delito
+            INNER JOIN dbo.catalogo_modalidad_delito modalidad ON modalidad.id_modalidad_delito = sabana.id_modalidad_delito AND modalidad.activo = 1
+            INNER JOIN dbo.catalogo_subtipo_delito subtipo ON subtipo.id_subtipo_delito = modalidad.id_subtipo_delito AND subtipo.activo = 1
+            INNER JOIN dbo.catalogo_delito delito ON delito.id_delito = subtipo.id_delito AND delito.activo = 1
+            INNER JOIN dbo.catalogo_bien_juridico bien ON bien.id_bien_juridico = delito.id_bien_juridico AND bien.activo = 1
+            LEFT JOIN dbo.catalogo_sabana_orden_legacy orden_legacy ON orden_legacy.bien_juridico = bien.bien_juridico AND orden_legacy.delito_sabana = sabana.delito_sabana AND orden_legacy.subtipo_delito_sabana = sabana.subtipo_delito_sabana AND orden_legacy.modalidad_delito_sabana = sabana.modalidad_delito_sabana AND orden_legacy.activo = 1
+            WHERE sabana.activo = 1
+            GROUP BY bien.bien_juridico, sabana.delito_sabana, sabana.subtipo_delito_sabana, sabana.modalidad_delito_sabana
+        ),
+        matriz AS
+        (
+            SELECT
+                @AnioCorte AS anio_corte,
+                TRY_CONVERT(int, ef.clave) AS clave_ent,
+                ef.nombre AS entidad
+                {columnasMatrizMunicipio},
+                sabana.orden_sabana,
+                sabana.orden_delito,
+                sabana.bien_juridico,
+                sabana.delito_sabana,
+                sabana.subtipo_delito_sabana,
+                sabana.modalidad_delito_sabana
+            FROM dbo.catalogo_entidad_federativa ef
+            {joinMatrizMunicipio}
+            CROSS JOIN sabana
+            WHERE ef.activo = 1
+              AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
+              AND (@IdEntidadFederativa IS NULL OR ef.id_entidad_federativa = @IdEntidadFederativa)
+        ),
+        conteos AS
+        (
+            SELECT
+                TRY_CONVERT(int, efh.clave) AS clave_ent
+                {columnasConteoMunicipio},
+                bien.bien_juridico,
+                sabana.delito_sabana,
+                sabana.subtipo_delito_sabana,
+                sabana.modalidad_delito_sabana,
+                COUNT_BIG(1) AS cantidad_delitos
+            FROM dbo.semanal_delito delito_semanal
+            INNER JOIN cargas_confirmadas carga ON carga.id_semanal_carga = delito_semanal.id_semanal_carga
+            INNER JOIN dbo.semanal_carpeta_investigacion carpeta ON carpeta.id_semanal_carpeta_investigacion = delito_semanal.id_semanal_carpeta_investigacion AND carpeta.activo = 1
+            INNER JOIN dbo.catalogo_entidad_federativa efh ON efh.id_entidad_federativa = delito_semanal.id_entidad_federativa AND efh.activo = 1
+            INNER JOIN dbo.catalogo_municipio mun ON mun.id_municipio = delito_semanal.id_municipio AND mun.id_entidad_federativa = delito_semanal.id_entidad_federativa AND mun.activo = 1
+            INNER JOIN dbo.catalogo_delito_sabana sabana ON sabana.id_modalidad_delito = delito_semanal.id_modalidad_delito AND sabana.id_grado_consumacion = delito_semanal.id_grado_consumacion AND sabana.id_instrumento_comision = delito_semanal.id_instrumento_comision AND sabana.id_forma_accion = delito_semanal.id_forma_accion AND sabana.activo = 1
+            INNER JOIN dbo.catalogo_modalidad_delito modalidad ON modalidad.id_modalidad_delito = sabana.id_modalidad_delito AND modalidad.activo = 1
+            INNER JOIN dbo.catalogo_subtipo_delito subtipo ON subtipo.id_subtipo_delito = modalidad.id_subtipo_delito AND subtipo.activo = 1
+            INNER JOIN dbo.catalogo_delito delito ON delito.id_delito = subtipo.id_delito AND delito.activo = 1
+            INNER JOIN dbo.catalogo_bien_juridico bien ON bien.id_bien_juridico = delito.id_bien_juridico AND bien.activo = 1
+            WHERE delito_semanal.activo = 1
+              AND carpeta.fecha_inicio >= carga.fecha_inicio_tramo
+              AND carpeta.fecha_inicio < DATEADD(DAY, 1, carga.fecha_fin_tramo)
+            GROUP BY
+                TRY_CONVERT(int, efh.clave)
+                {agrupacionConteoMunicipio},
+                bien.bien_juridico,
+                sabana.delito_sabana,
+                sabana.subtipo_delito_sabana,
+                sabana.modalidad_delito_sabana
+        )
+        SELECT
+            m.anio_corte AS [Año],
+            RIGHT('00' + CONVERT(varchar(2), m.clave_ent), 2) AS [Clave_Ent],
+            m.entidad AS [Entidad]
+            {columnasFinalMunicipio},
+            m.bien_juridico AS [Bien jurídico afectado],
+            m.delito_sabana AS [Tipo de delito],
+            m.subtipo_delito_sabana AS [Subtipo de delito],
+            m.modalidad_delito_sabana AS [Modalidad],
+            CASE WHEN @MesCorte = 1 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Enero],
+            CASE WHEN @MesCorte = 2 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Febrero],
+            CASE WHEN @MesCorte = 3 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Marzo],
+            CASE WHEN @MesCorte = 4 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Abril],
+            CASE WHEN @MesCorte = 5 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Mayo],
+            CASE WHEN @MesCorte = 6 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Junio],
+            CASE WHEN @MesCorte = 7 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Julio],
+            CASE WHEN @MesCorte = 8 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Agosto],
+            CASE WHEN @MesCorte = 9 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Septiembre],
+            CASE WHEN @MesCorte = 10 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Octubre],
+            CASE WHEN @MesCorte = 11 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Noviembre],
+            CASE WHEN @MesCorte = 12 THEN ISNULL(c.cantidad_delitos, 0) ELSE 0 END AS [Diciembre]
+        FROM matriz m
+        LEFT JOIN conteos c ON c.clave_ent = m.clave_ent
+            {unionFinalMunicipio}
+           AND c.bien_juridico = m.bien_juridico
+           AND c.delito_sabana = m.delito_sabana
+           AND c.subtipo_delito_sabana = m.subtipo_delito_sabana
+           AND c.modalidad_delito_sabana = m.modalidad_delito_sabana
+        ORDER BY m.clave_ent, m.orden_sabana, m.orden_delito, m.subtipo_delito_sabana, m.modalidad_delito_sabana {ordenFinalMunicipio}
+        OPTION (RECOMPILE);
+        ";
+
+        return QueryDictionaryPlanoAsync(sql, anioCorte, mesCorte, idEntidadFederativa);
+    }
+
+    private Task<List<IDictionary<string, object?>>> ObtenerPlanoVictimasAsync(int anioCorte, int mesCorte, int? idEntidadFederativa, bool municipal)
+    {
+        var columnasMatrizMunicipio = municipal
+            ? @",
+                TRY_CONVERT(int, CONCAT(TRY_CONVERT(int, ef.clave), RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun_matriz.clave)), 3))) AS clave_municipio_compuesta,
+                mun_matriz.nombre AS municipio"
+            : string.Empty;
+
+        var joinMatrizMunicipio = municipal
+            ? @"
+            INNER JOIN dbo.catalogo_municipio mun_matriz ON mun_matriz.id_entidad_federativa = ef.id_entidad_federativa AND mun_matriz.activo = 1"
+            : string.Empty;
+
+        var columnasFuenteMunicipio = municipal
+            ? @",
+                TRY_CONVERT(int, CONCAT(TRY_CONVERT(int, efh.clave), RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3))) AS clave_municipio_compuesta"
+            : string.Empty;
+
+        var columnasConteoMunicipio = municipal ? ", clasificada.clave_municipio_compuesta" : string.Empty;
+        var agrupacionConteoMunicipio = municipal ? ", clasificada.clave_municipio_compuesta" : string.Empty;
+
+        var columnasFinalMunicipio = municipal
+            ? @",
+            m.clave_municipio_compuesta AS [Cve. Municipio],
+            m.municipio AS [Municipio]"
+            : string.Empty;
+
+        var unionFinalMunicipio = municipal ? "AND c.clave_municipio_compuesta = m.clave_municipio_compuesta" : string.Empty;
+        var ordenFinalMunicipio = municipal ? ", m.clave_municipio_compuesta" : string.Empty;
+
+        var sql = $@"
+        WITH cargas_confirmadas AS
+        (
+            SELECT sc.id_semanal_carga, sc.id_entidad_federativa, sc.fecha_inicio_tramo, sc.fecha_fin_tramo
+            FROM dbo.semanal_carga sc
+            WHERE sc.anio_corte = @AnioCorte
+              AND sc.mes_corte = @MesCorte
+              AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
+              AND sc.activo = 1
+              AND
+              (
+                  sc.tipo_carga = N'CARGA_INICIAL' AND sc.estado = N'CONFIRMADO'
+                  OR sc.tipo_carga = N'ACTUALIZACION' AND sc.estado = N'CONFIRMADO_ACTUALIZACION'
+              )
+        ),
+        modalidades_configuradas AS
+        (
+            SELECT DISTINCT configuracion.id_modalidad_delito
+            FROM dbo.semanal_carga_delito_configurado configuracion
+            INNER JOIN cargas_confirmadas carga ON carga.id_semanal_carga = configuracion.id_semanal_carga
+        ),
+        sabana AS
+        (
+            SELECT
+                MIN(COALESCE(orden_legacy.orden_general, sabana.id_delito_sabana)) AS orden_sabana,
+                MIN(delito.id_delito) AS orden_delito,
+                bien.bien_juridico,
+                sabana.delito_sabana,
+                sabana.subtipo_delito_sabana,
+                sabana.modalidad_delito_sabana
+            FROM dbo.catalogo_delito_sabana sabana
+            INNER JOIN modalidades_configuradas configuracion ON configuracion.id_modalidad_delito = sabana.id_modalidad_delito
+            INNER JOIN dbo.catalogo_modalidad_delito modalidad ON modalidad.id_modalidad_delito = sabana.id_modalidad_delito AND modalidad.activo = 1
+            INNER JOIN dbo.catalogo_subtipo_delito subtipo ON subtipo.id_subtipo_delito = modalidad.id_subtipo_delito AND subtipo.activo = 1
+            INNER JOIN dbo.catalogo_delito delito ON delito.id_delito = subtipo.id_delito AND delito.activo = 1
+            INNER JOIN dbo.catalogo_bien_juridico bien ON bien.id_bien_juridico = delito.id_bien_juridico AND bien.activo = 1
+            LEFT JOIN dbo.catalogo_sabana_orden_legacy orden_legacy ON orden_legacy.bien_juridico = bien.bien_juridico AND orden_legacy.delito_sabana = sabana.delito_sabana AND orden_legacy.subtipo_delito_sabana = sabana.subtipo_delito_sabana AND orden_legacy.modalidad_delito_sabana = sabana.modalidad_delito_sabana AND orden_legacy.activo = 1
+            WHERE sabana.activo = 1
+            GROUP BY bien.bien_juridico, sabana.delito_sabana, sabana.subtipo_delito_sabana, sabana.modalidad_delito_sabana
+        ),
+        sexos AS
+        (
+            SELECT 1 AS orden_sexo, N'Hombre' AS sexo
+            UNION ALL SELECT 2, N'Mujer'
+            UNION ALL SELECT 3, N'No identificado'
+        ),
+        rangos_edad AS
+        (
+            SELECT 1 AS orden_rango, N'0 a 12 años' AS rango_edad
+            UNION ALL SELECT 2, N'13 a 17 años'
+            UNION ALL SELECT 3, N'18 a 29 años'
+            UNION ALL SELECT 4, N'30 a 60 años'
+            UNION ALL SELECT 5, N'Más de 60 años'
+            UNION ALL SELECT 6, N'No especificado'
+        ),
+        matriz AS
+        (
+            SELECT
+                @AnioCorte AS anio_corte,
+                TRY_CONVERT(int, ef.clave) AS clave_ent,
+                ef.nombre AS entidad
+                {columnasMatrizMunicipio},
+                sabana.orden_sabana,
+                sabana.orden_delito,
+                sabana.bien_juridico,
+                sabana.delito_sabana,
+                sabana.subtipo_delito_sabana,
+                sabana.modalidad_delito_sabana,
+                sexo.orden_sexo,
+                sexo.sexo,
+                rango.orden_rango,
+                rango.rango_edad
+            FROM dbo.catalogo_entidad_federativa ef
+            {joinMatrizMunicipio}
+            CROSS JOIN sabana
+            CROSS JOIN sexos sexo
+            CROSS JOIN rangos_edad rango
+            WHERE ef.activo = 1
+              AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
+              AND (@IdEntidadFederativa IS NULL OR ef.id_entidad_federativa = @IdEntidadFederativa)
+        ),
+        fuente_victimas AS
+        (
+            SELECT
+                TRY_CONVERT(int, efh.clave) AS clave_ent
+                {columnasFuenteMunicipio},
+                bien.bien_juridico,
+                sabana.delito_sabana,
+                sabana.subtipo_delito_sabana,
+                sabana.modalidad_delito_sabana,
+                tipo_victima.clave AS tipo_victima_clave,
+                sexo.clave AS sexo_clave,
+                sexo.descripcion AS sexo_descripcion,
+                TRY_CONVERT(int, victima.edad) AS edad
+            FROM dbo.semanal_victima victima
+            INNER JOIN cargas_confirmadas carga ON carga.id_semanal_carga = victima.id_semanal_carga
+            INNER JOIN dbo.semanal_delito delito_semanal ON delito_semanal.id_semanal_delito = victima.id_semanal_delito AND delito_semanal.activo = 1
+            INNER JOIN dbo.semanal_carpeta_investigacion carpeta ON carpeta.id_semanal_carpeta_investigacion = delito_semanal.id_semanal_carpeta_investigacion AND carpeta.activo = 1
+            INNER JOIN dbo.catalogo_entidad_federativa efh ON efh.id_entidad_federativa = delito_semanal.id_entidad_federativa AND efh.activo = 1
+            INNER JOIN dbo.catalogo_municipio mun ON mun.id_municipio = delito_semanal.id_municipio AND mun.id_entidad_federativa = delito_semanal.id_entidad_federativa AND mun.activo = 1
+            INNER JOIN dbo.catalogo_delito_sabana sabana ON sabana.id_modalidad_delito = delito_semanal.id_modalidad_delito AND sabana.id_grado_consumacion = delito_semanal.id_grado_consumacion AND sabana.id_instrumento_comision = delito_semanal.id_instrumento_comision AND sabana.id_forma_accion = delito_semanal.id_forma_accion AND sabana.activo = 1
+            INNER JOIN dbo.catalogo_modalidad_delito modalidad ON modalidad.id_modalidad_delito = sabana.id_modalidad_delito AND modalidad.activo = 1
+            INNER JOIN dbo.catalogo_subtipo_delito subtipo ON subtipo.id_subtipo_delito = modalidad.id_subtipo_delito AND subtipo.activo = 1
+            INNER JOIN dbo.catalogo_delito delito ON delito.id_delito = subtipo.id_delito AND delito.activo = 1
+            INNER JOIN dbo.catalogo_bien_juridico bien ON bien.id_bien_juridico = delito.id_bien_juridico AND bien.activo = 1
+            INNER JOIN dbo.catalogo_tipo_victima tipo_victima ON tipo_victima.id_tipo_victima = victima.id_tipo_victima AND tipo_victima.activo = 1
+            LEFT JOIN dbo.catalogo_sexo sexo ON sexo.id_sexo = victima.id_sexo AND sexo.activo = 1
+            WHERE victima.activo = 1
+              AND carpeta.fecha_inicio >= carga.fecha_inicio_tramo
+              AND carpeta.fecha_inicio < DATEADD(DAY, 1, carga.fecha_fin_tramo)
+        ),
+        victimas_clasificadas AS
+        (
+            SELECT
+                fuente.*,
+                CASE WHEN fuente.tipo_victima_clave = 1 AND fuente.sexo_clave IN (1, 2, 3) THEN fuente.sexo_descripcion ELSE N'No identificado' END AS sexo,
+                CASE
+                    WHEN fuente.tipo_victima_clave <> 1 THEN N'No especificado'
+                    WHEN fuente.edad IS NULL THEN N'No especificado'
+                    WHEN fuente.edad BETWEEN 0 AND 12 THEN N'0 a 12 años'
+                    WHEN fuente.edad BETWEEN 13 AND 17 THEN N'13 a 17 años'
+                    WHEN fuente.edad BETWEEN 18 AND 29 THEN N'18 a 29 años'
+                    WHEN fuente.edad BETWEEN 30 AND 60 THEN N'30 a 60 años'
+                    WHEN fuente.edad BETWEEN 61 AND 120 THEN N'Más de 60 años'
+                    ELSE N'No especificado'
+                END AS rango_edad
+            FROM fuente_victimas fuente
+        ),
+        conteos AS
+        (
+            SELECT
+                clasificada.clave_ent
+                {columnasConteoMunicipio},
+                clasificada.bien_juridico,
+                clasificada.delito_sabana,
+                clasificada.subtipo_delito_sabana,
+                clasificada.modalidad_delito_sabana,
+                clasificada.sexo,
+                clasificada.rango_edad,
+                COUNT_BIG(1) AS cantidad_victimas
+            FROM victimas_clasificadas clasificada
+            GROUP BY
+                clasificada.clave_ent
+                {agrupacionConteoMunicipio},
+                clasificada.bien_juridico,
+                clasificada.delito_sabana,
+                clasificada.subtipo_delito_sabana,
+                clasificada.modalidad_delito_sabana,
+                clasificada.sexo,
+                clasificada.rango_edad
+        )
+        SELECT
+            m.anio_corte AS [Año],
+            RIGHT('00' + CONVERT(varchar(2), m.clave_ent), 2) AS [Clave_Ent],
+            m.entidad AS [Entidad]
+            {columnasFinalMunicipio},
+            m.bien_juridico AS [Bien jurídico afectado],
+            m.delito_sabana AS [Tipo de delito],
+            m.subtipo_delito_sabana AS [Subtipo de delito],
+            m.modalidad_delito_sabana AS [Modalidad],
+            m.sexo AS [Sexo],
+            m.rango_edad AS [Rango de edad],
+            CASE WHEN @MesCorte = 1 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Enero],
+            CASE WHEN @MesCorte = 2 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Febrero],
+            CASE WHEN @MesCorte = 3 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Marzo],
+            CASE WHEN @MesCorte = 4 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Abril],
+            CASE WHEN @MesCorte = 5 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Mayo],
+            CASE WHEN @MesCorte = 6 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Junio],
+            CASE WHEN @MesCorte = 7 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Julio],
+            CASE WHEN @MesCorte = 8 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Agosto],
+            CASE WHEN @MesCorte = 9 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Septiembre],
+            CASE WHEN @MesCorte = 10 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Octubre],
+            CASE WHEN @MesCorte = 11 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Noviembre],
+            CASE WHEN @MesCorte = 12 THEN ISNULL(c.cantidad_victimas, 0) ELSE 0 END AS [Diciembre]
+        FROM matriz m
+        LEFT JOIN conteos c ON c.clave_ent = m.clave_ent
+            {unionFinalMunicipio}
+           AND c.bien_juridico = m.bien_juridico
+           AND c.delito_sabana = m.delito_sabana
+           AND c.subtipo_delito_sabana = m.subtipo_delito_sabana
+           AND c.modalidad_delito_sabana = m.modalidad_delito_sabana
+           AND c.sexo = m.sexo
+           AND c.rango_edad = m.rango_edad
+        ORDER BY m.clave_ent, m.orden_sabana, m.orden_delito, m.subtipo_delito_sabana, m.modalidad_delito_sabana, m.orden_sexo, m.orden_rango {ordenFinalMunicipio}
+        OPTION (RECOMPILE);
+        ";
+
+        return QueryDictionaryPlanoAsync(sql, anioCorte, mesCorte, idEntidadFederativa);
+    }
+
+    private async Task<List<IDictionary<string, object?>>> QueryDictionaryPlanoAsync(string sql, int anioCorte, int mesCorte, int? idEntidadFederativa)
+    {
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var filas = await connection.QueryAsync(sql, new
+        {
+            AnioCorte = anioCorte,
+            MesCorte = mesCorte,
+            IdEntidadFederativa = idEntidadFederativa
+        }, commandTimeout: 300);
+
+        return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
+    }
+
     public Task<List<IDictionary<string, object?>>> ObtenerCarpetasConfirmadasSemanaAsync(SemanalEnvioReferenciaInfo referencia)
     {
         const string sql = @"

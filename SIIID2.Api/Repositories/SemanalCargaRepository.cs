@@ -194,6 +194,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             sql,
             new { IdSemanalCarga = idSemanalCarga })).ToList();
     }
+    
     public async Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int anioSemana, int numeroSemana)
     {
         const string sql = @"
