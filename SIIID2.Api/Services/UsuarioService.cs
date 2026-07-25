@@ -465,6 +465,17 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        if (idUsuario == idUsuarioModificacion && !request.HabilitaSemanal)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_PUEDE_DESHABILITAR_SU_ACCESO_SEMANAL",
+                Mensaje = "No puede deshabilitar su propio acceso al módulo semanal.",
+                IdUsuario = idUsuario
+            };
+        }
+
         var rol = request.Rol.Trim().ToUpperInvariant();
 
         var requestValidacion = new EditarUsuarioRequest
