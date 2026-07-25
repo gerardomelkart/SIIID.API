@@ -212,6 +212,33 @@ public class UsuarioService : IUsuarioService
         };
     }
 
+    public async Task<CrearUsuarioResponse> CrearUsuarioSemanalAsync(CrearUsuarioSemanalRequest request, int idUsuarioAlta)
+    {
+        var requestGeneral = new CrearUsuarioRequest
+        {
+            Usuario = request.Usuario,
+            Password = request.Password,
+            Nombre = request.Nombre,
+            PrimerApellido = request.PrimerApellido,
+            SegundoApellido = request.SegundoApellido,
+            CorreoElectronico = request.CorreoElectronico,
+            Rfc = request.Rfc,
+            Curp = request.Curp,
+            TelefonoContacto = request.TelefonoContacto,
+            IdEntidadFederativa = request.IdEntidadFederativa,
+            Rol = request.Rol,
+            HabilitaCarga = false,
+            HabilitaModificacion = false,
+            HabilitaSemanal = request.HabilitaSemanal,
+            HabilitaCargaSemanal = request.HabilitaCargaSemanal,
+            HabilitaModificacionSemanal = request.HabilitaModificacionSemanal,
+            AdministraDelitosSemanal = request.AdministraDelitosSemanal
+        };
+
+        return await CrearUsuarioAsync(requestGeneral, idUsuarioAlta);
+    }
+
+
     public async Task<UsuarioOperacionResponse> EditarUsuarioAsync(int idUsuario, EditarUsuarioRequest request, int idUsuarioModificacion)
     {
         // Se valida que el usuario que modifica exista y esté activo.
@@ -399,6 +426,155 @@ public class UsuarioService : IUsuarioService
         };
     }
 
+    public async Task<UsuarioOperacionResponse> EditarUsuarioSemanalAsync(int idUsuario, EditarUsuarioSemanalRequest request, int idUsuarioModificacion)
+    {
+        var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
+
+        if (usuarioModificacion == null)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_MODIFICACION_NO_VALIDO",
+                Mensaje = "El usuario autenticado no existe o no está activo.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        if (!usuarioModificacion.EsSuperUsuario)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_MODIFICACION_SEMANAL_SIN_PERMISO",
+                Mensaje = "Solo un SUPER_USUARIO puede editar usuarios desde el módulo semanal.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        var existeUsuario = await _usuarioRepository.ExisteUsuarioActivoAsync(idUsuario);
+
+        if (!existeUsuario)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_EXISTE",
+                Mensaje = "El usuario que intenta editar no existe o no está activo.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        var rol = request.Rol.Trim().ToUpperInvariant();
+
+        var requestValidacion = new EditarUsuarioRequest
+        {
+            Usuario = request.Usuario,
+            NuevaPassword = request.NuevaPassword,
+            Nombre = request.Nombre,
+            PrimerApellido = request.PrimerApellido,
+            SegundoApellido = request.SegundoApellido,
+            CorreoElectronico = request.CorreoElectronico,
+            Rfc = request.Rfc,
+            Curp = request.Curp,
+            TelefonoContacto = request.TelefonoContacto,
+            IdEntidadFederativa = request.IdEntidadFederativa,
+            Rol = request.Rol,
+            HabilitaCarga = false,
+            HabilitaModificacion = false,
+            HabilitaSemanal = request.HabilitaSemanal,
+            HabilitaCargaSemanal = request.HabilitaCargaSemanal,
+            HabilitaModificacionSemanal = request.HabilitaModificacionSemanal,
+            AdministraDelitosSemanal = request.AdministraDelitosSemanal
+        };
+
+        var errores = ValidarCamposObligatoriosEdicion(requestValidacion, rol);
+
+        if (rol != "SUPER_USUARIO")
+        {
+            if (!request.IdEntidadFederativa.HasValue)
+            {
+                errores.Add(ErrorUsuario("idEntidadFederativa", "USUARIO_ENTIDAD_OBLIGATORIA", "El usuario debe tener entidad federativa para el rol seleccionado."));
+            }
+            else
+            {
+                var existeEntidad = await _usuarioRepository.ExisteEntidadActivaAsync(request.IdEntidadFederativa.Value);
+
+                if (!existeEntidad) errores.Add(ErrorUsuario("idEntidadFederativa", "USUARIO_ENTIDAD_INVALIDA", "La entidad federativa indicada no existe o no está activa."));
+            }
+        }
+        else
+        {
+            request.IdEntidadFederativa = null;
+        }
+
+        if (rol == "CONSULTA")
+        {
+            request.HabilitaCargaSemanal = false;
+            request.HabilitaModificacionSemanal = false;
+        }
+
+        if (rol != "SUPER_USUARIO") request.AdministraDelitosSemanal = false;
+
+        if (!request.HabilitaSemanal)
+        {
+            request.HabilitaCargaSemanal = false;
+            request.HabilitaModificacionSemanal = false;
+            request.AdministraDelitosSemanal = false;
+        }
+
+        int? idRol = null;
+
+        if (!string.IsNullOrWhiteSpace(rol))
+        {
+            idRol = await _usuarioRepository.ObtenerIdRolActivoAsync(rol);
+
+            if (!idRol.HasValue) errores.Add(ErrorUsuario("rol", "USUARIO_ROL_INVALIDO", $"El rol {rol} no existe o no está activo."));
+        }
+
+        var duplicados = await _usuarioRepository.ObtenerDuplicadosUsuarioEdicionAsync(idUsuario, request.Usuario, request.CorreoElectronico, request.Rfc, request.Curp);
+        errores.AddRange(duplicados);
+
+        string? passwordHash = null;
+
+        if (!string.IsNullOrWhiteSpace(request.NuevaPassword))
+        {
+            if (request.NuevaPassword.Length < 8)
+            {
+                errores.Add(ErrorUsuario("nuevaPassword", "USUARIO_PASSWORD_CORTO", "La nueva contraseña debe tener al menos 8 caracteres."));
+            }
+            else
+            {
+                passwordHash = BCrypt.Net.BCrypt.HashPassword(request.NuevaPassword, workFactor: 12);
+            }
+        }
+
+        if (errores.Count > 0)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_DATOS_INVALIDOS",
+                Mensaje = "Existen errores en los datos del usuario.",
+                IdUsuario = idUsuario,
+                Errores = errores
+            };
+        }
+
+        await _usuarioRepository.EditarUsuarioSemanalAsync(idUsuario, request, idRol!.Value, passwordHash, idUsuarioModificacion);
+
+        _logger.LogInformation("Usuario editado desde el módulo semanal. IdUsuario: {IdUsuario}, UsuarioModificacion: {IdUsuarioModificacion}", idUsuario, idUsuarioModificacion);
+
+        return new UsuarioOperacionResponse
+        {
+            EsValido = true,
+            Codigo = "USUARIO_SEMANAL_EDITADO",
+            Mensaje = "Usuario actualizado correctamente.",
+            IdUsuario = idUsuario
+        };
+    }
+
+
     public async Task<UsuarioOperacionResponse> ActualizarPermisosSemanalesAsync(int idUsuario, ActualizarPermisosSemanalesRequest request, int idUsuarioModificacion)
     {
         var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
@@ -535,6 +711,25 @@ public class UsuarioService : IUsuarioService
                 IdUsuario = idUsuario
             };
         }
+
+        var usuario = await _usuarioRepository.ObtenerUsuarioDetalleAsync(idUsuario);
+
+        if (usuario?.Rol.Trim().ToUpperInvariant() == "SUPER_USUARIO")
+        {
+            var totalSuperUsuariosActivos = await _usuarioRepository.ContarSuperUsuariosActivosAsync();
+
+            if (totalSuperUsuariosActivos <= 1)
+            {
+                return new UsuarioOperacionResponse
+                {
+                    EsValido = false,
+                    Codigo = "USUARIO_UNICO_SUPER_USUARIO_ACTIVO",
+                    Mensaje = "No puede desactivar al único superusuario activo.",
+                    IdUsuario = idUsuario
+                };
+            }
+        }
+
 
         // No elimina físicamente.
         // Solo marca usuario y permisos como inactivos.
@@ -678,6 +873,98 @@ public class UsuarioService : IUsuarioService
             IdUsuario = idUsuario
         };
     }
+
+    public async Task<UsuarioOperacionResponse> ReactivarUsuarioSemanalAsync(int idUsuario, ReactivarUsuarioSemanalRequest request, int idUsuarioModificacion)
+    {
+        var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
+
+        if (usuarioModificacion == null)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_MODIFICACION_NO_VALIDO",
+                Mensaje = "El usuario autenticado no existe o no está activo.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        if (!usuarioModificacion.EsSuperUsuario)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_REACTIVACION_SEMANAL_SIN_PERMISO",
+                Mensaje = "Solo un SUPER_USUARIO puede reactivar usuarios desde el módulo semanal.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        if (idUsuario == idUsuarioModificacion)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_PUEDE_REACTIVARSE_A_SI_MISMO",
+                Mensaje = "No es necesario reactivar su propio usuario autenticado.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        var usuario = await _usuarioRepository.ObtenerUsuarioDetalleAsync(idUsuario);
+
+        if (usuario == null)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_EXISTE",
+                Mensaje = "El usuario que intenta reactivar no existe.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        if (usuario.Activo)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_YA_ACTIVO",
+                Mensaje = "El usuario ya se encuentra activo.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        var rol = usuario.Rol.Trim().ToUpperInvariant();
+
+        if (rol == "CONSULTA")
+        {
+            request.HabilitaCargaSemanal = false;
+            request.HabilitaModificacionSemanal = false;
+        }
+
+        if (rol != "SUPER_USUARIO") request.AdministraDelitosSemanal = false;
+
+        if (!request.HabilitaSemanal)
+        {
+            request.HabilitaCargaSemanal = false;
+            request.HabilitaModificacionSemanal = false;
+            request.AdministraDelitosSemanal = false;
+        }
+
+        await _usuarioRepository.ReactivarUsuarioSemanalAsync(idUsuario, request, idUsuarioModificacion);
+
+        _logger.LogInformation("Usuario reactivado desde el módulo semanal. IdUsuario: {IdUsuario}, UsuarioModificacion: {IdUsuarioModificacion}", idUsuario, idUsuarioModificacion);
+
+        return new UsuarioOperacionResponse
+        {
+            EsValido = true,
+            Codigo = "USUARIO_SEMANAL_REACTIVADO",
+            Mensaje = "Usuario reactivado correctamente.",
+            IdUsuario = idUsuario
+        };
+    }
+
 
     private static List<UsuarioValidacionError> ValidarCamposCrearUsuario(CrearUsuarioRequest request, string rol)
     {

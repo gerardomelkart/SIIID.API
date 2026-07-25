@@ -21,6 +21,7 @@ public interface IUsuarioRepository
 
     // Registra usuario y sus permisos de carga/modificación.
     Task<int> CrearUsuarioAsync(CrearUsuarioRequest request, int idRol, string passwordHash, int idUsuarioAlta);
+
     // Lista usuarios para la tabla administrativa.
     Task<List<UsuarioListadoItem>> ObtenerUsuariosAsync(bool incluirInactivos);
 
@@ -30,11 +31,17 @@ public interface IUsuarioRepository
     // Revisa si existe un usuario activo por id.
     Task<bool> ExisteUsuarioActivoAsync(int idUsuario);
 
+    // Cuenta los superusuarios activos.
+    Task<int> ContarSuperUsuariosActivosAsync();
+
     // Revisa duplicados excluyendo al usuario que se está editando.
     Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioEdicionAsync(int idUsuario, string usuario, string correoElectronico, string rfc, string curp);
 
     // Edita usuario y permisos.
     Task EditarUsuarioAsync(int idUsuario, EditarUsuarioRequest request, int idRol, string? passwordHash, int idUsuarioModificacion);
+
+    // Edita datos generales y exclusivamente permisos semanales.
+    Task EditarUsuarioSemanalAsync(int idUsuario, EditarUsuarioSemanalRequest request, int idRol, string? passwordHash, int idUsuarioModificacion);
 
     // Baja lógica de usuario.
     Task DesactivarUsuarioAsync(int idUsuario, int idUsuarioModificacion);
@@ -47,6 +54,9 @@ public interface IUsuarioRepository
 
     // Reactiva usuario y permisos.
     Task ReactivarUsuarioAsync(int idUsuario, ReactivarUsuarioRequest request, int idUsuarioModificacion);
+
+    // Reactiva la cuenta conservando permisos mensuales y configurando los semanales.
+    Task ReactivarUsuarioSemanalAsync(int idUsuario, ReactivarUsuarioSemanalRequest request, int idUsuarioModificacion);
 
     // Obtiene contraseña y estado de cambio obligatorio de un usuario activo.
     Task<UsuarioPasswordInfo?> ObtenerUsuarioPasswordAsync(int idUsuario);

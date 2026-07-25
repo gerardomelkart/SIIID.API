@@ -132,6 +132,9 @@ public class UsuarioRepository : IUsuarioRepository
             COALESCE(h.habilita_carga, 0) AS HabilitaCarga,
             COALESCE(h.habilita_modificacion, 0) AS HabilitaModificacion,
             COALESCE(ums.habilitado, 0) AS HabilitaSemanal,
+            COALESCE(ums.habilita_carga, 0) AS HabilitaCargaSemanal,
+            COALESCE(ums.habilita_modificacion, 0) AS HabilitaModificacionSemanal,
+            COALESCE(ums.administra_delitos, 0) AS AdministraDelitosSemanal,
             u.activo AS Activo
         FROM usuario u
         INNER JOIN roles r
@@ -442,6 +445,23 @@ public class UsuarioRepository : IUsuarioRepository
         return total > 0;
     }
 
+    public async Task<int> ContarSuperUsuariosActivosAsync()
+    {
+        var sql = @"
+        SELECT COUNT(1)
+        FROM usuario u
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+           AND r.activo = 1
+        WHERE u.activo = 1
+          AND r.rol = N'SUPER_USUARIO';
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+        return await connection.ExecuteScalarAsync<int>(sql);
+    }
+
+
     public async Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioEdicionAsync(int idUsuario, string usuario, string correoElectronico, string rfc, string curp)
     {
         // Regresa todos los duplicados encontrados,
@@ -621,6 +641,131 @@ public class UsuarioRepository : IUsuarioRepository
             throw;
         }
     }
+
+    public async Task EditarUsuarioSemanalAsync(int idUsuario, EditarUsuarioSemanalRequest request, int idRol, string? passwordHash, int idUsuarioModificacion)
+    {
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+        await connection.OpenAsync();
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var sqlUsuario = @"
+            UPDATE usuario
+            SET usuario = @Usuario,
+                nombre = @Nombre,
+                primer_apellido = @PrimerApellido,
+                segundo_apellido = @SegundoApellido,
+                correo_electronico = @CorreoElectronico,
+                rfc = @Rfc,
+                curp = @Curp,
+                telefono_contacto = @TelefonoContacto,
+                id_entidad_federativa = @IdEntidadFederativa,
+                id_rol = @IdRol,
+                fecha_modificacion = SYSDATETIME(),
+                id_usuario_modificacion = @IdUsuarioModificacion,
+                password = CASE WHEN @PasswordHash IS NULL THEN password ELSE @PasswordHash END,
+                requiere_cambio_password = CASE WHEN @PasswordHash IS NULL THEN requiere_cambio_password ELSE 1 END
+            WHERE id_usuario = @IdUsuario
+              AND activo = 1;
+        ";
+
+            await connection.ExecuteAsync(sqlUsuario, new
+            {
+                IdUsuario = idUsuario,
+                Usuario = request.Usuario.Trim(),
+                Nombre = request.Nombre.Trim(),
+                PrimerApellido = request.PrimerApellido.Trim(),
+                SegundoApellido = string.IsNullOrWhiteSpace(request.SegundoApellido) ? null : request.SegundoApellido.Trim(),
+                CorreoElectronico = request.CorreoElectronico.Trim(),
+                Rfc = request.Rfc.Trim().ToUpperInvariant(),
+                Curp = request.Curp.Trim().ToUpperInvariant(),
+                TelefonoContacto = string.IsNullOrWhiteSpace(request.TelefonoContacto) ? null : request.TelefonoContacto.Trim(),
+                IdEntidadFederativa = request.IdEntidadFederativa,
+                IdRol = idRol,
+                IdUsuarioModificacion = idUsuarioModificacion,
+                PasswordHash = passwordHash
+            }, transaction);
+
+            var sqlSemanal = @"
+            DECLARE @IdModuloSemanal TINYINT =
+            (
+                SELECT id_modulo
+                FROM catalogo_modulo
+                WHERE clave = N'SEMANAL'
+                  AND activo = 1
+            );
+
+            IF @IdModuloSemanal IS NULL
+            BEGIN
+                THROW 50010, 'No fue posible resolver el módulo SEMANAL.', 1;
+            END;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM usuario_modulo
+                WHERE id_usuario = @IdUsuario
+                  AND id_modulo = @IdModuloSemanal
+            )
+            BEGIN
+                UPDATE usuario_modulo
+                SET habilitado = @HabilitaSemanal,
+                    habilita_carga = @HabilitaCargaSemanal,
+                    habilita_modificacion = @HabilitaModificacionSemanal,
+                    administra_delitos = @AdministraDelitosSemanal,
+                    fecha_modificacion = SYSDATETIME(),
+                    id_usuario_modificacion = @IdUsuarioModificacion,
+                    activo = 1
+                WHERE id_usuario = @IdUsuario
+                  AND id_modulo = @IdModuloSemanal;
+            END
+            ELSE
+            BEGIN
+                INSERT INTO usuario_modulo
+                (
+                    id_usuario,
+                    id_modulo,
+                    habilitado,
+                    habilita_carga,
+                    habilita_modificacion,
+                    administra_delitos,
+                    id_usuario_modificacion,
+                    activo
+                )
+                VALUES
+                (
+                    @IdUsuario,
+                    @IdModuloSemanal,
+                    @HabilitaSemanal,
+                    @HabilitaCargaSemanal,
+                    @HabilitaModificacionSemanal,
+                    @AdministraDelitosSemanal,
+                    @IdUsuarioModificacion,
+                    1
+                );
+            END;
+        ";
+
+            await connection.ExecuteAsync(sqlSemanal, new
+            {
+                IdUsuario = idUsuario,
+                request.HabilitaSemanal,
+                request.HabilitaCargaSemanal,
+                request.HabilitaModificacionSemanal,
+                request.AdministraDelitosSemanal,
+                IdUsuarioModificacion = idUsuarioModificacion
+            }, transaction);
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
     public async Task ActualizarPermisosSemanalesAsync(int idUsuario, ActualizarPermisosSemanalesRequest request, int idUsuarioModificacion)
     {
         var sql = @"
@@ -928,6 +1073,135 @@ public class UsuarioRepository : IUsuarioRepository
             throw;
         }
     }
+
+    public async Task ReactivarUsuarioSemanalAsync(int idUsuario, ReactivarUsuarioSemanalRequest request, int idUsuarioModificacion)
+    {
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+        await connection.OpenAsync();
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var sql = @"
+            UPDATE usuario
+            SET activo = 1,
+                fecha_modificacion = SYSDATETIME(),
+                id_usuario_modificacion = @IdUsuarioModificacion
+            WHERE id_usuario = @IdUsuario;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM habilita_carga_modificacion
+                WHERE id_usuario = @IdUsuario
+            )
+            BEGIN
+                UPDATE habilita_carga_modificacion
+                SET activo = 1
+                WHERE id_usuario = @IdUsuario;
+            END
+            ELSE
+            BEGIN
+                INSERT INTO habilita_carga_modificacion
+                (
+                    habilita_carga,
+                    habilita_modificacion,
+                    id_usuario,
+                    activo
+                )
+                VALUES
+                (
+                    0,
+                    0,
+                    @IdUsuario,
+                    1
+                );
+            END;
+
+            UPDATE usuario_modulo
+            SET activo = 1,
+                fecha_modificacion = SYSDATETIME(),
+                id_usuario_modificacion = @IdUsuarioModificacion
+            WHERE id_usuario = @IdUsuario;
+
+            DECLARE @IdModuloSemanal TINYINT =
+            (
+                SELECT id_modulo
+                FROM catalogo_modulo
+                WHERE clave = N'SEMANAL'
+                  AND activo = 1
+            );
+
+            IF @IdModuloSemanal IS NULL
+            BEGIN
+                THROW 50010, 'No fue posible resolver el módulo SEMANAL.', 1;
+            END;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM usuario_modulo
+                WHERE id_usuario = @IdUsuario
+                  AND id_modulo = @IdModuloSemanal
+            )
+            BEGIN
+                UPDATE usuario_modulo
+                SET habilitado = @HabilitaSemanal,
+                    habilita_carga = @HabilitaCargaSemanal,
+                    habilita_modificacion = @HabilitaModificacionSemanal,
+                    administra_delitos = @AdministraDelitosSemanal,
+                    fecha_modificacion = SYSDATETIME(),
+                    id_usuario_modificacion = @IdUsuarioModificacion,
+                    activo = 1
+                WHERE id_usuario = @IdUsuario
+                  AND id_modulo = @IdModuloSemanal;
+            END
+            ELSE
+            BEGIN
+                INSERT INTO usuario_modulo
+                (
+                    id_usuario,
+                    id_modulo,
+                    habilitado,
+                    habilita_carga,
+                    habilita_modificacion,
+                    administra_delitos,
+                    id_usuario_modificacion,
+                    activo
+                )
+                VALUES
+                (
+                    @IdUsuario,
+                    @IdModuloSemanal,
+                    @HabilitaSemanal,
+                    @HabilitaCargaSemanal,
+                    @HabilitaModificacionSemanal,
+                    @AdministraDelitosSemanal,
+                    @IdUsuarioModificacion,
+                    1
+                );
+            END;
+        ";
+
+            await connection.ExecuteAsync(sql, new
+            {
+                IdUsuario = idUsuario,
+                request.HabilitaSemanal,
+                request.HabilitaCargaSemanal,
+                request.HabilitaModificacionSemanal,
+                request.AdministraDelitosSemanal,
+                IdUsuarioModificacion = idUsuarioModificacion
+            }, transaction);
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
 
     public async Task<UsuarioPasswordInfo?> ObtenerUsuarioPasswordAsync(int idUsuario)
     {

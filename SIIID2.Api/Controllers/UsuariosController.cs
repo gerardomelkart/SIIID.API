@@ -121,6 +121,36 @@ public class UsuariosController : ControllerBase
         return Ok(resultado);
     }
 
+    // Registra una cuenta desde la administración semanal.
+    // Los permisos mensuales quedan deshabilitados por definición.
+    [Authorize]
+    [HttpPost("semanal")]
+    public async Task<IActionResult> CrearUsuarioSemanal([FromBody] CrearUsuarioSemanalRequest request)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioAlta))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        var resultado = await _usuarioService.CrearUsuarioSemanalAsync(request, idUsuarioAlta);
+
+        if (!resultado.EsValido)
+        {
+            return BadRequest(resultado);
+        }
+
+        return Ok(resultado);
+    }
+
+
     // Edita un usuario existente.
     // Si nuevaPassword viene vacía o null, conserva la contraseña actual.
     // Ejemplo: PUT /api/usuarios/3
@@ -153,6 +183,35 @@ public class UsuariosController : ControllerBase
 
         return Ok(resultado);
     }
+
+    // Edita datos generales y permisos semanales sin modificar permisos mensuales.
+    [Authorize]
+    [HttpPut("{idUsuario:int}/semanal")]
+    public async Task<IActionResult> EditarUsuarioSemanal(int idUsuario, [FromBody] EditarUsuarioSemanalRequest request)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        var resultado = await _usuarioService.EditarUsuarioSemanalAsync(idUsuario, request, idUsuarioModificacion);
+
+        if (!resultado.EsValido)
+        {
+            return BadRequest(resultado);
+        }
+
+        return Ok(resultado);
+    }
+
 
     // Actualiza exclusivamente los permisos del módulo semanal.
     // Ejemplo: PUT /api/usuarios/3/permisos-semanales
@@ -270,6 +329,35 @@ public class UsuariosController : ControllerBase
             idUsuario,
             request,
             idUsuarioModificacion);
+
+        if (!resultado.EsValido)
+        {
+            return BadRequest(resultado);
+        }
+
+        return Ok(resultado);
+    }
+
+
+    // Reactiva la cuenta conservando los valores mensuales y configurando el módulo semanal.
+    [Authorize]
+    [HttpPut("{idUsuario:int}/reactivar-semanal")]
+    public async Task<IActionResult> ReactivarUsuarioSemanal(int idUsuario, [FromBody] ReactivarUsuarioSemanalRequest request)
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+                mensaje = "El token no contiene un id de usuario válido.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        var resultado = await _usuarioService.ReactivarUsuarioSemanalAsync(idUsuario, request, idUsuarioModificacion);
 
         if (!resultado.EsValido)
         {
