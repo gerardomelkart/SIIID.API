@@ -362,8 +362,9 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-# Mantener la carpeta, ignorar su contenido
+# Mantener las carpetas, ignorar su contenido
 **/UltimosArchivosEntidad/**
+**/UltimosArchivosEntidadSemanal/**
 
 # Configuración local / sensible
 appsettings.Local.json
