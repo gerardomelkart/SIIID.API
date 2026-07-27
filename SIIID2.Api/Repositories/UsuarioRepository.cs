@@ -1089,6 +1089,26 @@ public class UsuarioRepository : IUsuarioRepository
                 id_usuario_modificacion = @IdUsuarioModificacion
             WHERE id_usuario = @IdUsuario;
 
+            DECLARE @HabilitaCargaMensual BIT = 0;
+            DECLARE @HabilitaModificacionMensual BIT = 0;
+
+            SELECT TOP (1)
+                @HabilitaCargaMensual =
+                    CASE
+                        WHEN um.habilitado = 1 THEN um.habilita_carga
+                        ELSE 0
+                    END,
+                @HabilitaModificacionMensual =
+                    CASE
+                        WHEN um.habilitado = 1 THEN um.habilita_modificacion
+                        ELSE 0
+                    END
+            FROM usuario_modulo um
+            INNER JOIN catalogo_modulo cm
+                ON cm.id_modulo = um.id_modulo
+               AND cm.clave = N'MENSUAL'
+            WHERE um.id_usuario = @IdUsuario;
+
             IF EXISTS
             (
                 SELECT 1
@@ -1097,7 +1117,9 @@ public class UsuarioRepository : IUsuarioRepository
             )
             BEGIN
                 UPDATE habilita_carga_modificacion
-                SET activo = 1
+                SET habilita_carga = @HabilitaCargaMensual,
+                    habilita_modificacion = @HabilitaModificacionMensual,
+                    activo = 1
                 WHERE id_usuario = @IdUsuario;
             END
             ELSE
@@ -1111,8 +1133,8 @@ public class UsuarioRepository : IUsuarioRepository
                 )
                 VALUES
                 (
-                    0,
-                    0,
+                    @HabilitaCargaMensual,
+                    @HabilitaModificacionMensual,
                     @IdUsuario,
                     1
                 );
