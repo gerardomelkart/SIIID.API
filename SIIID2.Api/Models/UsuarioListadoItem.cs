@@ -9,6 +9,7 @@ public class UsuarioListadoItem
     public string Rol { get; set; } = string.Empty;
     public int? IdEntidadFederativa { get; set; }
     public string? EntidadFederativa { get; set; }
+    public bool HabilitaMensual { get; set; }
     public bool HabilitaCarga { get; set; }
     public bool HabilitaModificacion { get; set; }
     public bool HabilitaSemanal { get; set; }
