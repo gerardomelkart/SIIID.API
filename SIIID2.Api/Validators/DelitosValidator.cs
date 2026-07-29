@@ -211,6 +211,30 @@ public class DelitosValidator
         return errores;
     }
 
+    public List<CargaValidacionError> ValidarAdvertencias(List<ArchivoFila> filas)
+    {
+        var advertencias = new List<CargaValidacionError>();
+
+        foreach (var fila in filas)
+        {
+            ValidarCoordenadaSinInformacion(
+                fila,
+                "coord_x",
+                advertencias,
+                "DELITOS_COORD_X_SIN_INFORMACION_ADVERTENCIA",
+                "Coordenada X sin información");
+
+            ValidarCoordenadaSinInformacion(
+                fila,
+                "coord_y",
+                advertencias,
+                "DELITOS_COORD_Y_SIN_INFORMACION_ADVERTENCIA",
+                "Coordenada Y sin información");
+        }
+
+        return advertencias;
+    }
+
     private void ValidarColumnasObligatorias(List<ArchivoFila> filas, List<CargaValidacionError> errores)
     {
         // Obtenemos todas las columnas que llegaron en el archivo.
@@ -470,6 +494,30 @@ public class DelitosValidator
                 descripcionRango,
                 $"El campo {columna} debe estar entre {minimo} y {maximo}.");
         }
+    }
+
+    private void ValidarCoordenadaSinInformacion(ArchivoFila fila, string columna, List<CargaValidacionError> advertencias, string codigo, string descripcionResumen)
+    {
+        var valor = ObtenerValor(fila, columna);
+
+        if (!EsCoordenadaSinInformacion(valor)) return;
+
+        AgregarError(
+            advertencias,
+            fila,
+            columna,
+            codigo,
+            descripcionResumen,
+            $"El campo {columna} está vacío o tiene valor 0. La carga puede continuar, pero debe revisar la información.");
+    }
+
+    private bool EsCoordenadaSinInformacion(string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor)) return true;
+
+        valor = valor.Trim();
+
+        return valor.All(c => c == '0' || c == '.' || c == ',' || c == '-');
     }
 
     private bool IntentarConvertirFecha(string valor, out DateTime fecha)

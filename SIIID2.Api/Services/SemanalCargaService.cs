@@ -776,10 +776,8 @@ public class SemanalCargaService : ISemanalCargaService
 
         if (response.Errores.Count == 0)
         {
-            response.Advertencias.AddRange(
-                _cargaIntegridadValidator.ValidarAdvertencias(
-                    delitosIncluidos,
-                    victimasIncluidas));
+            response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(delitosIncluidos));
+            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(delitosIncluidos, victimasIncluidas));
         }
 
         FinalizarRespuesta(
