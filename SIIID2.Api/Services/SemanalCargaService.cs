@@ -744,6 +744,8 @@ public class SemanalCargaService : ISemanalCargaService
                 delitosIncluidos,
                 victimasIncluidas));
 
+        ValidarHomicidioTentativa(delitosIncluidos, response.Errores);
+
         ValidarLongitudIdentificadorDelito(
             delitosIncluidos,
             response.Errores);
@@ -1140,9 +1142,7 @@ public class SemanalCargaService : ISemanalCargaService
         }
     }
 
-    private static List<SemanalArchivoFilaCarga> EtiquetarCarpetas(
-        List<ArchivoFila> filas,
-        SemanalPeriodoCarga periodo)
+    private static List<SemanalArchivoFilaCarga> EtiquetarCarpetas(List<ArchivoFila> filas, SemanalPeriodoCarga periodo)
     {
         var fechaInicioPeriodo =
             ObtenerFechaInicioPeriodo(periodo);
@@ -1169,9 +1169,7 @@ public class SemanalCargaService : ISemanalCargaService
 
     private static DateTime ObtenerFechaInicioPeriodo(SemanalPeriodoCarga periodo) => periodo.FechaInicioTramo;
 
-    private static Dictionary<string, string>
-        ObtenerExclusionesPorCarpeta(
-            List<SemanalArchivoFilaCarga> carpetas)
+    private static Dictionary<string, string> ObtenerExclusionesPorCarpeta(List<SemanalArchivoFilaCarga> carpetas)
     {
         var exclusiones =
             new Dictionary<string, string>(
@@ -1195,10 +1193,7 @@ public class SemanalCargaService : ISemanalCargaService
         return exclusiones;
     }
 
-    private static List<SemanalArchivoFilaCarga>
-        EtiquetarPorCarpeta(
-            List<ArchivoFila> filas,
-            Dictionary<string, string> exclusionesPorCarpeta)
+    private static List<SemanalArchivoFilaCarga> EtiquetarPorCarpeta(List<ArchivoFila> filas, Dictionary<string, string> exclusionesPorCarpeta)
     {
         return filas.Select(fila =>
         {
@@ -1224,11 +1219,7 @@ public class SemanalCargaService : ISemanalCargaService
         }).ToList();
     }
 
-    private static List<SemanalSemanaPendiente>
-        ObtenerSemanasPendientes(
-            List<SemanalCargaPendienteComparacion> cargasPendientes,
-            DateTime fechaInicio,
-            DateTime fechaFin)
+    private static List<SemanalSemanaPendiente> ObtenerSemanasPendientes(List<SemanalCargaPendienteComparacion> cargasPendientes, DateTime fechaInicio, DateTime fechaFin)
     {
         var resultado =
             new List<SemanalSemanaPendiente>();
@@ -1262,11 +1253,7 @@ public class SemanalCargaService : ISemanalCargaService
         return resultado;
     }
 
-    private static Dictionary<DateTime, SemanalDatosSemana>
-        AgruparDatosArchivoPorSemana(
-            List<ArchivoFila> carpetas,
-            List<ArchivoFila> delitos,
-            List<ArchivoFila> victimas)
+    private static Dictionary<DateTime, SemanalDatosSemana> AgruparDatosArchivoPorSemana(List<ArchivoFila> carpetas, List<ArchivoFila> delitos,List<ArchivoFila> victimas)
     {
         var resultado =
             new Dictionary<DateTime, SemanalDatosSemana>();
@@ -1334,9 +1321,7 @@ public class SemanalCargaService : ISemanalCargaService
         return resultado;
     }
 
-    private static Dictionary<DateTime, SemanalDatosSemana>
-        AgruparDatosConfirmadosPorSemana(
-            SemanalDatosComparacion datosComparacion)
+    private static Dictionary<DateTime, SemanalDatosSemana> AgruparDatosConfirmadosPorSemana(SemanalDatosComparacion datosComparacion)
     {
         var resultado =
             new Dictionary<DateTime, SemanalDatosSemana>();
@@ -1423,13 +1408,9 @@ public class SemanalCargaService : ISemanalCargaService
         return resultado;
     }
 
-    private static SemanalDatosSemana ObtenerDatosSemana(
-        Dictionary<DateTime, SemanalDatosSemana> datosPorSemana,
-        DateTime semana)
+    private static SemanalDatosSemana ObtenerDatosSemana(Dictionary<DateTime, SemanalDatosSemana> datosPorSemana, DateTime semana)
     {
-        if (datosPorSemana.TryGetValue(
-                semana,
-                out var datos))
+        if (datosPorSemana.TryGetValue(semana, out var datos))
         {
             return datos;
         }
@@ -1440,8 +1421,7 @@ public class SemanalCargaService : ISemanalCargaService
         return datos;
     }
 
-    private static ArchivoFila ConvertirFilaComparacion(
-        SemanalFilaComparacion item)
+    private static ArchivoFila ConvertirFilaComparacion(SemanalFilaComparacion item)
     {
         var columnas =
             JsonSerializer.Deserialize<
@@ -1458,9 +1438,7 @@ public class SemanalCargaService : ISemanalCargaService
         };
     }
 
-    private static string CrearLlaveCargaCarpeta(
-        long idSemanalCarga,
-        string idCi)
+    private static string CrearLlaveCargaCarpeta(long idSemanalCarga, string idCi)
     {
         return
             $"{idSemanalCarga}|{idCi.Trim().ToUpperInvariant()}";
@@ -1468,16 +1446,12 @@ public class SemanalCargaService : ISemanalCargaService
 
     private static DateTime ObtenerInicioSemana(DateTime fecha)
     {
-        var diasDesdeLunes =
-            ((int)fecha.DayOfWeek + 6) % 7;
+        var diasDesdeLunes = ((int)fecha.DayOfWeek + 6) % 7;
 
         return fecha.Date.AddDays(-diasDesdeLunes);
     }
 
-    private static bool CoincidenDatosSemana(
-        SemanalDatosSemana archivo,
-        SemanalDatosSemana confirmados,
-        out List<string> archivosDiferentes)
+    private static bool CoincidenDatosSemana(SemanalDatosSemana archivo, SemanalDatosSemana confirmados, out List<string> archivosDiferentes)
     {
         archivosDiferentes = new List<string>();
 
@@ -1508,10 +1482,7 @@ public class SemanalCargaService : ISemanalCargaService
         return archivosDiferentes.Count == 0;
     }
 
-    private static bool CoincidenFirmas(
-        List<ArchivoFila> archivo,
-        List<ArchivoFila> confirmados,
-        IReadOnlyCollection<string> columnas)
+    private static bool CoincidenFirmas(List<ArchivoFila> archivo, List<ArchivoFila> confirmados, IReadOnlyCollection<string> columnas)
     {
         var firmasArchivo = archivo
             .Select(fila =>
@@ -1530,9 +1501,7 @@ public class SemanalCargaService : ISemanalCargaService
             StringComparer.Ordinal);
     }
 
-    private static string CrearFirma(
-        ArchivoFila fila,
-        IReadOnlyCollection<string> columnas)
+    private static string CrearFirma(ArchivoFila fila, IReadOnlyCollection<string> columnas)
     {
         return string.Join(
             "|",
@@ -1648,9 +1617,7 @@ public class SemanalCargaService : ISemanalCargaService
             .ToUpperInvariant();
     }
 
-    private static bool IntentarConvertirDecimal(
-        string valor,
-        out decimal numero)
+    private static bool IntentarConvertirDecimal(string valor, out decimal numero)
     {
         return decimal.TryParse(
                    valor,
@@ -1664,9 +1631,7 @@ public class SemanalCargaService : ISemanalCargaService
                    out numero);
     }
 
-    private static bool IntentarConvertirFechaHoraComparacion(
-        string valor,
-        out DateTime fecha)
+    private static bool IntentarConvertirFechaHoraComparacion(string valor, out DateTime fecha)
     {
         var formatos = new[]
         {
@@ -1728,9 +1693,7 @@ public class SemanalCargaService : ISemanalCargaService
         return false;
     }
 
-    private static bool IntentarConvertirHora(
-        string? valor,
-        out TimeSpan hora)
+    private static bool IntentarConvertirHora(string? valor, out TimeSpan hora)
     {
         hora = default;
 
@@ -1921,6 +1884,34 @@ public class SemanalCargaService : ISemanalCargaService
         response.TotalCarpetasExcluidas = carpetas.Count - response.TotalCarpetasIncluidas;
         response.TotalDelitosExcluidos = delitos.Count - response.TotalDelitosIncluidos;
         response.TotalVictimasExcluidas = victimas.Count - response.TotalVictimasIncluidas;
+    }
+
+    private static void ValidarHomicidioTentativa(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    {
+        foreach (var fila in filasDelitos)
+        {
+            var claveModalidad = ObtenerValor(fila, "clasf_de_dto")?.Trim();
+            var valorGradoConsumacion = ObtenerValor(fila, "grdo_cons")?.Trim();
+
+            if (!string.Equals(claveModalidad, "1.01.01", StringComparison.OrdinalIgnoreCase) ||
+                !int.TryParse(valorGradoConsumacion, NumberStyles.Integer, CultureInfo.InvariantCulture, out var gradoConsumacion) ||
+                gradoConsumacion != 2)
+            {
+                continue;
+            }
+
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "delitos",
+                Fila = fila.NumeroFila,
+                Columna = "grdo_cons",
+                Campo = "grdo_cons",
+                Valor = valorGradoConsumacion,
+                Codigo = "SEMANAL_HOMICIDIO_TENTATIVA_NO_PERMITIDO",
+                DescripcionResumen = "Homicidio en grado de tentativa no permitido",
+                Mensaje = "El módulo preliminar no admite registros de homicidio doloso en grado de tentativa."
+            });
+        }
     }
 
     private static void ValidarModalidadesConfiguradas(List<ArchivoFila> filasDelitos, List<ConfiguracionModalidadSemanalItem> configuracion, List<CargaValidacionError> errores)
