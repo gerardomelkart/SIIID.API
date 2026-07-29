@@ -371,7 +371,8 @@ public class SemanalCargaService : ISemanalCargaService
         var response = new SemanalCargaValidacionResponse
         {
             CodigoReferencia = GenerarCodigoReferencia(),
-            TipoCarga = tipoCarga
+            TipoCarga = tipoCarga,
+            Ventana = ObtenerVentanaCarga(DateTime.Today)
         };
 
         if (!TiposCargaPermitidos.Contains(tipoCarga))
@@ -699,6 +700,8 @@ public class SemanalCargaService : ISemanalCargaService
             .Select(x => x.Fila)
             .ToList();
 
+        response.Bloques = ObtenerBloquesCarga(carpetasIncluidas, delitosIncluidos, victimasIncluidas, esActualizacion);
+
         if (carpetasIncluidas.Count == 0)
         {
             AgregarErrorGeneral(
@@ -797,27 +800,20 @@ public class SemanalCargaService : ISemanalCargaService
             new SemanalCargaPersistencia
             {
                 IdUsuarioCarga = idUsuarioCarga,
-                IdEntidadFederativa =
-                    idEntidadFederativa.Value,
-                CodigoReferencia =
-                    response.CodigoReferencia,
+                IdEntidadFederativa = idEntidadFederativa.Value,
+                CodigoReferencia = response.CodigoReferencia,
                 TipoCarga = tipoCarga,
                 Periodo = periodo,
-                TotalCarpetasIncluidas =
-                    response.TotalCarpetasIncluidas,
-                TotalDelitosIncluidos =
-                    response.TotalDelitosIncluidos,
-                TotalVictimasIncluidas =
-                    response.TotalVictimasIncluidas,
-                TotalCarpetasExcluidas =
-                    response.TotalCarpetasExcluidas,
-                TotalDelitosExcluidos =
-                    response.TotalDelitosExcluidos,
-                TotalVictimasExcluidas =
-                    response.TotalVictimasExcluidas,
+                Ventana = response.Ventana,
+                Bloques = response.Bloques,
+                TotalCarpetasIncluidas = response.TotalCarpetasIncluidas,
+                TotalDelitosIncluidos = response.TotalDelitosIncluidos,
+                TotalVictimasIncluidas = response.TotalVictimasIncluidas,
+                TotalCarpetasExcluidas = response.TotalCarpetasExcluidas,
+                TotalDelitosExcluidos = response.TotalDelitosExcluidos,
+                TotalVictimasExcluidas = response.TotalVictimasExcluidas,
                 Advertencias = response.Advertencias,
-                ModalidadesConfiguradas =
-                    modalidadesConfiguradas,
+                ModalidadesConfiguradas = modalidadesConfiguradas,
                 Carpetas = carpetasEtiquetadas,
                 Delitos = delitosEtiquetados,
                 Victimas = victimasEtiquetadas
@@ -980,6 +976,77 @@ public class SemanalCargaService : ISemanalCargaService
     }
 
     public Task<ConfirmarCargaResponse> ConfirmarCargaAsync(ConfirmarCargaRequest request, int idUsuarioConfirmacion) => _semanalCargaRepository.ConfirmarCargaAsync(request.CodigoReferencia.Trim(), request.Aceptar, idUsuarioConfirmacion);
+
+    private static SemanalVentanaCarga ObtenerVentanaCarga(DateTime fechaReferencia)
+    {
+        var fechaActual = fechaReferencia.Date;
+        var fechaInicioMesActual = new DateTime(fechaActual.Year, fechaActual.Month, 1);
+        var fechaInicioSemanaAnterior = ObtenerInicioSemana(fechaActual).AddDays(-7);
+        var permiteMesAnterior = fechaInicioSemanaAnterior < fechaInicioMesActual;
+
+        return new SemanalVentanaCarga
+        {
+            FechaMinimaPermitida = permiteMesAnterior ? fechaInicioMesActual.AddMonths(-1) : fechaInicioMesActual,
+            FechaMaximaPermitida = fechaActual,
+            PermiteMesAnterior = permiteMesAnterior
+        };
+    }
+
+    private static List<SemanalCargaBloque> ObtenerBloquesCarga(List<ArchivoFila> carpetas, List<ArchivoFila> delitos, List<ArchivoFila> victimas, bool reemplazaInformacion)
+    {
+        var bloques = new Dictionary<(DateTime FechaInicioSemana, int AnioCorte, int MesCorte), SemanalCargaBloque>();
+        var bloquePorCarpeta = new Dictionary<string, SemanalCargaBloque>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var carpeta in carpetas)
+        {
+            var idCi = ObtenerValor(carpeta, "id_ci")?.Trim();
+
+            if (string.IsNullOrWhiteSpace(idCi) || !IntentarConvertirFecha(ObtenerValor(carpeta, "fha_de_ini"), out var fechaInicio)) continue;
+
+            var fechaInicioSemana = ObtenerInicioSemana(fechaInicio);
+            var fechaFinSemana = fechaInicioSemana.AddDays(6);
+            var fechaInicioMes = new DateTime(fechaInicio.Year, fechaInicio.Month, 1);
+            var fechaFinMes = fechaInicioMes.AddMonths(1).AddDays(-1);
+            var clave = (fechaInicioSemana, fechaInicio.Year, fechaInicio.Month);
+
+            if (!bloques.TryGetValue(clave, out var bloque))
+            {
+                bloque = new SemanalCargaBloque
+                {
+                    AnioSemana = ISOWeek.GetYear(fechaInicio),
+                    NumeroSemana = ISOWeek.GetWeekOfYear(fechaInicio),
+                    FechaInicioSemana = fechaInicioSemana,
+                    FechaFinSemana = fechaFinSemana,
+                    AnioCorte = fechaInicio.Year,
+                    MesCorte = fechaInicio.Month,
+                    FechaInicioTramo = fechaInicioSemana > fechaInicioMes ? fechaInicioSemana : fechaInicioMes,
+                    FechaFinTramo = fechaFinSemana < fechaFinMes ? fechaFinSemana : fechaFinMes,
+                    ReemplazaInformacion = reemplazaInformacion
+                };
+
+                bloques[clave] = bloque;
+            }
+
+            bloque.TotalCarpetas++;
+            bloquePorCarpeta[idCi] = bloque;
+        }
+
+        foreach (var delito in delitos)
+        {
+            var idCi = ObtenerValor(delito, "id_ci")?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(idCi) && bloquePorCarpeta.TryGetValue(idCi, out var bloque)) bloque.TotalDelitos++;
+        }
+
+        foreach (var victima in victimas)
+        {
+            var idCi = ObtenerValor(victima, "id_ci")?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(idCi) && bloquePorCarpeta.TryGetValue(idCi, out var bloque)) bloque.TotalVictimas++;
+        }
+
+        return bloques.Values.OrderBy(x => x.FechaInicioSemana).ThenBy(x => x.AnioCorte).ThenBy(x => x.MesCorte).ToList();
+    }
 
     private static SemanalPeriodoCarga? ValidarPeriodo(SemanalCargaValidacionRequest request, List<CargaValidacionError> errores)
     {
