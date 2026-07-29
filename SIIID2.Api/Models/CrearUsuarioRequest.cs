@@ -13,6 +13,7 @@ public class CrearUsuarioRequest
     public string? TelefonoContacto { get; set; }
     public int? IdEntidadFederativa { get; set; }
     public string Rol { get; set; } = string.Empty;
+    public bool HabilitaMensual { get; set; } = true;
     public bool HabilitaCarga { get; set; }
     public bool HabilitaModificacion { get; set; }
     public bool HabilitaSemanal { get; set; }

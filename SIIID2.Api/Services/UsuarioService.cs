@@ -155,11 +155,22 @@ public class UsuarioService : IUsuarioService
             request.AdministraDelitosSemanal = false;
         }
 
+        if (!request.HabilitaMensual)
+        {
+            request.HabilitaCarga = false;
+            request.HabilitaModificacion = false;
+        }
+
         if (!request.HabilitaSemanal)
         {
             request.HabilitaCargaSemanal = false;
             request.HabilitaModificacionSemanal = false;
             request.AdministraDelitosSemanal = false;
+        }
+
+        if (!request.HabilitaMensual && !request.HabilitaSemanal)
+        {
+            errores.Add(ErrorUsuario("modulos", "USUARIO_MODULO_OBLIGATORIO", "Debe habilitar al menos un módulo para el usuario."));
         }
 
         // Se validan duplicados de usuario, correo, RFC y CURP.
@@ -227,6 +238,7 @@ public class UsuarioService : IUsuarioService
             TelefonoContacto = request.TelefonoContacto,
             IdEntidadFederativa = request.IdEntidadFederativa,
             Rol = request.Rol,
+            HabilitaMensual = false,
             HabilitaCarga = false,
             HabilitaModificacion = false,
             HabilitaSemanal = request.HabilitaSemanal,
@@ -237,7 +249,6 @@ public class UsuarioService : IUsuarioService
 
         return await CrearUsuarioAsync(requestGeneral, idUsuarioAlta);
     }
-
 
     public async Task<UsuarioOperacionResponse> EditarUsuarioAsync(int idUsuario, EditarUsuarioRequest request, int idUsuarioModificacion)
     {
@@ -268,15 +279,26 @@ public class UsuarioService : IUsuarioService
         }
 
         // La edición solo aplica sobre usuarios activos.
-        var existeUsuario = await _usuarioRepository.ExisteUsuarioActivoAsync(idUsuario);
+        var usuarioExistente = await _usuarioRepository.ObtenerUsuarioDetalleAsync(idUsuario);
 
-        if (!existeUsuario)
+        if (usuarioExistente == null || !usuarioExistente.Activo)
         {
             return new UsuarioOperacionResponse
             {
                 EsValido = false,
                 Codigo = "USUARIO_NO_EXISTE",
                 Mensaje = "El usuario que intenta editar no existe o no está activo.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        if (idUsuario == idUsuarioModificacion && !request.HabilitaMensual)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_NO_PUEDE_DESHABILITAR_SU_ACCESO_MENSUAL",
+                Mensaje = "No puede deshabilitar su propio acceso al módulo consolidado.",
                 IdUsuario = idUsuario
             };
         }
@@ -331,6 +353,12 @@ public class UsuarioService : IUsuarioService
         if (rol != "SUPER_USUARIO")
         {
             request.AdministraDelitosSemanal = false;
+        }
+
+        if (!request.HabilitaMensual)
+        {
+            request.HabilitaCarga = false;
+            request.HabilitaModificacion = false;
         }
 
         if (request.HabilitaSemanal == false)
@@ -452,9 +480,9 @@ public class UsuarioService : IUsuarioService
             };
         }
 
-        var existeUsuario = await _usuarioRepository.ExisteUsuarioActivoAsync(idUsuario);
+        var usuarioExistente = await _usuarioRepository.ObtenerUsuarioDetalleAsync(idUsuario);
 
-        if (!existeUsuario)
+        if (usuarioExistente == null || !usuarioExistente.Activo)
         {
             return new UsuarioOperacionResponse
             {
@@ -476,6 +504,17 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        if (!usuarioExistente.HabilitaMensual && !request.HabilitaSemanal)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_MODULO_OBLIGATORIO",
+                Mensaje = "Debe habilitar al menos un módulo para el usuario.",
+                IdUsuario = idUsuario
+            };
+        }
+
         var rol = request.Rol.Trim().ToUpperInvariant();
 
         var requestValidacion = new EditarUsuarioRequest
@@ -491,6 +530,7 @@ public class UsuarioService : IUsuarioService
             TelefonoContacto = request.TelefonoContacto,
             IdEntidadFederativa = request.IdEntidadFederativa,
             Rol = request.Rol,
+            HabilitaMensual = usuarioExistente.HabilitaMensual,
             HabilitaCarga = false,
             HabilitaModificacion = false,
             HabilitaSemanal = request.HabilitaSemanal,
@@ -585,7 +625,6 @@ public class UsuarioService : IUsuarioService
         };
     }
 
-
     public async Task<UsuarioOperacionResponse> ActualizarPermisosSemanalesAsync(int idUsuario, ActualizarPermisosSemanalesRequest request, int idUsuarioModificacion)
     {
         var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
@@ -632,6 +671,17 @@ public class UsuarioService : IUsuarioService
                 EsValido = false,
                 Codigo = "USUARIO_NO_PUEDE_DESHABILITAR_SU_ACCESO_SEMANAL",
                 Mensaje = "No puede deshabilitar su propio acceso al módulo semanal.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        if (!usuario.HabilitaMensual && !request.HabilitaSemanal)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_MODULO_OBLIGATORIO",
+                Mensaje = "Debe habilitar al menos un módulo para el usuario.",
                 IdUsuario = idUsuario
             };
         }
@@ -850,9 +900,9 @@ public class UsuarioService : IUsuarioService
         }
 
         // Aquí se valida existencia sin importar si está activo o inactivo.
-        var existeUsuario = await _usuarioRepository.ExisteUsuarioAsync(idUsuario);
+        var usuario = await _usuarioRepository.ObtenerUsuarioDetalleAsync(idUsuario);
 
-        if (!existeUsuario)
+        if (usuario == null)
         {
             return new UsuarioOperacionResponse
             {
@@ -861,6 +911,23 @@ public class UsuarioService : IUsuarioService
                 Mensaje = "El usuario que intenta reactivar no existe.",
                 IdUsuario = idUsuario
             };
+        }
+
+        if (!request.HabilitaMensual && !usuario.HabilitaSemanal)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_MODULO_OBLIGATORIO",
+                Mensaje = "Debe habilitar al menos un módulo para el usuario.",
+                IdUsuario = idUsuario
+            };
+        }
+
+        if (!request.HabilitaMensual)
+        {
+            request.HabilitaCarga = false;
+            request.HabilitaModificacion = false;
         }
 
         // Reactiva usuario y define permisos de carga/modificación.
@@ -946,6 +1013,17 @@ public class UsuarioService : IUsuarioService
             };
         }
 
+        if (!usuario.HabilitaMensual && !request.HabilitaSemanal)
+        {
+            return new UsuarioOperacionResponse
+            {
+                EsValido = false,
+                Codigo = "USUARIO_MODULO_OBLIGATORIO",
+                Mensaje = "Debe habilitar al menos un módulo para el usuario.",
+                IdUsuario = idUsuario
+            };
+        }
+
         var rol = usuario.Rol.Trim().ToUpperInvariant();
 
         if (rol == "CONSULTA")
@@ -975,7 +1053,6 @@ public class UsuarioService : IUsuarioService
             IdUsuario = idUsuario
         };
     }
-
 
     private static List<UsuarioValidacionError> ValidarCamposCrearUsuario(CrearUsuarioRequest request, string rol)
     {
