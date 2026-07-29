@@ -46,8 +46,8 @@ public interface IUsuarioRepository
     // Baja lógica de usuario.
     Task DesactivarUsuarioAsync(int idUsuario, int idUsuarioModificacion);
 
-    // Actualiza permisos de carga/modificación para todos los usuarios activos.
-    Task<int> ActualizarPermisosGlobalesAsync(bool habilitaCarga, bool habilitaModificacion);
+    // Actualiza acceso, carga y modificación mensual para todos los usuarios activos.
+    Task<int> ActualizarPermisosGlobalesAsync(bool habilitaMensual, bool habilitaCarga, bool habilitaModificacion, int idUsuarioModificacion);
 
     // Revisa si existe un usuario por id, sin importar si está activo o inactivo.
     Task<bool> ExisteUsuarioAsync(int idUsuario);

@@ -1,4 +1,5 @@
-﻿using SIIID2.Api.Models;
+﻿using SIIID2.Api.Data;
+using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 using System.Text.RegularExpressions;
 
@@ -817,51 +818,96 @@ public class UsuarioService : IUsuarioService
         };
     }
 
-    public async Task<UsuarioOperacionResponse> ActualizarPermisosGlobalesAsync(PermisosGlobalesUsuariosRequest request, int idUsuarioModificacion)
+    public async Task<int> ActualizarPermisosGlobalesAsync(bool habilitaMensual, bool habilitaCarga, bool habilitaModificacion, int idUsuarioModificacion)
     {
-        // Se valida que el usuario que ejecuta el cambio exista y esté activo.
-        var usuarioModificacion = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioModificacion);
+        var sql = @"
+        SET NOCOUNT ON;
 
-        if (usuarioModificacion == null)
+        UPDATE um
+        SET um.habilitado = acceso.habilita_mensual,
+            um.habilita_carga = CASE WHEN acceso.habilita_mensual = 1 AND r.rol <> N'CONSULTA' THEN @HabilitaCarga ELSE 0 END,
+            um.habilita_modificacion = CASE WHEN acceso.habilita_mensual = 1 AND r.rol <> N'CONSULTA' THEN @HabilitaModificacion ELSE 0 END,
+            um.fecha_modificacion = SYSDATETIME(),
+            um.id_usuario_modificacion = @IdUsuarioModificacion
+        FROM usuario_modulo um
+        INNER JOIN catalogo_modulo m
+            ON m.id_modulo = um.id_modulo
+           AND m.clave = N'MENSUAL'
+           AND m.activo = 1
+        INNER JOIN usuario u
+            ON u.id_usuario = um.id_usuario
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+           AND r.activo = 1
+        OUTER APPLY
+        (
+            SELECT TOP (1)
+                1 AS habilita_semanal
+            FROM usuario_modulo us
+            INNER JOIN catalogo_modulo ms
+                ON ms.id_modulo = us.id_modulo
+               AND ms.clave = N'SEMANAL'
+               AND ms.activo = 1
+            WHERE us.id_usuario = um.id_usuario
+              AND us.habilitado = 1
+              AND us.activo = 1
+        ) semanal
+        CROSS APPLY
+        (
+            SELECT
+                CASE
+                    WHEN @HabilitaMensual = 1 THEN 1
+                    WHEN um.id_usuario = @IdUsuarioModificacion THEN 1
+                    WHEN ISNULL(semanal.habilita_semanal, 0) = 0 THEN 1
+                    ELSE 0
+                END AS habilita_mensual
+        ) acceso
+        WHERE u.activo = 1
+          AND um.activo = 1;
+
+        UPDATE h
+        SET h.habilita_carga = CASE WHEN um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN um.habilita_carga ELSE 0 END,
+            h.habilita_modificacion = CASE WHEN um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN um.habilita_modificacion ELSE 0 END
+        FROM habilita_carga_modificacion h
+        INNER JOIN usuario u
+            ON u.id_usuario = h.id_usuario
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+           AND r.activo = 1
+        INNER JOIN catalogo_modulo m
+            ON m.clave = N'MENSUAL'
+           AND m.activo = 1
+        INNER JOIN usuario_modulo um
+            ON um.id_usuario = u.id_usuario
+           AND um.id_modulo = m.id_modulo
+           AND um.activo = 1
+        WHERE h.activo = 1
+          AND u.activo = 1;
+
+        SELECT COUNT(*)
+        FROM usuario_modulo um
+        INNER JOIN catalogo_modulo m
+            ON m.id_modulo = um.id_modulo
+           AND m.clave = N'MENSUAL'
+           AND m.activo = 1
+        INNER JOIN usuario u
+            ON u.id_usuario = um.id_usuario
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+           AND r.activo = 1
+        WHERE u.activo = 1
+          AND um.activo = 1;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.ExecuteScalarAsync<int>(sql, new
         {
-            return new UsuarioOperacionResponse
-            {
-                EsValido = false,
-                Codigo = "USUARIO_MODIFICACION_NO_VALIDO",
-                Mensaje = "El usuario autenticado no existe o no está activo."
-            };
-        }
-
-        // Por ahora solo SUPER_USUARIO puede activar/desactivar permisos globales.
-        if (!usuarioModificacion.EsSuperUsuario)
-        {
-            return new UsuarioOperacionResponse
-            {
-                EsValido = false,
-                Codigo = "USUARIO_PERMISOS_GLOBALES_SIN_PERMISO",
-                Mensaje = "Solo un SUPER_USUARIO puede actualizar permisos globales."
-            };
-        }
-
-        // El repository actualiza los permisos en base.
-        // CONSULTA queda protegido desde el SQL del repository.
-        var totalActualizados = await _usuarioRepository.ActualizarPermisosGlobalesAsync(
-            request.HabilitaCarga,
-            request.HabilitaModificacion);
-
-        _logger.LogInformation(
-            "Permisos globales actualizados. HabilitaCarga: {HabilitaCarga}, HabilitaModificacion: {HabilitaModificacion}, Total: {Total}, UsuarioModificacion: {IdUsuarioModificacion}",
-            request.HabilitaCarga,
-            request.HabilitaModificacion,
-            totalActualizados,
-            idUsuarioModificacion);
-
-        return new UsuarioOperacionResponse
-        {
-            EsValido = true,
-            Codigo = "USUARIOS_PERMISOS_GLOBALES_ACTUALIZADOS",
-            Mensaje = $"Permisos globales actualizados correctamente. Usuarios afectados: {totalActualizados}."
-        };
+            HabilitaMensual = habilitaMensual,
+            HabilitaCarga = habilitaCarga,
+            HabilitaModificacion = habilitaModificacion,
+            IdUsuarioModificacion = idUsuarioModificacion
+        });
     }
 
     public async Task<UsuarioOperacionResponse> ReactivarUsuarioAsync(int idUsuario, ReactivarUsuarioRequest request, int idUsuarioModificacion)
