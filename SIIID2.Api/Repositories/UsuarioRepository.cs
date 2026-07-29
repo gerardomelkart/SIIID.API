@@ -902,33 +902,17 @@ public class UsuarioRepository : IUsuarioRepository
         }
     }
 
-    public async Task<int> ActualizarPermisosGlobalesAsync(bool habilitaCarga, bool habilitaModificacion)
+    public async Task<int> ActualizarPermisosGlobalesAsync(bool habilitaMensual, bool habilitaCarga, bool habilitaModificacion, int idUsuarioModificacion)
     {
         var sql = @"
         SET NOCOUNT ON;
 
-        UPDATE h
-        SET h.habilita_carga = CASE WHEN um.habilitado = 1 AND um.activo = 1 AND r.rol <> N'CONSULTA' THEN @HabilitaCarga ELSE 0 END,
-            h.habilita_modificacion = CASE WHEN um.habilitado = 1 AND um.activo = 1 AND r.rol <> N'CONSULTA' THEN @HabilitaModificacion ELSE 0 END
-        FROM habilita_carga_modificacion h
-        INNER JOIN usuario u
-            ON u.id_usuario = h.id_usuario
-        INNER JOIN roles r
-            ON r.id_rol = u.id_rol
-        INNER JOIN catalogo_modulo m
-            ON m.clave = N'MENSUAL'
-           AND m.activo = 1
-        INNER JOIN usuario_modulo um
-            ON um.id_usuario = u.id_usuario
-           AND um.id_modulo = m.id_modulo
-        WHERE h.activo = 1
-          AND u.activo = 1
-          AND r.activo = 1;
-
         UPDATE um
-        SET um.habilita_carga = CASE WHEN um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN @HabilitaCarga ELSE 0 END,
-            um.habilita_modificacion = CASE WHEN um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN @HabilitaModificacion ELSE 0 END,
-            um.fecha_modificacion = SYSDATETIME()
+        SET um.habilitado = acceso.habilita_mensual,
+            um.habilita_carga = CASE WHEN acceso.habilita_mensual = 1 AND r.rol <> N'CONSULTA' THEN @HabilitaCarga ELSE 0 END,
+            um.habilita_modificacion = CASE WHEN acceso.habilita_mensual = 1 AND r.rol <> N'CONSULTA' THEN @HabilitaModificacion ELSE 0 END,
+            um.fecha_modificacion = SYSDATETIME(),
+            um.id_usuario_modificacion = @IdUsuarioModificacion
         FROM usuario_modulo um
         INNER JOIN catalogo_modulo m
             ON m.id_modulo = um.id_modulo
@@ -938,9 +922,51 @@ public class UsuarioRepository : IUsuarioRepository
             ON u.id_usuario = um.id_usuario
         INNER JOIN roles r
             ON r.id_rol = u.id_rol
+           AND r.activo = 1
+        OUTER APPLY
+        (
+            SELECT TOP (1)
+                1 AS habilita_semanal
+            FROM usuario_modulo us
+            INNER JOIN catalogo_modulo ms
+                ON ms.id_modulo = us.id_modulo
+               AND ms.clave = N'SEMANAL'
+               AND ms.activo = 1
+            WHERE us.id_usuario = um.id_usuario
+              AND us.habilitado = 1
+              AND us.activo = 1
+        ) semanal
+        CROSS APPLY
+        (
+            SELECT
+                CASE
+                    WHEN @HabilitaMensual = 1 THEN 1
+                    WHEN um.id_usuario = @IdUsuarioModificacion THEN 1
+                    WHEN ISNULL(semanal.habilita_semanal, 0) = 0 THEN 1
+                    ELSE 0
+                END AS habilita_mensual
+        ) acceso
         WHERE u.activo = 1
-          AND r.activo = 1
           AND um.activo = 1;
+
+        UPDATE h
+        SET h.habilita_carga = CASE WHEN um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN um.habilita_carga ELSE 0 END,
+            h.habilita_modificacion = CASE WHEN um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN um.habilita_modificacion ELSE 0 END
+        FROM habilita_carga_modificacion h
+        INNER JOIN usuario u
+            ON u.id_usuario = h.id_usuario
+        INNER JOIN roles r
+            ON r.id_rol = u.id_rol
+           AND r.activo = 1
+        INNER JOIN catalogo_modulo m
+            ON m.clave = N'MENSUAL'
+           AND m.activo = 1
+        INNER JOIN usuario_modulo um
+            ON um.id_usuario = u.id_usuario
+           AND um.id_modulo = m.id_modulo
+           AND um.activo = 1
+        WHERE h.activo = 1
+          AND u.activo = 1;
 
         SELECT COUNT(*)
         FROM usuario_modulo um
@@ -954,7 +980,6 @@ public class UsuarioRepository : IUsuarioRepository
             ON r.id_rol = u.id_rol
            AND r.activo = 1
         WHERE u.activo = 1
-          AND um.habilitado = 1
           AND um.activo = 1;
     ";
 
@@ -962,8 +987,10 @@ public class UsuarioRepository : IUsuarioRepository
 
         return await connection.ExecuteScalarAsync<int>(sql, new
         {
+            HabilitaMensual = habilitaMensual,
             HabilitaCarga = habilitaCarga,
-            HabilitaModificacion = habilitaModificacion
+            HabilitaModificacion = habilitaModificacion,
+            IdUsuarioModificacion = idUsuarioModificacion
         });
     }
 
