@@ -28,10 +28,35 @@ public class SemanalPeriodoCarga
     public int AnioCorte { get; set; }
 }
 
+public class SemanalVentanaCarga
+{
+    public DateTime FechaMinimaPermitida { get; set; }
+    public DateTime FechaMaximaPermitida { get; set; }
+    public bool PermiteMesAnterior { get; set; }
+}
+
+public class SemanalCargaBloque
+{
+    public int AnioSemana { get; set; }
+    public int NumeroSemana { get; set; }
+    public DateTime FechaInicioSemana { get; set; }
+    public DateTime FechaFinSemana { get; set; }
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
+    public DateTime FechaInicioTramo { get; set; }
+    public DateTime FechaFinTramo { get; set; }
+    public int TotalCarpetas { get; set; }
+    public int TotalDelitos { get; set; }
+    public int TotalVictimas { get; set; }
+    public bool ReemplazaInformacion { get; set; }
+}
+
 public class SemanalCargaValidacionResponse : CargaValidacionResponse
 {
     public string TipoCarga { get; set; } = "CARGA_INICIAL";
     public SemanalPeriodoCarga? Periodo { get; set; }
+    public SemanalVentanaCarga? Ventana { get; set; }
+    public List<SemanalCargaBloque> Bloques { get; set; } = new();
     public int TotalCarpetasIncluidas { get; set; }
     public int TotalDelitosIncluidos { get; set; }
     public int TotalVictimasIncluidas { get; set; }
@@ -54,6 +79,8 @@ public class SemanalCargaPersistencia
     public string CodigoReferencia { get; set; } = string.Empty;
     public string TipoCarga { get; set; } = "CARGA_INICIAL";
     public SemanalPeriodoCarga Periodo { get; set; } = new();
+    public SemanalVentanaCarga? Ventana { get; set; }
+    public List<SemanalCargaBloque> Bloques { get; set; } = new();
     public int TotalCarpetasIncluidas { get; set; }
     public int TotalDelitosIncluidos { get; set; }
     public int TotalVictimasIncluidas { get; set; }
