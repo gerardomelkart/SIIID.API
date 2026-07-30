@@ -647,7 +647,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 return Exito(codigoReferencia, "PENDIENTE_APROBACION", esActualizacion ? "La actualización semanal fue enviada correctamente a revisión administrativa." : "La carga semanal fue enviada correctamente a revisión administrativa.");
             }
 
-            if (esActualizacion) await PrepararActualizacionSemanalAsync(connection, transaction, carga, idUsuarioConfirmacion);
+            await PrepararReemplazoBloquesAsync(connection, transaction, carga, idUsuarioConfirmacion);
 
             var totalCarpetas = await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
             var totalDelitos = await InsertarDelitosFinalesAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
@@ -705,7 +705,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
 
             var esActualizacion = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
 
-            if (esActualizacion) await PrepararActualizacionSemanalAsync(connection, transaction, carga, idUsuarioAprobacion);
+            await PrepararReemplazoBloquesAsync(connection, transaction, carga, idUsuarioAprobacion);
 
             var totalCarpetas = await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
             var totalDelitos = await InsertarDelitosFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
@@ -1142,23 +1142,51 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioRechazo = idUsuarioRechazo, Motivo = motivo }, transaction);
     }
 
-    private static async Task PrepararActualizacionSemanalAsync(SqlConnection connection, SqlTransaction transaction, SemanalCargaConfirmacionInfo carga, int idUsuarioModificacion)
+    private static async Task PrepararReemplazoBloquesAsync(SqlConnection connection, SqlTransaction transaction, SemanalCargaConfirmacionInfo carga, int idUsuarioModificacion)
     {
         const string sql = @"
-        SELECT ci.id_semanal_carpeta_investigacion
+        SELECT DISTINCT
+            ci.id_semanal_carpeta_investigacion
         INTO #CarpetasVersionAnterior
         FROM dbo.semanal_carpeta_investigacion ci WITH (UPDLOCK, HOLDLOCK)
-        INNER JOIN dbo.semanal_carga sc ON sc.id_semanal_carga = ci.id_semanal_carga
+        INNER JOIN dbo.semanal_carga sc
+            ON sc.id_semanal_carga = ci.id_semanal_carga
+        INNER JOIN dbo.semanal_carga_bloque bloque
+            ON bloque.id_semanal_carga = @IdSemanalCargaNueva
+           AND bloque.id_entidad_federativa = @IdEntidadFederativa
+           AND bloque.reemplaza_informacion = 1
+           AND bloque.activo = 1
+           AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
+           AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND ci.fecha_inicio >= @FechaInicioTramo
-          AND ci.fecha_inicio < DATEADD(DAY, 1, @FechaFinTramo)
           AND ci.activo = 1
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1;
 
-        IF NOT EXISTS (SELECT 1 FROM #CarpetasVersionAnterior)
+        IF EXISTS
+        (
+            SELECT 1
+            FROM dbo.semanal_carga_bloque bloque
+            WHERE bloque.id_semanal_carga = @IdSemanalCargaNueva
+              AND bloque.id_entidad_federativa = @IdEntidadFederativa
+              AND bloque.reemplaza_informacion = 1
+              AND bloque.activo = 1
+              AND NOT EXISTS
+              (
+                  SELECT 1
+                  FROM dbo.semanal_carpeta_investigacion ci WITH (UPDLOCK, HOLDLOCK)
+                  INNER JOIN dbo.semanal_carga sc
+                      ON sc.id_semanal_carga = ci.id_semanal_carga
+                  WHERE sc.id_entidad_federativa = bloque.id_entidad_federativa
+                    AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                    AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+                    AND ci.activo = 1
+                    AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+                    AND sc.activo = 1
+              )
+        )
         BEGIN
-            THROW 50040, 'No existe una versión semanal confirmada activa para reemplazar.', 1;
+            THROW 50040, 'Uno o más bloques marcados para reemplazo no tienen información semanal confirmada activa.', 1;
         END;
 
         SELECT d.id_semanal_delito
@@ -1370,8 +1398,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         {
             IdSemanalCargaNueva = carga.IdSemanalCarga,
             IdEntidadFederativa = carga.IdEntidadFederativaCarga,
-            carga.FechaInicioTramo,
-            carga.FechaFinTramo,
             IdUsuarioModificacion = idUsuarioModificacion
         }, transaction);
     }
