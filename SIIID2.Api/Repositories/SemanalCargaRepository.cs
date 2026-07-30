@@ -294,12 +294,33 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             (
                 SELECT 1
                 FROM dbo.semanal_carga sc
-                INNER JOIN dbo.semanal_carpeta_investigacion ci ON ci.id_semanal_carga = sc.id_semanal_carga AND ci.activo = 1
                 WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-                  AND sc.anio_semana = @AnioSemana
-                  AND sc.numero_semana = @NumeroSemana
                   AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
                   AND sc.activo = 1
+                  AND
+                  (
+                      EXISTS
+                      (
+                          SELECT 1
+                          FROM dbo.semanal_carga_bloque bloque
+                          WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                            AND bloque.anio_semana = @AnioSemana
+                            AND bloque.numero_semana = @NumeroSemana
+                            AND bloque.activo = 1
+                      )
+                      OR
+                      (
+                          NOT EXISTS
+                          (
+                              SELECT 1
+                              FROM dbo.semanal_carga_bloque bloque
+                              WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                                AND bloque.activo = 1
+                          )
+                          AND sc.anio_semana = @AnioSemana
+                          AND sc.numero_semana = @NumeroSemana
+                      )
+                  )
             ) THEN 1 ELSE 0 END) AS TieneCargaConfirmada,
             pendiente.codigo_referencia AS CodigoReferenciaPendiente,
             pendiente.estado AS EstadoPendiente,
@@ -308,11 +329,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         FROM (VALUES (1)) base(valor)
         OUTER APPLY
         (
-            SELECT TOP (1) sc.codigo_referencia, sc.estado, sc.tipo_carga, sc.id_usuario_carga
+            SELECT TOP (1)
+                sc.codigo_referencia,
+                sc.estado,
+                sc.tipo_carga,
+                sc.id_usuario_carga
             FROM dbo.semanal_carga sc
             WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-              AND sc.anio_semana = @AnioSemana
-              AND sc.numero_semana = @NumeroSemana
               AND sc.estado IN
               (
                   N'VALIDADO_PENDIENTE',
@@ -320,9 +343,35 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                   N'PENDIENTE_APROBACION'
               )
               AND sc.activo = 1
-            ORDER BY sc.fecha_validacion DESC, sc.id_semanal_carga DESC
+              AND
+              (
+                  EXISTS
+                  (
+                      SELECT 1
+                      FROM dbo.semanal_carga_bloque bloque
+                      WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                        AND bloque.anio_semana = @AnioSemana
+                        AND bloque.numero_semana = @NumeroSemana
+                        AND bloque.activo = 1
+                  )
+                  OR
+                  (
+                      NOT EXISTS
+                      (
+                          SELECT 1
+                          FROM dbo.semanal_carga_bloque bloque
+                          WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                            AND bloque.activo = 1
+                      )
+                      AND sc.anio_semana = @AnioSemana
+                      AND sc.numero_semana = @NumeroSemana
+                  )
+              )
+            ORDER BY
+                sc.fecha_validacion DESC,
+                sc.id_semanal_carga DESC
         ) pendiente;
-    ";
+        ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.QuerySingleAsync<SemanalSemanaEstadoInfo>(sql, new { IdEntidadFederativa = idEntidadFederativa, AnioSemana = anioSemana, NumeroSemana = numeroSemana });

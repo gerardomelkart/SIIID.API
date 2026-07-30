@@ -2,6 +2,23 @@
 
 namespace SIIID2.Api.Models;
 
+public class SemanalCargaBloqueAdministracionItem
+{
+    public long IdSemanalCarga { get; set; }
+    public int AnioSemana { get; set; }
+    public int NumeroSemana { get; set; }
+    public DateTime FechaInicioSemana { get; set; }
+    public DateTime FechaFinSemana { get; set; }
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
+    public DateTime FechaInicioTramo { get; set; }
+    public DateTime FechaFinTramo { get; set; }
+    public int TotalCarpetas { get; set; }
+    public int TotalDelitos { get; set; }
+    public int TotalVictimas { get; set; }
+    public bool ReemplazaInformacion { get; set; }
+}
+
 public class SemanalCargaPendienteAdministracionItem
 {
     public long IdSemanalCarga { get; set; }
@@ -29,6 +46,7 @@ public class SemanalCargaPendienteAdministracionItem
     public int TotalDelitosExcluidos { get; set; }
     public int TotalVictimasExcluidas { get; set; }
     public int TotalAdvertencias { get; set; }
+    public List<SemanalCargaBloqueAdministracionItem> Bloques { get; set; } = [];
 }
 
 public class SemanalCargaAdvertenciaAdministracionItem
