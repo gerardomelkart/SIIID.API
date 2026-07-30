@@ -559,6 +559,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         try
         {
             var idSemanalCarga = await CrearCargaAsync(connection, transaction, carga);
+            await GuardarBloquesCargaAsync(connection, transaction, idSemanalCarga, carga);
             await GuardarConfiguracionCargaAsync(connection, transaction, idSemanalCarga, carga.ModalidadesConfiguradas);
             await GuardarTmpCarpetasAsync(connection, transaction, idSemanalCarga, carga.Carpetas);
             await GuardarTmpDelitosAsync(connection, transaction, idSemanalCarga, carga.Delitos);
@@ -850,6 +851,69 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         }, transaction);
     }
 
+    private static async Task GuardarBloquesCargaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, SemanalCargaPersistencia carga)
+    {
+        const string sql = @"
+        INSERT INTO dbo.semanal_carga_bloque
+        (
+            id_semanal_carga,
+            id_entidad_federativa,
+            anio_semana,
+            numero_semana,
+            fecha_inicio_semana,
+            fecha_fin_semana,
+            anio_corte,
+            mes_corte,
+            fecha_inicio_tramo,
+            fecha_fin_tramo,
+            total_carpetas,
+            total_delitos,
+            total_victimas,
+            reemplaza_informacion,
+            estado
+        )
+        VALUES
+        (
+            @IdSemanalCarga,
+            @IdEntidadFederativa,
+            @AnioSemana,
+            @NumeroSemana,
+            @FechaInicioSemana,
+            @FechaFinSemana,
+            @AnioCorte,
+            @MesCorte,
+            @FechaInicioTramo,
+            @FechaFinTramo,
+            @TotalCarpetas,
+            @TotalDelitos,
+            @TotalVictimas,
+            @ReemplazaInformacion,
+            @Estado
+        );
+    ";
+
+        var estadoInicial = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "VALIDADO_PENDIENTE";
+
+        await connection.ExecuteAsync(sql, carga.Bloques.Select(bloque => new
+        {
+            IdSemanalCarga = idSemanalCarga,
+            carga.IdEntidadFederativa,
+            bloque.AnioSemana,
+            bloque.NumeroSemana,
+            FechaInicioSemana = bloque.FechaInicioSemana.Date,
+            FechaFinSemana = bloque.FechaFinSemana.Date,
+            bloque.AnioCorte,
+            bloque.MesCorte,
+            FechaInicioTramo = bloque.FechaInicioTramo.Date,
+            FechaFinTramo = bloque.FechaFinTramo.Date,
+            bloque.TotalCarpetas,
+            bloque.TotalDelitos,
+            bloque.TotalVictimas,
+            bloque.ReemplazaInformacion,
+            Estado = estadoInicial
+        }), transaction);
+    }
+
     private static async Task GuardarConfiguracionCargaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, List<ConfiguracionModalidadSemanalItem> modalidades)
     {
         const string sql = @"
@@ -1001,6 +1065,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     {
         const string sql = @"
         UPDATE dbo.semanal_carga SET estado = @Estado, mensaje_error = N'La operación semanal expiró antes de ser confirmada.' WHERE id_semanal_carga = @IdSemanalCarga;
+        UPDATE dbo.semanal_carga_bloque SET estado = @Estado WHERE id_semanal_carga = @IdSemanalCarga AND activo = 1;
         UPDATE dbo.semanal_carga_tmp_carpeta SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_delito SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_victima SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
@@ -1015,10 +1080,16 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         UPDATE dbo.semanal_carga
         SET estado = @Estado, fecha_confirmacion = SYSDATETIME(), id_usuario_confirmacion = @IdUsuarioConfirmacion, mensaje_error = N'La operación semanal fue rechazada por el usuario.'
         WHERE id_semanal_carga = @IdSemanalCarga;
+
+        UPDATE dbo.semanal_carga_bloque
+        SET estado = @Estado
+        WHERE id_semanal_carga = @IdSemanalCarga
+          AND activo = 1;
+
         UPDATE dbo.semanal_carga_tmp_carpeta SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_delito SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_victima SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
-    ";
+        ";
 
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion, Estado = esActualizacion ? "RECHAZADO_VALIDACION_ACTUALIZACION" : "RECHAZADO_VALIDACION" }, transaction);
     }
@@ -1027,10 +1098,11 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     {
         const string sql = @"
         UPDATE dbo.semanal_carga SET estado = N'PENDIENTE_APROBACION', fecha_expiracion = NULL, mensaje_error = NULL WHERE id_semanal_carga = @IdSemanalCarga;
+        UPDATE dbo.semanal_carga_bloque SET estado = N'PENDIENTE_APROBACION' WHERE id_semanal_carga = @IdSemanalCarga AND activo = 1;
         UPDATE dbo.semanal_carga_tmp_carpeta SET estado = N'PENDIENTE_APROBACION', fecha_procesamiento = NULL WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_delito SET estado = N'PENDIENTE_APROBACION', fecha_procesamiento = NULL WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_victima SET estado = N'PENDIENTE_APROBACION', fecha_procesamiento = NULL WHERE id_semanal_carga = @IdSemanalCarga;
-    ";
+        ";
 
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga }, transaction);
     }
@@ -1045,6 +1117,11 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             id_usuario_confirmacion = @IdUsuarioRechazo,
             mensaje_error = @Motivo
         WHERE id_semanal_carga = @IdSemanalCarga;
+
+        UPDATE dbo.semanal_carga_bloque
+        SET estado = N'RECHAZADO_ADMIN'
+        WHERE id_semanal_carga = @IdSemanalCarga
+          AND activo = 1;
 
         UPDATE dbo.semanal_carga_tmp_carpeta
         SET estado = N'RECHAZADO_ADMIN',
@@ -1486,10 +1563,16 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         UPDATE dbo.semanal_carga
         SET estado = @EstadoConfirmado, fecha_confirmacion = SYSDATETIME(), fecha_expiracion = NULL, id_usuario_confirmacion = @IdUsuarioConfirmacion, mensaje_error = NULL
         WHERE id_semanal_carga = @IdSemanalCarga;
+
+        UPDATE dbo.semanal_carga_bloque
+        SET estado = @EstadoConfirmado
+        WHERE id_semanal_carga = @IdSemanalCarga
+          AND activo = 1;
+
         UPDATE dbo.semanal_carga_tmp_carpeta SET estado = N'PROCESADO', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_delito SET estado = N'PROCESADO', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_victima SET estado = N'PROCESADO', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
-    ";
+        ";
 
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion, EstadoConfirmado = esActualizacion ? "CONFIRMADO_ACTUALIZACION" : "CONFIRMADO" }, transaction);
     }
