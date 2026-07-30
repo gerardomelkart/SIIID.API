@@ -16,17 +16,13 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
     private readonly ISemanalCargaRepository _semanalCargaRepository;
     private readonly IWebHostEnvironment _webHostEnvironment;
 
-    public SemanalAcusePdfService(
-        ISemanalCargaRepository semanalCargaRepository,
-        IWebHostEnvironment webHostEnvironment)
+    public SemanalAcusePdfService(ISemanalCargaRepository semanalCargaRepository, IWebHostEnvironment webHostEnvironment)
     {
         _semanalCargaRepository = semanalCargaRepository;
         _webHostEnvironment = webHostEnvironment;
     }
 
-    public async Task<byte[]> GenerarAcusePrevioAsync(
-        string codigoReferencia,
-        int idUsuarioConsulta)
+    public async Task<byte[]> GenerarAcusePrevioAsync(string codigoReferencia, int idUsuarioConsulta)
     {
         QuestPDF.Settings.License = LicenseType.Community;
 
@@ -57,9 +53,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             mostrarMarcaPrevio: true);
     }
 
-    public async Task<byte[]> GenerarAcuseConfirmadoAsync(
-        string codigoReferencia,
-        int idUsuarioConsulta)
+    public async Task<byte[]> GenerarAcuseConfirmadoAsync(string codigoReferencia, int idUsuarioConsulta)
     {
         QuestPDF.Settings.License = LicenseType.Community;
 
@@ -83,9 +77,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             mostrarMarcaPrevio: false);
     }
 
-    private async Task<SemanalCargaAcuseInfo> ObtenerCargaAutorizadaAsync(
-        string codigoReferencia,
-        int idUsuarioConsulta)
+    private async Task<SemanalCargaAcuseInfo> ObtenerCargaAutorizadaAsync(string codigoReferencia, int idUsuarioConsulta)
     {
         var usuarioConsulta =
             await _semanalCargaRepository.ObtenerUsuarioCargaAsync(
@@ -120,10 +112,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
         return carga;
     }
 
-    private byte[] GenerarPdf(
-        SemanalCargaAcuseInfo carga,
-        List<CargaAcuseResumenItem> resumen,
-        bool mostrarMarcaPrevio)
+    private byte[] GenerarPdf(SemanalCargaAcuseInfo carga, List<CargaAcuseResumenItem> resumen, bool mostrarMarcaPrevio)
     {
         return Document.Create(container =>
         {
@@ -175,6 +164,11 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                             ConstruirLeyendaAcuse(
                                 contenedor,
                                 carga));
+                    column.Item().Element(
+                        contenedor =>
+                            ConstruirTablaBloques(
+                                contenedor,
+                                carga));
 
                     column.Item().Element(
                         contenedor =>
@@ -197,9 +191,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
         }).GeneratePdf();
     }
 
-    private static void ConstruirMarcaAgua(
-        IContainer container,
-        float offsetY)
+    private static void ConstruirMarcaAgua(IContainer container, float offsetY)
     {
         container
             .AlignCenter()
@@ -212,13 +204,9 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             .FontColor(Colors.Red.Lighten4);
     }
 
-    private void ConstruirEncabezado(
-        IContainer container,
-        SemanalCargaAcuseInfo carga)
+    private void ConstruirEncabezado(IContainer container, SemanalCargaAcuseInfo carga)
     {
-        var rutaLogo =
-            ObtenerRutaArchivo(
-                RutaLogoAcuse);
+        var rutaLogo = ObtenerRutaArchivo(RutaLogoAcuse);
 
         var rutaMujer =
             ObtenerRutaArchivo(
@@ -290,6 +278,11 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
         var entidad = carga.EntidadFederativa.Trim();
         var entidadMayusculas = entidad.ToUpper(cultura);
         var esActualizacion = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+        var bloques = ObtenerBloquesAcuse(carga);
+        var fechaInicio = bloques.Min(x => x.FechaInicioTramo);
+        var fechaFin = bloques.Max(x => x.FechaFinTramo);
+        var semanas = bloques.Select(x => $"{x.NumeroSemana}/{x.AnioSemana}").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var cortes = bloques.Select(x => $"{x.MesCorte:00}/{x.AnioCorte}").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         container.Column(column =>
         {
@@ -326,16 +319,94 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                 .Text(text =>
                 {
                     text.DefaultTextStyle(x => x.FontSize(8.5f));
-
-                    text.Span("Semana correspondiente: ");
-                    text.Span($"{carga.NumeroSemana} de {carga.AnioSemana}, del {carga.FechaInicioSemana:dd/MM/yyyy} al {carga.FechaFinSemana:dd/MM/yyyy}").Bold();
+                    text.Span("Periodo reportado: ");
+                    text.Span($"del {fechaInicio:dd/MM/yyyy} al {fechaFin:dd/MM/yyyy}. ").Bold();
+                    text.Span("Semanas incluidas: ");
+                    text.Span(string.Join(", ", semanas)).Bold();
+                    text.Span(". Cortes mensuales: ");
+                    text.Span(string.Join(", ", cortes)).Bold();
+                    text.Span(".");
                 });
         });
     }
 
-    private static void ConstruirDetalleRegistros(
-        IContainer container,
-        SemanalCargaAcuseInfo carga)
+    private static List<SemanalCargaAcuseBloque> ObtenerBloquesAcuse(SemanalCargaAcuseInfo carga)
+    {
+        if (carga.Bloques.Count > 0)
+        {
+            return carga.Bloques.OrderBy(x => x.FechaInicioSemana).ThenBy(x => x.AnioCorte).ThenBy(x => x.MesCorte).ToList();
+        }
+
+        return new List<SemanalCargaAcuseBloque>
+        {
+            new()
+            {
+                AnioSemana = carga.AnioSemana,
+                NumeroSemana = carga.NumeroSemana,
+                FechaInicioSemana = carga.FechaInicioSemana,
+                FechaFinSemana = carga.FechaFinSemana,
+                AnioCorte = carga.AnioCorte,
+                MesCorte = carga.MesCorte,
+                FechaInicioTramo = carga.FechaInicioTramo,
+                FechaFinTramo = carga.FechaFinTramo,
+                TotalCarpetas = carga.TotalCarpetasIncluidas,
+                TotalDelitos = carga.TotalDelitosIncluidos,
+                TotalVictimas = carga.TotalVictimasIncluidas,
+                ReemplazaInformacion = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase)
+            }
+        };
+    }
+
+    private static void ConstruirTablaBloques(IContainer container, SemanalCargaAcuseInfo carga)
+    {
+        var cultura = new CultureInfo("es-MX");
+        var bloques = ObtenerBloquesAcuse(carga);
+
+        container
+            .PaddingTop(3)
+            .Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.ConstantColumn(52);
+                    columns.ConstantColumn(48);
+                    columns.RelativeColumn(1.7f);
+                    columns.ConstantColumn(62);
+                    columns.ConstantColumn(48);
+                    columns.ConstantColumn(48);
+                    columns.ConstantColumn(48);
+                });
+
+                table.Header(header =>
+                {
+                    header.Cell()
+                        .ColumnSpan(7)
+                        .Element(CeldaTituloSeccion)
+                        .Text("Bloques incluidos en la operación");
+
+                    header.Cell().Element(CeldaEncabezado).Text("Semana");
+                    header.Cell().Element(CeldaEncabezado).Text("Corte");
+                    header.Cell().Element(CeldaEncabezado).Text("Tramo");
+                    header.Cell().Element(CeldaEncabezado).Text("Tipo");
+                    header.Cell().Element(CeldaEncabezado).Text("Carpetas");
+                    header.Cell().Element(CeldaEncabezado).Text("Delitos");
+                    header.Cell().Element(CeldaEncabezado).Text("Víctimas");
+                });
+
+                foreach (var bloque in bloques)
+                {
+                    table.Cell().Element(CeldaNormalSinCorte).AlignCenter().Text($"{bloque.NumeroSemana}/{bloque.AnioSemana}");
+                    table.Cell().Element(CeldaNormalSinCorte).AlignCenter().Text($"{bloque.MesCorte:00}/{bloque.AnioCorte}");
+                    table.Cell().Element(CeldaNormalSinCorte).AlignCenter().Text($"{bloque.FechaInicioTramo:dd/MM/yyyy} - {bloque.FechaFinTramo:dd/MM/yyyy}");
+                    table.Cell().Element(CeldaNormalSinCorte).AlignCenter().Text(bloque.ReemplazaInformacion ? "Reemplazo" : "Nuevo");
+                    table.Cell().Element(CeldaNumeroSinCorte).Text(bloque.TotalCarpetas.ToString("N0", cultura));
+                    table.Cell().Element(CeldaNumeroSinCorte).Text(bloque.TotalDelitos.ToString("N0", cultura));
+                    table.Cell().Element(CeldaNumeroSinCorte).Text(bloque.TotalVictimas.ToString("N0", cultura));
+                }
+            });
+    }
+
+    private static void ConstruirDetalleRegistros(IContainer container, SemanalCargaAcuseInfo carga)
     {
         var cultura =
             new CultureInfo("es-MX");
@@ -356,7 +427,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                     .ColumnSpan(6)
                     .Element(CeldaTituloSeccion)
                     .Text(
-                        "Detalle de registros incluidos en el tramo semanal");
+                        "Totales de registros incluidos en la operación");
 
                 table.Cell()
                     .ColumnSpan(4)
@@ -415,11 +486,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             });
     }
 
-    private static void AgregarFilaDetalle(
-        TableDescriptor table,
-        string descripcion,
-        int total,
-        CultureInfo cultura)
+    private static void AgregarFilaDetalle(TableDescriptor table, string descripcion, int total, CultureInfo cultura)
     {
         table.Cell()
             .ColumnSpan(4)
@@ -435,9 +502,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                     cultura));
     }
 
-    private static void ConstruirTablaResumen(
-        IContainer container,
-        List<CargaAcuseResumenItem> resumen)
+    private static void ConstruirTablaResumen(IContainer container, List<CargaAcuseResumenItem> resumen)
     {
         var cultura =
             new CultureInfo("es-MX");
@@ -509,8 +574,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
         });
     }
 
-    private void ConstruirPiePagina(
-        IContainer container)
+    private void ConstruirPiePagina(IContainer container)
     {
         var rutaPiePagina =
             ObtenerRutaArchivo(
@@ -524,8 +588,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             .FitArea();
     }
 
-    private string ObtenerRutaArchivo(
-        string rutaRelativa)
+    private string ObtenerRutaArchivo(string rutaRelativa)
     {
         var rutaLimpia =
             rutaRelativa
@@ -550,8 +613,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
         return rutaFisica;
     }
 
-    private static void DefinirColumnasAcuse(
-        TableDescriptor table)
+    private static void DefinirColumnasAcuse(TableDescriptor table)
     {
         table.ColumnsDefinition(columns =>
         {
@@ -564,8 +626,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
         });
     }
 
-    private static IContainer CeldaTituloSeccion(
-        IContainer container)
+    private static IContainer CeldaTituloSeccion(IContainer container)
     {
         return container
             .Border(0.5f)
@@ -581,8 +642,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                         .FontColor(Colors.White));
     }
 
-    private static IContainer CeldaEncabezado(
-        IContainer container)
+    private static IContainer CeldaEncabezado(IContainer container)
     {
         return container
             .Border(0.5f)
@@ -597,8 +657,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                         .Bold());
     }
 
-    private static IContainer CeldaNormal(
-        IContainer container)
+    private static IContainer CeldaNormal(IContainer container)
     {
         return container
             .ShowEntire()
@@ -611,8 +670,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                 x => x.FontSize(7.2f));
     }
 
-    private static IContainer CeldaNumero(
-        IContainer container)
+    private static IContainer CeldaNumero(IContainer container)
     {
         return container
             .ShowEntire()
@@ -626,24 +684,21 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                 x => x.FontSize(7));
     }
 
-    private static IContainer CeldaNormalSinCorte(
-        IContainer container)
+    private static IContainer CeldaNormalSinCorte(IContainer container)
     {
         return CeldaNormal(
             container)
             .ShowEntire();
     }
 
-    private static IContainer CeldaNumeroSinCorte(
-        IContainer container)
+    private static IContainer CeldaNumeroSinCorte(IContainer container)
     {
         return CeldaNumero(
             container)
             .ShowEntire();
     }
 
-    private static IContainer CeldaDescripcionDetalle(
-        IContainer container)
+    private static IContainer CeldaDescripcionDetalle(IContainer container)
     {
         return CeldaNormal(
             container)
@@ -654,8 +709,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                         .Bold());
     }
 
-    private static IContainer CeldaNumeroDetalle(
-        IContainer container)
+    private static IContainer CeldaNumeroDetalle(IContainer container)
     {
         return CeldaNormal(
             container)
@@ -666,8 +720,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                         .Bold());
     }
 
-    private static string ObtenerNombreMes(
-        int mes)
+    private static string ObtenerNombreMes(int mes)
     {
         if (mes < 1 || mes > 12)
         {
@@ -687,14 +740,12 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                nombreMes[1..];
     }
 
-    private static string ObtenerFechaLargaEncabezado(
-        DateTime fecha)
+    private static string ObtenerFechaLargaEncabezado(DateTime fecha)
     {
         return $"{fecha:dd} de {ObtenerNombreMes(fecha.Month)} de {fecha:yyyy}";
     }
 
-    private static string ObtenerFechaLargaTexto(
-        DateTime fecha)
+    private static string ObtenerFechaLargaTexto(DateTime fecha)
     {
         var cultura =
             new CultureInfo("es-MX");

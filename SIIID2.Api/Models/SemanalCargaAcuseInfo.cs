@@ -1,5 +1,21 @@
 ﻿namespace SIIID2.Api.Models;
 
+public class SemanalCargaAcuseBloque
+{
+    public int AnioSemana { get; set; }
+    public int NumeroSemana { get; set; }
+    public DateTime FechaInicioSemana { get; set; }
+    public DateTime FechaFinSemana { get; set; }
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
+    public DateTime FechaInicioTramo { get; set; }
+    public DateTime FechaFinTramo { get; set; }
+    public int TotalCarpetas { get; set; }
+    public int TotalDelitos { get; set; }
+    public int TotalVictimas { get; set; }
+    public bool ReemplazaInformacion { get; set; }
+}
+
 public class SemanalCargaAcuseInfo
 {
     public long IdSemanalCarga { get; set; }
@@ -27,4 +43,5 @@ public class SemanalCargaAcuseInfo
     public DateTime? FechaConfirmacion { get; set; }
     public int IdUsuarioCarga { get; set; }
     public string UsuarioCarga { get; set; } = string.Empty;
+    public List<SemanalCargaAcuseBloque> Bloques { get; set; } = new();
 }

@@ -59,47 +59,76 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     public async Task<SemanalCargaAcuseInfo?> ObtenerCargaParaAcuseAsync(string codigoReferencia)
     {
         const string sql = @"
-    SELECT
-        sc.id_semanal_carga AS IdSemanalCarga,
-        sc.codigo_referencia AS CodigoReferencia,
-        sc.id_entidad_federativa AS IdEntidadFederativa,
-        ISNULL(e.nombre, N'') AS EntidadFederativa,
-        sc.tipo_carga AS TipoCarga,
-        sc.tipo_contenido AS TipoContenido,
-        sc.anio_semana AS AnioSemana,
-        sc.numero_semana AS NumeroSemana,
-        sc.fecha_inicio_semana AS FechaInicioSemana,
-        sc.fecha_fin_semana AS FechaFinSemana,
-        sc.fecha_inicio_tramo AS FechaInicioTramo,
-        sc.fecha_fin_tramo AS FechaFinTramo,
-        sc.mes_corte AS MesCorte,
-        sc.anio_corte AS AnioCorte,
-        sc.total_carpetas_incluidas AS TotalCarpetasIncluidas,
-        sc.total_delitos_incluidos AS TotalDelitosIncluidos,
-        sc.total_victimas_incluidas AS TotalVictimasIncluidas,
-        sc.total_carpetas_excluidas AS TotalCarpetasExcluidas,
-        sc.total_delitos_excluidos AS TotalDelitosExcluidos,
-        sc.total_victimas_excluidas AS TotalVictimasExcluidas,
-        sc.estado AS Estado,
-        sc.fecha_validacion AS FechaValidacion,
-        sc.fecha_confirmacion AS FechaConfirmacion,
-        sc.id_usuario_carga AS IdUsuarioCarga,
-        u.usuario AS UsuarioCarga
-    FROM dbo.semanal_carga sc
-    INNER JOIN dbo.usuario u
-        ON u.id_usuario = sc.id_usuario_carga
-    LEFT JOIN dbo.catalogo_entidad_federativa e
-        ON e.id_entidad_federativa = sc.id_entidad_federativa
-    WHERE sc.codigo_referencia = @CodigoReferencia
-      AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-      AND sc.activo = 1;
-";
+        SELECT
+            sc.id_semanal_carga AS IdSemanalCarga,
+            sc.codigo_referencia AS CodigoReferencia,
+            sc.id_entidad_federativa AS IdEntidadFederativa,
+            ISNULL(e.nombre, N'') AS EntidadFederativa,
+            sc.tipo_carga AS TipoCarga,
+            sc.tipo_contenido AS TipoContenido,
+            sc.anio_semana AS AnioSemana,
+            sc.numero_semana AS NumeroSemana,
+            sc.fecha_inicio_semana AS FechaInicioSemana,
+            sc.fecha_fin_semana AS FechaFinSemana,
+            sc.fecha_inicio_tramo AS FechaInicioTramo,
+            sc.fecha_fin_tramo AS FechaFinTramo,
+            sc.mes_corte AS MesCorte,
+            sc.anio_corte AS AnioCorte,
+            sc.total_carpetas_incluidas AS TotalCarpetasIncluidas,
+            sc.total_delitos_incluidos AS TotalDelitosIncluidos,
+            sc.total_victimas_incluidas AS TotalVictimasIncluidas,
+            sc.total_carpetas_excluidas AS TotalCarpetasExcluidas,
+            sc.total_delitos_excluidos AS TotalDelitosExcluidos,
+            sc.total_victimas_excluidas AS TotalVictimasExcluidas,
+            sc.estado AS Estado,
+            sc.fecha_validacion AS FechaValidacion,
+            sc.fecha_confirmacion AS FechaConfirmacion,
+            sc.id_usuario_carga AS IdUsuarioCarga,
+            u.usuario AS UsuarioCarga
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.usuario u
+            ON u.id_usuario = sc.id_usuario_carga
+        LEFT JOIN dbo.catalogo_entidad_federativa e
+            ON e.id_entidad_federativa = sc.id_entidad_federativa
+        WHERE sc.codigo_referencia = @CodigoReferencia
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.activo = 1;
+
+        SELECT
+            bloque.anio_semana AS AnioSemana,
+            bloque.numero_semana AS NumeroSemana,
+            bloque.fecha_inicio_semana AS FechaInicioSemana,
+            bloque.fecha_fin_semana AS FechaFinSemana,
+            bloque.anio_corte AS AnioCorte,
+            bloque.mes_corte AS MesCorte,
+            bloque.fecha_inicio_tramo AS FechaInicioTramo,
+            bloque.fecha_fin_tramo AS FechaFinTramo,
+            bloque.total_carpetas AS TotalCarpetas,
+            bloque.total_delitos AS TotalDelitos,
+            bloque.total_victimas AS TotalVictimas,
+            CONVERT(bit, bloque.reemplaza_informacion) AS ReemplazaInformacion
+        FROM dbo.semanal_carga_bloque bloque
+        INNER JOIN dbo.semanal_carga sc
+            ON sc.id_semanal_carga = bloque.id_semanal_carga
+        WHERE sc.codigo_referencia = @CodigoReferencia
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.activo = 1
+          AND bloque.activo = 1
+        ORDER BY
+            bloque.fecha_inicio_semana,
+            bloque.anio_corte,
+            bloque.mes_corte;
+        ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
+        using var resultados = await connection.QueryMultipleAsync(sql, new { CodigoReferencia = codigoReferencia });
 
-        return await connection.QueryFirstOrDefaultAsync<SemanalCargaAcuseInfo>(
-            sql,
-            new { CodigoReferencia = codigoReferencia });
+        var carga = await resultados.ReadFirstOrDefaultAsync<SemanalCargaAcuseInfo>();
+
+        if (carga == null) return null;
+
+        carga.Bloques = (await resultados.ReadAsync<SemanalCargaAcuseBloque>()).ToList();
+        return carga;
     }
 
     public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idSemanalCarga)
