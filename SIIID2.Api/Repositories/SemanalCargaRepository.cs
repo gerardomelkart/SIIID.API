@@ -221,6 +221,42 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return (await connection.QueryAsync<SemanalCargaBloqueConfirmado>(sql, new { IdEntidadFederativa = idEntidadFederativa, FechaInicio = fechaInicio.Date, FechaFinExclusiva = fechaFin.Date.AddDays(1) })).ToList();
     }
 
+    public async Task<List<SemanalCargaBloquePendiente>> ObtenerBloquesPendientesAsync(int idEntidadFederativa, DateTime fechaInicio, DateTime fechaFin)
+    {
+        const string sql = @"
+        SELECT DISTINCT
+            sc.codigo_referencia AS CodigoReferencia,
+            sc.estado AS Estado,
+            bloque.anio_semana AS AnioSemana,
+            bloque.numero_semana AS NumeroSemana,
+            bloque.fecha_inicio_semana AS FechaInicioSemana,
+            bloque.anio_corte AS AnioCorte,
+            bloque.mes_corte AS MesCorte
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.semanal_carga_bloque bloque
+            ON bloque.id_semanal_carga = sc.id_semanal_carga
+           AND bloque.activo = 1
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND bloque.fecha_inicio_tramo <= @FechaFin
+          AND bloque.fecha_fin_tramo >= @FechaInicio
+          AND sc.estado IN
+          (
+              N'VALIDADO_PENDIENTE',
+              N'VALIDADO_PENDIENTE_ACTUALIZACION',
+              N'PENDIENTE_APROBACION'
+          )
+          AND sc.activo = 1
+        ORDER BY
+            FechaInicioSemana,
+            AnioCorte,
+            MesCorte,
+            CodigoReferencia;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+        return (await connection.QueryAsync<SemanalCargaBloquePendiente>(sql, new { IdEntidadFederativa = idEntidadFederativa, FechaInicio = fechaInicio.Date, FechaFin = fechaFin.Date })).ToList();
+    }
+
     public async Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int anioSemana, int numeroSemana)
     {
         const string sql = @"

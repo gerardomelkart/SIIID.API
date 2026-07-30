@@ -58,6 +58,17 @@ public class SemanalCargaBloqueConfirmado
     public int MesCorte { get; set; }
 }
 
+public class SemanalCargaBloquePendiente
+{
+    public string CodigoReferencia { get; set; } = string.Empty;
+    public string Estado { get; set; } = string.Empty;
+    public int AnioSemana { get; set; }
+    public int NumeroSemana { get; set; }
+    public DateTime FechaInicioSemana { get; set; }
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
+}
+
 public class SemanalCargaValidacionResponse : CargaValidacionResponse
 {
     public string TipoCarga { get; set; } = "CARGA_INICIAL";
