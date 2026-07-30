@@ -45,7 +45,20 @@ public class SemanalEnviosService : ISemanalEnviosService
             registro.EsRechazadoAdministrador = estadoRegistro == "RECHAZADO_ADMIN";
             registro.EstadoTexto = ObtenerEstadoTexto(estadoRegistro, esActualizacion);
             registro.FechaEnvioTexto = registro.FechaMovimiento.ToString("dd-MM-yyyy");
-            registro.Semana = $"Semana {registro.NumeroSemana}/{registro.AnioSemana}";
+            var semanas = registro.Bloques
+            .GroupBy(x => new { x.AnioSemana, x.NumeroSemana })
+            .Select(x => x.Key)
+            .OrderBy(x => x.AnioSemana)
+            .ThenBy(x => x.NumeroSemana)
+            .Select(x => $"{x.NumeroSemana}/{x.AnioSemana}")
+            .ToList();
+
+            registro.Semana = semanas.Count switch
+            {
+                0 => $"Semana {registro.NumeroSemana}/{registro.AnioSemana}",
+                1 => $"Semana {semanas[0]}",
+                _ => $"Semanas {string.Join(", ", semanas)}"
+            };
             registro.FechaRechazoTexto = registro.EsRechazadoAdministrador
                 ? registro.FechaConfirmacion?.ToString("dd-MM-yyyy HH:mm") ?? string.Empty
                 : string.Empty;
@@ -160,7 +173,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = $"ARCHIVOS_SEMANA_{referencia.NumeroSemana}_{referencia.AnioSemana}_{NormalizarNombreArchivo(referencia.EntidadFederativa)}_{codigoLimpio}.zip"
+            NombreArchivo = $"ARCHIVOS_SEMANALES_{NormalizarNombreArchivo(referencia.EntidadFederativa)}_{codigoLimpio}.zip"
         };
     }
 

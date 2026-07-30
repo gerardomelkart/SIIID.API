@@ -14,20 +14,38 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(bool esSuperUsuario, int? idEntidadFederativaUsuario, int? idEntidadFederativa, int? anioSemana, int? numeroSemana, string? tipoCarga, string? estado)
     {
         const string sql = @"
-        WITH ultimo_visible AS
+        WITH bloques_operacion AS
         (
             SELECT
                 sc.id_semanal_carga,
-                ROW_NUMBER() OVER
-                (
-                    PARTITION BY
-                        sc.id_entidad_federativa,
-                        sc.anio_semana,
-                        sc.numero_semana
-                    ORDER BY
-                        COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) DESC,
-                        sc.id_semanal_carga DESC
-                ) AS rn
+                sc.id_entidad_federativa,
+                bloque.anio_semana,
+                bloque.numero_semana,
+                bloque.anio_corte,
+                bloque.mes_corte,
+                COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) AS fecha_movimiento
+            FROM dbo.semanal_carga sc
+            INNER JOIN dbo.semanal_carga_bloque bloque
+                ON bloque.id_semanal_carga = sc.id_semanal_carga
+               AND bloque.activo = 1
+            WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+              AND
+              (
+                  sc.estado NOT LIKE N'RECHAZADO%'
+                  OR sc.estado = N'RECHAZADO_ADMIN'
+              )
+              AND sc.activo = 1
+
+            UNION ALL
+
+            SELECT
+                sc.id_semanal_carga,
+                sc.id_entidad_federativa,
+                sc.anio_semana,
+                sc.numero_semana,
+                sc.anio_corte,
+                sc.mes_corte,
+                COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga)
             FROM dbo.semanal_carga sc
             WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
               AND
@@ -36,10 +54,35 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                   OR sc.estado = N'RECHAZADO_ADMIN'
               )
               AND sc.activo = 1
+              AND NOT EXISTS
+              (
+                  SELECT 1
+                  FROM dbo.semanal_carga_bloque bloque
+                  WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                    AND bloque.activo = 1
+              )
+        ),
+        ultimo_visible AS
+        (
+            SELECT
+                bloque.id_semanal_carga,
+                ROW_NUMBER() OVER
+                (
+                    PARTITION BY
+                        bloque.id_entidad_federativa,
+                        bloque.anio_semana,
+                        bloque.numero_semana,
+                        bloque.anio_corte,
+                        bloque.mes_corte
+                    ORDER BY
+                        bloque.fecha_movimiento DESC,
+                        bloque.id_semanal_carga DESC
+                ) AS rn
+            FROM bloques_operacion bloque
         ),
         cargas_visibles AS
         (
-            SELECT id_semanal_carga
+            SELECT DISTINCT id_semanal_carga
             FROM ultimo_visible
             WHERE rn = 1
         )
@@ -137,21 +180,55 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             ON usuario_resolucion.id_usuario = sc.id_usuario_confirmacion
         WHERE (@EsSuperUsuario = 1 OR sc.id_entidad_federativa = @IdEntidadFederativaUsuario)
           AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
-          AND (@AnioSemana IS NULL OR sc.anio_semana = @AnioSemana)
-          AND (@NumeroSemana IS NULL OR sc.numero_semana = @NumeroSemana)
+          AND
+          (
+              @AnioSemana IS NULL
+              AND @NumeroSemana IS NULL
+              OR EXISTS
+              (
+                  SELECT 1
+                  FROM bloques_operacion periodo
+                  WHERE periodo.id_semanal_carga = sc.id_semanal_carga
+                    AND (@AnioSemana IS NULL OR periodo.anio_semana = @AnioSemana)
+                    AND (@NumeroSemana IS NULL OR periodo.numero_semana = @NumeroSemana)
+              )
+          )
           AND (@TipoCarga IS NULL OR sc.tipo_carga = @TipoCarga)
           AND (@Estado IS NULL OR sc.estado = @Estado)
         ORDER BY
             ef.nombre,
-            sc.anio_semana DESC,
-            sc.numero_semana DESC,
             COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) DESC,
             sc.id_semanal_carga DESC;
-    ";
+        ";
+
+        const string sqlBloques = @"
+        SELECT
+            bloque.id_semanal_carga AS IdSemanalCarga,
+            bloque.anio_semana AS AnioSemana,
+            bloque.numero_semana AS NumeroSemana,
+            bloque.fecha_inicio_semana AS FechaInicioSemana,
+            bloque.fecha_fin_semana AS FechaFinSemana,
+            bloque.anio_corte AS AnioCorte,
+            bloque.mes_corte AS MesCorte,
+            bloque.fecha_inicio_tramo AS FechaInicioTramo,
+            bloque.fecha_fin_tramo AS FechaFinTramo,
+            bloque.total_carpetas AS TotalCarpetas,
+            bloque.total_delitos AS TotalDelitos,
+            bloque.total_victimas AS TotalVictimas,
+            CONVERT(bit, bloque.reemplaza_informacion) AS ReemplazaInformacion
+        FROM dbo.semanal_carga_bloque bloque
+        WHERE bloque.id_semanal_carga IN @Ids
+          AND bloque.activo = 1
+        ORDER BY
+            bloque.id_semanal_carga,
+            bloque.fecha_inicio_semana,
+            bloque.anio_corte,
+            bloque.mes_corte;
+        ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return (await connection.QueryAsync<SemanalEnvioItem>(sql, new
+        var cargas = (await connection.QueryAsync<SemanalEnvioItem>(sql, new
         {
             EsSuperUsuario = esSuperUsuario,
             IdEntidadFederativaUsuario = idEntidadFederativaUsuario,
@@ -161,8 +238,21 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             TipoCarga = tipoCarga,
             Estado = estado
         })).ToList();
-    }
 
+        if (cargas.Count == 0) return cargas;
+
+        var ids = cargas.Select(x => x.IdSemanalCarga).Distinct().ToArray();
+        var bloques = (await connection.QueryAsync<SemanalEnvioBloqueItem>(sqlBloques, new { Ids = ids })).ToList();
+        var bloquesPorCarga = bloques.GroupBy(x => x.IdSemanalCarga).ToDictionary(x => x.Key, x => x.ToList());
+
+        foreach (var carga in cargas)
+        {
+            if (bloquesPorCarga.TryGetValue(carga.IdSemanalCarga, out var bloquesCarga)) carga.Bloques = bloquesCarga;
+        }
+
+        return cargas;
+    }
+    
     public async Task<SemanalEnvioReferenciaInfo?> ObtenerReferenciaAsync(string codigoReferencia)
     {
         const string sql = @"
@@ -1323,22 +1413,29 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     public Task<List<IDictionary<string, object?>>> ObtenerCarpetasConfirmadasSemanaAsync(SemanalEnvioReferenciaInfo referencia)
     {
         const string sql = @"
-        WITH cargas_semana AS
+        WITH bloques_referencia AS
         (
             SELECT
-                sc.id_semanal_carga
+                bloque.fecha_inicio_tramo,
+                bloque.fecha_fin_tramo
+            FROM dbo.semanal_carga_bloque bloque
+            WHERE bloque.id_semanal_carga = @IdSemanalCarga
+              AND bloque.activo = 1
+
+            UNION ALL
+
+            SELECT
+                sc.fecha_inicio_tramo,
+                sc.fecha_fin_tramo
             FROM dbo.semanal_carga sc
-            WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-              AND sc.anio_semana = @AnioSemana
-              AND sc.numero_semana = @NumeroSemana
+            WHERE sc.id_semanal_carga = @IdSemanalCarga
               AND sc.activo = 1
-              AND
+              AND NOT EXISTS
               (
-                  sc.tipo_carga = N'CARGA_INICIAL'
-                  AND sc.estado = N'CONFIRMADO'
-                  OR
-                  sc.tipo_carga = N'ACTUALIZACION'
-                  AND sc.estado = N'CONFIRMADO_ACTUALIZACION'
+                  SELECT 1
+                  FROM dbo.semanal_carga_bloque bloque
+                  WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                    AND bloque.activo = 1
               )
         )
         SELECT
@@ -1351,12 +1448,23 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             END AS hra_de_ini,
             ci.resumen_hechos AS rmen_de_hchos
         FROM dbo.semanal_carpeta_investigacion ci
-        INNER JOIN cargas_semana cs
-            ON cs.id_semanal_carga = ci.id_semanal_carga
-        WHERE ci.activo = 1
+        INNER JOIN dbo.semanal_carga sc
+            ON sc.id_semanal_carga = ci.id_semanal_carga
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+          AND sc.activo = 1
+          AND ci.activo = 1
+          AND EXISTS
+          (
+              SELECT 1
+              FROM bloques_referencia bloque
+              WHERE ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+          )
         ORDER BY
             ci.identificador_carpeta_fiscalia;
-    ";
+        ";
 
         return QueryDictionaryAsync(sql, referencia);
     }
@@ -1364,22 +1472,29 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     public Task<List<IDictionary<string, object?>>> ObtenerDelitosConfirmadosSemanaAsync(SemanalEnvioReferenciaInfo referencia)
     {
         const string sql = @"
-        WITH cargas_semana AS
+        WITH bloques_referencia AS
         (
             SELECT
-                sc.id_semanal_carga
+                bloque.fecha_inicio_tramo,
+                bloque.fecha_fin_tramo
+            FROM dbo.semanal_carga_bloque bloque
+            WHERE bloque.id_semanal_carga = @IdSemanalCarga
+              AND bloque.activo = 1
+
+            UNION ALL
+
+            SELECT
+                sc.fecha_inicio_tramo,
+                sc.fecha_fin_tramo
             FROM dbo.semanal_carga sc
-            WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-              AND sc.anio_semana = @AnioSemana
-              AND sc.numero_semana = @NumeroSemana
+            WHERE sc.id_semanal_carga = @IdSemanalCarga
               AND sc.activo = 1
-              AND
+              AND NOT EXISTS
               (
-                  sc.tipo_carga = N'CARGA_INICIAL'
-                  AND sc.estado = N'CONFIRMADO'
-                  OR
-                  sc.tipo_carga = N'ACTUALIZACION'
-                  AND sc.estado = N'CONFIRMADO_ACTUALIZACION'
+                  SELECT 1
+                  FROM dbo.semanal_carga_bloque bloque
+                  WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                    AND bloque.activo = 1
               )
         )
         SELECT
@@ -1408,11 +1523,11 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             d.coordenada_y AS coord_y,
             d.domicilio_hechos AS dom_hchos
         FROM dbo.semanal_delito d
-        INNER JOIN cargas_semana cs
-            ON cs.id_semanal_carga = d.id_semanal_carga
         INNER JOIN dbo.semanal_carpeta_investigacion ci
             ON ci.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
            AND ci.activo = 1
+        INNER JOIN dbo.semanal_carga sc
+            ON sc.id_semanal_carga = d.id_semanal_carga
         INNER JOIN dbo.catalogo_modalidad_delito md
             ON md.id_modalidad_delito = d.id_modalidad_delito
         INNER JOIN dbo.catalogo_forma_accion fa
@@ -1427,11 +1542,22 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
            AND mun.activo = 1
         LEFT JOIN dbo.catalogo_codigo_postal cp
             ON cp.id_codigo_postal = d.id_codigo_postal
-        WHERE d.activo = 1
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+          AND sc.activo = 1
+          AND d.activo = 1
+          AND EXISTS
+          (
+              SELECT 1
+              FROM bloques_referencia bloque
+              WHERE ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+          )
         ORDER BY
             ci.identificador_carpeta_fiscalia,
             d.identificador_delito_fiscalia;
-    ";
+        ";
 
         return QueryDictionaryAsync(sql, referencia);
     }
@@ -1439,22 +1565,29 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     public Task<List<IDictionary<string, object?>>> ObtenerVictimasConfirmadasSemanaAsync(SemanalEnvioReferenciaInfo referencia)
     {
         const string sql = @"
-        WITH cargas_semana AS
+        WITH bloques_referencia AS
         (
             SELECT
-                sc.id_semanal_carga
+                bloque.fecha_inicio_tramo,
+                bloque.fecha_fin_tramo
+            FROM dbo.semanal_carga_bloque bloque
+            WHERE bloque.id_semanal_carga = @IdSemanalCarga
+              AND bloque.activo = 1
+
+            UNION ALL
+
+            SELECT
+                sc.fecha_inicio_tramo,
+                sc.fecha_fin_tramo
             FROM dbo.semanal_carga sc
-            WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-              AND sc.anio_semana = @AnioSemana
-              AND sc.numero_semana = @NumeroSemana
+            WHERE sc.id_semanal_carga = @IdSemanalCarga
               AND sc.activo = 1
-              AND
+              AND NOT EXISTS
               (
-                  sc.tipo_carga = N'CARGA_INICIAL'
-                  AND sc.estado = N'CONFIRMADO'
-                  OR
-                  sc.tipo_carga = N'ACTUALIZACION'
-                  AND sc.estado = N'CONFIRMADO_ACTUALIZACION'
+                  SELECT 1
+                  FROM dbo.semanal_carga_bloque bloque
+                  WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                    AND bloque.activo = 1
               )
         )
         SELECT
@@ -1471,14 +1604,14 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             v.edad AS edad,
             nac.clave AS nacional
         FROM dbo.semanal_victima v
-        INNER JOIN cargas_semana cs
-            ON cs.id_semanal_carga = v.id_semanal_carga
         INNER JOIN dbo.semanal_delito d
             ON d.id_semanal_delito = v.id_semanal_delito
            AND d.activo = 1
         INNER JOIN dbo.semanal_carpeta_investigacion ci
             ON ci.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
            AND ci.activo = 1
+        INNER JOIN dbo.semanal_carga sc
+            ON sc.id_semanal_carga = v.id_semanal_carga
         INNER JOIN dbo.catalogo_tipo_victima tv
             ON tv.id_tipo_victima = v.id_tipo_victima
         LEFT JOIN dbo.catalogo_tipo_victima_moral tvm
@@ -1493,12 +1626,23 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             ON disc.id_presenta_discapacidad = v.id_presenta_discapacidad
         LEFT JOIN dbo.catalogo_nacionalidad nac
             ON nac.id_nacionalidad = v.id_nacionalidad
-        WHERE v.activo = 1
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+          AND sc.activo = 1
+          AND v.activo = 1
+          AND EXISTS
+          (
+              SELECT 1
+              FROM bloques_referencia bloque
+              WHERE ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+          )
         ORDER BY
             ci.identificador_carpeta_fiscalia,
             d.identificador_delito_fiscalia,
             v.identificador_victima_fiscalia;
-    ";
+        ";
 
         return QueryDictionaryAsync(sql, referencia);
     }
@@ -1509,15 +1653,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
 
         var filas = await connection.QueryAsync(sql, new
         {
-            referencia.IdEntidadFederativa,
-            referencia.AnioSemana,
-            referencia.NumeroSemana
+            referencia.IdSemanalCarga,
+            referencia.IdEntidadFederativa
         });
 
-        return filas
-            .Select(fila => ((IDictionary<string, object?>)fila)
-                .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase))
-            .Cast<IDictionary<string, object?>>()
-            .ToList();
+        return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
     }
 }

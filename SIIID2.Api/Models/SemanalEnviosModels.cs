@@ -1,5 +1,22 @@
 ﻿namespace SIIID2.Api.Models;
 
+public class SemanalEnvioBloqueItem
+{
+    public long IdSemanalCarga { get; set; }
+    public int AnioSemana { get; set; }
+    public int NumeroSemana { get; set; }
+    public DateTime FechaInicioSemana { get; set; }
+    public DateTime FechaFinSemana { get; set; }
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
+    public DateTime FechaInicioTramo { get; set; }
+    public DateTime FechaFinTramo { get; set; }
+    public int TotalCarpetas { get; set; }
+    public int TotalDelitos { get; set; }
+    public int TotalVictimas { get; set; }
+    public bool ReemplazaInformacion { get; set; }
+}
+
 public class SemanalEnvioItem
 {
     public long IdSemanalCarga { get; set; }
@@ -36,12 +53,12 @@ public class SemanalEnvioItem
     public bool PuedeResolverPendiente { get; set; }
     public string EndpointAcuse { get; set; } = string.Empty;
     public string EndpointArchivos { get; set; } = string.Empty;
-
     public string FechaEnvioTexto { get; set; } = string.Empty;
     public string Semana { get; set; } = string.Empty;
     public bool EsRechazadoAdministrador { get; set; }
     public bool TieneStagingDisponible { get; set; }
     public string FechaRechazoTexto { get; set; } = string.Empty;
+    public List<SemanalEnvioBloqueItem> Bloques { get; set; } = [];
 }
 
 public class SemanalEnvioReferenciaInfo
