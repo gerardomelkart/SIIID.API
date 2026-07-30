@@ -280,50 +280,93 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     public async Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int? anioSemana, int? numeroSemana)
     {
         const string sql = @"
-        WITH semanas AS
+        WITH bloques_carga AS
         (
             SELECT
+                sc.id_semanal_carga,
+                sc.id_entidad_federativa,
+                bloque.anio_semana,
+                bloque.numero_semana,
+                sc.codigo_referencia,
+                sc.tipo_carga,
+                sc.estado,
+                sc.fecha_carga,
+                sc.fecha_validacion,
+                sc.fecha_confirmacion
+            FROM dbo.semanal_carga sc
+            INNER JOIN dbo.semanal_carga_bloque bloque
+                ON bloque.id_semanal_carga = sc.id_semanal_carga
+               AND bloque.activo = 1
+            WHERE sc.activo = 1
+              AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+              AND sc.id_entidad_federativa IS NOT NULL
+
+            UNION ALL
+
+            SELECT
+                sc.id_semanal_carga,
                 sc.id_entidad_federativa,
                 sc.anio_semana,
                 sc.numero_semana,
-                COUNT(1) AS intentos
+                sc.codigo_referencia,
+                sc.tipo_carga,
+                sc.estado,
+                sc.fecha_carga,
+                sc.fecha_validacion,
+                sc.fecha_confirmacion
             FROM dbo.semanal_carga sc
             WHERE sc.activo = 1
               AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
               AND sc.id_entidad_federativa IS NOT NULL
-              AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
-              AND (@AnioSemana IS NULL OR sc.anio_semana = @AnioSemana)
-              AND (@NumeroSemana IS NULL OR sc.numero_semana = @NumeroSemana)
+              AND NOT EXISTS
+              (
+                  SELECT 1
+                  FROM dbo.semanal_carga_bloque bloque
+                  WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                    AND bloque.activo = 1
+              )
+        ),
+        semanas AS
+        (
+            SELECT
+                bloque.id_entidad_federativa,
+                bloque.anio_semana,
+                bloque.numero_semana,
+                COUNT(DISTINCT bloque.id_semanal_carga) AS intentos
+            FROM bloques_carga bloque
+            WHERE (@IdEntidadFederativa IS NULL OR bloque.id_entidad_federativa = @IdEntidadFederativa)
+              AND (@AnioSemana IS NULL OR bloque.anio_semana = @AnioSemana)
+              AND (@NumeroSemana IS NULL OR bloque.numero_semana = @NumeroSemana)
             GROUP BY
-                sc.id_entidad_federativa,
-                sc.anio_semana,
-                sc.numero_semana
+                bloque.id_entidad_federativa,
+                bloque.anio_semana,
+                bloque.numero_semana
         )
         SELECT
             ef.id_entidad_federativa AS IdEntidadFederativa,
             ef.nombre AS EntidadFederativa,
             ef.clave AS ClaveEntidad,
-            s.anio_semana AS AnioSemana,
-            s.numero_semana AS NumeroSemana,
-            s.intentos AS Intentos,
+            semana.anio_semana AS AnioSemana,
+            semana.numero_semana AS NumeroSemana,
+            semana.intentos AS Intentos,
             ultimo.codigo_referencia AS UltimoIntento,
             ultimo.tipo_carga AS TipoCargaUltimoIntento,
             ultimo.estado AS EstatusUltimoIntento,
             ultimo.fecha_carga_actualizacion AS FechaCargaActualizacion,
             ultimo.fecha_aprobacion AS FechaAprobacion,
             exitosa.fecha_carga_exitosa AS FechaCargaExitosa
-        FROM semanas s
+        FROM semanas semana
         INNER JOIN dbo.catalogo_entidad_federativa ef
-            ON ef.id_entidad_federativa = s.id_entidad_federativa
+            ON ef.id_entidad_federativa = semana.id_entidad_federativa
            AND ef.activo = 1
         OUTER APPLY
         (
             SELECT TOP (1)
-                sc.codigo_referencia,
-                sc.tipo_carga,
-                sc.estado,
+                bloque.codigo_referencia,
+                bloque.tipo_carga,
+                bloque.estado,
                 CASE
-                    WHEN sc.estado IN
+                    WHEN bloque.estado IN
                     (
                         N'VALIDADO_PENDIENTE',
                         N'VALIDADO_PENDIENTE_ACTUALIZACION',
@@ -332,38 +375,30 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                         N'CONFIRMADO_ACTUALIZACION',
                         N'RECHAZADO_ADMIN'
                     )
-                    THEN sc.fecha_validacion
+                    THEN bloque.fecha_validacion
                     ELSE NULL
                 END AS fecha_carga_actualizacion,
                 CASE
-                    WHEN sc.estado IN
-                    (
-                        N'CONFIRMADO',
-                        N'CONFIRMADO_ACTUALIZACION'
-                    )
-                    THEN sc.fecha_confirmacion
+                    WHEN bloque.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+                    THEN bloque.fecha_confirmacion
                     ELSE NULL
                 END AS fecha_aprobacion
-            FROM dbo.semanal_carga sc
-            WHERE sc.id_entidad_federativa = s.id_entidad_federativa
-              AND sc.anio_semana = s.anio_semana
-              AND sc.numero_semana = s.numero_semana
-              AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-              AND sc.activo = 1
+            FROM bloques_carga bloque
+            WHERE bloque.id_entidad_federativa = semana.id_entidad_federativa
+              AND bloque.anio_semana = semana.anio_semana
+              AND bloque.numero_semana = semana.numero_semana
             ORDER BY
-                COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) DESC,
-                sc.id_semanal_carga DESC
+                COALESCE(bloque.fecha_confirmacion, bloque.fecha_validacion, bloque.fecha_carga) DESC,
+                bloque.id_semanal_carga DESC
         ) ultimo
         OUTER APPLY
         (
-            SELECT
-                MIN(sc.fecha_validacion) AS fecha_carga_exitosa
-            FROM dbo.semanal_carga sc
-            WHERE sc.id_entidad_federativa = s.id_entidad_federativa
-              AND sc.anio_semana = s.anio_semana
-              AND sc.numero_semana = s.numero_semana
-              AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-              AND sc.estado IN
+            SELECT MIN(bloque.fecha_validacion) AS fecha_carga_exitosa
+            FROM bloques_carga bloque
+            WHERE bloque.id_entidad_federativa = semana.id_entidad_federativa
+              AND bloque.anio_semana = semana.anio_semana
+              AND bloque.numero_semana = semana.numero_semana
+              AND bloque.estado IN
               (
                   N'VALIDADO_PENDIENTE',
                   N'VALIDADO_PENDIENTE_ACTUALIZACION',
@@ -371,13 +406,12 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                   N'CONFIRMADO',
                   N'CONFIRMADO_ACTUALIZACION'
               )
-              AND sc.activo = 1
         ) exitosa
         ORDER BY
-            s.anio_semana DESC,
-            s.numero_semana DESC,
+            semana.anio_semana DESC,
+            semana.numero_semana DESC,
             ef.nombre;
-    ";
+        ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
@@ -391,14 +425,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         foreach (var registro in registros)
         {
             registro.Semana = $"Semana {registro.NumeroSemana}/{registro.AnioSemana}";
-
-            registro.FechaCargaActualizacionTexto = registro.FechaCargaActualizacion.HasValue
-                ? registro.FechaCargaActualizacion.Value.ToString("yyyy-MM-dd HH:mm:ss")
-                : string.Empty;
-
-            registro.FechaAprobacionTexto = registro.FechaAprobacion.HasValue
-                ? registro.FechaAprobacion.Value.ToString("yyyy-MM-dd HH:mm:ss")
-                : string.Empty;
+            registro.FechaCargaActualizacionTexto = registro.FechaCargaActualizacion.HasValue ? registro.FechaCargaActualizacion.Value.ToString("yyyy-MM-dd HH:mm:ss") : string.Empty;
+            registro.FechaAprobacionTexto = registro.FechaAprobacion.HasValue ? registro.FechaAprobacion.Value.ToString("yyyy-MM-dd HH:mm:ss") : string.Empty;
         }
 
         return registros;
