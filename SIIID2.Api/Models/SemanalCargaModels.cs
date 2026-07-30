@@ -125,7 +125,6 @@ public class SemanalDatosComparacion
     public List<SemanalFilaComparacion> CarpetasConfirmadas { get; set; } = new();
     public List<SemanalFilaComparacion> DelitosConfirmados { get; set; } = new();
     public List<SemanalFilaComparacion> VictimasConfirmadas { get; set; } = new();
-    public List<SemanalCargaPendienteComparacion> CargasPendientes { get; set; } = new();
 }
 
 public class SemanalSemanaEstadoInfo
