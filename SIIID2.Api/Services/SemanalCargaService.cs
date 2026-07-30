@@ -700,7 +700,7 @@ public class SemanalCargaService : ISemanalCargaService
             .Select(x => x.Fila)
             .ToList();
 
-        response.Bloques = ObtenerBloquesCarga(carpetasIncluidas, delitosIncluidos, victimasIncluidas, esActualizacion);
+        response.Bloques = ObtenerBloquesCarga(carpetasIncluidas, delitosIncluidos, victimasIncluidas);
 
         if (carpetasIncluidas.Count == 0)
         {
@@ -719,18 +719,14 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
-        var erroresIntegridad =
-            _cargaIntegridadValidator.Validar(
-                carpetasIncluidas,
-                delitosIncluidos,
-                victimasIncluidas);
+        var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, response.Bloques.Min(x => x.FechaInicioTramo), response.Bloques.Max(x => x.FechaFinTramo));
+        MarcarBloquesParaReemplazo(response.Bloques, bloquesConfirmados);
+
+        var erroresIntegridad = _cargaIntegridadValidator.Validar(carpetasIncluidas, delitosIncluidos, victimasIncluidas);
 
         if (usuarioCarga.EsSuperUsuario)
         {
-            response.Advertencias.AddRange(
-                erroresIntegridad.Where(x =>
-                    x.Codigo ==
-                    "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO"));
+            response.Advertencias.AddRange(erroresIntegridad.Where(x =>  x.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO"));
 
             erroresIntegridad = erroresIntegridad
                 .Where(x =>
@@ -992,7 +988,7 @@ public class SemanalCargaService : ISemanalCargaService
         };
     }
 
-    private static List<SemanalCargaBloque> ObtenerBloquesCarga(List<ArchivoFila> carpetas, List<ArchivoFila> delitos, List<ArchivoFila> victimas, bool reemplazaInformacion)
+    private static List<SemanalCargaBloque> ObtenerBloquesCarga(List<ArchivoFila> carpetas, List<ArchivoFila> delitos, List<ArchivoFila> victimas)
     {
         var bloques = new Dictionary<(DateTime FechaInicioSemana, int AnioCorte, int MesCorte), SemanalCargaBloque>();
         var bloquePorCarpeta = new Dictionary<string, SemanalCargaBloque>(StringComparer.OrdinalIgnoreCase);
@@ -1021,7 +1017,8 @@ public class SemanalCargaService : ISemanalCargaService
                     MesCorte = fechaInicio.Month,
                     FechaInicioTramo = fechaInicioSemana > fechaInicioMes ? fechaInicioSemana : fechaInicioMes,
                     FechaFinTramo = fechaFinSemana < fechaFinMes ? fechaFinSemana : fechaFinMes,
-                    ReemplazaInformacion = reemplazaInformacion
+                    FechaInicioTramo = fechaInicioSemana > fechaInicioMes ? fechaInicioSemana : fechaInicioMes,
+                    FechaFinTramo = fechaFinSemana < fechaFinMes ? fechaFinSemana : fechaFinMes
                 };
 
                 bloques[clave] = bloque;
@@ -1046,6 +1043,13 @@ public class SemanalCargaService : ISemanalCargaService
         }
 
         return bloques.Values.OrderBy(x => x.FechaInicioSemana).ThenBy(x => x.AnioCorte).ThenBy(x => x.MesCorte).ToList();
+    }
+
+    private static void MarcarBloquesParaReemplazo(List<SemanalCargaBloque> bloques, List<SemanalCargaBloqueConfirmado> bloquesConfirmados)
+    {
+        var clavesConfirmadas = bloquesConfirmados.Select(x => (x.FechaInicioSemana.Date, x.AnioCorte, x.MesCorte)).ToHashSet();
+
+        foreach (var bloque in bloques) bloque.ReemplazaInformacion = clavesConfirmadas.Contains((bloque.FechaInicioSemana.Date, bloque.AnioCorte, bloque.MesCorte));
     }
 
     private static SemanalPeriodoCarga? ValidarPeriodo(SemanalCargaValidacionRequest request, List<CargaValidacionError> errores)

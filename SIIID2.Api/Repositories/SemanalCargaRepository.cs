@@ -194,7 +194,33 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             sql,
             new { IdSemanalCarga = idSemanalCarga })).ToList();
     }
-    
+
+    public async Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, DateTime fechaInicio, DateTime fechaFin)
+    {
+        const string sql = @"
+        SELECT DISTINCT
+            DATEADD(DAY, -(DATEDIFF(DAY, CONVERT(date, '19000101', 112), CONVERT(date, ci.fecha_inicio)) % 7), CONVERT(date, ci.fecha_inicio)) AS FechaInicioSemana,
+            YEAR(ci.fecha_inicio) AS AnioCorte,
+            MONTH(ci.fecha_inicio) AS MesCorte
+        FROM dbo.semanal_carpeta_investigacion ci
+        INNER JOIN dbo.semanal_carga sc
+            ON sc.id_semanal_carga = ci.id_semanal_carga
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND ci.fecha_inicio >= @FechaInicio
+          AND ci.fecha_inicio < @FechaFinExclusiva
+          AND ci.activo = 1
+          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+          AND sc.activo = 1
+        ORDER BY
+            FechaInicioSemana,
+            AnioCorte,
+            MesCorte;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+        return (await connection.QueryAsync<SemanalCargaBloqueConfirmado>(sql, new { IdEntidadFederativa = idEntidadFederativa, FechaInicio = fechaInicio.Date, FechaFinExclusiva = fechaFin.Date.AddDays(1) })).ToList();
+    }
+
     public async Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int anioSemana, int numeroSemana)
     {
         const string sql = @"

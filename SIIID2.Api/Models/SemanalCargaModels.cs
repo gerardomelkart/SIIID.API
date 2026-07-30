@@ -51,6 +51,13 @@ public class SemanalCargaBloque
     public bool ReemplazaInformacion { get; set; }
 }
 
+public class SemanalCargaBloqueConfirmado
+{
+    public DateTime FechaInicioSemana { get; set; }
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
+}
+
 public class SemanalCargaValidacionResponse : CargaValidacionResponse
 {
     public string TipoCarga { get; set; } = "CARGA_INICIAL";
