@@ -140,12 +140,6 @@ public class SemanalCargaService : ISemanalCargaService
         public List<ArchivoFila> Victimas { get; } = new();
     }
 
-    private sealed class SemanalSemanaPendiente
-    {
-        public DateTime Semana { get; set; }
-        public string CodigoReferencia { get; set; } = string.Empty;
-        public string Estado { get; set; } = string.Empty;
-    }
 
     private readonly IArchivoReader _archivoReader;
     private readonly CarpetasValidator _carpetasValidator;
@@ -1135,108 +1129,6 @@ public class SemanalCargaService : ISemanalCargaService
         }).ToList();
     }
 
-    private static List<SemanalSemanaPendiente> ObtenerSemanasPendientes(List<SemanalCargaPendienteComparacion> cargasPendientes, DateTime fechaInicio, DateTime fechaFin)
-    {
-        var resultado =
-            new List<SemanalSemanaPendiente>();
-
-        foreach (var carga in cargasPendientes)
-        {
-            var fechaCarpeta =
-                IntentarConvertirFecha(
-                    carga.FechaInicioCarpeta,
-                    out var fechaConvertida)
-                    ? fechaConvertida.Date
-                    : carga.FechaInicioSemana.Date;
-
-            if (fechaCarpeta < fechaInicio ||
-                fechaCarpeta > fechaFin)
-            {
-                continue;
-            }
-
-            resultado.Add(
-                new SemanalSemanaPendiente
-                {
-                    Semana =
-                        ObtenerInicioSemana(fechaCarpeta),
-                    CodigoReferencia =
-                        carga.CodigoReferencia,
-                    Estado = carga.Estado
-                });
-        }
-
-        return resultado;
-    }
-
-    private static Dictionary<DateTime, SemanalDatosSemana> AgruparDatosArchivoPorSemana(List<ArchivoFila> carpetas, List<ArchivoFila> delitos,List<ArchivoFila> victimas)
-    {
-        var resultado =
-            new Dictionary<DateTime, SemanalDatosSemana>();
-
-        var semanaPorCarpeta =
-            new Dictionary<string, DateTime>(
-                StringComparer.OrdinalIgnoreCase);
-
-        foreach (var carpeta in carpetas)
-        {
-            var idCi =
-                ObtenerValor(carpeta, "id_ci")?.Trim();
-
-            if (string.IsNullOrWhiteSpace(idCi) ||
-                !IntentarConvertirFecha(
-                    ObtenerValor(carpeta, "fha_de_ini"),
-                    out var fechaInicio))
-            {
-                continue;
-            }
-
-            var semana =
-                ObtenerInicioSemana(fechaInicio);
-
-            semanaPorCarpeta[idCi] = semana;
-
-            ObtenerDatosSemana(resultado, semana)
-                .Carpetas.Add(carpeta);
-        }
-
-        foreach (var delito in delitos)
-        {
-            var idCi =
-                ObtenerValor(delito, "id_ci")?.Trim();
-
-            if (string.IsNullOrWhiteSpace(idCi) ||
-                !semanaPorCarpeta.TryGetValue(
-                    idCi,
-                    out var semana))
-            {
-                continue;
-            }
-
-            ObtenerDatosSemana(resultado, semana)
-                .Delitos.Add(delito);
-        }
-
-        foreach (var victima in victimas)
-        {
-            var idCi =
-                ObtenerValor(victima, "id_ci")?.Trim();
-
-            if (string.IsNullOrWhiteSpace(idCi) ||
-                !semanaPorCarpeta.TryGetValue(
-                    idCi,
-                    out var semana))
-            {
-                continue;
-            }
-
-            ObtenerDatosSemana(resultado, semana)
-                .Victimas.Add(victima);
-        }
-
-        return resultado;
-    }
-
     private static Dictionary<DateTime, SemanalDatosSemana> AgruparDatosConfirmadosPorSemana(SemanalDatosComparacion datosComparacion)
     {
         var resultado =
@@ -1365,71 +1257,6 @@ public class SemanalCargaService : ISemanalCargaService
         var diasDesdeLunes = ((int)fecha.DayOfWeek + 6) % 7;
 
         return fecha.Date.AddDays(-diasDesdeLunes);
-    }
-
-    private static bool CoincidenDatosSemana(SemanalDatosSemana archivo, SemanalDatosSemana confirmados, out List<string> archivosDiferentes)
-    {
-        archivosDiferentes = new List<string>();
-
-        if (!CoincidenFirmas(
-                archivo.Carpetas,
-                confirmados.Carpetas,
-                ColumnasCarpetasComparacion))
-        {
-            archivosDiferentes.Add("carpetas");
-        }
-
-        if (!CoincidenFirmas(
-                archivo.Delitos,
-                confirmados.Delitos,
-                ColumnasDelitosComparacion))
-        {
-            archivosDiferentes.Add("delitos");
-        }
-
-        if (!CoincidenFirmas(
-                archivo.Victimas,
-                confirmados.Victimas,
-                ColumnasVictimasComparacion))
-        {
-            archivosDiferentes.Add("víctimas");
-        }
-
-        return archivosDiferentes.Count == 0;
-    }
-
-    private static bool CoincidenFirmas(List<ArchivoFila> archivo, List<ArchivoFila> confirmados, IReadOnlyCollection<string> columnas)
-    {
-        var firmasArchivo = archivo
-            .Select(fila =>
-                CrearFirma(fila, columnas))
-            .OrderBy(x => x, StringComparer.Ordinal)
-            .ToList();
-
-        var firmasConfirmadas = confirmados
-            .Select(fila =>
-                CrearFirma(fila, columnas))
-            .OrderBy(x => x, StringComparer.Ordinal)
-            .ToList();
-
-        return firmasArchivo.SequenceEqual(
-            firmasConfirmadas,
-            StringComparer.Ordinal);
-    }
-
-    private static string CrearFirma(ArchivoFila fila, IReadOnlyCollection<string> columnas)
-    {
-        return string.Join(
-            "|",
-            columnas.Select(columna =>
-            {
-                var valor =
-                    NormalizarValorComparacion(
-                        columna,
-                        ObtenerValor(fila, columna));
-
-                return $"{valor.Length}:{valor}";
-            }));
     }
 
     private static string NormalizarValorComparacion(string columna, string? valor)

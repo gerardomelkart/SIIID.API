@@ -120,14 +120,6 @@ public class SemanalFilaComparacion
     public string Datos { get; set; } = "{}";
 }
 
-public class SemanalCargaPendienteComparacion
-{
-    public string CodigoReferencia { get; set; } = string.Empty;
-    public string Estado { get; set; } = string.Empty;
-    public DateTime FechaInicioSemana { get; set; }
-    public string FechaInicioCarpeta { get; set; } = string.Empty;
-}
-
 public class SemanalDatosComparacion
 {
     public List<SemanalFilaComparacion> CarpetasConfirmadas { get; set; } = new();

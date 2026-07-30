@@ -430,29 +430,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
           AND v.activo = 1;
-
-        SELECT DISTINCT
-            sc.codigo_referencia AS CodigoReferencia,
-            sc.estado AS Estado,
-            sc.fecha_inicio_semana AS FechaInicioSemana,
-            c.fha_de_ini AS FechaInicioCarpeta
-        FROM dbo.semanal_carga sc
-        INNER JOIN dbo.semanal_carga_tmp_carpeta c
-            ON c.id_semanal_carga = sc.id_semanal_carga
-           AND c.incluido = 1
-           AND c.activo = 1
-        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.mes_corte = @MesCorte
-          AND sc.anio_corte = @AnioCorte
-          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-          AND sc.estado IN
-          (
-              N'VALIDADO_PENDIENTE',
-              N'VALIDADO_PENDIENTE_ACTUALIZACION',
-              N'PENDIENTE_APROBACION'
-          )
-          AND sc.activo = 1;
-    ";
+        ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
@@ -477,10 +455,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
 
             VictimasConfirmadas =
                 (await resultados.ReadAsync<SemanalFilaComparacion>())
-                .ToList(),
-
-            CargasPendientes =
-                (await resultados.ReadAsync<SemanalCargaPendienteComparacion>())
                 .ToList()
         };
     }
