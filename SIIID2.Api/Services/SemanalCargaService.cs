@@ -1016,8 +1016,6 @@ public class SemanalCargaService : ISemanalCargaService
                     AnioCorte = fechaInicio.Year,
                     MesCorte = fechaInicio.Month,
                     FechaInicioTramo = fechaInicioSemana > fechaInicioMes ? fechaInicioSemana : fechaInicioMes,
-                    FechaFinTramo = fechaFinSemana < fechaFinMes ? fechaFinSemana : fechaFinMes,
-                    FechaInicioTramo = fechaInicioSemana > fechaInicioMes ? fechaInicioSemana : fechaInicioMes,
                     FechaFinTramo = fechaFinSemana < fechaFinMes ? fechaFinSemana : fechaFinMes
                 };
 
