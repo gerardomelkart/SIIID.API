@@ -1064,19 +1064,23 @@ public class SemanalCargaService : ISemanalCargaService
         }
     }
 
-    private static void ValidarFechasFueraVentana(List<SemanalArchivoFilaCarga> carpetas, SemanalVentanaCarga ventana, List<CargaValidacionError> errores)
+    private static bool EsFechaMesAnteriorPermitida(DateTime fechaInicio, SemanalVentanaCarga ventana)
     {
+        if (!ventana.PermiteMesAnterior) return false;
+
         var fechaInicioSemanaActual = ObtenerInicioSemana(ventana.FechaMaximaPermitida);
 
+        return fechaInicio.Date >= fechaInicioSemanaActual && fechaInicio.Date < ventana.FechaMinimaPermitida.Date;
+    }
+
+    private static void ValidarFechasFueraVentana(List<SemanalArchivoFilaCarga> carpetas, SemanalVentanaCarga ventana, List<CargaValidacionError> errores)
+    {
         foreach (var carpeta in carpetas.Where(x => !x.Incluido))
         {
             var valor = ObtenerValor(carpeta.Fila, "fha_de_ini")?.Trim();
 
             if (!IntentarConvertirFecha(valor, out var fechaInicio)) continue;
-
-            var fechaMesAnteriorPermitida = ventana.PermiteMesAnterior && fechaInicio.Date >= fechaInicioSemanaActual && fechaInicio.Date < ventana.FechaMinimaPermitida.Date;
-
-            if (fechaMesAnteriorPermitida) continue;
+            if (EsFechaMesAnteriorPermitida(fechaInicio, ventana)) continue;
 
             var fechaFutura = fechaInicio.Date > ventana.FechaMaximaPermitida.Date;
 
@@ -1100,7 +1104,13 @@ public class SemanalCargaService : ISemanalCargaService
     {
         return filas.Select(fila =>
         {
-            var incluido = IntentarConvertirFecha(ObtenerValor(fila, "fha_de_ini"), out var fechaInicio) && fechaInicio.Date >= ventana.FechaMinimaPermitida.Date && fechaInicio.Date <= ventana.FechaMaximaPermitida.Date;
+            var incluido = false;
+
+            if (IntentarConvertirFecha(ObtenerValor(fila, "fha_de_ini"), out var fechaInicio))
+            {
+                var fechaMesActualPermitida = fechaInicio.Date >= ventana.FechaMinimaPermitida.Date && fechaInicio.Date <= ventana.FechaMaximaPermitida.Date;
+                incluido = fechaMesActualPermitida || EsFechaMesAnteriorPermitida(fechaInicio, ventana);
+            }
 
             return new SemanalArchivoFilaCarga
             {
