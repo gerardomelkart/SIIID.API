@@ -15,7 +15,8 @@ public class SemanalCargaService : ISemanalCargaService
     private static readonly HashSet<string> TiposContenidoPermitidos =
         new(StringComparer.OrdinalIgnoreCase)
         {
-        "SOLO_SEMANA"
+        "SOLO_SEMANA",
+        "ACUMULADO_MES"
         };
 
     private static readonly HashSet<string> TiposCargaPermitidos =
@@ -905,7 +906,7 @@ public class SemanalCargaService : ISemanalCargaService
                 errores,
                 "SEMANAL_TIPO_CONTENIDO_INVALIDO",
                 "Tipo de contenido inválido",
-                "El módulo semanal únicamente admite información de una semana puntual.",
+                "El tipo de contenido debe ser SOLO_SEMANA o ACUMULADO_MES.",
                 "tipoContenido",
                 request.TipoContenido);
         }
