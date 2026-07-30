@@ -382,11 +382,7 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
-        var esActualizacion = string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
-
-        var usuarioCarga =
-            await _semanalCargaRepository.ObtenerUsuarioCargaAsync(
-                idUsuarioCarga);
+        var usuarioCarga = await _semanalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioCarga);
 
         if (usuarioCarga == null)
         {
@@ -400,50 +396,20 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
-        if (!esActualizacion && !usuarioCarga.HabilitaCarga)
+        if (!usuarioCarga.HabilitaCarga && !usuarioCarga.HabilitaModificacion)
         {
-            AgregarErrorGeneral(
-                response,
-                "SEMANAL_USUARIO_SIN_PERMISO_CARGA",
-                "Usuario sin permiso de carga semanal",
-                "El usuario no tiene habilitada la carga de información en el módulo semanal.");
-
+            AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_PERMISOS_OPERACION", "Usuario sin permisos de operación semanal", "El usuario no tiene habilitada la carga ni la actualización de información en el módulo semanal.");
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
         }
 
-        if (esActualizacion && !usuarioCarga.HabilitaModificacion)
-        {
-            AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_PERMISO_MODIFICACION", "Usuario sin permiso de actualización semanal", "El usuario no tiene habilitada la modificación de información en el módulo semanal.");
-            FinalizarRespuesta(response, 0, 0, 0);
-            return response;
-        }
+        response.Periodo = ValidarPeriodo(request, response.Errores);
 
-        if (esActualizacion && usuarioCarga.EsSuperUsuario && (!request.IdEntidadFederativa.HasValue || request.IdEntidadFederativa.Value <= 0))
-        {
-            AgregarErrorGeneral(response, "SEMANAL_ENTIDAD_SELECCIONADA_OBLIGATORIA", "Entidad federativa obligatoria", "Debe seleccionar la entidad federativa que desea actualizar.");
-            FinalizarRespuesta(response, 0, 0, 0);
-            return response;
-        }
+        ValidarArchivoBase(request.Carpetas, "carpetas", response.Errores);
 
-        response.Periodo = ValidarPeriodo(
-            request,
-            response.Errores);
+        ValidarArchivoBase(request.Delitos, "delitos", response.Errores);
 
-        ValidarArchivoBase(
-            request.Carpetas,
-            "carpetas",
-            response.Errores);
-
-        ValidarArchivoBase(
-            request.Delitos,
-            "delitos",
-            response.Errores);
-
-        ValidarArchivoBase(
-            request.Victimas,
-            "victimas",
-            response.Errores);
+        ValidarArchivoBase(request.Victimas, "victimas", response.Errores);
 
         if (response.Errores.Count > 0)
         {
@@ -560,35 +526,41 @@ public class SemanalCargaService : ISemanalCargaService
                 usuarioCarga,
                 delitosPeriodo));
 
-        var idEntidadFederativa = ObtenerEntidadFederativaCarga(usuarioCarga, delitosPeriodo, esActualizacion, request.IdEntidadFederativa, response.Errores);
+        var idEntidadFederativa = ObtenerEntidadFederativaCarga(usuarioCarga, delitosPeriodo, response.Errores);
 
-        if (response.Errores.Count > 0 ||
-            !idEntidadFederativa.HasValue)
+        if (response.Errores.Count > 0 || !idEntidadFederativa.HasValue)
         {
-            FinalizarRespuesta(
-                response,
-                filasCarpetas.Count,
-                filasDelitos.Count,
-                filasVictimas.Count);
+            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
 
             return response;
         }
 
-        var datosComparacion =
-            await _semanalCargaRepository
-                .ObtenerDatosComparacionAsync(
-                    idEntidadFederativa.Value,
-                    periodo.MesCorte,
-                    periodo.AnioCorte);
+        response.Bloques = ObtenerBloquesCarga(carpetasPeriodo, delitosPeriodo, victimasPeriodo);
 
-        var fechaInicioComparacion =
-            ObtenerFechaInicioPeriodo(periodo);
+        var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, response.Bloques.Min(x => x.FechaInicioTramo), response.Bloques.Max(x => x.FechaFinTramo));
+        MarcarBloquesParaReemplazo(response.Bloques, bloquesConfirmados);
 
-        var semanasPendientes =
-            ObtenerSemanasPendientes(
-                datosComparacion.CargasPendientes,
-                fechaInicioComparacion,
-                periodo.FechaFinTramo);
+        var tieneBloquesNuevos = response.Bloques.Any(x => !x.ReemplazaInformacion);
+        var tieneBloquesReemplazo = response.Bloques.Any(x => x.ReemplazaInformacion);
+
+        tipoCarga = tieneBloquesReemplazo ? "ACTUALIZACION" : "CARGA_INICIAL";
+        response.TipoCarga = tipoCarga;
+        var esActualizacion = tieneBloquesReemplazo;
+
+        if (tieneBloquesNuevos && !usuarioCarga.HabilitaCarga) AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_PERMISO_CARGA", "Usuario sin permiso de carga semanal", "Los archivos contienen bloques nuevos, pero el usuario no tiene habilitada la carga de información semanal.");
+        if (tieneBloquesReemplazo && !usuarioCarga.HabilitaModificacion) AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_PERMISO_MODIFICACION", "Usuario sin permiso de actualización semanal", "Los archivos contienen bloques que reemplazan información confirmada, pero el usuario no tiene habilitada la actualización semanal.");
+
+        if (response.Errores.Count > 0)
+        {
+            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+            return response;
+        }
+
+        var datosComparacion = await _semanalCargaRepository.ObtenerDatosComparacionAsync(idEntidadFederativa.Value, periodo.MesCorte, periodo.AnioCorte);
+
+        var fechaInicioComparacion = ObtenerFechaInicioPeriodo(periodo);
+
+        var semanasPendientes = ObtenerSemanasPendientes(datosComparacion.CargasPendientes, fechaInicioComparacion, periodo.FechaFinTramo);
 
         foreach (var pendiente in semanasPendientes
                      .GroupBy(x => x.Semana)
@@ -700,8 +672,6 @@ public class SemanalCargaService : ISemanalCargaService
             .Select(x => x.Fila)
             .ToList();
 
-        response.Bloques = ObtenerBloquesCarga(carpetasIncluidas, delitosIncluidos, victimasIncluidas);
-
         if (carpetasIncluidas.Count == 0)
         {
             AgregarErrorGeneral(
@@ -718,9 +688,6 @@ public class SemanalCargaService : ISemanalCargaService
 
             return response;
         }
-
-        var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, response.Bloques.Min(x => x.FechaInicioTramo), response.Bloques.Max(x => x.FechaFinTramo));
-        MarcarBloquesParaReemplazo(response.Bloques, bloquesConfirmados);
 
         var erroresIntegridad = _cargaIntegridadValidator.Validar(carpetasIncluidas, delitosIncluidos, victimasIncluidas);
 
@@ -2053,7 +2020,7 @@ public class SemanalCargaService : ISemanalCargaService
         return errores;
     }
 
-    private static int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos, bool esActualizacion, int? idEntidadFederativaSeleccionada, List<CargaValidacionError> errores)
+    private static int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
     {
         if (!usuarioCarga.EsSuperUsuario) return usuarioCarga.IdEntidadFederativa;
 
@@ -2073,21 +2040,7 @@ public class SemanalCargaService : ISemanalCargaService
 
         var idEntidadExcel = entidades.First();
 
-        if (!esActualizacion) return idEntidadExcel;
-
-        if (!idEntidadFederativaSeleccionada.HasValue || idEntidadFederativaSeleccionada.Value <= 0)
-        {
-            AgregarErrorGeneral(errores, "SEMANAL_ENTIDAD_SELECCIONADA_OBLIGATORIA", "Entidad federativa obligatoria", "Debe seleccionar la entidad federativa que desea actualizar.", "idEntidadFederativa", null);
-            return null;
-        }
-
-        if (idEntidadExcel != idEntidadFederativaSeleccionada.Value)
-        {
-            AgregarErrorGeneral(errores, "SEMANAL_ENTIDAD_NO_CORRESPONDE_SELECCIONADA", "Entidad del Excel distinta a la entidad seleccionada", $"La entidad del Excel ({idEntidadExcel}) no corresponde con la entidad seleccionada ({idEntidadFederativaSeleccionada.Value}).", "id_ent_hchos", idEntidadExcel.ToString(CultureInfo.InvariantCulture));
-            return null;
-        }
-
-        return idEntidadFederativaSeleccionada.Value;
+        return idEntidadExcel;
     }
 
     private static void FinalizarRespuesta(SemanalCargaValidacionResponse response, int totalCarpetas, int totalDelitos, int totalVictimas)
