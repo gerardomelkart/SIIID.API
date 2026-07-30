@@ -6,7 +6,6 @@ namespace SIIID2.Api.Services;
 public class SemanalDelitoService : ISemanalDelitoService
 {
     private const string ClaveDelitoExtorsion = "4.04";
-
     private readonly ISemanalDelitoRepository _semanalDelitoRepository;
     private readonly ILogger<SemanalDelitoService> _logger;
 
