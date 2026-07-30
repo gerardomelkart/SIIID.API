@@ -299,7 +299,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return await connection.QuerySingleAsync<SemanalSemanaEstadoInfo>(sql, new { IdEntidadFederativa = idEntidadFederativa, AnioSemana = anioSemana, NumeroSemana = numeroSemana });
     }
 
-    public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
+    public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(long idSemanalCarga, int idEntidadFederativa)
     {
         const string sql = @"
         SELECT
@@ -319,12 +319,21 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         INNER JOIN dbo.semanal_carga sc
             ON sc.id_semanal_carga = ci.id_semanal_carga
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.mes_corte = @MesCorte
-          AND sc.anio_corte = @AnioCorte
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
-          AND ci.activo = 1;
+          AND ci.activo = 1
+          AND EXISTS
+          (
+              SELECT 1
+              FROM dbo.semanal_carga_bloque bloque
+              WHERE bloque.id_semanal_carga = @IdSemanalCarga
+                AND bloque.id_entidad_federativa = @IdEntidadFederativa
+                AND bloque.reemplaza_informacion = 1
+                AND bloque.activo = 1
+                AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+          );
 
         SELECT
             sc.id_semanal_carga AS IdSemanalCarga,
@@ -373,12 +382,21 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         LEFT JOIN dbo.catalogo_codigo_postal cp
             ON cp.id_codigo_postal = d.id_codigo_postal
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.mes_corte = @MesCorte
-          AND sc.anio_corte = @AnioCorte
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
-          AND d.activo = 1;
+          AND d.activo = 1
+          AND EXISTS
+          (
+              SELECT 1
+              FROM dbo.semanal_carga_bloque bloque
+              WHERE bloque.id_semanal_carga = @IdSemanalCarga
+                AND bloque.id_entidad_federativa = @IdEntidadFederativa
+                AND bloque.reemplaza_informacion = 1
+                AND bloque.activo = 1
+                AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+          );
 
         SELECT
             sc.id_semanal_carga AS IdSemanalCarga,
@@ -424,38 +442,31 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         LEFT JOIN dbo.catalogo_presenta_discapacidad disc
             ON disc.id_presenta_discapacidad = v.id_presenta_discapacidad
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.mes_corte = @MesCorte
-          AND sc.anio_corte = @AnioCorte
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
-          AND v.activo = 1;
+          AND v.activo = 1
+          AND EXISTS
+          (
+              SELECT 1
+              FROM dbo.semanal_carga_bloque bloque
+              WHERE bloque.id_semanal_carga = @IdSemanalCarga
+                AND bloque.id_entidad_federativa = @IdEntidadFederativa
+                AND bloque.reemplaza_informacion = 1
+                AND bloque.activo = 1
+                AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+          );
         ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        using var resultados = await connection.QueryMultipleAsync(
-            sql,
-            new
-            {
-                IdEntidadFederativa = idEntidadFederativa,
-                MesCorte = mesCorte,
-                AnioCorte = anioCorte
-            });
+        using var resultados = await connection.QueryMultipleAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdEntidadFederativa = idEntidadFederativa });
 
         return new SemanalDatosComparacion
         {
-            CarpetasConfirmadas =
-                (await resultados.ReadAsync<SemanalFilaComparacion>())
-                .ToList(),
-
-            DelitosConfirmados =
-                (await resultados.ReadAsync<SemanalFilaComparacion>())
-                .ToList(),
-
-            VictimasConfirmadas =
-                (await resultados.ReadAsync<SemanalFilaComparacion>())
-                .ToList()
+            CarpetasConfirmadas = (await resultados.ReadAsync<SemanalFilaComparacion>()).ToList(),
+            DelitosConfirmados = (await resultados.ReadAsync<SemanalFilaComparacion>()).ToList(),
+            VictimasConfirmadas = (await resultados.ReadAsync<SemanalFilaComparacion>()).ToList()
         };
     }
 

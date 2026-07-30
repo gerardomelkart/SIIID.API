@@ -8,7 +8,7 @@ public interface ISemanalCargaRepository
     Task<SemanalCargaAcuseInfo?> ObtenerCargaParaAcuseAsync(string codigoReferencia);
     Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idSemanalCarga);
     Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idSemanalCarga);
-    Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
+    Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(long idSemanalCarga, int idEntidadFederativa);
     Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int anioSemana, int numeroSemana);
     Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, DateTime fechaInicio, DateTime fechaFin);
     Task<List<SemanalCargaBloquePendiente>> ObtenerBloquesPendientesAsync(int idEntidadFederativa, DateTime fechaInicio, DateTime fechaFin);

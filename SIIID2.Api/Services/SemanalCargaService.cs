@@ -728,31 +728,22 @@ public class SemanalCargaService : ISemanalCargaService
                 "El usuario no tiene permiso para consultar las diferencias de esta actualización semanal.");
         }
 
-        var datosComparacion = await _semanalCargaRepository.ObtenerDatosComparacionAsync(
-            carga.IdEntidadFederativa,
-            carga.MesCorte,
-            carga.AnioCorte);
+        var datosComparacion = await _semanalCargaRepository.ObtenerDatosComparacionAsync(carga.IdSemanalCarga, carga.IdEntidadFederativa);
 
-        var datosConfirmadosPorSemana = AgruparDatosConfirmadosPorSemana(datosComparacion);
-        var semanaObjetivo = ObtenerInicioSemana(carga.FechaInicioSemana);
-
-        if (!datosConfirmadosPorSemana.TryGetValue(semanaObjetivo, out var datosConfirmados))
+        if (datosComparacion.CarpetasConfirmadas.Count == 0)
         {
-            return ErrorDiferencias(
-                codigoLimpio,
-                $"No se encontró la versión confirmada de la semana {carga.NumeroSemana}/{carga.AnioSemana}.");
+            return ErrorDiferencias(codigoLimpio, "No se encontró información confirmada activa para los bloques que serán reemplazados.");
         }
 
+        var datosConfirmados = new SemanalDatosSemana();
+        datosConfirmados.Carpetas.AddRange(datosComparacion.CarpetasConfirmadas.Select(ConvertirFilaComparacion));
+        datosConfirmados.Delitos.AddRange(datosComparacion.DelitosConfirmados.Select(ConvertirFilaComparacion));
+        datosConfirmados.Victimas.AddRange(datosComparacion.VictimasConfirmadas.Select(ConvertirFilaComparacion));
+
         var datosNuevos = new SemanalDatosSemana();
-
-        datosNuevos.Carpetas.AddRange(
-            carga.Carpetas.Select(ConvertirFilaComparacion));
-
-        datosNuevos.Delitos.AddRange(
-            carga.Delitos.Select(ConvertirFilaComparacion));
-
-        datosNuevos.Victimas.AddRange(
-            carga.Victimas.Select(ConvertirFilaComparacion));
+        datosNuevos.Carpetas.AddRange(carga.Carpetas.Select(ConvertirFilaComparacion));
+        datosNuevos.Delitos.AddRange(carga.Delitos.Select(ConvertirFilaComparacion));
+        datosNuevos.Victimas.AddRange(carga.Victimas.Select(ConvertirFilaComparacion));
 
         var response = new ActualizacionDiferenciasResponse
         {
@@ -1129,106 +1120,6 @@ public class SemanalCargaService : ISemanalCargaService
         }).ToList();
     }
 
-    private static Dictionary<DateTime, SemanalDatosSemana> AgruparDatosConfirmadosPorSemana(SemanalDatosComparacion datosComparacion)
-    {
-        var resultado =
-            new Dictionary<DateTime, SemanalDatosSemana>();
-
-        var cargaMasRecientePorSemana =
-            new Dictionary<DateTime, SemanalFilaComparacion>();
-
-        foreach (var item in datosComparacion.CarpetasConfirmadas)
-        {
-            var fila = ConvertirFilaComparacion(item);
-
-            if (!IntentarConvertirFecha(ObtenerValor(fila, "fha_de_ini"), out var fechaInicio)) continue;
-
-            var semana = ObtenerInicioSemana(fechaInicio);
-
-            if (!cargaMasRecientePorSemana.TryGetValue(semana, out var actual) || item.FechaConfirmacion > actual.FechaConfirmacion || (item.FechaConfirmacion == actual.FechaConfirmacion && item.IdSemanalCarga > actual.IdSemanalCarga)) cargaMasRecientePorSemana[semana] = item;
-        }
-
-        var semanaPorCarpeta =
-            new Dictionary<string, DateTime>(
-                StringComparer.OrdinalIgnoreCase);
-
-        foreach (var item in
-                 datosComparacion.CarpetasConfirmadas)
-        {
-            var fila =
-                ConvertirFilaComparacion(item);
-
-            if (!IntentarConvertirFecha(
-                    ObtenerValor(fila, "fha_de_ini"),
-                    out var fechaInicio))
-            {
-                continue;
-            }
-
-            var semana =
-                ObtenerInicioSemana(fechaInicio);
-
-            if (!cargaMasRecientePorSemana.TryGetValue(semana, out var cargaMasReciente) || cargaMasReciente.IdSemanalCarga != item.IdSemanalCarga) continue;
-
-            semanaPorCarpeta[
-                CrearLlaveCargaCarpeta(
-                    item.IdSemanalCarga,
-                    item.IdCi)] = semana;
-
-            ObtenerDatosSemana(resultado, semana)
-                .Carpetas.Add(fila);
-        }
-
-        foreach (var item in
-                 datosComparacion.DelitosConfirmados)
-        {
-            if (!semanaPorCarpeta.TryGetValue(
-                    CrearLlaveCargaCarpeta(
-                        item.IdSemanalCarga,
-                        item.IdCi),
-                    out var semana))
-            {
-                continue;
-            }
-
-            ObtenerDatosSemana(resultado, semana)
-                .Delitos.Add(
-                    ConvertirFilaComparacion(item));
-        }
-
-        foreach (var item in
-                 datosComparacion.VictimasConfirmadas)
-        {
-            if (!semanaPorCarpeta.TryGetValue(
-                    CrearLlaveCargaCarpeta(
-                        item.IdSemanalCarga,
-                        item.IdCi),
-                    out var semana))
-            {
-                continue;
-            }
-
-            ObtenerDatosSemana(resultado, semana)
-                .Victimas.Add(
-                    ConvertirFilaComparacion(item));
-        }
-
-        return resultado;
-    }
-
-    private static SemanalDatosSemana ObtenerDatosSemana(Dictionary<DateTime, SemanalDatosSemana> datosPorSemana, DateTime semana)
-    {
-        if (datosPorSemana.TryGetValue(semana, out var datos))
-        {
-            return datos;
-        }
-
-        datos = new SemanalDatosSemana();
-        datosPorSemana[semana] = datos;
-
-        return datos;
-    }
-
     private static ArchivoFila ConvertirFilaComparacion(SemanalFilaComparacion item)
     {
         var columnas =
@@ -1244,12 +1135,6 @@ public class SemanalCargaService : ISemanalCargaService
                     columnas,
                     StringComparer.OrdinalIgnoreCase)
         };
-    }
-
-    private static string CrearLlaveCargaCarpeta(long idSemanalCarga, string idCi)
-    {
-        return
-            $"{idSemanalCarga}|{idCi.Trim().ToUpperInvariant()}";
     }
 
     private static DateTime ObtenerInicioSemana(DateTime fecha)
