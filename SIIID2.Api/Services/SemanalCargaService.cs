@@ -488,6 +488,14 @@ public class SemanalCargaService : ISemanalCargaService
             delitosEtiquetados,
             victimasEtiquetadas);
 
+        ValidarFechasFueraVentana(carpetasEtiquetadas, ventana, response.Errores);
+
+        if (response.Errores.Count > 0)
+        {
+            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+            return response;
+        }
+
         if (carpetasPeriodo.Count == 0)
         {
             AgregarErrorGeneral(response, "SEMANAL_SIN_CARPETAS_EN_VENTANA", "Sin carpetas dentro de la ventana permitida", $"No existen carpetas cuya fecha de inicio esté entre {ventana.FechaMinimaPermitida:dd/MM/yyyy} y {ventana.FechaMaximaPermitida:dd/MM/yyyy}.");
@@ -822,12 +830,12 @@ public class SemanalCargaService : ISemanalCargaService
     {
         var fechaActual = fechaReferencia.Date;
         var fechaInicioMesActual = new DateTime(fechaActual.Year, fechaActual.Month, 1);
-        var fechaInicioSemanaAnterior = ObtenerInicioSemana(fechaActual).AddDays(-7);
-        var permiteMesAnterior = fechaInicioSemanaAnterior < fechaInicioMesActual;
+        var fechaInicioSemanaActual = ObtenerInicioSemana(fechaActual);
+        var permiteMesAnterior = fechaInicioSemanaActual < fechaInicioMesActual;
 
         return new SemanalVentanaCarga
         {
-            FechaMinimaPermitida = permiteMesAnterior ? fechaInicioMesActual.AddMonths(-1) : fechaInicioMesActual,
+            FechaMinimaPermitida = fechaInicioMesActual,
             FechaMaximaPermitida = fechaActual,
             PermiteMesAnterior = permiteMesAnterior
         };
@@ -1053,6 +1061,38 @@ public class SemanalCargaService : ISemanalCargaService
         foreach (var columna in columnasObligatorias.Where(columna => !columnasArchivo.Contains(columna)))
         {
             errores.Add(new CargaValidacionError { Archivo = nombreArchivo, Fila = 1, Columna = columna, Campo = columna, Codigo = $"{nombreArchivo.ToUpperInvariant()}_COLUMNA_OBLIGATORIA_NO_ENCONTRADA", DescripcionResumen = "Columna obligatoria no encontrada", Mensaje = $"El archivo de {nombreArchivo} no contiene la columna obligatoria \"{columna}\"." });
+        }
+    }
+
+    private static void ValidarFechasFueraVentana(List<SemanalArchivoFilaCarga> carpetas, SemanalVentanaCarga ventana, List<CargaValidacionError> errores)
+    {
+        var fechaInicioSemanaActual = ObtenerInicioSemana(ventana.FechaMaximaPermitida);
+
+        foreach (var carpeta in carpetas.Where(x => !x.Incluido))
+        {
+            var valor = ObtenerValor(carpeta.Fila, "fha_de_ini")?.Trim();
+
+            if (!IntentarConvertirFecha(valor, out var fechaInicio)) continue;
+
+            var fechaMesAnteriorPermitida = ventana.PermiteMesAnterior && fechaInicio.Date >= fechaInicioSemanaActual && fechaInicio.Date < ventana.FechaMinimaPermitida.Date;
+
+            if (fechaMesAnteriorPermitida) continue;
+
+            var fechaFutura = fechaInicio.Date > ventana.FechaMaximaPermitida.Date;
+
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "carpetas",
+                Fila = carpeta.Fila.NumeroFila,
+                Columna = "fha_de_ini",
+                Campo = "fha_de_ini",
+                Valor = valor,
+                Codigo = fechaFutura ? "SEMANAL_FECHA_FUTURA_NO_PERMITIDA" : "SEMANAL_FECHA_MES_ANTERIOR_NO_PERMITIDA",
+                DescripcionResumen = fechaFutura ? "Fecha futura no permitida" : "Fecha de mes anterior no permitida",
+                Mensaje = fechaFutura
+                    ? $"La fecha de inicio {fechaInicio:dd/MM/yyyy} es posterior a la fecha actual {ventana.FechaMaximaPermitida:dd/MM/yyyy}. No se permiten fechas futuras."
+                    : $"La fecha de inicio {fechaInicio:dd/MM/yyyy} pertenece a un mes anterior. Solo se admite cuando pertenece a la semana que cruza el inicio del mes y la carga se realiza durante esa misma semana."
+            });
         }
     }
 
