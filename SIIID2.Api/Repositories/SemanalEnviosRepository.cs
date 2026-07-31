@@ -14,21 +14,36 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte, string? tipoCarga, string? estado)
     {
         const string sql = @"
-    WITH operaciones_rankeadas AS
+    WITH bloques_operacion AS
     (
         SELECT
             sc.id_semanal_carga,
-            ROW_NUMBER() OVER
-            (
-                PARTITION BY
-                    sc.id_entidad_federativa,
-                    sc.id_usuario_carga,
-                    sc.anio_corte,
-                    sc.mes_corte
-                ORDER BY
-                    COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) DESC,
-                    sc.id_semanal_carga DESC
-            ) AS rn
+            sc.id_entidad_federativa,
+            sc.id_usuario_carga,
+            bloque.anio_corte,
+            bloque.mes_corte,
+            COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) AS fecha_movimiento
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.semanal_carga_bloque bloque
+            ON bloque.id_semanal_carga = sc.id_semanal_carga
+           AND bloque.activo = 1
+        WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND
+          (
+              sc.estado NOT LIKE N'RECHAZADO%'
+              OR sc.estado = N'RECHAZADO_ADMIN'
+          )
+          AND sc.activo = 1
+
+        UNION ALL
+
+        SELECT
+            sc.id_semanal_carga,
+            sc.id_entidad_federativa,
+            sc.id_usuario_carga,
+            sc.anio_corte,
+            sc.mes_corte,
+            COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga)
         FROM dbo.semanal_carga sc
         WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND
@@ -37,6 +52,40 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
               OR sc.estado = N'RECHAZADO_ADMIN'
           )
           AND sc.activo = 1
+          AND NOT EXISTS
+          (
+              SELECT 1
+              FROM dbo.semanal_carga_bloque bloque
+              WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                AND bloque.activo = 1
+          )
+    ),
+    ultimo_visible AS
+    (
+        SELECT
+            bloque.id_semanal_carga,
+            bloque.anio_corte,
+            bloque.mes_corte,
+            ROW_NUMBER() OVER
+            (
+                PARTITION BY
+                    bloque.id_entidad_federativa,
+                    bloque.id_usuario_carga,
+                    bloque.anio_corte,
+                    bloque.mes_corte
+                ORDER BY
+                    bloque.fecha_movimiento DESC,
+                    bloque.id_semanal_carga DESC
+            ) AS rn
+        FROM bloques_operacion bloque
+    ),
+    cargas_visibles AS
+    (
+        SELECT DISTINCT visible.id_semanal_carga
+        FROM ultimo_visible visible
+        WHERE visible.rn = 1
+          AND (@AnioCorte IS NULL OR visible.anio_corte = @AnioCorte)
+          AND (@MesCorte IS NULL OR visible.mes_corte = @MesCorte)
     )
     SELECT
         sc.id_semanal_carga AS IdSemanalCarga,
@@ -121,7 +170,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 ELSE 0
             END
         ) AS TieneStagingDisponible
-    FROM operaciones_rankeadas visible
+    FROM cargas_visibles visible
     INNER JOIN dbo.semanal_carga sc
         ON sc.id_semanal_carga = visible.id_semanal_carga
     INNER JOIN dbo.usuario u
@@ -130,17 +179,12 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         ON ef.id_entidad_federativa = sc.id_entidad_federativa
     LEFT JOIN dbo.usuario usuario_resolucion
         ON usuario_resolucion.id_usuario = sc.id_usuario_confirmacion
-    WHERE visible.rn = 1
-      AND (@EsSuperUsuario = 1 OR sc.id_usuario_carga = @IdUsuarioConsulta)
+    WHERE (@EsSuperUsuario = 1 OR sc.id_usuario_carga = @IdUsuarioConsulta)
       AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
       AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
-      AND (@AnioCorte IS NULL OR sc.anio_corte = @AnioCorte)
-      AND (@MesCorte IS NULL OR sc.mes_corte = @MesCorte)
       AND (@TipoCarga IS NULL OR sc.tipo_carga = @TipoCarga)
       AND (@Estado IS NULL OR sc.estado = @Estado)
     ORDER BY
-        sc.anio_corte DESC,
-        sc.mes_corte DESC,
         ef.nombre,
         u.usuario,
         COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) DESC,
@@ -172,6 +216,85 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         bloque.mes_corte;
     ";
 
+        const string sqlPeriodos = @"
+    WITH bloques_operacion AS
+    (
+        SELECT
+            sc.id_semanal_carga,
+            sc.id_entidad_federativa,
+            sc.id_usuario_carga,
+            bloque.anio_corte,
+            bloque.mes_corte,
+            COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) AS fecha_movimiento
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.semanal_carga_bloque bloque
+            ON bloque.id_semanal_carga = sc.id_semanal_carga
+           AND bloque.activo = 1
+        WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND
+          (
+              sc.estado NOT LIKE N'RECHAZADO%'
+              OR sc.estado = N'RECHAZADO_ADMIN'
+          )
+          AND sc.activo = 1
+
+        UNION ALL
+
+        SELECT
+            sc.id_semanal_carga,
+            sc.id_entidad_federativa,
+            sc.id_usuario_carga,
+            sc.anio_corte,
+            sc.mes_corte,
+            COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga)
+        FROM dbo.semanal_carga sc
+        WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND
+          (
+              sc.estado NOT LIKE N'RECHAZADO%'
+              OR sc.estado = N'RECHAZADO_ADMIN'
+          )
+          AND sc.activo = 1
+          AND NOT EXISTS
+          (
+              SELECT 1
+              FROM dbo.semanal_carga_bloque bloque
+              WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                AND bloque.activo = 1
+          )
+    ),
+    ultimo_visible AS
+    (
+        SELECT
+            bloque.id_semanal_carga,
+            bloque.anio_corte,
+            bloque.mes_corte,
+            ROW_NUMBER() OVER
+            (
+                PARTITION BY
+                    bloque.id_entidad_federativa,
+                    bloque.id_usuario_carga,
+                    bloque.anio_corte,
+                    bloque.mes_corte
+                ORDER BY
+                    bloque.fecha_movimiento DESC,
+                    bloque.id_semanal_carga DESC
+            ) AS rn
+        FROM bloques_operacion bloque
+    )
+    SELECT
+        visible.id_semanal_carga AS IdSemanalCarga,
+        visible.anio_corte AS AnioCorte,
+        visible.mes_corte AS MesCorte
+    FROM ultimo_visible visible
+    WHERE visible.rn = 1
+      AND visible.id_semanal_carga IN @Ids
+    ORDER BY
+        visible.id_semanal_carga,
+        visible.anio_corte,
+        visible.mes_corte;
+    ";
+
         using var connection = _dbConnectionFactory.CrearConexion();
 
         var cargas = (await connection.QueryAsync<SemanalEnvioItem>(sql, new
@@ -189,12 +312,17 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         if (cargas.Count == 0) return cargas;
 
         var ids = cargas.Select(x => x.IdSemanalCarga).Distinct().ToArray();
+
         var bloques = (await connection.QueryAsync<SemanalEnvioBloqueItem>(sqlBloques, new { Ids = ids })).ToList();
         var bloquesPorCarga = bloques.GroupBy(x => x.IdSemanalCarga).ToDictionary(x => x.Key, x => x.ToList());
+
+        var periodos = (await connection.QueryAsync<SemanalEnvioPeriodoItem>(sqlPeriodos, new { Ids = ids })).ToList();
+        var periodosPorCarga = periodos.GroupBy(x => x.IdSemanalCarga).ToDictionary(x => x.Key, x => x.ToList());
 
         foreach (var carga in cargas)
         {
             if (bloquesPorCarga.TryGetValue(carga.IdSemanalCarga, out var bloquesCarga)) carga.Bloques = bloquesCarga;
+            if (periodosPorCarga.TryGetValue(carga.IdSemanalCarga, out var periodosCarga)) carga.Periodos = periodosCarga;
         }
 
         return cargas;
@@ -230,8 +358,30 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     public async Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte)
     {
         const string sql = @"
-    WITH cargas AS
+    WITH bloques_carga AS
     (
+        SELECT
+            sc.id_semanal_carga,
+            sc.id_entidad_federativa,
+            sc.id_usuario_carga,
+            bloque.anio_corte,
+            bloque.mes_corte,
+            sc.codigo_referencia,
+            sc.tipo_carga,
+            sc.estado,
+            sc.fecha_carga,
+            sc.fecha_validacion,
+            sc.fecha_confirmacion
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.semanal_carga_bloque bloque
+            ON bloque.id_semanal_carga = sc.id_semanal_carga
+           AND bloque.activo = 1
+        WHERE sc.activo = 1
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.id_entidad_federativa IS NOT NULL
+
+        UNION ALL
+
         SELECT
             sc.id_semanal_carga,
             sc.id_entidad_federativa,
@@ -248,25 +398,32 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         WHERE sc.activo = 1
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.id_entidad_federativa IS NOT NULL
-          AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
-          AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
-          AND (@AnioCorte IS NULL OR sc.anio_corte = @AnioCorte)
-          AND (@MesCorte IS NULL OR sc.mes_corte = @MesCorte)
+          AND NOT EXISTS
+          (
+              SELECT 1
+              FROM dbo.semanal_carga_bloque bloque
+              WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                AND bloque.activo = 1
+          )
     ),
     periodos AS
     (
         SELECT
-            carga.id_entidad_federativa,
-            carga.id_usuario_carga,
-            carga.anio_corte,
-            carga.mes_corte,
-            COUNT(DISTINCT carga.id_semanal_carga) AS intentos
-        FROM cargas carga
+            bloque.id_entidad_federativa,
+            bloque.id_usuario_carga,
+            bloque.anio_corte,
+            bloque.mes_corte,
+            COUNT(DISTINCT bloque.id_semanal_carga) AS intentos
+        FROM bloques_carga bloque
+        WHERE (@IdEntidadFederativa IS NULL OR bloque.id_entidad_federativa = @IdEntidadFederativa)
+          AND (@IdUsuarioCarga IS NULL OR bloque.id_usuario_carga = @IdUsuarioCarga)
+          AND (@AnioCorte IS NULL OR bloque.anio_corte = @AnioCorte)
+          AND (@MesCorte IS NULL OR bloque.mes_corte = @MesCorte)
         GROUP BY
-            carga.id_entidad_federativa,
-            carga.id_usuario_carga,
-            carga.anio_corte,
-            carga.mes_corte
+            bloque.id_entidad_federativa,
+            bloque.id_usuario_carga,
+            bloque.anio_corte,
+            bloque.mes_corte
     )
     SELECT
         ef.id_entidad_federativa AS IdEntidadFederativa,
@@ -310,11 +467,11 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     OUTER APPLY
     (
         SELECT TOP (1)
-            carga.codigo_referencia,
-            carga.tipo_carga,
-            carga.estado,
+            bloque.codigo_referencia,
+            bloque.tipo_carga,
+            bloque.estado,
             CASE
-                WHEN carga.estado IN
+                WHEN bloque.estado IN
                 (
                     N'VALIDADO_PENDIENTE',
                     N'VALIDADO_PENDIENTE_ACTUALIZACION',
@@ -323,32 +480,32 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                     N'CONFIRMADO_ACTUALIZACION',
                     N'RECHAZADO_ADMIN'
                 )
-                THEN carga.fecha_validacion
+                THEN bloque.fecha_validacion
                 ELSE NULL
             END AS fecha_carga_actualizacion,
             CASE
-                WHEN carga.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-                THEN carga.fecha_confirmacion
+                WHEN bloque.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+                THEN bloque.fecha_confirmacion
                 ELSE NULL
             END AS fecha_aprobacion
-        FROM cargas carga
-        WHERE carga.id_entidad_federativa = periodo.id_entidad_federativa
-          AND carga.id_usuario_carga = periodo.id_usuario_carga
-          AND carga.anio_corte = periodo.anio_corte
-          AND carga.mes_corte = periodo.mes_corte
+        FROM bloques_carga bloque
+        WHERE bloque.id_entidad_federativa = periodo.id_entidad_federativa
+          AND bloque.id_usuario_carga = periodo.id_usuario_carga
+          AND bloque.anio_corte = periodo.anio_corte
+          AND bloque.mes_corte = periodo.mes_corte
         ORDER BY
-            COALESCE(carga.fecha_confirmacion, carga.fecha_validacion, carga.fecha_carga) DESC,
-            carga.id_semanal_carga DESC
+            COALESCE(bloque.fecha_confirmacion, bloque.fecha_validacion, bloque.fecha_carga) DESC,
+            bloque.id_semanal_carga DESC
     ) ultimo
     OUTER APPLY
     (
-        SELECT MIN(carga.fecha_validacion) AS fecha_carga_exitosa
-        FROM cargas carga
-        WHERE carga.id_entidad_federativa = periodo.id_entidad_federativa
-          AND carga.id_usuario_carga = periodo.id_usuario_carga
-          AND carga.anio_corte = periodo.anio_corte
-          AND carga.mes_corte = periodo.mes_corte
-          AND carga.estado IN
+        SELECT MIN(bloque.fecha_validacion) AS fecha_carga_exitosa
+        FROM bloques_carga bloque
+        WHERE bloque.id_entidad_federativa = periodo.id_entidad_federativa
+          AND bloque.id_usuario_carga = periodo.id_usuario_carga
+          AND bloque.anio_corte = periodo.anio_corte
+          AND bloque.mes_corte = periodo.mes_corte
+          AND bloque.estado IN
           (
               N'VALIDADO_PENDIENTE',
               N'VALIDADO_PENDIENTE_ACTUALIZACION',

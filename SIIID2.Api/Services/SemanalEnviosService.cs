@@ -46,7 +46,21 @@ public class SemanalEnviosService : ISemanalEnviosService
             registro.EsRechazadoAdministrador = estadoRegistro == "RECHAZADO_ADMIN";
             registro.EstadoTexto = ObtenerEstadoTexto(estadoRegistro, esActualizacion);
             registro.FechaEnvioTexto = registro.FechaMovimiento.ToString("dd-MM-yyyy");
-            registro.Periodo = $"{ObtenerNombreMes(registro.MesCorte)} {registro.AnioCorte}";
+            var periodos = registro.Periodos
+                .Select(x => new { x.AnioCorte, x.MesCorte })
+                .Distinct()
+                .OrderBy(x => x.AnioCorte)
+                .ThenBy(x => x.MesCorte)
+                .Select(x => $"{ObtenerNombreMes(x.MesCorte)} {x.AnioCorte}")
+                .ToList();
+
+            registro.Periodo = periodos.Count switch
+            {
+                0 => $"{ObtenerNombreMes(registro.MesCorte)} {registro.AnioCorte}",
+                1 => periodos[0],
+                _ => string.Join(", ", periodos)
+            };
+
             registro.Semana = registro.Periodo;
             registro.FechaRechazoTexto = registro.EsRechazadoAdministrador
                 ? registro.FechaConfirmacion?.ToString("dd-MM-yyyy HH:mm") ?? string.Empty

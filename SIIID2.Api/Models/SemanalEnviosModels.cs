@@ -17,6 +17,13 @@ public class SemanalEnvioBloqueItem
     public bool ReemplazaInformacion { get; set; }
 }
 
+public class SemanalEnvioPeriodoItem
+{
+    public long IdSemanalCarga { get; set; }
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
+}
+
 public class SemanalEnvioItem
 {
     public long IdSemanalCarga { get; set; }
@@ -34,6 +41,7 @@ public class SemanalEnvioItem
     public int MesCorte { get; set; }
     public int AnioCorte { get; set; }
     public string Periodo { get; set; } = string.Empty;
+    public List<SemanalEnvioPeriodoItem> Periodos { get; set; } = [];
     public int IdUsuarioCarga { get; set; }
     public string UsuarioCarga { get; set; } = string.Empty;
     public string NombreUsuarioCarga { get; set; } = string.Empty;
