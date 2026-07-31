@@ -20,7 +20,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         _acusePdfService = acusePdfService;
     }
 
-    public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioSemana, int? numeroSemana, string? tipoCarga, string? estado)
+    public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte, string? tipoCarga, string? estado)
     {
         var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
         var tipoCargaNormalizado = NormalizarFiltro(tipoCarga);
@@ -31,8 +31,8 @@ public class SemanalEnviosService : ISemanalEnviosService
             idUsuarioConsulta,
             idEntidadFederativa,
             idUsuarioCarga,
-            anioSemana,
-            numeroSemana,
+            anioCorte,
+            mesCorte,
             tipoCargaNormalizado,
             estadoNormalizado);
 
@@ -46,20 +46,8 @@ public class SemanalEnviosService : ISemanalEnviosService
             registro.EsRechazadoAdministrador = estadoRegistro == "RECHAZADO_ADMIN";
             registro.EstadoTexto = ObtenerEstadoTexto(estadoRegistro, esActualizacion);
             registro.FechaEnvioTexto = registro.FechaMovimiento.ToString("dd-MM-yyyy");
-            var semanas = registro.Bloques
-            .GroupBy(x => new { x.AnioSemana, x.NumeroSemana })
-            .Select(x => x.Key)
-            .OrderBy(x => x.AnioSemana)
-            .ThenBy(x => x.NumeroSemana)
-            .Select(x => $"{x.NumeroSemana}/{x.AnioSemana}")
-            .ToList();
-
-            registro.Semana = semanas.Count switch
-            {
-                0 => $"Semana {registro.NumeroSemana}/{registro.AnioSemana}",
-                1 => $"Semana {semanas[0]}",
-                _ => $"Semanas {string.Join(", ", semanas)}"
-            };
+            registro.Periodo = $"{ObtenerNombreMes(registro.MesCorte)} {registro.AnioCorte}";
+            registro.Semana = registro.Periodo;
             registro.FechaRechazoTexto = registro.EsRechazadoAdministrador
                 ? registro.FechaConfirmacion?.ToString("dd-MM-yyyy HH:mm") ?? string.Empty
                 : string.Empty;
@@ -99,7 +87,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         return registros;
     }
 
-    public async Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioSemana, int? numeroSemana)
+    public async Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte)
     {
         var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
 
@@ -111,8 +99,8 @@ public class SemanalEnviosService : ISemanalEnviosService
         return await _semanalEnviosRepository.ObtenerReporteCargasAsync(
             idEntidadFederativa,
             idUsuarioCarga,
-            anioSemana,
-            numeroSemana);
+            anioCorte,
+            mesCorte);
     }
 
     public async Task<InformeArchivoZipResponse> GenerarZipArchivosAsync(int idUsuarioConsulta, string codigoReferencia)
@@ -176,12 +164,21 @@ public class SemanalEnviosService : ISemanalEnviosService
         };
     }
 
-    public async Task<InformeArchivoZipResponse> GenerarZipAcusesAsync(int idUsuarioConsulta, int anioSemana, int numeroSemana)
+    public async Task<InformeArchivoZipResponse> GenerarZipAcusesAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int? idEntidadFederativa, int? idUsuarioCarga)
     {
-        if (anioSemana < 2000 || anioSemana > 2100) throw new InvalidOperationException("El año de la semana no es válido.");
-        if (numeroSemana < 1 || numeroSemana > 53) throw new InvalidOperationException("El número de semana no es válido.");
+        if (anioCorte < 2000 || anioCorte > 2100) throw new InvalidOperationException("El año de corte no es válido.");
+        if (mesCorte < 1 || mesCorte > 12) throw new InvalidOperationException("El mes de corte no es válido.");
 
-        var envios = await ObtenerEnviosAsync(idUsuarioConsulta, null, null, anioSemana, numeroSemana, null, null);
+        var usuarioConsulta = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
+
+        var envios = await ObtenerEnviosAsync(
+            idUsuarioConsulta,
+            usuarioConsulta.EsSuperUsuario ? idEntidadFederativa : null,
+            usuarioConsulta.EsSuperUsuario ? idUsuarioCarga : null,
+            anioCorte,
+            mesCorte,
+            null,
+            null);
 
         var enviosConAcuse = envios
             .Where(envio => envio.Estado is
@@ -194,7 +191,7 @@ public class SemanalEnviosService : ISemanalEnviosService
 
         if (enviosConAcuse.Count == 0)
         {
-            throw new InvalidOperationException($"No existen acuses disponibles para la semana {numeroSemana}/{anioSemana}.");
+            throw new InvalidOperationException($"No existen acuses disponibles para {ObtenerNombreMes(mesCorte)} de {anioCorte}.");
         }
 
         using var zipStream = new MemoryStream();
@@ -213,7 +210,8 @@ public class SemanalEnviosService : ISemanalEnviosService
 
                 var tipoDocumento = esConfirmado ? "ACUSE" : "INFORME_PREVIO";
                 var entidad = NormalizarNombreArchivo(envio.EntidadFederativa);
-                var nombreArchivo = $"{envio.ClaveEntidad}_{entidad}_{tipoDocumento}_{envio.CodigoReferencia}.pdf";
+                var usuario = NormalizarNombreArchivo(envio.UsuarioCarga);
+                var nombreArchivo = $"{envio.ClaveEntidad}_{entidad}_{usuario}_{tipoDocumento}_{envio.CodigoReferencia}.pdf";
                 var entry = archive.CreateEntry(nombreArchivo, CompressionLevel.Fastest);
 
                 await using var entryStream = entry.Open();
@@ -221,10 +219,19 @@ public class SemanalEnviosService : ISemanalEnviosService
             }
         }
 
+        var usuarios = enviosConAcuse
+            .Select(x => x.IdUsuarioCarga)
+            .Distinct()
+            .ToList();
+
+        var alcanceUsuario = usuarios.Count == 1
+            ? $"USUARIO_{NormalizarNombreArchivo(enviosConAcuse[0].UsuarioCarga)}"
+            : "TODOS_LOS_USUARIOS";
+
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = $"ACUSES_SEMANA_{numeroSemana}_{anioSemana}.zip"
+            NombreArchivo = $"ACUSES_PRELIMINARES_{NormalizarNombreArchivo(ObtenerNombreMes(mesCorte))}_{anioCorte}_{alcanceUsuario}.zip"
         };
     }
 

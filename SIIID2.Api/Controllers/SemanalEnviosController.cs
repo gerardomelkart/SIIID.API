@@ -23,7 +23,7 @@ public class SemanalEnviosController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> ObtenerEnvios([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? idUsuarioCarga = null, [FromQuery] int? anioSemana = null, [FromQuery] int? numeroSemana = null, [FromQuery] string? tipoCarga = null, [FromQuery] string? estado = null)
+    public async Task<IActionResult> ObtenerEnvios([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? idUsuarioCarga = null, [FromQuery] int? anioCorte = null, [FromQuery] int? mesCorte = null, [FromQuery] string? tipoCarga = null, [FromQuery] string? estado = null)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
@@ -33,14 +33,18 @@ public class SemanalEnviosController : ControllerBase
                 idUsuario,
                 idEntidadFederativa,
                 idUsuarioCarga,
-                anioSemana,
-                numeroSemana,
+                anioCorte,
+                mesCorte,
                 tipoCarga,
                 estado);
 
             return Ok(new
             {
                 esValido = true,
+                idEntidadFederativa,
+                idUsuarioCarga,
+                anioCorte,
+                mesCorte,
                 total = registros.Count,
                 registros
             });
@@ -57,7 +61,7 @@ public class SemanalEnviosController : ControllerBase
     }
 
     [HttpGet("reporte-cargas")]
-    public async Task<IActionResult> ObtenerReporteCargas([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? idUsuarioCarga = null, [FromQuery] int? anioSemana = null, [FromQuery] int? numeroSemana = null)
+    public async Task<IActionResult> ObtenerReporteCargas([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? idUsuarioCarga = null, [FromQuery] int? anioCorte = null, [FromQuery] int? mesCorte = null)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
@@ -67,16 +71,16 @@ public class SemanalEnviosController : ControllerBase
                 idUsuario,
                 idEntidadFederativa,
                 idUsuarioCarga,
-                anioSemana,
-                numeroSemana);
+                anioCorte,
+                mesCorte);
 
             return Ok(new
             {
                 esValido = true,
                 idEntidadFederativa,
                 idUsuarioCarga,
-                anioSemana,
-                numeroSemana,
+                anioCorte,
+                mesCorte,
                 total = registros.Count,
                 registros
             });
@@ -132,15 +136,21 @@ public class SemanalEnviosController : ControllerBase
     }
 
     [HttpPost("acuses/ticket")]
-    public async Task<IActionResult> CrearTicketDescargaAcuses([FromQuery] int anioSemana, [FromQuery] int numeroSemana)
+    public async Task<IActionResult> CrearTicketDescargaAcuses([FromQuery] int anioCorte, [FromQuery] int mesCorte, [FromQuery] int? idEntidadFederativa = null, [FromQuery] int? idUsuarioCarga = null)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
         try
         {
-            var zip = await _semanalEnviosService.GenerarZipAcusesAsync(idUsuario, anioSemana, numeroSemana);
+            var zip = await _semanalEnviosService.GenerarZipAcusesAsync(
+                idUsuario,
+                anioCorte,
+                mesCorte,
+                idEntidadFederativa,
+                idUsuarioCarga);
+
             var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-            var cacheKey = $"ACUSES_SEMANALES_DOWNLOAD_TICKET:{ticket}";
+            var cacheKey = $"ACUSES_PRELIMINARES_DOWNLOAD_TICKET:{ticket}";
 
             _cache.Set(
                 cacheKey,
@@ -191,7 +201,7 @@ public class SemanalEnviosController : ControllerBase
             });
         }
 
-        var cacheKey = $"ACUSES_SEMANALES_DOWNLOAD_TICKET:{ticket}";
+        var cacheKey = $"ACUSES_PRELIMINARES_DOWNLOAD_TICKET:{ticket}";
 
         if (!_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var zip) || zip == null)
         {

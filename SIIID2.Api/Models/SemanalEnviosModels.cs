@@ -33,6 +33,7 @@ public class SemanalEnvioItem
     public DateTime FechaFinTramo { get; set; }
     public int MesCorte { get; set; }
     public int AnioCorte { get; set; }
+    public string Periodo { get; set; } = string.Empty;
     public int IdUsuarioCarga { get; set; }
     public string UsuarioCarga { get; set; } = string.Empty;
     public string NombreUsuarioCarga { get; set; } = string.Empty;
@@ -72,5 +73,7 @@ public class SemanalEnvioReferenciaInfo
     public int IdUsuarioCarga { get; set; }
     public int AnioSemana { get; set; }
     public int NumeroSemana { get; set; }
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
 }
 

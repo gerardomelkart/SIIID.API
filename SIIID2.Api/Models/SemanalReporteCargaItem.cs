@@ -8,9 +8,9 @@ public class SemanalReporteCargaItem
     public int IdUsuarioCarga { get; set; }
     public string UsuarioCarga { get; set; } = string.Empty;
     public string NombreUsuarioCarga { get; set; } = string.Empty;
-    public int AnioSemana { get; set; }
-    public int NumeroSemana { get; set; }
-    public string Semana { get; set; } = string.Empty;
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
+    public string Periodo { get; set; } = string.Empty;
     public int Intentos { get; set; }
     public string? UltimoIntento { get; set; }
     public string? TipoCargaUltimoIntento { get; set; }
