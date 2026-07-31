@@ -40,7 +40,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
 
         if (!estadoPermitido)
         {
-            throw new InvalidOperationException("El informe previo semanal no está disponible para el estado actual de la operación.");
+            throw new InvalidOperationException("El informe previo de la carga preliminar no está disponible para el estado actual de la operación.");
         }
 
         var resumen =
@@ -63,8 +63,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
 
         if (!string.Equals(carga.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) && !string.Equals(carga.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException(
-                "El acuse semanal confirmado solo puede generarse para operaciones semanales confirmadas.");
+            throw new InvalidOperationException("El acuse confirmado solo puede generarse para operaciones preliminares confirmadas.");
         }
 
         var resumen =
@@ -85,8 +84,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
 
         if (usuarioConsulta == null)
         {
-            throw new UnauthorizedAccessException(
-                "El usuario no tiene acceso activo al módulo semanal.");
+            throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo preliminar.");
         }
 
         var carga =
@@ -95,8 +93,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
 
         if (carga == null)
         {
-            throw new InvalidOperationException(
-                "No se encontró la carga semanal solicitada.");
+            throw new InvalidOperationException("No se encontró la carga preliminar solicitada.");
         }
 
         if (!usuarioConsulta.EsSuperUsuario &&
@@ -105,8 +102,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
              usuarioConsulta.IdEntidadFederativa.Value !=
              carga.IdEntidadFederativa.Value))
         {
-            throw new UnauthorizedAccessException(
-                "El usuario no tiene permiso para consultar el acuse semanal de esta entidad.");
+            throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse preliminar de esta entidad.");
         }
 
         return carga;
@@ -162,11 +158,6 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                     column.Item().Element(
                         contenedor =>
                             ConstruirLeyendaAcuse(
-                                contenedor,
-                                carga));
-                    column.Item().Element(
-                        contenedor =>
-                            ConstruirTablaBloques(
                                 contenedor,
                                 carga));
 
@@ -281,8 +272,13 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
         var bloques = ObtenerBloquesAcuse(carga);
         var fechaInicio = bloques.Min(x => x.FechaInicioTramo);
         var fechaFin = bloques.Max(x => x.FechaFinTramo);
-        var semanas = bloques.Select(x => $"{x.NumeroSemana}/{x.AnioSemana}").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var cortes = bloques.Select(x => $"{x.MesCorte:00}/{x.AnioCorte}").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var periodos = bloques
+            .Select(x => new { x.AnioCorte, x.MesCorte })
+            .Distinct()
+            .OrderBy(x => x.AnioCorte)
+            .ThenBy(x => x.MesCorte)
+            .Select(x => ObtenerNombrePeriodo(x.MesCorte, x.AnioCorte, cultura))
+            .ToList();
 
         container.Column(column =>
         {
@@ -291,7 +287,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             column.Item()
                 .PaddingTop(4)
                 .AlignCenter()
-                .Text($"ACUSE DE {(esActualizacion ? "ACTUALIZACIÓN" : "ENTREGA")} DE INFORMACIÓN SEMANAL DEL ESTADO DE {entidadMayusculas}")
+                .Text($"ACUSE DE {(esActualizacion ? "ACTUALIZACIÓN" : "ENTREGA")} DE INFORMACIÓN PRELIMINAR DEL ESTADO DE {entidadMayusculas}")
                 .FontSize(11.5f)
                 .Bold();
 
@@ -301,11 +297,16 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                     text.Justify();
                     text.DefaultTextStyle(x => x.FontSize(8.5f));
 
-                    text.Span("El presente acuse de recepción hace constar que la estadística delictiva reportada por la ");
+                    text.Span("El presente acuse de recepción hace constar que la información preliminar de incidencia delictiva reportada por la ");
                     text.Span($"Fiscalía General del Estado de {entidad}").Bold();
                     text.Span(" al ");
                     text.Span("Registro Nacional de Incidencia Delictiva (RNID)").Bold();
-                    text.Span(esActualizacion ? " del Sistema Nacional de Seguridad Pública, ha sido actualizada de manera satisfactoria a través de la plataforma web; mediante este acuse se confirma la actualización formal de la estadística delictiva del " : " del Sistema Nacional de Seguridad Pública, ha sido enviada de manera satisfactoria a través de la plataforma web; mediante este acuse se confirma la entrega formal de la estadística delictiva del ");
+
+                    text.Span(
+                        esActualizacion
+                            ? ", ha sido actualizada satisfactoriamente mediante la plataforma web; por medio de este documento se confirma la actualización de la información preliminar acumulada del "
+                            : ", ha sido enviada satisfactoriamente mediante la plataforma web; por medio de este documento se confirma la entrega de la información preliminar acumulada del ");
+
                     text.Span($"Estado de {entidad}").Bold();
                     text.Span(" el día ");
                     text.Span(ObtenerFechaLargaTexto(fechaAcuse)).Bold();
@@ -319,15 +320,29 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                 .Text(text =>
                 {
                     text.DefaultTextStyle(x => x.FontSize(8.5f));
+
                     text.Span("Periodo reportado: ");
-                    text.Span($"del {fechaInicio:dd/MM/yyyy} al {fechaFin:dd/MM/yyyy}. ").Bold();
-                    text.Span("Semanas incluidas: ");
-                    text.Span(string.Join(", ", semanas)).Bold();
-                    text.Span(". Cortes mensuales: ");
-                    text.Span(string.Join(", ", cortes)).Bold();
+                    text.Span(string.Join(", ", periodos)).Bold();
+                    text.Span(". ");
+
+                    text.Span("Información acumulada comprendida del ");
+                    text.Span(fechaInicio.ToString("dd/MM/yyyy", cultura)).Bold();
+                    text.Span(" al ");
+                    text.Span(fechaFin.ToString("dd/MM/yyyy", cultura)).Bold();
                     text.Span(".");
                 });
         });
+    }
+
+    private static string ObtenerNombrePeriodo(int mes, int anio, CultureInfo cultura)
+    {
+        if (mes < 1 || mes > 12)
+        {
+            return $"{mes:00}/{anio}";
+        }
+
+        var nombreMes = cultura.DateTimeFormat.GetMonthName(mes);
+        return $"{cultura.TextInfo.ToTitleCase(nombreMes)} {anio}";
     }
 
     private static List<SemanalCargaAcuseBloque> ObtenerBloquesAcuse(SemanalCargaAcuseInfo carga)
@@ -355,55 +370,6 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
                 ReemplazaInformacion = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase)
             }
         };
-    }
-
-    private static void ConstruirTablaBloques(IContainer container, SemanalCargaAcuseInfo carga)
-    {
-        var cultura = new CultureInfo("es-MX");
-        var bloques = ObtenerBloquesAcuse(carga);
-
-        container
-            .PaddingTop(3)
-            .Table(table =>
-            {
-                table.ColumnsDefinition(columns =>
-                {
-                    columns.ConstantColumn(52);
-                    columns.ConstantColumn(48);
-                    columns.RelativeColumn(1.7f);
-                    columns.ConstantColumn(62);
-                    columns.ConstantColumn(48);
-                    columns.ConstantColumn(48);
-                    columns.ConstantColumn(48);
-                });
-
-                table.Header(header =>
-                {
-                    header.Cell()
-                        .ColumnSpan(7)
-                        .Element(CeldaTituloSeccion)
-                        .Text("Bloques incluidos en la operación");
-
-                    header.Cell().Element(CeldaEncabezado).Text("Semana");
-                    header.Cell().Element(CeldaEncabezado).Text("Corte");
-                    header.Cell().Element(CeldaEncabezado).Text("Tramo");
-                    header.Cell().Element(CeldaEncabezado).Text("Tipo");
-                    header.Cell().Element(CeldaEncabezado).Text("Carpetas");
-                    header.Cell().Element(CeldaEncabezado).Text("Delitos");
-                    header.Cell().Element(CeldaEncabezado).Text("Víctimas");
-                });
-
-                foreach (var bloque in bloques)
-                {
-                    table.Cell().Element(CeldaNormalSinCorte).AlignCenter().Text($"{bloque.NumeroSemana}/{bloque.AnioSemana}");
-                    table.Cell().Element(CeldaNormalSinCorte).AlignCenter().Text($"{bloque.MesCorte:00}/{bloque.AnioCorte}");
-                    table.Cell().Element(CeldaNormalSinCorte).AlignCenter().Text($"{bloque.FechaInicioTramo:dd/MM/yyyy} - {bloque.FechaFinTramo:dd/MM/yyyy}");
-                    table.Cell().Element(CeldaNormalSinCorte).AlignCenter().Text(bloque.ReemplazaInformacion ? "Reemplazo" : "Nuevo");
-                    table.Cell().Element(CeldaNumeroSinCorte).Text(bloque.TotalCarpetas.ToString("N0", cultura));
-                    table.Cell().Element(CeldaNumeroSinCorte).Text(bloque.TotalDelitos.ToString("N0", cultura));
-                    table.Cell().Element(CeldaNumeroSinCorte).Text(bloque.TotalVictimas.ToString("N0", cultura));
-                }
-            });
     }
 
     private static void ConstruirDetalleRegistros(IContainer container, SemanalCargaAcuseInfo carga)
