@@ -15,7 +15,6 @@ public class SemanalCargaService : ISemanalCargaService
     private static readonly HashSet<string> TiposContenidoPermitidos =
         new(StringComparer.OrdinalIgnoreCase)
         {
-        "SOLO_SEMANA",
         "ACUMULADO_MES"
         };
 
@@ -573,7 +572,7 @@ public class SemanalCargaService : ISemanalCargaService
                 response,
                 esActualizacion ? "SEMANAL_ACTUALIZACION_SIN_REGISTROS" : "SEMANAL_CARGA_SIN_REGISTROS",
                 esActualizacion ? "La actualización no contiene registros" : "La carga no contiene registros",
-                esActualizacion ? "No existen registros de la semana seleccionada para actualizar." : "No existen registros correspondientes a la semana seleccionada para cargar.");
+                esActualizacion ? "No existen registros dentro del periodo mensual permitido para actualizar." : "No existen registros dentro del periodo mensual permitido para cargar.");
 
             FinalizarRespuesta(
                 response,
@@ -687,12 +686,12 @@ public class SemanalCargaService : ISemanalCargaService
                 request.Victimas!);
 
         _logger.LogInformation(
-            "Operación semanal validada. Tipo: {TipoCarga}, Referencia: {CodigoReferencia}, Entidad: {IdEntidad}, Semana: {NumeroSemana}/{AnioSemana}, Tramo: {FechaInicioTramo:yyyy-MM-dd} a {FechaFinTramo:yyyy-MM-dd}",
+            "Operación preliminar acumulativa validada. Tipo: {TipoCarga}, Referencia: {CodigoReferencia}, Entidad: {IdEntidad}, Corte: {MesCorte:00}/{AnioCorte}, Periodo: {FechaInicioTramo:yyyy-MM-dd} a {FechaFinTramo:yyyy-MM-dd}",
             tipoCarga,
             response.CodigoReferencia,
             idEntidadFederativa.Value,
-            periodo.NumeroSemana,
-            periodo.AnioSemana,
+            periodo.MesCorte,
+            periodo.AnioCorte,
             periodo.FechaInicioTramo,
             periodo.FechaFinTramo);
 
@@ -905,7 +904,6 @@ public class SemanalCargaService : ISemanalCargaService
 
     private static SemanalPeriodoCarga? ValidarPeriodo(SemanalCargaValidacionRequest request, List<CargaValidacionError> errores)
     {
-        var tipoCarga = (request.TipoCarga ?? string.Empty).Trim().ToUpperInvariant();
         var tipoContenido = (request.TipoContenido ?? string.Empty).Trim().ToUpperInvariant();
 
         if (!TiposContenidoPermitidos.Contains(tipoContenido))
@@ -914,117 +912,29 @@ public class SemanalCargaService : ISemanalCargaService
                 errores,
                 "SEMANAL_TIPO_CONTENIDO_INVALIDO",
                 "Tipo de contenido inválido",
-                "El tipo de contenido debe ser SOLO_SEMANA o ACUMULADO_MES.",
+                "El módulo preliminar únicamente admite la carga acumulada del mes en curso.",
                 "tipoContenido",
                 request.TipoContenido);
-        }
-
-        if (request.AnioSemana < 2000 || request.AnioSemana > 2100) AgregarErrorGeneral(errores, "SEMANAL_ANIO_SEMANA_INVALIDO", "Año de semana inválido", "El año de la semana debe estar entre 2000 y 2100.", "anioSemana", request.AnioSemana.ToString(CultureInfo.InvariantCulture));
-        if (request.NumeroSemana < 1 || request.NumeroSemana > 53) AgregarErrorGeneral(errores, "SEMANAL_NUMERO_SEMANA_INVALIDO", "Número de semana inválido", "El número de semana debe estar entre 1 y 53.", "numeroSemana", request.NumeroSemana.ToString(CultureInfo.InvariantCulture));
-        if (request.MesCorte < 1 || request.MesCorte > 12) AgregarErrorGeneral(errores, "SEMANAL_MES_CORTE_INVALIDO", "Mes de corte inválido", "El mes de corte debe estar entre 1 y 12.", "mesCorte", request.MesCorte.ToString(CultureInfo.InvariantCulture));
-        if (request.AnioCorte < 2000 || request.AnioCorte > 2100) AgregarErrorGeneral(errores, "SEMANAL_ANIO_CORTE_INVALIDO", "Año de corte inválido", "El año de corte debe estar entre 2000 y 2100.", "anioCorte", request.AnioCorte.ToString(CultureInfo.InvariantCulture));
-
-        var fechaInicioSemana = request.FechaInicioSemana.Date;
-
-        if (fechaInicioSemana < new DateTime(2000, 1, 1) || fechaInicioSemana > new DateTime(2100, 12, 25))
-        {
-            AgregarErrorGeneral(errores, "SEMANAL_FECHA_INICIO_INVALIDA", "Fecha de inicio semanal inválida", "La fecha de inicio de la semana debe estar entre 01/01/2000 y 25/12/2100.", "fechaInicioSemana", request.FechaInicioSemana.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        }
-
-        if (errores.Count > 0)
-        {
-            return null;
-        }
-
-        var fechaFinSemana =
-            fechaInicioSemana.AddDays(6);
-
-        if (fechaInicioSemana.DayOfWeek != DayOfWeek.Monday ||
-            ISOWeek.GetYear(fechaInicioSemana) != request.AnioSemana ||
-            ISOWeek.GetWeekOfYear(fechaInicioSemana) !=
-                request.NumeroSemana)
-        {
-            AgregarErrorGeneral(
-                errores,
-                "SEMANAL_SEMANA_NO_COINCIDE_FECHA",
-                "La semana no coincide con la fecha calculada",
-                "La fecha inicial debe ser el lunes correspondiente al año y número de semana enviados.",
-                "fechaInicioSemana",
-                request.FechaInicioSemana.ToString(
-                    "yyyy-MM-dd",
-                    CultureInfo.InvariantCulture));
 
             return null;
         }
 
         var fechaActual = DateTime.Today;
-        var fechaInicioSemanaActual = ObtenerInicioSemana(fechaActual);
         var fechaInicioMesActual = new DateTime(fechaActual.Year, fechaActual.Month, 1);
-
-        if (fechaInicioSemana > fechaInicioSemanaActual)
-        {
-            AgregarErrorGeneral(
-                errores,
-                "SEMANAL_SEMANA_FUTURA",
-                "Semana futura no permitida",
-                "Solo puede cargar la semana en curso o una semana anterior cuyo mes de corte siga vigente.",
-                "fechaInicioSemana",
-                request.FechaInicioSemana.ToString(
-                    "yyyy-MM-dd",
-                    CultureInfo.InvariantCulture));
-
-            return null;
-        }
-
-        if (fechaFinSemana < fechaInicioMesActual)
-        {
-            AgregarErrorGeneral(
-                errores,
-                "SEMANAL_MES_ANTERIOR_CONSOLIDADO",
-                "El mes de la semana ya fue consolidado",
-                "El último día de la semana seleccionada corresponde a un mes anterior al mes en curso. Seleccione una semana del periodo actual.",
-                "fechaInicioSemana",
-                request.FechaInicioSemana.ToString(
-                    "yyyy-MM-dd",
-                    CultureInfo.InvariantCulture));
-
-            return null;
-        }
-
-        if (fechaFinSemana.Month != request.MesCorte || fechaFinSemana.Year != request.AnioCorte)
-        {
-            AgregarErrorGeneral(
-                errores,
-                "SEMANAL_CORTE_NO_CORRESPONDE_FIN_SEMANA",
-                "El corte no corresponde al último día de la semana",
-                "El mes y año de corte deben corresponder al mes donde cae el último día de la semana.",
-                "mesCorte",
-                $"{request.MesCorte:00}/{request.AnioCorte}");
-
-            return null;
-        }
-        var fechaInicioMes = new DateTime(request.AnioCorte, request.MesCorte, 1);
-        var fechaFinMes = fechaInicioMes.AddMonths(1).AddDays(-1);
-        var fechaInicioTramo = fechaInicioSemana > fechaInicioMes ? fechaInicioSemana : fechaInicioMes;
-        var fechaFinTramo = fechaFinSemana < fechaFinMes ? fechaFinSemana : fechaFinMes;
-
-        if (fechaInicioTramo > fechaFinTramo)
-        {
-            AgregarErrorGeneral(errores, "SEMANAL_CORTE_FUERA_DE_SEMANA", "El corte no coincide con la semana", "El mes y año de corte seleccionados no intersectan con las fechas de la semana.", "mesCorte", $"{request.MesCorte:00}/{request.AnioCorte}");
-            return null;
-        }
+        var fechaInicioSemanaActual = ObtenerInicioSemana(fechaActual);
+        var fechaFinSemanaActual = fechaInicioSemanaActual.AddDays(6);
 
         return new SemanalPeriodoCarga
         {
-            TipoContenido = tipoContenido,
-            AnioSemana = request.AnioSemana,
-            NumeroSemana = request.NumeroSemana,
-            FechaInicioSemana = fechaInicioSemana,
-            FechaFinSemana = fechaFinSemana,
-            FechaInicioTramo = fechaInicioTramo,
-            FechaFinTramo = fechaFinTramo,
-            MesCorte = request.MesCorte,
-            AnioCorte = request.AnioCorte
+            TipoContenido = "ACUMULADO_MES",
+            AnioSemana = ISOWeek.GetYear(fechaActual),
+            NumeroSemana = ISOWeek.GetWeekOfYear(fechaActual),
+            FechaInicioSemana = fechaInicioSemanaActual,
+            FechaFinSemana = fechaFinSemanaActual,
+            FechaInicioTramo = fechaInicioMesActual,
+            FechaFinTramo = fechaActual,
+            MesCorte = fechaActual.Month,
+            AnioCorte = fechaActual.Year
         };
     }
 
