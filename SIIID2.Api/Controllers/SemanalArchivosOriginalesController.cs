@@ -41,21 +41,18 @@ public class SemanalArchivosOriginalesController : ControllerBase
         });
     }
 
-    [HttpGet("{idEntidadFederativa:int}")]
-    public async Task<IActionResult> DescargarArchivosOriginales(int idEntidadFederativa)
+    [HttpGet("{idEntidadFederativa:int}/{idUsuarioCarga:int}")]
+    public async Task<IActionResult> DescargarArchivosOriginales(int idEntidadFederativa, int idUsuarioCarga)
     {
         var autorizacion = await ValidarSuperUsuarioAsync();
 
-        if (autorizacion != null)
-        {
-            return autorizacion;
-        }
+        if (autorizacion != null) return autorizacion;
 
         try
         {
-            var zip =
-                await _ultimosArchivosEntidadService.DescargarSemanalAsync(
-                    idEntidadFederativa);
+            var zip = await _ultimosArchivosEntidadService.DescargarSemanalAsync(
+                idEntidadFederativa,
+                idUsuarioCarga);
 
             return File(
                 zip.Archivo,

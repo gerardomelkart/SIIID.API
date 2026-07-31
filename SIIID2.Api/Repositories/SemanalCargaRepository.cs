@@ -224,7 +224,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             new { IdSemanalCarga = idSemanalCarga })).ToList();
     }
 
-    public async Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, DateTime fechaInicio, DateTime fechaFin)
+    public async Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, int idUsuarioCarga, DateTime fechaInicio, DateTime fechaFin)
     {
         const string sql = @"
         SELECT DISTINCT
@@ -235,6 +235,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         INNER JOIN dbo.semanal_carga sc
             ON sc.id_semanal_carga = ci.id_semanal_carga
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.id_usuario_carga = @IdUsuarioCarga
           AND ci.fecha_inicio >= @FechaInicio
           AND ci.fecha_inicio < @FechaFinExclusiva
           AND ci.activo = 1
@@ -247,10 +248,17 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
-        return (await connection.QueryAsync<SemanalCargaBloqueConfirmado>(sql, new { IdEntidadFederativa = idEntidadFederativa, FechaInicio = fechaInicio.Date, FechaFinExclusiva = fechaFin.Date.AddDays(1) })).ToList();
+
+        return (await connection.QueryAsync<SemanalCargaBloqueConfirmado>(sql, new
+        {
+            IdEntidadFederativa = idEntidadFederativa,
+            IdUsuarioCarga = idUsuarioCarga,
+            FechaInicio = fechaInicio.Date,
+            FechaFinExclusiva = fechaFin.Date.AddDays(1)
+        })).ToList();
     }
 
-    public async Task<List<SemanalCargaBloquePendiente>> ObtenerBloquesPendientesAsync(int idEntidadFederativa, DateTime fechaInicio, DateTime fechaFin)
+    public async Task<List<SemanalCargaBloquePendiente>> ObtenerBloquesPendientesAsync(int idEntidadFederativa, int idUsuarioCarga, DateTime fechaInicio, DateTime fechaFin)
     {
         const string sql = @"
         SELECT DISTINCT
@@ -266,6 +274,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             ON bloque.id_semanal_carga = sc.id_semanal_carga
            AND bloque.activo = 1
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.id_usuario_carga = @IdUsuarioCarga
           AND bloque.fecha_inicio_tramo <= @FechaFin
           AND bloque.fecha_fin_tramo >= @FechaInicio
           AND sc.estado IN
@@ -283,10 +292,17 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
-        return (await connection.QueryAsync<SemanalCargaBloquePendiente>(sql, new { IdEntidadFederativa = idEntidadFederativa, FechaInicio = fechaInicio.Date, FechaFin = fechaFin.Date })).ToList();
-    }
 
-    public async Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int anioSemana, int numeroSemana)
+        return (await connection.QueryAsync<SemanalCargaBloquePendiente>(sql, new
+        {
+            IdEntidadFederativa = idEntidadFederativa,
+            IdUsuarioCarga = idUsuarioCarga,
+            FechaInicio = fechaInicio.Date,
+            FechaFin = fechaFin.Date
+        })).ToList();
+    }
+    
+    public async Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int idUsuarioCarga, int anioSemana, int numeroSemana)
     {
         const string sql = @"
         SELECT
@@ -295,6 +311,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 SELECT 1
                 FROM dbo.semanal_carga sc
                 WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+                  AND sc.id_usuario_carga = @IdUsuarioCarga
                   AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
                   AND sc.activo = 1
                   AND
@@ -336,6 +353,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 sc.id_usuario_carga
             FROM dbo.semanal_carga sc
             WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+              AND sc.id_usuario_carga = @IdUsuarioCarga
               AND sc.estado IN
               (
                   N'VALIDADO_PENDIENTE',
@@ -371,13 +389,20 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 sc.fecha_validacion DESC,
                 sc.id_semanal_carga DESC
         ) pendiente;
-        ";
+    ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
-        return await connection.QuerySingleAsync<SemanalSemanaEstadoInfo>(sql, new { IdEntidadFederativa = idEntidadFederativa, AnioSemana = anioSemana, NumeroSemana = numeroSemana });
+
+        return await connection.QuerySingleAsync<SemanalSemanaEstadoInfo>(sql, new
+        {
+            IdEntidadFederativa = idEntidadFederativa,
+            IdUsuarioCarga = idUsuarioCarga,
+            AnioSemana = anioSemana,
+            NumeroSemana = numeroSemana
+        });
     }
 
-    public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(long idSemanalCarga, int idEntidadFederativa)
+    public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(long idSemanalCarga, int idEntidadFederativa, int idUsuarioCarga)
     {
         const string sql = @"
         SELECT
@@ -397,6 +422,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         INNER JOIN dbo.semanal_carga sc
             ON sc.id_semanal_carga = ci.id_semanal_carga
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.id_usuario_carga = @IdUsuarioCarga
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
@@ -460,6 +486,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         LEFT JOIN dbo.catalogo_codigo_postal cp
             ON cp.id_codigo_postal = d.id_codigo_postal
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.id_usuario_carga = @IdUsuarioCarga
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
@@ -520,6 +547,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         LEFT JOIN dbo.catalogo_presenta_discapacidad disc
             ON disc.id_presenta_discapacidad = v.id_presenta_discapacidad
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.id_usuario_carga = @IdUsuarioCarga
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
@@ -538,7 +566,12 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
-        using var resultados = await connection.QueryMultipleAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdEntidadFederativa = idEntidadFederativa });
+        using var resultados = await connection.QueryMultipleAsync(sql, new
+        {
+            IdSemanalCarga = idSemanalCarga,
+            IdEntidadFederativa = idEntidadFederativa,
+            IdUsuarioCarga = idUsuarioCarga
+        });
 
         return new SemanalDatosComparacion
         {
@@ -1284,6 +1317,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
            AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
            AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.id_usuario_carga = @IdUsuarioCarga
           AND ci.activo = 1
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1;
@@ -1302,8 +1336,9 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                   FROM dbo.semanal_carpeta_investigacion ci WITH (UPDLOCK, HOLDLOCK)
                   INNER JOIN dbo.semanal_carga sc
                       ON sc.id_semanal_carga = ci.id_semanal_carga
-                  WHERE sc.id_entidad_federativa = bloque.id_entidad_federativa
-                    AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                    WHERE sc.id_entidad_federativa = bloque.id_entidad_federativa
+                      AND sc.id_usuario_carga = @IdUsuarioCarga
+                      AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
                     AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
                     AND ci.activo = 1
                     AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
@@ -1523,6 +1558,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         {
             IdSemanalCargaNueva = carga.IdSemanalCarga,
             IdEntidadFederativa = carga.IdEntidadFederativaCarga,
+            IdUsuarioCarga = carga.IdUsuarioCarga,
             IdUsuarioModificacion = idUsuarioModificacion
         }, transaction);
     }

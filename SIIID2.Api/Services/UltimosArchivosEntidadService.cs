@@ -136,22 +136,23 @@ public class UltimosArchivosEntidadService : IUltimosArchivosEntidadService
         };
     }
 
-    public async Task GuardarSemanalAsync(int idEntidadFederativa, string codigoReferencia, string tipoMovimiento, SemanalPeriodoCarga periodo, IFormFile archivoCarpetas, IFormFile archivoDelitos, IFormFile archivoVictimas)
+    public async Task GuardarSemanalAsync(int idEntidadFederativa, int idUsuarioCarga, string codigoReferencia, string tipoMovimiento, SemanalPeriodoCarga periodo, IFormFile archivoCarpetas, IFormFile archivoDelitos, IFormFile archivoVictimas)
     {
-        var rutaBase = ObtenerRutaEntidadSemanal(idEntidadFederativa);
+        var rutaBase = ObtenerRutaEntidadUsuarioSemanal(idEntidadFederativa, idUsuarioCarga);
 
         LimpiarCarpetaEntidad(rutaBase);
 
         var archivos = new List<UltimosArchivosEntidadArchivo>
-        {
-            await GuardarArchivoOriginalAsync(archivoCarpetas, rutaBase, "carpetas"),
-            await GuardarArchivoOriginalAsync(archivoDelitos, rutaBase, "delitos"),
-            await GuardarArchivoOriginalAsync(archivoVictimas, rutaBase, "victimas")
-        };
+    {
+        await GuardarArchivoOriginalAsync(archivoCarpetas, rutaBase, "carpetas"),
+        await GuardarArchivoOriginalAsync(archivoDelitos, rutaBase, "delitos"),
+        await GuardarArchivoOriginalAsync(archivoVictimas, rutaBase, "victimas")
+    };
 
         var metadata = new UltimosArchivosEntidadSemanalMetadata
         {
             IdEntidadFederativa = idEntidadFederativa,
+            IdUsuarioCarga = idUsuarioCarga,
             CodigoReferencia = codigoReferencia,
             TipoMovimiento = tipoMovimiento,
             TipoContenido = periodo.TipoContenido,
@@ -169,34 +170,31 @@ public class UltimosArchivosEntidadService : IUltimosArchivosEntidadService
 
         var metadataJson = JsonSerializer.Serialize(metadata, JsonOptions);
 
-        await File.WriteAllTextAsync(
-            Path.Combine(rutaBase, "metadata.json"),
-            metadataJson);
+        await File.WriteAllTextAsync(Path.Combine(rutaBase, "metadata.json"), metadataJson);
     }
 
     public async Task<List<UltimosArchivosEntidadSemanalResumen>> ObtenerResumenSemanalAsync()
     {
         var rutaRaiz = ObtenerRutaRaizSemanal();
 
-        if (!Directory.Exists(rutaRaiz))
-        {
-            return new List<UltimosArchivosEntidadSemanalResumen>();
-        }
+        if (!Directory.Exists(rutaRaiz)) return new List<UltimosArchivosEntidadSemanalResumen>();
 
         var resumen = new List<UltimosArchivosEntidadSemanalResumen>();
 
-        foreach (var rutaEntidad in Directory.EnumerateDirectories(rutaRaiz, "entidad-*"))
+        foreach (var rutaMetadata in Directory.EnumerateFiles(rutaRaiz, "metadata.json", SearchOption.AllDirectories))
         {
-            var metadata = await LeerMetadataSemanalAsync(rutaEntidad);
+            var rutaBase = Path.GetDirectoryName(rutaMetadata);
 
-            if (metadata == null)
-            {
-                continue;
-            }
+            if (string.IsNullOrWhiteSpace(rutaBase)) continue;
+
+            var metadata = await LeerMetadataSemanalAsync(rutaBase);
+
+            if (metadata == null) continue;
 
             resumen.Add(new UltimosArchivosEntidadSemanalResumen
             {
                 IdEntidadFederativa = metadata.IdEntidadFederativa,
+                IdUsuarioCarga = metadata.IdUsuarioCarga,
                 CodigoReferencia = metadata.CodigoReferencia,
                 TipoMovimiento = metadata.TipoMovimiento,
                 TipoContenido = metadata.TipoContenido,
@@ -215,25 +213,24 @@ public class UltimosArchivosEntidadService : IUltimosArchivosEntidadService
 
         return resumen
             .OrderBy(x => x.IdEntidadFederativa)
+            .ThenBy(x => x.IdUsuarioCarga)
             .ToList();
     }
 
-    public async Task<InformeArchivoZipResponse> DescargarSemanalAsync(int idEntidadFederativa)
+    public async Task<InformeArchivoZipResponse> DescargarSemanalAsync(int idEntidadFederativa, int idUsuarioCarga)
     {
-        var rutaBase = ObtenerRutaEntidadSemanal(idEntidadFederativa);
+        var rutaBase = ObtenerRutaEntidadUsuarioSemanal(idEntidadFederativa, idUsuarioCarga);
 
         if (!Directory.Exists(rutaBase))
         {
-            throw new InvalidOperationException(
-                "No existen archivos originales semanales guardados para la entidad solicitada.");
+            throw new InvalidOperationException("No existen archivos originales preliminares guardados para la entidad y usuario solicitados.");
         }
 
         var metadata = await LeerMetadataSemanalAsync(rutaBase);
 
         if (metadata == null || metadata.Archivos.Count == 0)
         {
-            throw new InvalidOperationException(
-                "No existe metadata válida para los archivos originales semanales de la entidad solicitada.");
+            throw new InvalidOperationException("No existe metadata válida para los archivos originales preliminares solicitados.");
         }
 
         using var zipStream = new MemoryStream();
@@ -242,40 +239,26 @@ public class UltimosArchivosEntidadService : IUltimosArchivosEntidadService
         {
             foreach (var archivo in metadata.Archivos)
             {
-                var rutaArchivo = ObtenerRutaArchivoSegura(
-                    rutaBase,
-                    archivo.RutaRelativa);
+                var rutaArchivo = ObtenerRutaArchivoSegura(rutaBase, archivo.RutaRelativa);
 
                 if (!File.Exists(rutaArchivo))
                 {
-                    throw new InvalidOperationException(
-                        $"No se encontró el archivo original: {archivo.NombreOriginal}.");
+                    throw new InvalidOperationException($"No se encontró el archivo original: {archivo.NombreOriginal}.");
                 }
 
                 var rutaZip = archivo.RutaRelativa.Replace('\\', '/');
-
-                archive.CreateEntryFromFile(
-                    rutaArchivo,
-                    rutaZip,
-                    CompressionLevel.Fastest);
+                archive.CreateEntryFromFile(rutaArchivo, rutaZip, CompressionLevel.Fastest);
             }
 
             var rutaMetadata = Path.Combine(rutaBase, "metadata.json");
 
-            if (File.Exists(rutaMetadata))
-            {
-                archive.CreateEntryFromFile(
-                    rutaMetadata,
-                    "metadata.json",
-                    CompressionLevel.Fastest);
-            }
+            if (File.Exists(rutaMetadata)) archive.CreateEntryFromFile(rutaMetadata, "metadata.json", CompressionLevel.Fastest);
         }
 
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo =
-                $"ARCHIVOS_ORIGINALES_SEMANALES_ENTIDAD_{metadata.IdEntidadFederativa:00}_{metadata.AnioSemana}_SEMANA_{metadata.NumeroSemana:00}.zip"
+            NombreArchivo = $"ARCHIVOS_ORIGINALES_PRELIMINARES_ENTIDAD_{metadata.IdEntidadFederativa:00}_USUARIO_{metadata.IdUsuarioCarga}_{metadata.AnioCorte}_{metadata.MesCorte:00}.zip"
         };
     }
 
@@ -474,6 +457,13 @@ public class UltimosArchivosEntidadService : IUltimosArchivosEntidadService
         return Path.Combine(
             ObtenerRutaRaizSemanal(),
             $"entidad-{idEntidadFederativa:00}");
+    }
+
+    private string ObtenerRutaEntidadUsuarioSemanal(int idEntidadFederativa, int idUsuarioCarga)
+    {
+        return Path.Combine(
+            ObtenerRutaEntidadSemanal(idEntidadFederativa),
+            $"usuario-{idUsuarioCarga}");
     }
 
     private static async Task<UltimosArchivosEntidadSemanalMetadata?> LeerMetadataSemanalAsync(string rutaBase)

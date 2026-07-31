@@ -34,6 +34,7 @@ public class UltimosArchivosEntidadResumen
 public class UltimosArchivosEntidadSemanalMetadata
 {
     public int IdEntidadFederativa { get; set; }
+    public int IdUsuarioCarga { get; set; }
     public string CodigoReferencia { get; set; } = string.Empty;
     public string TipoMovimiento { get; set; } = string.Empty;
     public string TipoContenido { get; set; } = string.Empty;
@@ -52,6 +53,7 @@ public class UltimosArchivosEntidadSemanalMetadata
 public class UltimosArchivosEntidadSemanalResumen
 {
     public int IdEntidadFederativa { get; set; }
+    public int IdUsuarioCarga { get; set; }
     public string CodigoReferencia { get; set; } = string.Empty;
     public string TipoMovimiento { get; set; } = string.Empty;
     public string TipoContenido { get; set; } = string.Empty;

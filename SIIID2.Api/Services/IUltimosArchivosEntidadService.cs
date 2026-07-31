@@ -8,7 +8,7 @@ public interface IUltimosArchivosEntidadService
     Task<List<UltimosArchivosEntidadResumen>> ObtenerResumenAsync();
     Task<InformeArchivoZipResponse> DescargarAsync(int idEntidadFederativa);
 
-    Task GuardarSemanalAsync(int idEntidadFederativa, string codigoReferencia, string tipoMovimiento, SemanalPeriodoCarga periodo, IFormFile archivoCarpetas, IFormFile archivoDelitos, IFormFile archivoVictimas);
+    Task GuardarSemanalAsync(int idEntidadFederativa, int idUsuarioCarga, string codigoReferencia, string tipoMovimiento, SemanalPeriodoCarga periodo, IFormFile archivoCarpetas, IFormFile archivoDelitos, IFormFile archivoVictimas);
     Task<List<UltimosArchivosEntidadSemanalResumen>> ObtenerResumenSemanalAsync();
-    Task<InformeArchivoZipResponse> DescargarSemanalAsync(int idEntidadFederativa);
+    Task<InformeArchivoZipResponse> DescargarSemanalAsync(int idEntidadFederativa, int idUsuarioCarga);
 }
