@@ -23,14 +23,27 @@ public class SemanalEnviosController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> ObtenerEnvios([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? anioSemana = null, [FromQuery] int? numeroSemana = null, [FromQuery] string? tipoCarga = null, [FromQuery] string? estado = null)
+    public async Task<IActionResult> ObtenerEnvios([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? idUsuarioCarga = null, [FromQuery] int? anioSemana = null, [FromQuery] int? numeroSemana = null, [FromQuery] string? tipoCarga = null, [FromQuery] string? estado = null)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
         try
         {
-            var registros = await _semanalEnviosService.ObtenerEnviosAsync(idUsuario, idEntidadFederativa, anioSemana, numeroSemana, tipoCarga, estado);
-            return Ok(new { esValido = true, total = registros.Count, registros });
+            var registros = await _semanalEnviosService.ObtenerEnviosAsync(
+                idUsuario,
+                idEntidadFederativa,
+                idUsuarioCarga,
+                anioSemana,
+                numeroSemana,
+                tipoCarga,
+                estado);
+
+            return Ok(new
+            {
+                esValido = true,
+                total = registros.Count,
+                registros
+            });
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -44,7 +57,7 @@ public class SemanalEnviosController : ControllerBase
     }
 
     [HttpGet("reporte-cargas")]
-    public async Task<IActionResult> ObtenerReporteCargas([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? anioSemana = null, [FromQuery] int? numeroSemana = null)
+    public async Task<IActionResult> ObtenerReporteCargas([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? idUsuarioCarga = null, [FromQuery] int? anioSemana = null, [FromQuery] int? numeroSemana = null)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
@@ -53,6 +66,7 @@ public class SemanalEnviosController : ControllerBase
             var registros = await _semanalEnviosService.ObtenerReporteCargasAsync(
                 idUsuario,
                 idEntidadFederativa,
+                idUsuarioCarga,
                 anioSemana,
                 numeroSemana);
 
@@ -60,6 +74,7 @@ public class SemanalEnviosController : ControllerBase
             {
                 esValido = true,
                 idEntidadFederativa,
+                idUsuarioCarga,
                 anioSemana,
                 numeroSemana,
                 total = registros.Count,

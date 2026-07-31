@@ -69,6 +69,8 @@ public class SemanalEnvioReferenciaInfo
     public string Estado { get; set; } = string.Empty;
     public int IdEntidadFederativa { get; set; }
     public string EntidadFederativa { get; set; } = string.Empty;
+    public int IdUsuarioCarga { get; set; }
     public int AnioSemana { get; set; }
     public int NumeroSemana { get; set; }
 }
+

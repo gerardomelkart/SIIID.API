@@ -20,7 +20,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         _acusePdfService = acusePdfService;
     }
 
-    public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? anioSemana, int? numeroSemana, string? tipoCarga, string? estado)
+    public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioSemana, int? numeroSemana, string? tipoCarga, string? estado)
     {
         var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
         var tipoCargaNormalizado = NormalizarFiltro(tipoCarga);
@@ -28,8 +28,9 @@ public class SemanalEnviosService : ISemanalEnviosService
 
         var registros = await _semanalEnviosRepository.ObtenerEnviosAsync(
             usuario.EsSuperUsuario,
-            usuario.IdEntidadFederativa,
+            idUsuarioConsulta,
             idEntidadFederativa,
+            idUsuarioCarga,
             anioSemana,
             numeroSemana,
             tipoCargaNormalizado,
@@ -98,17 +99,18 @@ public class SemanalEnviosService : ISemanalEnviosService
         return registros;
     }
 
-    public async Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? anioSemana, int? numeroSemana)
+    public async Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioSemana, int? numeroSemana)
     {
         var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
 
         if (!usuario.EsSuperUsuario)
         {
-            throw new UnauthorizedAccessException("Únicamente el superusuario puede consultar el reporte de cargas semanales.");
+            throw new UnauthorizedAccessException("Únicamente el superusuario puede consultar el reporte de cargas preliminares.");
         }
 
         return await _semanalEnviosRepository.ObtenerReporteCargasAsync(
             idEntidadFederativa,
+            idUsuarioCarga,
             anioSemana,
             numeroSemana);
     }
@@ -122,18 +124,15 @@ public class SemanalEnviosService : ISemanalEnviosService
 
         var referencia = await _semanalEnviosRepository.ObtenerReferenciaAsync(codigoLimpio);
 
-        if (referencia == null) throw new KeyNotFoundException("No se encontró la operación semanal solicitada.");
+        if (referencia == null) throw new KeyNotFoundException("No se encontró la operación preliminar solicitada.");
 
-        if (!usuario.EsSuperUsuario &&
-            (!usuario.IdEntidadFederativa.HasValue ||
-             usuario.IdEntidadFederativa.Value != referencia.IdEntidadFederativa))
+        if (!usuario.EsSuperUsuario && referencia.IdUsuarioCarga != idUsuarioConsulta)
         {
-            throw new UnauthorizedAccessException("No tiene permiso para descargar archivos de otra entidad federativa.");
+            throw new UnauthorizedAccessException("No tiene permiso para descargar archivos de una operación registrada por otro usuario.");
         }
 
-        var esConfirmada =
-            string.Equals(referencia.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(referencia.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+        var esConfirmada = string.Equals(referencia.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) 
+                           || string.Equals(referencia.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
 
         List<IDictionary<string, object?>> carpetas;
         List<IDictionary<string, object?>> delitos;
@@ -173,7 +172,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = $"ARCHIVOS_SEMANALES_{NormalizarNombreArchivo(referencia.EntidadFederativa)}_{codigoLimpio}.zip"
+            NombreArchivo = $"ARCHIVOS_PRELIMINARES_{NormalizarNombreArchivo(referencia.EntidadFederativa)}_{codigoLimpio}.zip"
         };
     }
 
@@ -182,7 +181,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         if (anioSemana < 2000 || anioSemana > 2100) throw new InvalidOperationException("El año de la semana no es válido.");
         if (numeroSemana < 1 || numeroSemana > 53) throw new InvalidOperationException("El número de semana no es válido.");
 
-        var envios = await ObtenerEnviosAsync(idUsuarioConsulta, null, anioSemana, numeroSemana, null, null);
+        var envios = await ObtenerEnviosAsync(idUsuarioConsulta, null, null, anioSemana, numeroSemana, null, null);
 
         var enviosConAcuse = envios
             .Where(envio => envio.Estado is

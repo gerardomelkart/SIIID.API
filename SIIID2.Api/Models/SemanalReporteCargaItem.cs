@@ -5,6 +5,9 @@ public class SemanalReporteCargaItem
     public int IdEntidadFederativa { get; set; }
     public string EntidadFederativa { get; set; } = string.Empty;
     public string ClaveEntidad { get; set; } = string.Empty;
+    public int IdUsuarioCarga { get; set; }
+    public string UsuarioCarga { get; set; } = string.Empty;
+    public string NombreUsuarioCarga { get; set; } = string.Empty;
     public int AnioSemana { get; set; }
     public int NumeroSemana { get; set; }
     public string Semana { get; set; } = string.Empty;

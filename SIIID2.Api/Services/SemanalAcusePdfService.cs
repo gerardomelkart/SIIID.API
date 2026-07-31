@@ -78,31 +78,23 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
 
     private async Task<SemanalCargaAcuseInfo> ObtenerCargaAutorizadaAsync(string codigoReferencia, int idUsuarioConsulta)
     {
-        var usuarioConsulta =
-            await _semanalCargaRepository.ObtenerUsuarioCargaAsync(
-                idUsuarioConsulta);
+        var usuarioConsulta = await _semanalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
 
         if (usuarioConsulta == null)
         {
             throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo preliminar.");
         }
 
-        var carga =
-            await _semanalCargaRepository.ObtenerCargaParaAcuseAsync(
-                codigoReferencia.Trim());
+        var carga = await _semanalCargaRepository.ObtenerCargaParaAcuseAsync(codigoReferencia.Trim());
 
         if (carga == null)
         {
             throw new InvalidOperationException("No se encontró la carga preliminar solicitada.");
         }
 
-        if (!usuarioConsulta.EsSuperUsuario &&
-            (!usuarioConsulta.IdEntidadFederativa.HasValue ||
-             !carga.IdEntidadFederativa.HasValue ||
-             usuarioConsulta.IdEntidadFederativa.Value !=
-             carga.IdEntidadFederativa.Value))
+        if (!usuarioConsulta.EsSuperUsuario && carga.IdUsuarioCarga != idUsuarioConsulta)
         {
-            throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse preliminar de esta entidad.");
+            throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de una operación registrada por otro usuario.");
         }
 
         return carga;
