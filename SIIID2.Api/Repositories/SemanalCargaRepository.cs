@@ -1016,6 +1016,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         (
             id_semanal_carga,
             id_entidad_federativa,
+            id_usuario_carga,
             anio_semana,
             numero_semana,
             fecha_inicio_semana,
@@ -1034,6 +1035,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         (
             @IdSemanalCarga,
             @IdEntidadFederativa,
+            @IdUsuarioCarga,
             @AnioSemana,
             @NumeroSemana,
             @FechaInicioSemana,
@@ -1056,6 +1058,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         {
             IdSemanalCarga = idSemanalCarga,
             carga.IdEntidadFederativa,
+            carga.IdUsuarioCarga,
             bloque.AnioSemana,
             bloque.NumeroSemana,
             FechaInicioSemana = bloque.FechaInicioSemana.Date,
