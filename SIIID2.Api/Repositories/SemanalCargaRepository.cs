@@ -175,8 +175,8 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                  @FechaInicio IS NULL
                  OR
                  (
-                     TRY_CONVERT(date, carpeta.fha_de_ini) >= @FechaInicio
-                     AND TRY_CONVERT(date, carpeta.fha_de_ini) < @FechaFinExclusiva
+                    COALESCE(TRY_CONVERT(date, carpeta.fha_de_ini, 103), TRY_CONVERT(date, carpeta.fha_de_ini)) >= @FechaInicio
+                    AND COALESCE(TRY_CONVERT(date, carpeta.fha_de_ini, 103), TRY_CONVERT(date, carpeta.fha_de_ini)) < @FechaFinExclusiva
                  )
              )
        )
