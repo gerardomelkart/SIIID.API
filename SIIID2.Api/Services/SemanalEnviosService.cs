@@ -250,54 +250,89 @@ public class SemanalEnviosService : ISemanalEnviosService
         };
     }
 
-    public async Task<InformeArchivoZipResponse> GenerarZipPlanosAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, string? tipoPlano, string? modoPlano)
+    public async Task<SemanalReportePreliminarOpcionesResponse> ObtenerOpcionesReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int? idUsuarioCarga)
     {
-        var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
+        var contexto = await ObtenerContextoReportePreliminarAsync(idUsuarioConsulta, anioCorte, mesCorte, idUsuarioCarga);
 
+        return new SemanalReportePreliminarOpcionesResponse
+        {
+            EsValido = true,
+            Usuarios = contexto.Usuarios,
+            Delitos = contexto.Delitos
+        };
+    }
+
+    public async Task<SemanalReportePreliminarArchivoResponse> GenerarReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int idDelito, int? idUsuarioCarga)
+    {
+        var contexto = await ObtenerContextoReportePreliminarAsync(idUsuarioConsulta, anioCorte, mesCorte, idUsuarioCarga);
+        var delito = contexto.Delitos.FirstOrDefault(x => x.IdDelito == idDelito);
+
+        if (delito == null) throw new InvalidOperationException("El delito seleccionado no tiene información preliminar confirmada para el periodo y usuario solicitados.");
+
+        SemanalReportePreliminarUsuarioItem? usuarioSeleccionado = null;
+
+        if (contexto.IdUsuarioCarga.HasValue)
+        {
+            usuarioSeleccionado = contexto.Usuarios.FirstOrDefault(x => x.IdUsuarioCarga == contexto.IdUsuarioCarga.Value);
+
+            if (usuarioSeleccionado == null) throw new InvalidOperationException("El usuario seleccionado no tiene información preliminar confirmada para el periodo solicitado.");
+        }
+
+        var carpetasTask = _semanalEnviosRepository.ObtenerCarpetasReportePreliminarAsync(anioCorte, mesCorte, idDelito, contexto.IdUsuarioCarga);
+        var delitosTask = _semanalEnviosRepository.ObtenerDelitosReportePreliminarAsync(anioCorte, mesCorte, idDelito, contexto.IdUsuarioCarga);
+        var victimasTask = _semanalEnviosRepository.ObtenerVictimasReportePreliminarAsync(anioCorte, mesCorte, idDelito, contexto.IdUsuarioCarga);
+
+        await Task.WhenAll(carpetasTask, delitosTask, victimasTask);
+
+        var carpetas = carpetasTask.Result;
+        var delitos = delitosTask.Result;
+        var victimas = victimasTask.Result;
+
+        if (carpetas.Count == 0 && delitos.Count == 0 && victimas.Count == 0)
+        {
+            throw new InvalidOperationException($"No existe información preliminar confirmada de {delito.Delito} para {ObtenerNombreMes(mesCorte)} de {anioCorte}.");
+        }
+
+        using var workbook = new XLWorkbook();
+
+        AgregarHojaReportePreliminar(workbook, "Carpetas", carpetas, ["Nombre entidad", "id_ci", "ntra_ci", "fha_de_ini", "hra_de_ini", "rmen_de_hchos"]);
+        AgregarHojaReportePreliminar(workbook, "Delitos", delitos, ["Nombre entidad", "id_ci", "id_delito", "dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "id_ent_hchos", "id_mun_hchos", "id_loc_hchos", "nom_loc_hchos", "id_col_hchos", "nom_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos"]);
+        AgregarHojaReportePreliminar(workbook, "Víctimas", victimas, ["Nombre entidad", "id_ci", "id_delito", "id_vicf", "id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional"]);
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+
+        var alcance = usuarioSeleccionado == null
+            ? "GENERAL"
+            : $"{NormalizarNombreArchivo(usuarioSeleccionado.EntidadFederativa)}_{NormalizarNombreArchivo(usuarioSeleccionado.UsuarioCarga)}";
+
+        return new SemanalReportePreliminarArchivoResponse
+        {
+            Archivo = stream.ToArray(),
+            NombreArchivo = $"REPORTE_PRELIMINAR_{NormalizarNombreArchivo(delito.Delito)}_{alcance}_{NormalizarNombreArchivo(ObtenerNombreMes(mesCorte))}_{anioCorte}.xlsx"
+        };
+    }
+
+    private async Task<(int? IdUsuarioCarga, List<SemanalReportePreliminarUsuarioItem> Usuarios, List<SemanalReportePreliminarDelitoItem> Delitos)> ObtenerContextoReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int? idUsuarioCarga)
+    {
         if (anioCorte < 2000 || anioCorte > 2100) throw new InvalidOperationException("El año de corte no es válido.");
         if (mesCorte < 1 || mesCorte > 12) throw new InvalidOperationException("El mes de corte no es válido.");
+        if (idUsuarioCarga.HasValue && idUsuarioCarga.Value <= 0) throw new InvalidOperationException("El usuario seleccionado no es válido.");
 
-        var tipo = (tipoPlano ?? "COMPLETA").Trim().ToUpperInvariant();
-        var modo = NormalizarModoPlano(modoPlano);
+        var usuarioConsulta = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
+        var idUsuarioEfectivo = usuarioConsulta.EsSuperUsuario ? idUsuarioCarga : idUsuarioConsulta;
 
-        if (tipo is not "COMPLETA" and not "ESTATALES" and not "MUNICIPALES") throw new InvalidOperationException("El tipo de plano debe ser COMPLETA, ESTATALES o MUNICIPALES.");
-        if (!usuario.EsSuperUsuario && modo != "CONFIRMADO") throw new UnauthorizedAccessException("Únicamente el superusuario puede generar planos previos o mixtos.");
+        var usuarios = await _semanalEnviosRepository.ObtenerUsuariosReportePreliminarAsync(
+            anioCorte,
+            mesCorte,
+            usuarioConsulta.EsSuperUsuario ? null : idUsuarioConsulta);
 
-        var idEntidadFederativa = usuario.EsSuperUsuario ? null : usuario.IdEntidadFederativa;
+        var delitos = await _semanalEnviosRepository.ObtenerDelitosReportePreliminarAsync(
+            anioCorte,
+            mesCorte,
+            idUsuarioEfectivo);
 
-        if (!await _semanalEnviosRepository.ExisteInformacionPlanoAsync(anioCorte, mesCorte, idEntidadFederativa, modo))
-        {
-            throw new InvalidOperationException($"No existe información semanal disponible para {ObtenerNombreMes(mesCorte)} de {anioCorte} en modo {modo.ToLowerInvariant()}.");
-        }
-
-        var tareas = new List<(string Archivo, string Hoja, Task<List<IDictionary<string, object?>>> Consulta)>();
-
-        if (tipo is "COMPLETA" or "ESTATALES")
-        {
-            tareas.Add(("estatal-delitos.xlsx", "estatal-delitos", _semanalEnviosRepository.ObtenerPlanoEstatalDelitosAsync(anioCorte, mesCorte, idEntidadFederativa, modo)));
-            tareas.Add(("estatal-victimas.xlsx", "estatal-victimas", _semanalEnviosRepository.ObtenerPlanoEstatalVictimasAsync(anioCorte, mesCorte, idEntidadFederativa, modo)));
-        }
-
-        if (tipo is "COMPLETA" or "MUNICIPALES")
-        {
-            tareas.Add(("municipal-delitos.xlsx", "municipal-delitos", _semanalEnviosRepository.ObtenerPlanoMunicipalDelitosAsync(anioCorte, mesCorte, idEntidadFederativa, modo)));
-            tareas.Add(("municipal-victimas.xlsx", "municipal-victimas", _semanalEnviosRepository.ObtenerPlanoMunicipalVictimasAsync(anioCorte, mesCorte, idEntidadFederativa, modo)));
-        }
-
-        await Task.WhenAll(tareas.Select(tarea => tarea.Consulta));
-
-        using var zipStream = new MemoryStream();
-
-        using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            foreach (var tarea in tareas) AgregarExcelAlZip(archive, tarea.Archivo, tarea.Hoja, tarea.Consulta.Result);
-        }
-
-        return new InformeArchivoZipResponse
-        {
-            Archivo = zipStream.ToArray(),
-            NombreArchivo = $"PLANOS_SEMANALES_{modo}_{NormalizarNombreArchivo(ObtenerNombreMes(mesCorte))}_{anioCorte}.zip"
-        };
+        return (idUsuarioEfectivo, usuarios, delitos);
     }
 
     private async Task<UsuarioCargaInfo> ObtenerUsuarioAutorizadoAsync(int idUsuario)
@@ -319,15 +354,6 @@ public class SemanalEnviosService : ISemanalEnviosService
         }
 
         return usuario;
-    }
-
-    private static string NormalizarModoPlano(string? modoPlano)
-    {
-        var modo = (modoPlano ?? "CONFIRMADO").Trim().ToUpperInvariant();
-
-        return modo is "CONFIRMADO" or "PREVIO" or "MIXTO"
-            ? modo
-            : throw new InvalidOperationException("El modo del plano debe ser CONFIRMADO, PREVIO o MIXTO.");
     }
 
     private static string ObtenerNombreMes(int mes)
@@ -415,6 +441,38 @@ public class SemanalEnviosService : ISemanalEnviosService
         worksheet.SheetView.FreezeRows(1);
         worksheet.RangeUsed()?.SetAutoFilter();
         workbook.SaveAs(entryStream);
+    }
+
+    private static void AgregarHojaReportePreliminar(XLWorkbook workbook, string nombreHoja, List<IDictionary<string, object?>> filas, IReadOnlyList<string> columnas)
+    {
+        var worksheet = workbook.Worksheets.Add(nombreHoja);
+
+        for (var columna = 0; columna < columnas.Count; columna++)
+        {
+            var celda = worksheet.Cell(1, columna + 1);
+
+            celda.Value = columnas[columna];
+            celda.Style.Font.Bold = true;
+            celda.Style.Fill.BackgroundColor = XLColor.FromHtml("#19463C");
+            celda.Style.Font.FontColor = XLColor.White;
+            worksheet.Column(columna + 1).Style.NumberFormat.Format = "@";
+        }
+
+        for (var fila = 0; fila < filas.Count; fila++)
+        {
+            for (var columna = 0; columna < columnas.Count; columna++)
+            {
+                var nombreColumna = columnas[columna];
+                var valor = filas[fila].TryGetValue(nombreColumna, out var dato) ? dato : null;
+                var celda = worksheet.Cell(fila + 2, columna + 1);
+
+                celda.Style.NumberFormat.Format = "@";
+                celda.Value = valor?.ToString() ?? string.Empty;
+            }
+        }
+
+        worksheet.SheetView.FreezeRows(1);
+        worksheet.Range(1, 1, Math.Max(1, filas.Count + 1), columnas.Count).SetAutoFilter();
     }
 
     private static string NormalizarNombreArchivo(string valor)

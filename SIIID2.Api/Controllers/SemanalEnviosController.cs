@@ -219,18 +219,48 @@ public class SemanalEnviosController : ControllerBase
         return File(zip.Archivo, "application/zip", zip.NombreArchivo);
     }
 
-    [HttpPost("planos/ticket")]
-    public async Task<IActionResult> CrearTicketDescargaPlanos([FromQuery] int anioCorte, [FromQuery] int mesCorte, [FromQuery] string tipo = "COMPLETA", [FromQuery] string modo = "CONFIRMADO")
+    [HttpGet("reporte-preliminar/opciones")]
+    public async Task<IActionResult> ObtenerOpcionesReportePreliminar([FromQuery] int anioCorte, [FromQuery] int mesCorte, [FromQuery] int? idUsuarioCarga = null)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
         try
         {
-            var zip = await _semanalEnviosService.GenerarZipPlanosAsync(idUsuario, anioCorte, mesCorte, tipo, modo);
-            var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-            var cacheKey = $"PLANOS_SEMANALES_DOWNLOAD_TICKET:{ticket}";
+            var resultado = await _semanalEnviosService.ObtenerOpcionesReportePreliminarAsync(idUsuario, anioCorte, mesCorte, idUsuarioCarga);
+            return Ok(resultado);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "SEMANAL_REPORTE_PRELIMINAR_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "SEMANAL_REPORTE_PRELIMINAR_FILTRO_INVALIDO",
+                mensaje = ex.Message
+            });
+        }
+    }
 
-            _cache.Set(cacheKey, zip, new MemoryCacheEntryOptions
+    [HttpPost("reporte-preliminar/ticket")]
+    public async Task<IActionResult> CrearTicketReportePreliminar([FromQuery] int anioCorte, [FromQuery] int mesCorte, [FromQuery] int idDelito, [FromQuery] int? idUsuarioCarga = null)
+    {
+        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
+
+        try
+        {
+            var archivo = await _semanalEnviosService.GenerarReportePreliminarAsync(idUsuario, anioCorte, mesCorte, idDelito, idUsuarioCarga);
+            var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+            var cacheKey = $"REPORTE_PRELIMINAR_DOWNLOAD_TICKET:{ticket}";
+
+            _cache.Set(cacheKey, archivo, new MemoryCacheEntryOptions
             {
                 SlidingExpiration = TimeSpan.FromMinutes(5),
                 AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
@@ -243,7 +273,7 @@ public class SemanalEnviosController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden, new
             {
                 esValido = false,
-                codigo = "SEMANAL_PLANOS_SIN_PERMISO",
+                codigo = "SEMANAL_REPORTE_PRELIMINAR_SIN_PERMISO",
                 mensaje = ex.Message
             });
         }
@@ -252,34 +282,34 @@ public class SemanalEnviosController : ControllerBase
             return BadRequest(new
             {
                 esValido = false,
-                codigo = "SEMANAL_PLANOS_NO_DISPONIBLES",
+                codigo = "SEMANAL_REPORTE_PRELIMINAR_NO_DISPONIBLE",
                 mensaje = ex.Message
             });
         }
     }
 
     [AllowAnonymous]
-    [HttpGet("planos/descargar")]
-    public IActionResult DescargarPlanosPorTicket([FromQuery] string ticket)
+    [HttpGet("reporte-preliminar/descargar")]
+    public IActionResult DescargarReportePreliminarPorTicket([FromQuery] string ticket)
     {
         if (string.IsNullOrWhiteSpace(ticket))
         {
             return Unauthorized(new
             {
                 esValido = false,
-                codigo = "SEMANAL_PLANOS_TICKET_REQUERIDO",
+                codigo = "SEMANAL_REPORTE_PRELIMINAR_TICKET_REQUERIDO",
                 mensaje = "Debe proporcionar un ticket de descarga válido."
             });
         }
 
-        var cacheKey = $"PLANOS_SEMANALES_DOWNLOAD_TICKET:{ticket}";
+        var cacheKey = $"REPORTE_PRELIMINAR_DOWNLOAD_TICKET:{ticket}";
 
-        if (!_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var zip) || zip == null)
+        if (!_cache.TryGetValue<SemanalReportePreliminarArchivoResponse>(cacheKey, out var archivo) || archivo == null)
         {
             return Unauthorized(new
             {
                 esValido = false,
-                codigo = "SEMANAL_PLANOS_TICKET_INVALIDO",
+                codigo = "SEMANAL_REPORTE_PRELIMINAR_TICKET_INVALIDO",
                 mensaje = "El ticket de descarga no existe o ya expiró."
             });
         }
@@ -287,7 +317,7 @@ public class SemanalEnviosController : ControllerBase
         _cache.Remove(cacheKey);
         Response.Headers.CacheControl = "no-store";
 
-        return File(zip.Archivo, "application/zip", zip.NombreArchivo);
+        return File(archivo.Archivo, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", archivo.NombreArchivo);
     }
 
     private bool ObtenerIdUsuario(out int idUsuario) => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out idUsuario);

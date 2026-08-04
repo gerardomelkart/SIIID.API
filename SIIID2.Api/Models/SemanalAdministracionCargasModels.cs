@@ -82,3 +82,32 @@ public class RechazarCargaSemanalAdministracionRequest
     [StringLength(2000, MinimumLength = 5, ErrorMessage = "El motivo debe tener entre 5 y 2000 caracteres.")]
     public string Motivo { get; set; } = string.Empty;
 }
+
+public class SemanalReportePreliminarUsuarioItem
+{
+    public int IdUsuarioCarga { get; set; }
+    public string UsuarioCarga { get; set; } = string.Empty;
+    public string NombreUsuarioCarga { get; set; } = string.Empty;
+    public int IdEntidadFederativa { get; set; }
+    public string EntidadFederativa { get; set; } = string.Empty;
+}
+
+public class SemanalReportePreliminarDelitoItem
+{
+    public int IdDelito { get; set; }
+    public string ClaveDelito { get; set; } = string.Empty;
+    public string Delito { get; set; } = string.Empty;
+}
+
+public class SemanalReportePreliminarOpcionesResponse
+{
+    public bool EsValido { get; set; }
+    public List<SemanalReportePreliminarUsuarioItem> Usuarios { get; set; } = [];
+    public List<SemanalReportePreliminarDelitoItem> Delitos { get; set; } = [];
+}
+
+public class SemanalReportePreliminarArchivoResponse
+{
+    public byte[] Archivo { get; set; } = [];
+    public string NombreArchivo { get; set; } = string.Empty;
+}
