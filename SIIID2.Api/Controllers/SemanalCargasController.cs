@@ -89,7 +89,7 @@ public class SemanalCargasController : ControllerBase
             return File(
                 pdf,
                 "application/pdf",
-                $"INFORME_PREVIO_SEMANAL_{codigoReferencia}.pdf");
+                $"INFORME_PREVIO_PRELIMINAR_{codigoReferencia}.pdf");
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -157,7 +157,7 @@ public class SemanalCargasController : ControllerBase
             return File(
                 pdf,
                 "application/pdf",
-                $"ACUSE_SEMANAL_{codigoReferencia}.pdf");
+                $"ACUSE_PRELIMINAR_{codigoReferencia}.pdf");
         }
         catch (UnauthorizedAccessException ex)
         {

@@ -238,23 +238,23 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         ON d.id_semanal_carga = configuracion.id_semanal_carga
        AND d.id_modalidad_delito = configuracion.id_modalidad_delito
        AND d.activo = 1
-       AND EXISTS
-       (
-           SELECT 1
-           FROM dbo.semanal_carpeta_investigacion carpeta
-           WHERE carpeta.id_semanal_carga = d.id_semanal_carga
-             AND carpeta.id_ci = d.id_ci
-             AND carpeta.activo = 1
-             AND
-             (
-                 @FechaInicio IS NULL
-                 OR
-                 (
-                     carpeta.fecha_inicio >= @FechaInicio
-                     AND carpeta.fecha_inicio < @FechaFinExclusiva
-                 )
-             )
-       )
+        AND EXISTS
+        (
+            SELECT 1
+            FROM dbo.semanal_carpeta_investigacion carpeta
+            WHERE carpeta.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
+              AND carpeta.id_semanal_carga = d.id_semanal_carga
+              AND carpeta.activo = 1
+              AND
+              (
+                  @FechaInicio IS NULL
+                  OR
+                  (
+                      carpeta.fecha_inicio >= @FechaInicio
+                      AND carpeta.fecha_inicio < @FechaFinExclusiva
+                  )
+              )
+        )
     LEFT JOIN dbo.semanal_victima v
         ON v.id_semanal_carga = d.id_semanal_carga
        AND v.id_semanal_delito = d.id_semanal_delito
