@@ -187,6 +187,37 @@ public class SemanalCargaRepository : ISemanalCargaRepository
        AND v.incluido = 1
        AND v.activo = 1
     WHERE configuracion.id_semanal_carga = @IdSemanalCarga
+      AND EXISTS
+      (
+          SELECT 1
+          FROM dbo.semanal_carga_tmp_delito delito_presente
+          INNER JOIN dbo.catalogo_modalidad_delito modalidad_presente
+              ON LTRIM(RTRIM(delito_presente.clasf_de_dto)) = LTRIM(RTRIM(modalidad_presente.clave4))
+          INNER JOIN dbo.catalogo_subtipo_delito subtipo_presente
+              ON subtipo_presente.id_subtipo_delito = modalidad_presente.id_subtipo_delito
+          WHERE delito_presente.id_semanal_carga = configuracion.id_semanal_carga
+            AND subtipo_presente.id_delito = cd.id_delito
+            AND delito_presente.incluido = 1
+            AND delito_presente.activo = 1
+            AND EXISTS
+            (
+                SELECT 1
+                FROM dbo.semanal_carga_tmp_carpeta carpeta_presente
+                WHERE carpeta_presente.id_semanal_carga = delito_presente.id_semanal_carga
+                  AND carpeta_presente.id_ci = delito_presente.id_ci
+                  AND carpeta_presente.incluido = 1
+                  AND carpeta_presente.activo = 1
+                  AND
+                  (
+                      @FechaInicio IS NULL
+                      OR
+                      (
+                          COALESCE(TRY_CONVERT(date, carpeta_presente.fha_de_ini, 103), TRY_CONVERT(date, carpeta_presente.fha_de_ini)) >= @FechaInicio
+                          AND COALESCE(TRY_CONVERT(date, carpeta_presente.fha_de_ini, 103), TRY_CONVERT(date, carpeta_presente.fha_de_ini)) < @FechaFinExclusiva
+                      )
+                  )
+            )
+      )
     GROUP BY
         cd.clave2,
         cd.delito,
@@ -260,6 +291,35 @@ public class SemanalCargaRepository : ISemanalCargaRepository
        AND v.id_semanal_delito = d.id_semanal_delito
        AND v.activo = 1
     WHERE configuracion.id_semanal_carga = @IdSemanalCarga
+      AND EXISTS
+      (
+          SELECT 1
+          FROM dbo.semanal_delito delito_presente
+          INNER JOIN dbo.catalogo_modalidad_delito modalidad_presente
+              ON modalidad_presente.id_modalidad_delito = delito_presente.id_modalidad_delito
+          INNER JOIN dbo.catalogo_subtipo_delito subtipo_presente
+              ON subtipo_presente.id_subtipo_delito = modalidad_presente.id_subtipo_delito
+          WHERE delito_presente.id_semanal_carga = configuracion.id_semanal_carga
+            AND subtipo_presente.id_delito = cd.id_delito
+            AND delito_presente.activo = 1
+            AND EXISTS
+            (
+                SELECT 1
+                FROM dbo.semanal_carpeta_investigacion carpeta_presente
+                WHERE carpeta_presente.id_semanal_carpeta_investigacion = delito_presente.id_semanal_carpeta_investigacion
+                  AND carpeta_presente.id_semanal_carga = delito_presente.id_semanal_carga
+                  AND carpeta_presente.activo = 1
+                  AND
+                  (
+                      @FechaInicio IS NULL
+                      OR
+                      (
+                          carpeta_presente.fecha_inicio >= @FechaInicio
+                          AND carpeta_presente.fecha_inicio < @FechaFinExclusiva
+                      )
+                  )
+            )
+      )
     GROUP BY
         cd.clave2,
         cd.delito,
