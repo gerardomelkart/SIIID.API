@@ -83,11 +83,8 @@ public class RechazarCargaSemanalAdministracionRequest
     public string Motivo { get; set; } = string.Empty;
 }
 
-public class SemanalReportePreliminarUsuarioItem
+public class SemanalReportePreliminarEntidadItem
 {
-    public int IdUsuarioCarga { get; set; }
-    public string UsuarioCarga { get; set; } = string.Empty;
-    public string NombreUsuarioCarga { get; set; } = string.Empty;
     public int IdEntidadFederativa { get; set; }
     public string EntidadFederativa { get; set; } = string.Empty;
 }
@@ -102,7 +99,7 @@ public class SemanalReportePreliminarDelitoItem
 public class SemanalReportePreliminarOpcionesResponse
 {
     public bool EsValido { get; set; }
-    public List<SemanalReportePreliminarUsuarioItem> Usuarios { get; set; } = [];
+    public List<SemanalReportePreliminarEntidadItem> Entidades { get; set; } = [];
     public List<SemanalReportePreliminarDelitoItem> Delitos { get; set; } = [];
 }
 

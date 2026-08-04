@@ -545,30 +545,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         return registros;
     }
 
-    public async Task<List<SemanalReportePreliminarUsuarioItem>> ObtenerUsuariosReportePreliminarAsync(int anioCorte, int mesCorte, int? idUsuarioCarga)
+    public async Task<List<SemanalReportePreliminarEntidadItem>> ObtenerEntidadesReportePreliminarAsync(int anioCorte, int mesCorte, int? idEntidadFederativa, int? idUsuarioCarga)
     {
         const string sql = @"
         SELECT DISTINCT
-            sc.id_usuario_carga AS IdUsuarioCarga,
-            u.usuario AS UsuarioCarga,
-            COALESCE
-            (
-                NULLIF
-                (
-                    LTRIM(RTRIM(CONCAT
-                    (
-                        u.nombre,
-                        N' ',
-                        u.primer_apellido,
-                        CASE
-                            WHEN NULLIF(u.segundo_apellido, N'') IS NULL THEN N''
-                            ELSE CONCAT(N' ', u.segundo_apellido)
-                        END
-                    ))),
-                    N''
-                ),
-                u.usuario
-            ) AS NombreUsuarioCarga,
             sc.id_entidad_federativa AS IdEntidadFederativa,
             ef.nombre AS EntidadFederativa
         FROM dbo.semanal_delito d
@@ -577,8 +557,6 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
            AND ci.activo = 1
         INNER JOIN dbo.semanal_carga sc
             ON sc.id_semanal_carga = d.id_semanal_carga
-        INNER JOIN dbo.usuario u
-            ON u.id_usuario = sc.id_usuario_carga
         INNER JOIN dbo.catalogo_entidad_federativa ef
             ON ef.id_entidad_federativa = sc.id_entidad_federativa
            AND ef.activo = 1
@@ -588,24 +566,25 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
+          AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
           AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
         ORDER BY
-            ef.nombre,
-            u.usuario;
+            ef.nombre;
         ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
         var fechaInicio = new DateTime(anioCorte, mesCorte, 1);
 
-        return (await connection.QueryAsync<SemanalReportePreliminarUsuarioItem>(sql, new
+        return (await connection.QueryAsync<SemanalReportePreliminarEntidadItem>(sql, new
         {
             FechaInicio = fechaInicio,
             FechaFinExclusiva = fechaInicio.AddMonths(1),
+            IdEntidadFederativa = idEntidadFederativa,
             IdUsuarioCarga = idUsuarioCarga
         })).ToList();
     }
 
-    public async Task<List<SemanalReportePreliminarDelitoItem>> ObtenerDelitosReportePreliminarAsync(int anioCorte, int mesCorte, int? idUsuarioCarga)
+    public async Task<List<SemanalReportePreliminarDelitoItem>> ObtenerDelitosReportePreliminarAsync(int anioCorte, int mesCorte, int? idEntidadFederativa, int? idUsuarioCarga)
     {
         const string sql = @"
         SELECT DISTINCT
@@ -627,6 +606,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
+          AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
           AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
         ORDER BY
             cd.clave2,
@@ -640,11 +620,12 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         {
             FechaInicio = fechaInicio,
             FechaFinExclusiva = fechaInicio.AddMonths(1),
+            IdEntidadFederativa = idEntidadFederativa,
             IdUsuarioCarga = idUsuarioCarga
         })).ToList();
     }
 
-    public Task<List<IDictionary<string, object?>>> ObtenerCarpetasReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idUsuarioCarga)
+    public Task<List<IDictionary<string, object?>>> ObtenerCarpetasReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idEntidadFederativa, int? idUsuarioCarga)
     {
         const string sql = @"
         SELECT
@@ -669,6 +650,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
+          AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
           AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
           AND EXISTS
           (
@@ -683,10 +665,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             ci.identificador_carpeta_fiscalia;
         ";
 
-        return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, idUsuarioCarga);
+        return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, idEntidadFederativa, idUsuarioCarga);
     }
 
-    public Task<List<IDictionary<string, object?>>> ObtenerDelitosReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idUsuarioCarga)
+    public Task<List<IDictionary<string, object?>>> ObtenerDelitosReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idEntidadFederativa, int? idUsuarioCarga)
     {
         const string sql = @"
         SELECT
@@ -745,6 +727,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
+          AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
           AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
         ORDER BY
             ef.nombre,
@@ -752,10 +735,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             d.identificador_delito_fiscalia;
         ";
 
-        return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, idUsuarioCarga);
+        return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, idEntidadFederativa, idUsuarioCarga);
     }
 
-    public Task<List<IDictionary<string, object?>>> ObtenerVictimasReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idUsuarioCarga)
+    public Task<List<IDictionary<string, object?>>> ObtenerVictimasReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idEntidadFederativa, int? idUsuarioCarga)
     {
         const string sql = @"
         SELECT
@@ -805,6 +788,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
+          AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
           AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
         ORDER BY
             ef.nombre,
@@ -813,10 +797,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             v.identificador_victima_fiscalia;
         ";
 
-        return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, idUsuarioCarga);
+        return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, idEntidadFederativa, idUsuarioCarga);
     }
 
-    private async Task<List<IDictionary<string, object?>>> QueryDictionaryReportePreliminarAsync(string sql, int anioCorte, int mesCorte, int idDelito, int? idUsuarioCarga)
+    private async Task<List<IDictionary<string, object?>>> QueryDictionaryReportePreliminarAsync(string sql, int anioCorte, int mesCorte, int idDelito, int? idEntidadFederativa, int? idUsuarioCarga)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
         var fechaInicio = new DateTime(anioCorte, mesCorte, 1);
@@ -826,6 +810,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             FechaInicio = fechaInicio,
             FechaFinExclusiva = fechaInicio.AddMonths(1),
             IdDelito = idDelito,
+            IdEntidadFederativa = idEntidadFederativa,
             IdUsuarioCarga = idUsuarioCarga
         }, commandTimeout: 300);
 

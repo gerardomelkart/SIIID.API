@@ -250,37 +250,54 @@ public class SemanalEnviosService : ISemanalEnviosService
         };
     }
 
-    public async Task<SemanalReportePreliminarOpcionesResponse> ObtenerOpcionesReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int? idUsuarioCarga)
+    public async Task<SemanalReportePreliminarOpcionesResponse> ObtenerOpcionesReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int? idEntidadFederativa)
     {
-        var contexto = await ObtenerContextoReportePreliminarAsync(idUsuarioConsulta, anioCorte, mesCorte, idUsuarioCarga);
+        var contexto = await ObtenerContextoReportePreliminarAsync(idUsuarioConsulta, anioCorte, mesCorte, idEntidadFederativa);
 
         return new SemanalReportePreliminarOpcionesResponse
         {
             EsValido = true,
-            Usuarios = contexto.Usuarios,
+            Entidades = contexto.Entidades,
             Delitos = contexto.Delitos
         };
     }
 
-    public async Task<SemanalReportePreliminarArchivoResponse> GenerarReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int idDelito, int? idUsuarioCarga)
+    public async Task<SemanalReportePreliminarArchivoResponse> GenerarReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int idDelito, int? idEntidadFederativa)
     {
-        var contexto = await ObtenerContextoReportePreliminarAsync(idUsuarioConsulta, anioCorte, mesCorte, idUsuarioCarga);
+        var contexto = await ObtenerContextoReportePreliminarAsync(idUsuarioConsulta, anioCorte, mesCorte, idEntidadFederativa);
         var delito = contexto.Delitos.FirstOrDefault(x => x.IdDelito == idDelito);
 
-        if (delito == null) throw new InvalidOperationException("El delito seleccionado no tiene información preliminar confirmada para el periodo y usuario solicitados.");
+        if (delito == null) throw new InvalidOperationException("El delito seleccionado no tiene información preliminar confirmada para el periodo y alcance solicitados.");
 
-        SemanalReportePreliminarUsuarioItem? usuarioSeleccionado = null;
+        SemanalReportePreliminarEntidadItem? entidadSeleccionada = null;
 
-        if (contexto.IdUsuarioCarga.HasValue)
+        if (contexto.IdEntidadFederativa.HasValue)
         {
-            usuarioSeleccionado = contexto.Usuarios.FirstOrDefault(x => x.IdUsuarioCarga == contexto.IdUsuarioCarga.Value);
+            entidadSeleccionada = contexto.Entidades.FirstOrDefault(x => x.IdEntidadFederativa == contexto.IdEntidadFederativa.Value);
 
-            if (usuarioSeleccionado == null) throw new InvalidOperationException("El usuario seleccionado no tiene información preliminar confirmada para el periodo solicitado.");
+            if (entidadSeleccionada == null) throw new InvalidOperationException("La entidad del reporte no tiene información preliminar confirmada para el periodo solicitado.");
         }
 
-        var carpetasTask = _semanalEnviosRepository.ObtenerCarpetasReportePreliminarAsync(anioCorte, mesCorte, idDelito, contexto.IdUsuarioCarga);
-        var delitosTask = _semanalEnviosRepository.ObtenerDelitosReportePreliminarAsync(anioCorte, mesCorte, idDelito, contexto.IdUsuarioCarga);
-        var victimasTask = _semanalEnviosRepository.ObtenerVictimasReportePreliminarAsync(anioCorte, mesCorte, idDelito, contexto.IdUsuarioCarga);
+        var carpetasTask = _semanalEnviosRepository.ObtenerCarpetasReportePreliminarAsync(
+            anioCorte,
+            mesCorte,
+            idDelito,
+            contexto.IdEntidadFederativa,
+            contexto.IdUsuarioCarga);
+
+        var delitosTask = _semanalEnviosRepository.ObtenerDelitosReportePreliminarAsync(
+            anioCorte,
+            mesCorte,
+            idDelito,
+            contexto.IdEntidadFederativa,
+            contexto.IdUsuarioCarga);
+
+        var victimasTask = _semanalEnviosRepository.ObtenerVictimasReportePreliminarAsync(
+            anioCorte,
+            mesCorte,
+            idDelito,
+            contexto.IdEntidadFederativa,
+            contexto.IdUsuarioCarga);
 
         await Task.WhenAll(carpetasTask, delitosTask, victimasTask);
 
@@ -302,9 +319,9 @@ public class SemanalEnviosService : ISemanalEnviosService
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
 
-        var alcance = usuarioSeleccionado == null
+        var alcance = entidadSeleccionada == null
             ? "GENERAL"
-            : $"{NormalizarNombreArchivo(usuarioSeleccionado.EntidadFederativa)}_{NormalizarNombreArchivo(usuarioSeleccionado.UsuarioCarga)}";
+            : NormalizarNombreArchivo(entidadSeleccionada.EntidadFederativa);
 
         return new SemanalReportePreliminarArchivoResponse
         {
@@ -313,26 +330,38 @@ public class SemanalEnviosService : ISemanalEnviosService
         };
     }
 
-    private async Task<(int? IdUsuarioCarga, List<SemanalReportePreliminarUsuarioItem> Usuarios, List<SemanalReportePreliminarDelitoItem> Delitos)> ObtenerContextoReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int? idUsuarioCarga)
+    private async Task<(int? IdEntidadFederativa, int? IdUsuarioCarga, List<SemanalReportePreliminarEntidadItem> Entidades, List<SemanalReportePreliminarDelitoItem> Delitos)> ObtenerContextoReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int? idEntidadFederativa)
     {
         if (anioCorte < 2000 || anioCorte > 2100) throw new InvalidOperationException("El año de corte no es válido.");
         if (mesCorte < 1 || mesCorte > 12) throw new InvalidOperationException("El mes de corte no es válido.");
-        if (idUsuarioCarga.HasValue && idUsuarioCarga.Value <= 0) throw new InvalidOperationException("El usuario seleccionado no es válido.");
+        if (idEntidadFederativa.HasValue && idEntidadFederativa.Value <= 0) throw new InvalidOperationException("La entidad seleccionada no es válida.");
 
         var usuarioConsulta = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
-        var idUsuarioEfectivo = usuarioConsulta.EsSuperUsuario ? idUsuarioCarga : idUsuarioConsulta;
+        var idEntidadEfectiva = usuarioConsulta.EsSuperUsuario ? idEntidadFederativa : usuarioConsulta.IdEntidadFederativa;
+        int? idUsuarioCargaEfectivo = usuarioConsulta.EsSuperUsuario ? null : idUsuarioConsulta;
+        int? idEntidadListado = usuarioConsulta.EsSuperUsuario ? null : idEntidadEfectiva;
+        int? idUsuarioListado = usuarioConsulta.EsSuperUsuario ? null : idUsuarioCargaEfectivo;
 
-        var usuarios = await _semanalEnviosRepository.ObtenerUsuariosReportePreliminarAsync(
+        var entidades = await _semanalEnviosRepository.ObtenerEntidadesReportePreliminarAsync(
             anioCorte,
             mesCorte,
-            usuarioConsulta.EsSuperUsuario ? null : idUsuarioConsulta);
+            idEntidadListado,
+            idUsuarioListado);
+
+        if (usuarioConsulta.EsSuperUsuario &&
+            idEntidadEfectiva.HasValue &&
+            !entidades.Any(x => x.IdEntidadFederativa == idEntidadEfectiva.Value))
+        {
+            throw new InvalidOperationException("La entidad seleccionada no tiene información preliminar confirmada para el periodo solicitado.");
+        }
 
         var delitos = await _semanalEnviosRepository.ObtenerDelitosReportePreliminarAsync(
             anioCorte,
             mesCorte,
-            idUsuarioEfectivo);
+            idEntidadEfectiva,
+            idUsuarioCargaEfectivo);
 
-        return (idUsuarioEfectivo, usuarios, delitos);
+        return (idEntidadEfectiva, idUsuarioCargaEfectivo, entidades, delitos);
     }
 
     private async Task<UsuarioCargaInfo> ObtenerUsuarioAutorizadoAsync(int idUsuario)

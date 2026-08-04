@@ -10,9 +10,9 @@ public interface ISemanalEnviosRepository
     Task<List<IDictionary<string, object?>>> ObtenerDelitosConfirmadosSemanaAsync(SemanalEnvioReferenciaInfo referencia);
     Task<List<IDictionary<string, object?>>> ObtenerVictimasConfirmadasSemanaAsync(SemanalEnvioReferenciaInfo referencia);
     Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte);
-    Task<List<SemanalReportePreliminarUsuarioItem>> ObtenerUsuariosReportePreliminarAsync(int anioCorte, int mesCorte, int? idUsuarioCarga);
-    Task<List<SemanalReportePreliminarDelitoItem>> ObtenerDelitosReportePreliminarAsync(int anioCorte, int mesCorte, int? idUsuarioCarga);
-    Task<List<IDictionary<string, object?>>> ObtenerCarpetasReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idUsuarioCarga);
-    Task<List<IDictionary<string, object?>>> ObtenerDelitosReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idUsuarioCarga);
-    Task<List<IDictionary<string, object?>>> ObtenerVictimasReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idUsuarioCarga);
+    Task<List<SemanalReportePreliminarEntidadItem>> ObtenerEntidadesReportePreliminarAsync(int anioCorte, int mesCorte, int? idEntidadFederativa, int? idUsuarioCarga);
+    Task<List<SemanalReportePreliminarDelitoItem>> ObtenerDelitosReportePreliminarAsync(int anioCorte, int mesCorte, int? idEntidadFederativa, int? idUsuarioCarga);
+    Task<List<IDictionary<string, object?>>> ObtenerCarpetasReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idEntidadFederativa, int? idUsuarioCarga);
+    Task<List<IDictionary<string, object?>>> ObtenerDelitosReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idEntidadFederativa, int? idUsuarioCarga);
+    Task<List<IDictionary<string, object?>>> ObtenerVictimasReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, int? idEntidadFederativa, int? idUsuarioCarga);
 }

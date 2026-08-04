@@ -220,13 +220,13 @@ public class SemanalEnviosController : ControllerBase
     }
 
     [HttpGet("reporte-preliminar/opciones")]
-    public async Task<IActionResult> ObtenerOpcionesReportePreliminar([FromQuery] int anioCorte, [FromQuery] int mesCorte, [FromQuery] int? idUsuarioCarga = null)
+    public async Task<IActionResult> ObtenerOpcionesReportePreliminar([FromQuery] int anioCorte, [FromQuery] int mesCorte, [FromQuery] int? idEntidadFederativa = null)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
         try
         {
-            var resultado = await _semanalEnviosService.ObtenerOpcionesReportePreliminarAsync(idUsuario, anioCorte, mesCorte, idUsuarioCarga);
+            var resultado = await _semanalEnviosService.ObtenerOpcionesReportePreliminarAsync(idUsuario, anioCorte, mesCorte, idEntidadFederativa);
             return Ok(resultado);
         }
         catch (UnauthorizedAccessException ex)
@@ -250,13 +250,13 @@ public class SemanalEnviosController : ControllerBase
     }
 
     [HttpPost("reporte-preliminar/ticket")]
-    public async Task<IActionResult> CrearTicketReportePreliminar([FromQuery] int anioCorte, [FromQuery] int mesCorte, [FromQuery] int idDelito, [FromQuery] int? idUsuarioCarga = null)
+    public async Task<IActionResult> CrearTicketReportePreliminar([FromQuery] int anioCorte, [FromQuery] int mesCorte, [FromQuery] int idDelito, [FromQuery] int? idEntidadFederativa = null)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
         try
         {
-            var archivo = await _semanalEnviosService.GenerarReportePreliminarAsync(idUsuario, anioCorte, mesCorte, idDelito, idUsuarioCarga);
+            var archivo = await _semanalEnviosService.GenerarReportePreliminarAsync(idUsuario, anioCorte, mesCorte, idDelito, idEntidadFederativa);
             var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
             var cacheKey = $"REPORTE_PRELIMINAR_DOWNLOAD_TICKET:{ticket}";
 
