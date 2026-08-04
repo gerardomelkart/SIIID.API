@@ -6,8 +6,8 @@ public interface ISemanalCargaRepository
 {
     Task<UsuarioCargaInfo?> ObtenerUsuarioCargaAsync(int idUsuario);
     Task<SemanalCargaAcuseInfo?> ObtenerCargaParaAcuseAsync(string codigoReferencia);
-    Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idSemanalCarga);
-    Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idSemanalCarga);
+    Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idSemanalCarga, int? anioCorte = null, int? mesCorte = null);
+    Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idSemanalCarga, int? anioCorte = null, int? mesCorte = null);
     Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(long idSemanalCarga, int idEntidadFederativa, int idUsuarioCarga);
     Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int idUsuarioCarga, int anioSemana, int numeroSemana);
     Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, int idUsuarioCarga, DateTime fechaInicio, DateTime fechaFin);

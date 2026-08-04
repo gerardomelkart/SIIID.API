@@ -219,8 +219,8 @@ public class SemanalEnviosService : ISemanalEnviosService
                     string.Equals(envio.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
 
                 var pdf = esConfirmado
-                    ? await _acusePdfService.GenerarAcuseConfirmadoAsync(envio.CodigoReferencia, idUsuarioConsulta)
-                    : await _acusePdfService.GenerarAcusePrevioAsync(envio.CodigoReferencia, idUsuarioConsulta);
+                    ? await _acusePdfService.GenerarAcuseConfirmadoAsync(envio.CodigoReferencia, idUsuarioConsulta, anioCorte, mesCorte)
+                    : await _acusePdfService.GenerarAcusePrevioAsync(envio.CodigoReferencia, idUsuarioConsulta, anioCorte, mesCorte);
 
                 var tipoDocumento = esConfirmado ? "ACUSE" : "INFORME_PREVIO";
                 var entidad = NormalizarNombreArchivo(envio.EntidadFederativa);

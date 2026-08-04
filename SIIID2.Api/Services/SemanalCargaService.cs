@@ -977,9 +977,9 @@ public class SemanalCargaService : ISemanalCargaService
     {
         if (!ventana.PermiteMesAnterior) return false;
 
-        var fechaInicioSemanaCruce = ObtenerInicioSemana(ventana.FechaMinimaPermitida);
+        var fechaInicioMesAnterior = ventana.FechaMinimaPermitida.AddMonths(-1);
 
-        return fechaInicio.Date >= fechaInicioSemanaCruce && fechaInicio.Date < ventana.FechaMinimaPermitida.Date;
+        return fechaInicio.Date >= fechaInicioMesAnterior.Date && fechaInicio.Date < ventana.FechaMinimaPermitida.Date;
     }
 
     private static void ValidarFechasFueraVentana(List<SemanalArchivoFilaCarga> carpetas, SemanalVentanaCarga ventana, List<CargaValidacionError> errores)
@@ -1004,7 +1004,7 @@ public class SemanalCargaService : ISemanalCargaService
                 DescripcionResumen = fechaFutura ? "Fecha futura no permitida" : "Fecha de mes anterior no permitida",
                 Mensaje = fechaFutura
                     ? $"La fecha de inicio {fechaInicio:dd/MM/yyyy} es posterior a la fecha actual {ventana.FechaMaximaPermitida:dd/MM/yyyy}. No se permiten fechas futuras."
-                    : $"La fecha de inicio {fechaInicio:dd/MM/yyyy} pertenece a un mes anterior. Solo se admite cuando pertenece a la semana que cruza el inicio del mes y la carga se realiza durante esa misma semana."
+                    : $"La fecha de inicio {fechaInicio:dd/MM/yyyy} pertenece a un periodo anterior. Únicamente se permite información del mes inmediato anterior cuando la carga se realiza del día 1 al 7 del mes en curso."
             });
         }
     }

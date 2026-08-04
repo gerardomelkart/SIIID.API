@@ -16,19 +16,23 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
     private readonly ISemanalCargaRepository _semanalCargaRepository;
     private readonly IWebHostEnvironment _webHostEnvironment;
 
+    private sealed class DocumentoAcusePeriodo
+    {
+        public SemanalCargaAcuseInfo Carga { get; init; } = new();
+        public List<CargaAcuseResumenItem> Resumen { get; init; } = [];
+    }
+
     public SemanalAcusePdfService(ISemanalCargaRepository semanalCargaRepository, IWebHostEnvironment webHostEnvironment)
     {
         _semanalCargaRepository = semanalCargaRepository;
         _webHostEnvironment = webHostEnvironment;
     }
 
-    public async Task<byte[]> GenerarAcusePrevioAsync(string codigoReferencia, int idUsuarioConsulta)
+    public async Task<byte[]> GenerarAcusePrevioAsync(string codigoReferencia, int idUsuarioConsulta, int? anioCorte = null, int? mesCorte = null)
     {
         QuestPDF.Settings.License = LicenseType.Community;
 
-        var carga = await ObtenerCargaAutorizadaAsync(
-            codigoReferencia,
-            idUsuarioConsulta);
+        var carga = await ObtenerCargaAutorizadaAsync(codigoReferencia, idUsuarioConsulta);
 
         var estadoPermitido =
             string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase) ||
@@ -38,42 +42,28 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             string.Equals(carga.Estado, "RECHAZADO_ADMIN", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(carga.Estado, "EXPIRADO", StringComparison.OrdinalIgnoreCase);
 
-        if (!estadoPermitido)
-        {
-            throw new InvalidOperationException("El informe previo de la carga preliminar no está disponible para el estado actual de la operación.");
-        }
+        if (!estadoPermitido) throw new InvalidOperationException("El informe previo de la carga preliminar no está disponible para el estado actual de la operación.");
 
-        var resumen =
-            await _semanalCargaRepository.ObtenerResumenAcuseAsync(
-                carga.IdSemanalCarga);
+        var documentos = await ObtenerDocumentosPeriodoAsync(carga, false, anioCorte, mesCorte);
 
-        return GenerarPdf(
-            carga,
-            resumen,
-            mostrarMarcaPrevio: true);
+        return GenerarPdf(documentos, true);
     }
 
-    public async Task<byte[]> GenerarAcuseConfirmadoAsync(string codigoReferencia, int idUsuarioConsulta)
+    public async Task<byte[]> GenerarAcuseConfirmadoAsync(string codigoReferencia, int idUsuarioConsulta, int? anioCorte = null, int? mesCorte = null)
     {
         QuestPDF.Settings.License = LicenseType.Community;
 
-        var carga = await ObtenerCargaAutorizadaAsync(
-            codigoReferencia,
-            idUsuarioConsulta);
+        var carga = await ObtenerCargaAutorizadaAsync(codigoReferencia, idUsuarioConsulta);
 
-        if (!string.Equals(carga.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) && !string.Equals(carga.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(carga.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(carga.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("El acuse confirmado solo puede generarse para operaciones preliminares confirmadas.");
         }
 
-        var resumen =
-            await _semanalCargaRepository.ObtenerResumenAcuseConfirmadoAsync(
-                carga.IdSemanalCarga);
+        var documentos = await ObtenerDocumentosPeriodoAsync(carga, true, anioCorte, mesCorte);
 
-        return GenerarPdf(
-            carga,
-            resumen,
-            mostrarMarcaPrevio: false);
+        return GenerarPdf(documentos, false);
     }
 
     private async Task<SemanalCargaAcuseInfo> ObtenerCargaAutorizadaAsync(string codigoReferencia, int idUsuarioConsulta)
@@ -100,77 +90,130 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
         return carga;
     }
 
-    private byte[] GenerarPdf(SemanalCargaAcuseInfo carga, List<CargaAcuseResumenItem> resumen, bool mostrarMarcaPrevio)
+    private async Task<List<DocumentoAcusePeriodo>> ObtenerDocumentosPeriodoAsync(SemanalCargaAcuseInfo carga, bool confirmado, int? anioCorte, int? mesCorte)
+    {
+        if (anioCorte.HasValue != mesCorte.HasValue) throw new InvalidOperationException("Debe indicar año y mes de corte.");
+        if (mesCorte.HasValue && (mesCorte.Value < 1 || mesCorte.Value > 12)) throw new InvalidOperationException("El mes de corte no es válido.");
+
+        var bloques = ObtenerBloquesAcuse(carga);
+
+        if (anioCorte.HasValue && mesCorte.HasValue)
+        {
+            bloques = bloques
+                .Where(x => x.AnioCorte == anioCorte.Value && x.MesCorte == mesCorte.Value)
+                .ToList();
+        }
+
+        if (bloques.Count == 0) throw new InvalidOperationException("La operación no contiene información para el periodo solicitado.");
+
+        var documentos = new List<DocumentoAcusePeriodo>();
+
+        foreach (var grupo in bloques
+            .GroupBy(x => new { x.AnioCorte, x.MesCorte })
+            .OrderBy(x => x.Key.AnioCorte)
+            .ThenBy(x => x.Key.MesCorte))
+        {
+            var bloquesPeriodo = grupo
+                .OrderBy(x => x.FechaInicioSemana)
+                .ThenBy(x => x.FechaInicioTramo)
+                .ToList();
+
+            var resumen = confirmado
+                ? await _semanalCargaRepository.ObtenerResumenAcuseConfirmadoAsync(carga.IdSemanalCarga, grupo.Key.AnioCorte, grupo.Key.MesCorte)
+                : await _semanalCargaRepository.ObtenerResumenAcuseAsync(carga.IdSemanalCarga, grupo.Key.AnioCorte, grupo.Key.MesCorte);
+
+            documentos.Add(new DocumentoAcusePeriodo
+            {
+                Carga = CrearCargaPeriodo(carga, bloquesPeriodo),
+                Resumen = resumen
+            });
+        }
+
+        return documentos;
+    }
+
+    private static SemanalCargaAcuseInfo CrearCargaPeriodo(SemanalCargaAcuseInfo origen, List<SemanalCargaAcuseBloque> bloques)
+    {
+        var primerBloque = bloques.First();
+
+        return new SemanalCargaAcuseInfo
+        {
+            IdSemanalCarga = origen.IdSemanalCarga,
+            CodigoReferencia = origen.CodigoReferencia,
+            IdEntidadFederativa = origen.IdEntidadFederativa,
+            EntidadFederativa = origen.EntidadFederativa,
+            TipoCarga = origen.TipoCarga,
+            TipoContenido = origen.TipoContenido,
+            AnioSemana = primerBloque.AnioSemana,
+            NumeroSemana = primerBloque.NumeroSemana,
+            FechaInicioSemana = bloques.Min(x => x.FechaInicioSemana),
+            FechaFinSemana = bloques.Max(x => x.FechaFinSemana),
+            FechaInicioTramo = bloques.Min(x => x.FechaInicioTramo),
+            FechaFinTramo = bloques.Max(x => x.FechaFinTramo),
+            MesCorte = primerBloque.MesCorte,
+            AnioCorte = primerBloque.AnioCorte,
+            TotalCarpetasIncluidas = bloques.Sum(x => x.TotalCarpetas),
+            TotalDelitosIncluidos = bloques.Sum(x => x.TotalDelitos),
+            TotalVictimasIncluidas = bloques.Sum(x => x.TotalVictimas),
+            TotalCarpetasExcluidas = 0,
+            TotalDelitosExcluidos = 0,
+            TotalVictimasExcluidas = 0,
+            Estado = origen.Estado,
+            FechaValidacion = origen.FechaValidacion,
+            FechaConfirmacion = origen.FechaConfirmacion,
+            IdUsuarioCarga = origen.IdUsuarioCarga,
+            UsuarioCarga = origen.UsuarioCarga,
+            Bloques = bloques
+        };
+    }
+
+    private byte[] GenerarPdf(List<DocumentoAcusePeriodo> documentos, bool mostrarMarcaPrevio)
     {
         return Document.Create(container =>
         {
-            container.Page(page =>
+            foreach (var documento in documentos)
             {
-                page.Size(PageSizes.Letter);
-                page.MarginTop(12);
-                page.MarginLeft(20);
-                page.MarginRight(20);
-                page.MarginBottom(8);
+                var carga = documento.Carga;
+                var resumen = documento.Resumen;
 
-                page.DefaultTextStyle(
-                    x => x.FontSize(8).FontFamily("Noto Sans"));
-
-                if (mostrarMarcaPrevio)
+                container.Page(page =>
                 {
-                    page.Background().Layers(layers =>
+                    page.Size(PageSizes.Letter);
+                    page.MarginTop(12);
+                    page.MarginLeft(20);
+                    page.MarginRight(20);
+                    page.MarginBottom(8);
+
+                    page.DefaultTextStyle(x => x.FontSize(8).FontFamily("Noto Sans"));
+
+                    if (mostrarMarcaPrevio)
                     {
-                        layers.PrimaryLayer()
-                            .ShowOnce()
-                            .Element(
-                                contenedor =>
-                                    ConstruirMarcaAgua(
-                                        contenedor,
-                                        80));
+                        page.Background().Layers(layers =>
+                        {
+                            layers.PrimaryLayer()
+                                .ShowOnce()
+                                .Element(contenedor => ConstruirMarcaAgua(contenedor, 80));
 
-                        layers.Layer()
-                            .SkipOnce()
-                            .Element(
-                                contenedor =>
-                                    ConstruirMarcaAgua(
-                                        contenedor,
-                                        55));
+                            layers.Layer()
+                                .SkipOnce()
+                                .Element(contenedor => ConstruirMarcaAgua(contenedor, 55));
+                        });
+                    }
+
+                    page.Header().Element(header => ConstruirEncabezado(header, carga));
+
+                    page.Content().Column(column =>
+                    {
+                        column.Spacing(4);
+
+                        column.Item().Element(contenedor => ConstruirLeyendaAcuse(contenedor, carga));
+                        column.Item().Element(contenedor => ConstruirDetalleRegistros(contenedor, carga));
+                        column.Item().Element(contenedor => ConstruirTablaResumen(contenedor, resumen));
                     });
-                }
 
-                page.Header().Element(
-                    header =>
-                        ConstruirEncabezado(
-                            header,
-                            carga));
-
-                page.Content().Column(column =>
-                {
-                    column.Spacing(4);
-
-                    column.Item().Element(
-                        contenedor =>
-                            ConstruirLeyendaAcuse(
-                                contenedor,
-                                carga));
-
-                    column.Item().Element(
-                        contenedor =>
-                            ConstruirDetalleRegistros(
-                                contenedor,
-                                carga));
-
-                    column.Item().Element(
-                        contenedor =>
-                            ConstruirTablaResumen(
-                                contenedor,
-                                resumen));
+                    page.Footer().Element(footer => ConstruirPiePagina(footer));
                 });
-
-                page.Footer().Element(
-                    footer =>
-                        ConstruirPiePagina(
-                            footer));
-            });
+            }
         }).GeneratePdf();
     }
 

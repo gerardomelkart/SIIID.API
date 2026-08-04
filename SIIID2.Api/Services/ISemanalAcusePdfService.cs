@@ -2,6 +2,6 @@
 
 public interface ISemanalAcusePdfService
 {
-    Task<byte[]> GenerarAcusePrevioAsync(string codigoReferencia, int idUsuarioConsulta);
-    Task<byte[]> GenerarAcuseConfirmadoAsync(string codigoReferencia, int idUsuarioConsulta);
+    Task<byte[]> GenerarAcusePrevioAsync(string codigoReferencia, int idUsuarioConsulta, int? anioCorte = null, int? mesCorte = null);
+    Task<byte[]> GenerarAcuseConfirmadoAsync(string codigoReferencia, int idUsuarioConsulta, int? anioCorte = null, int? mesCorte = null);
 }

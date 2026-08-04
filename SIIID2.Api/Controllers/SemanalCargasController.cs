@@ -75,7 +75,7 @@ public class SemanalCargasController : ControllerBase
     }
 
     [HttpGet("{codigoReferencia}/acuse")]
-    public async Task<IActionResult> DescargarAcuse(string codigoReferencia)
+    public async Task<IActionResult> DescargarAcuse(string codigoReferencia, [FromQuery] int? anioCorte, [FromQuery] int? mesCorte)
     {
         if (!ObtenerIdUsuario(out var idUsuario))
         {
@@ -84,10 +84,7 @@ public class SemanalCargasController : ControllerBase
 
         try
         {
-            var pdf =
-                await _semanalAcusePdfService.GenerarAcusePrevioAsync(
-                    codigoReferencia,
-                    idUsuario);
+            var pdf = await _semanalAcusePdfService.GenerarAcusePrevioAsync(codigoReferencia, idUsuario, anioCorte, mesCorte);
 
             return File(
                 pdf,
@@ -146,7 +143,7 @@ public class SemanalCargasController : ControllerBase
     }
 
     [HttpGet("{codigoReferencia}/acuse-confirmado")]
-    public async Task<IActionResult> DescargarAcuseConfirmado(string codigoReferencia)
+    public async Task<IActionResult> DescargarAcuseConfirmado(string codigoReferencia, [FromQuery] int? anioCorte, [FromQuery] int? mesCorte)
     {
         if (!ObtenerIdUsuario(out var idUsuario))
         {
@@ -155,7 +152,7 @@ public class SemanalCargasController : ControllerBase
 
         try
         {
-            var pdf = await _semanalAcusePdfService.GenerarAcuseConfirmadoAsync(codigoReferencia, idUsuario);
+            var pdf = await _semanalAcusePdfService.GenerarAcuseConfirmadoAsync(codigoReferencia, idUsuario, anioCorte, mesCorte);
 
             return File(
                 pdf,

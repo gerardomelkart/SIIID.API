@@ -131,8 +131,16 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return carga;
     }
 
-    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idSemanalCarga)
+    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idSemanalCarga, int? anioCorte = null, int? mesCorte = null)
     {
+        if (anioCorte.HasValue != mesCorte.HasValue) throw new InvalidOperationException("Debe indicar año y mes de corte.");
+
+        DateTime? fechaInicio = anioCorte.HasValue && mesCorte.HasValue
+            ? new DateTime(anioCorte.Value, mesCorte.Value, 1)
+            : null;
+
+        var fechaFinExclusiva = fechaInicio?.AddMonths(1);
+
         const string sql = @"
     SELECT
         cd.clave2 AS ClaveDelito,
@@ -154,6 +162,24 @@ public class SemanalCargaRepository : ISemanalCargaRepository
        AND LTRIM(RTRIM(d.clasf_de_dto)) = LTRIM(RTRIM(md.clave4))
        AND d.incluido = 1
        AND d.activo = 1
+       AND EXISTS
+       (
+           SELECT 1
+           FROM dbo.semanal_carga_tmp_carpeta carpeta
+           WHERE carpeta.id_semanal_carga = d.id_semanal_carga
+             AND carpeta.id_ci = d.id_ci
+             AND carpeta.incluido = 1
+             AND carpeta.activo = 1
+             AND
+             (
+                 @FechaInicio IS NULL
+                 OR
+                 (
+                     TRY_CONVERT(date, carpeta.fha_de_ini) >= @FechaInicio
+                     AND TRY_CONVERT(date, carpeta.fha_de_ini) < @FechaFinExclusiva
+                 )
+             )
+       )
     LEFT JOIN dbo.semanal_carga_tmp_victima v
         ON v.id_semanal_carga = d.id_semanal_carga
        AND v.id_ci = d.id_ci
@@ -170,17 +196,28 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         Orden,
         cd.clave2,
         sd.clave3;
-";
+    ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return (await connection.QueryAsync<CargaAcuseResumenItem>(
-            sql,
-            new { IdSemanalCarga = idSemanalCarga })).ToList();
+        return (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
+        {
+            IdSemanalCarga = idSemanalCarga,
+            FechaInicio = fechaInicio,
+            FechaFinExclusiva = fechaFinExclusiva
+        })).ToList();
     }
 
-    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idSemanalCarga)
+    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idSemanalCarga, int? anioCorte = null, int? mesCorte = null)
     {
+        if (anioCorte.HasValue != mesCorte.HasValue) throw new InvalidOperationException("Debe indicar año y mes de corte.");
+
+        DateTime? fechaInicio = anioCorte.HasValue && mesCorte.HasValue
+            ? new DateTime(anioCorte.Value, mesCorte.Value, 1)
+            : null;
+
+        var fechaFinExclusiva = fechaInicio?.AddMonths(1);
+
         const string sql = @"
     SELECT
         cd.clave2 AS ClaveDelito,
@@ -201,6 +238,23 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         ON d.id_semanal_carga = configuracion.id_semanal_carga
        AND d.id_modalidad_delito = configuracion.id_modalidad_delito
        AND d.activo = 1
+       AND EXISTS
+       (
+           SELECT 1
+           FROM dbo.semanal_carpeta_investigacion carpeta
+           WHERE carpeta.id_semanal_carga = d.id_semanal_carga
+             AND carpeta.id_ci = d.id_ci
+             AND carpeta.activo = 1
+             AND
+             (
+                 @FechaInicio IS NULL
+                 OR
+                 (
+                     carpeta.fecha_inicio >= @FechaInicio
+                     AND carpeta.fecha_inicio < @FechaFinExclusiva
+                 )
+             )
+       )
     LEFT JOIN dbo.semanal_victima v
         ON v.id_semanal_carga = d.id_semanal_carga
        AND v.id_semanal_delito = d.id_semanal_delito
@@ -215,13 +269,16 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         Orden,
         cd.clave2,
         sd.clave3;
-";
+    ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return (await connection.QueryAsync<CargaAcuseResumenItem>(
-            sql,
-            new { IdSemanalCarga = idSemanalCarga })).ToList();
+        return (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
+        {
+            IdSemanalCarga = idSemanalCarga,
+            FechaInicio = fechaInicio,
+            FechaFinExclusiva = fechaFinExclusiva
+        })).ToList();
     }
 
     public async Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, int idUsuarioCarga, DateTime fechaInicio, DateTime fechaFin)
