@@ -290,12 +290,28 @@ public class SemanalCargasController : ControllerBase
     private static string ObtenerNombreArchivoAcuse(SemanalCargaAcuseInfo carga, bool confirmado, int? anioCorte, int? mesCorte)
     {
         var usuario = NormalizarNombreArchivo(carga.UsuarioCarga);
-        var anio = anioCorte ?? carga.AnioCorte;
-        var mes = mesCorte ?? carga.MesCorte;
-        var periodo = NormalizarNombreArchivo(ObtenerNombreMes(mes));
         var prefijo = confirmado ? "ACUSE_PRELIMINAR" : "INFORME_PREVIO";
 
-        return $"{prefijo}_{usuario}_{periodo}_{anio}.pdf";
+        var periodos = anioCorte.HasValue && mesCorte.HasValue
+            ? new[] { (Anio: anioCorte.Value, Mes: mesCorte.Value) }
+            : carga.Bloques
+                .Select(x => (Anio: x.AnioCorte, Mes: x.MesCorte))
+                .Distinct()
+                .OrderBy(x => x.Anio)
+                .ThenBy(x => x.Mes)
+                .ToArray();
+
+        if (periodos.Length == 0)
+        {
+            periodos = new[] { (Anio: carga.AnioCorte, Mes: carga.MesCorte) };
+        }
+
+        var periodo = string.Join(
+            "_",
+            periodos.Select(x => $"{NormalizarNombreArchivo(ObtenerNombreMes(x.Mes))}_{x.Anio}")
+        );
+
+        return $"{prefijo}_{usuario}_{periodo}.pdf";
     }
 
     private static string ObtenerNombreMes(int mes)

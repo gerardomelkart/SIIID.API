@@ -95,7 +95,8 @@ public class SemanalEnviosService : ISemanalEnviosService
             registro.PuedeResolverPendiente =
                 pendienteResoluble &&
                 permisoOperacion &&
-                (usuario.EsSuperUsuario || registro.IdUsuarioCarga == idUsuarioConsulta);
+                !usuario.EsSuperUsuario &&
+                registro.IdUsuarioCarga == idUsuarioConsulta;
         }
 
         return registros;
