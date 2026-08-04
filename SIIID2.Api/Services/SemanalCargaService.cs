@@ -830,14 +830,12 @@ public class SemanalCargaService : ISemanalCargaService
     {
         var fechaActual = fechaReferencia.Date;
         var fechaInicioMesActual = new DateTime(fechaActual.Year, fechaActual.Month, 1);
-        var fechaInicioSemanaActual = ObtenerInicioSemana(fechaActual);
-        var permiteMesAnterior = fechaInicioSemanaActual < fechaInicioMesActual;
 
         return new SemanalVentanaCarga
         {
             FechaMinimaPermitida = fechaInicioMesActual,
             FechaMaximaPermitida = fechaActual,
-            PermiteMesAnterior = permiteMesAnterior
+            PermiteMesAnterior = fechaActual.Day <= 7
         };
     }
 
@@ -979,9 +977,9 @@ public class SemanalCargaService : ISemanalCargaService
     {
         if (!ventana.PermiteMesAnterior) return false;
 
-        var fechaInicioSemanaActual = ObtenerInicioSemana(ventana.FechaMaximaPermitida);
+        var fechaInicioSemanaCruce = ObtenerInicioSemana(ventana.FechaMinimaPermitida);
 
-        return fechaInicio.Date >= fechaInicioSemanaActual && fechaInicio.Date < ventana.FechaMinimaPermitida.Date;
+        return fechaInicio.Date >= fechaInicioSemanaCruce && fechaInicio.Date < ventana.FechaMinimaPermitida.Date;
     }
 
     private static void ValidarFechasFueraVentana(List<SemanalArchivoFilaCarga> carpetas, SemanalVentanaCarga ventana, List<CargaValidacionError> errores)
