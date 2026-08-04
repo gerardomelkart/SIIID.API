@@ -783,7 +783,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 return Error(codigoReferencia, carga.Estado, "El usuario no puede procesar cargas semanales de otra entidad federativa.");
             }
 
-            if (aceptar && EsPeriodoAnteriorAlMesActual(carga.MesCorte, carga.AnioCorte))
+            if (aceptar && EsPeriodoAnteriorNoPermitido(carga.MesCorte, carga.AnioCorte))
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, "PERIODO_CONSOLIDADO", "La carga corresponde a un mes anterior al mes en curso y ya no puede confirmarse porque ese periodo pertenece al consolidado.");
@@ -855,7 +855,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 return Error(codigoReferencia, carga.Estado, "La carga semanal ya no se encuentra pendiente de aprobación.");
             }
 
-            if (EsPeriodoAnteriorAlMesActual(carga.MesCorte, carga.AnioCorte))
+            if (EsPeriodoAnteriorNoPermitido(carga.MesCorte, carga.AnioCorte))
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, "PERIODO_CONSOLIDADO", "La carga corresponde a un mes anterior al mes en curso y ya no puede aprobarse porque ese periodo pertenece al consolidado.");
@@ -1216,10 +1216,18 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return await connection.QueryFirstOrDefaultAsync<SemanalCargaConfirmacionInfo>(sql, new { CodigoReferencia = codigoReferencia, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
-    private static bool EsPeriodoAnteriorAlMesActual(int mesCorte, int anioCorte)
+    private static bool EsPeriodoAnteriorNoPermitido(int mesCorte, int anioCorte)
     {
         var fechaActual = DateTime.Today;
-        return anioCorte < fechaActual.Year || (anioCorte == fechaActual.Year && mesCorte < fechaActual.Month);
+        var periodoActual = new DateTime(fechaActual.Year, fechaActual.Month, 1);
+        var periodoCarga = new DateTime(anioCorte, mesCorte, 1);
+
+        if (periodoCarga >= periodoActual) return false;
+
+        var periodoAnterior = periodoActual.AddMonths(-1);
+        var estaEnPrimeraSemanaMes = fechaActual.Day <= 7;
+
+        return periodoCarga != periodoAnterior || !estaEnPrimeraSemanaMes;
     }
 
     private static async Task ActualizarCargaExpiradaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, bool esActualizacion)
