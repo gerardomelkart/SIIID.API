@@ -92,7 +92,7 @@ public class UsuariosController : ControllerBase
 
     // Registra un usuario nuevo.
     // Por ahora solo SUPER_USUARIO puede registrar usuarios.
-    [Authorize]
+    [Authorize(Policy = "MODULO_MENSUAL")]
     [HttpPost]
     public async Task<IActionResult> CrearUsuario([FromBody] CrearUsuarioRequest request)
     {
@@ -123,7 +123,7 @@ public class UsuariosController : ControllerBase
 
     // Registra una cuenta desde la administración semanal.
     // Los permisos mensuales quedan deshabilitados por definición.
-    [Authorize]
+    [Authorize(Policy = "MODULO_SEMANAL")]
     [HttpPost("semanal")]
     public async Task<IActionResult> CrearUsuarioSemanal([FromBody] CrearUsuarioSemanalRequest request)
     {
@@ -154,7 +154,7 @@ public class UsuariosController : ControllerBase
     // Edita un usuario existente.
     // Si nuevaPassword viene vacía o null, conserva la contraseña actual.
     // Ejemplo: PUT /api/usuarios/3
-    [Authorize]
+    [Authorize(Policy = "MODULO_MENSUAL")]
     [HttpPut("{idUsuario:int}")]
     public async Task<IActionResult> EditarUsuario(int idUsuario, [FromBody] EditarUsuarioRequest request)
     {
@@ -185,7 +185,7 @@ public class UsuariosController : ControllerBase
     }
 
     // Edita datos generales y permisos semanales sin modificar permisos mensuales.
-    [Authorize]
+    [Authorize(Policy = "MODULO_SEMANAL")]
     [HttpPut("{idUsuario:int}/semanal")]
     public async Task<IActionResult> EditarUsuarioSemanal(int idUsuario, [FromBody] EditarUsuarioSemanalRequest request)
     {
@@ -215,7 +215,7 @@ public class UsuariosController : ControllerBase
 
     // Actualiza exclusivamente los permisos del módulo semanal.
     // Ejemplo: PUT /api/usuarios/3/permisos-semanales
-    [Authorize]
+    [Authorize(Policy = "MODULO_SEMANAL")]
     [HttpPut("{idUsuario:int}/permisos-semanales")]
     public async Task<IActionResult> ActualizarPermisosSemanales(int idUsuario, [FromBody] ActualizarPermisosSemanalesRequest request)
     {
@@ -276,7 +276,7 @@ public class UsuariosController : ControllerBase
 
     // Activa/desactiva carga y modificación para todos los usuarios activos.
     // Ejemplo: PUT /api/usuarios/permisos-globales
-    [Authorize]
+    [Authorize(Policy = "MODULO_MENSUAL")]
     [HttpPut("permisos-globales")]
     public async Task<IActionResult> ActualizarPermisosGlobales([FromBody] PermisosGlobalesUsuariosRequest request)
     {
@@ -308,7 +308,7 @@ public class UsuariosController : ControllerBase
     // Reactiva un usuario dado de baja lógicamente.
     // No cambia contraseña, rol, entidad ni datos personales.
     // Ejemplo: PUT /api/usuarios/3/reactivar
-    [Authorize]
+    [Authorize(Policy = "MODULO_MENSUAL")]
     [HttpPut("{idUsuario:int}/reactivar")]
     public async Task<IActionResult> ReactivarUsuario(int idUsuario, [FromBody] ReactivarUsuarioRequest request)
     {
@@ -340,7 +340,7 @@ public class UsuariosController : ControllerBase
 
 
     // Reactiva la cuenta conservando los valores mensuales y configurando el módulo semanal.
-    [Authorize]
+    [Authorize(Policy = "MODULO_SEMANAL")]
     [HttpPut("{idUsuario:int}/reactivar-semanal")]
     public async Task<IActionResult> ReactivarUsuarioSemanal(int idUsuario, [FromBody] ReactivarUsuarioSemanalRequest request)
     {
