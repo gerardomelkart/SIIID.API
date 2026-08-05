@@ -10,7 +10,7 @@ using SIIID2.Api.Repositories;
 namespace SIIID2.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Policy = "MODULO_SEMANAL")]
 [Route("api/semanal/cargas")]
 public class SemanalCargasController : ControllerBase
 {

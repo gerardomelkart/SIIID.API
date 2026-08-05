@@ -11,6 +11,7 @@ using System.Security.Claims;
 namespace SIIID2.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "MODULO_MENSUAL")]
 [Route("api/informes/rechazos")]
 public class InformesRechazosController : ControllerBase
 {

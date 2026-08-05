@@ -7,6 +7,7 @@ using SIIID2.Api.Services;
 namespace SIIID2.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "MODULO_MENSUAL")]
 [Authorize(Roles = "SUPER_USUARIO")]
 [Route("api/administracion/cargas-pendientes")]
 public class AdministracionCargasController : ControllerBase

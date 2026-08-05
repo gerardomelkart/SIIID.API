@@ -10,6 +10,7 @@ using System.Security.Cryptography;
 namespace SIIID2.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "MODULO_MENSUAL")]
 [Route("api/informes")]
 public class InformesController : ControllerBase
 {

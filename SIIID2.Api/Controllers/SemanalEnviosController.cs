@@ -9,7 +9,7 @@ using System.Security.Cryptography;
 namespace SIIID2.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Policy = "MODULO_SEMANAL")]
 [Route("api/semanal/envios")]
 public class SemanalEnviosController : ControllerBase
 {

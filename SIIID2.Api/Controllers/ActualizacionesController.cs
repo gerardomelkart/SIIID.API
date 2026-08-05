@@ -8,6 +8,7 @@ using SIIID2.Api.Services;
 namespace SIIID2.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "MODULO_MENSUAL")]
 [Route("api/actualizaciones")]
 public class ActualizacionesController : ControllerBase
 {
