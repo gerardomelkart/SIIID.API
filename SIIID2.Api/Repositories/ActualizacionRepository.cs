@@ -1926,10 +1926,7 @@ public class ActualizacionRepository : IActualizacionRepository
                     TRY_CONVERT(date, NULLIF(v.fha_nac, ''), 103),
                     TRY_CONVERT(date, NULLIF(v.fha_nac, ''))
                 ) AS fecha_nacimiento,
-                CASE
-                    WHEN TRY_CONVERT(int, NULLIF(v.edad, '')) = 999 THEN NULL
-                    ELSE TRY_CONVERT(tinyint, NULLIF(v.edad, ''))
-                END AS edad
+                TRY_CONVERT(smallint, NULLIF(v.edad, '')) AS edad
             FROM carga_tmp_victima v
             INNER JOIN catalogo_tipo_victima tv
                 ON tv.clave = TRY_CONVERT(tinyint, v.id_tv)
