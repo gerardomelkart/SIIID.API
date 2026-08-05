@@ -324,6 +324,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         if (response.Errores.Count == 0)
         {
             response.Advertencias.AddRange(advertenciasPendientes);
+            response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(filasDelitos));
 
             response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(
                 filasDelitos,
