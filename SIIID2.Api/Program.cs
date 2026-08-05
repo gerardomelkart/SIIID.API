@@ -11,6 +11,8 @@ using SIIID2.Api.Middleware;
 using Serilog;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Authorization;
+using SIIID2.Api.Authorization;
 
 // Punto de arranque de la API.
 // Aquí se registran servicios, controladores, Swagger y configuración general.
@@ -175,11 +177,38 @@ builder.Services
                 };
 
                 await context.Response.WriteAsJsonAsync(response);
+            },
+            OnForbidden = async context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "application/json";
+
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    esValido = false,
+                    codigo = "GENERAL_SIN_PERMISO",
+                    mensaje = "El usuario no tiene permiso para acceder al recurso solicitado."
+                });
             }
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddScoped<IAuthorizationHandler, ModuloHabilitadoHandler>();
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("MODULO_MENSUAL", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new ModuloHabilitadoRequirement("MENSUAL"));
+    });
+
+    options.AddPolicy("MODULO_SEMANAL", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new ModuloHabilitadoRequirement("SEMANAL"));
+    });
+});
 
 //para los logs
 var rutaLogs = Path.Combine(builder.Environment.ContentRootPath, "logs", "siiid-api-.log");

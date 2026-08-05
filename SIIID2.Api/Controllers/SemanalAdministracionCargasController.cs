@@ -8,6 +8,7 @@ namespace SIIID2.Api.Controllers;
 
 [ApiController]
 [Authorize(Roles = "SUPER_USUARIO")]
+[Authorize(Policy = "MODULO_SEMANAL")]
 [Route("api/semanal/administracion/cargas-pendientes")]
 public class SemanalAdministracionCargasController : ControllerBase
 {

@@ -10,6 +10,7 @@ namespace SIIID2.Api.Controllers;
 // Controlador del módulo de cargas.
 // Aquí se reciben las peticiones HTTP, pero la lógica de validación vive en el servicio.
 [ApiController]
+[Authorize(Policy = "MODULO_MENSUAL")]
 [Route("api/cargas")]
 public class CargasController : ControllerBase
 {
