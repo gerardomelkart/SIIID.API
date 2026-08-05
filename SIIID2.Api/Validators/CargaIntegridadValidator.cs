@@ -719,13 +719,23 @@ public class CargaIntegridadValidator
 
         horaValor = horaValor.Trim();
 
-        if (TimeSpan.TryParse(horaValor, CultureInfo.InvariantCulture, out var hora))
+        if (double.TryParse(horaValor.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var numeroExcel))
+        {
+            if (numeroExcel < 0 || numeroExcel >= 1) return false;
+
+            fechaHora = fecha.Date.Add(TimeSpan.FromDays(numeroExcel));
+            return true;
+        }
+
+        if (TimeSpan.TryParse(horaValor, CultureInfo.InvariantCulture, out var hora) &&
+            hora >= TimeSpan.Zero &&
+            hora < TimeSpan.FromDays(1))
         {
             fechaHora = fecha.Date.Add(hora);
             return true;
         }
 
-        if (DateTime.TryParse(
+        if (horaValor.Contains(':') && DateTime.TryParse(
                 horaValor,
                 new CultureInfo("es-MX"),
                 DateTimeStyles.None,
@@ -735,17 +745,7 @@ public class CargaIntegridadValidator
             return true;
         }
 
-        if (double.TryParse(horaValor.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var numeroExcel))
-        {
-            if (numeroExcel >= 0 && numeroExcel < 1)
-            {
-                fechaHora = fecha.Date.Add(TimeSpan.FromDays(numeroExcel));
-                return true;
-            }
-        }
-
-        fechaHora = fecha;
-        return true;
+        return false;
     }
 
 }

@@ -608,7 +608,6 @@ public class DelitosValidator
     private bool IntentarConvertirHora(string valor, out TimeSpan hora)
     {
         hora = default;
-
         valor = valor.Trim();
 
         var formatos = new[]
@@ -617,7 +616,6 @@ public class DelitosValidator
             @"h\:mm\:ss",
             @"hh\:mm",
             @"h\:mm",
-
             "HH:mm:ss",
             "H:mm:ss",
             "HH:mm",
@@ -626,35 +624,29 @@ public class DelitosValidator
 
         foreach (var formato in formatos)
         {
-            if (TimeSpan.TryParseExact(valor, formato, CultureInfo.InvariantCulture, out var horaParseada))
+            if (TimeSpan.TryParseExact(valor, formato, CultureInfo.InvariantCulture, out var horaParseada) &&
+                horaParseada >= TimeSpan.Zero &&
+                horaParseada < TimeSpan.FromDays(1))
             {
                 hora = horaParseada;
                 return true;
             }
         }
 
-        if (TimeSpan.TryParse(valor, CultureInfo.InvariantCulture, out var horaGeneral))
+        if (double.TryParse(valor.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var numeroExcel))
         {
-            hora = horaGeneral;
+            if (numeroExcel < 0 || numeroExcel >= 1) return false;
+
+            hora = TimeSpan.FromDays(numeroExcel);
             return true;
         }
 
-        if (double.TryParse(valor, NumberStyles.Any, CultureInfo.InvariantCulture, out var numeroExcel))
+        if (TimeSpan.TryParse(valor, CultureInfo.InvariantCulture, out var horaGeneral) &&
+            horaGeneral >= TimeSpan.Zero &&
+            horaGeneral < TimeSpan.FromDays(1))
         {
-            if (numeroExcel >= 0 && numeroExcel < 1)
-            {
-                hora = TimeSpan.FromDays(numeroExcel);
-                return true;
-            }
-        }
-
-        if (double.TryParse(valor, NumberStyles.Any, new CultureInfo("es-MX"), out var numeroExcelMx))
-        {
-            if (numeroExcelMx >= 0 && numeroExcelMx < 1)
-            {
-                hora = TimeSpan.FromDays(numeroExcelMx);
-                return true;
-            }
+            hora = horaGeneral;
+            return true;
         }
 
         return false;

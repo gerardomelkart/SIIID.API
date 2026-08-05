@@ -1480,8 +1480,11 @@ public class SemanalCargaService : ISemanalCargaService
         {
             var claveModalidad = ObtenerValor(fila, "clasf_de_dto")?.Trim();
             var valorGradoConsumacion = ObtenerValor(fila, "grdo_cons")?.Trim();
+            var esHomicidio = !string.IsNullOrWhiteSpace(claveModalidad) &&
+                (string.Equals(claveModalidad, "1.01", StringComparison.OrdinalIgnoreCase) ||
+                 claveModalidad.StartsWith("1.01.", StringComparison.OrdinalIgnoreCase));
 
-            if (!string.Equals(claveModalidad, "1.01.01", StringComparison.OrdinalIgnoreCase) ||
+            if (!esHomicidio ||
                 !int.TryParse(valorGradoConsumacion, NumberStyles.Integer, CultureInfo.InvariantCulture, out var gradoConsumacion) ||
                 gradoConsumacion != 2)
             {
@@ -1497,7 +1500,7 @@ public class SemanalCargaService : ISemanalCargaService
                 Valor = valorGradoConsumacion,
                 Codigo = "SEMANAL_HOMICIDIO_TENTATIVA_NO_PERMITIDO",
                 DescripcionResumen = "Homicidio en grado de tentativa no permitido",
-                Mensaje = "El módulo preliminar no admite registros de homicidio doloso en grado de tentativa."
+                Mensaje = "El módulo preliminar no admite registros de ningún tipo de homicidio en grado de tentativa."
             });
         }
     }
