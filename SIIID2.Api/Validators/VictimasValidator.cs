@@ -56,6 +56,10 @@ public class VictimasValidator
         if (errores.Count > 0)
             return errores;
 
+        NormalizarEdadSinInformacion(filas);
+
+        // Evita víctimas repetidas bajo el mismo delito.
+
         // Evita víctimas repetidas bajo el mismo delito.
         ValidarDuplicidadVictima(filas, errores);
 
@@ -295,6 +299,22 @@ public class VictimasValidator
 
         // Edad opcional.
         ValidarEdadOpcional(fila, errores);
+    }
+
+    private void NormalizarEdadSinInformacion(List<ArchivoFila> filas)
+    {
+        foreach (var fila in filas)
+        {
+            var tipoVictima = ObtenerValor(fila, "id_tv");
+            var edad = ObtenerValor(fila, "edad");
+
+            if (int.TryParse(tipoVictima, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idTipoVictima) &&
+                idTipoVictima == 1 &&
+                string.IsNullOrWhiteSpace(edad))
+            {
+                fila.Columnas["edad"] = "999";
+            }
+        }
     }
 
     private void ValidarIdTpmParaPersonaFisica(ArchivoFila fila, List<CargaValidacionError> errores)

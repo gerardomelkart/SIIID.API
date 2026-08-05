@@ -5,6 +5,15 @@ namespace SIIID2.Api.Validators;
 
 public class CargaIntegridadValidator
 {
+
+    private static readonly string[] BienesJuridicosPersonaFisica =
+    {
+        "La vida y la integridad corporal",
+        "Libertad personal",
+        "La libertad y la seguridad sexual",
+        "La familia"
+    };
+
     // Modelo interno para trabajar las carpetas en las validaciones cruzadas.
     private class CarpetaIntegridad
     {
@@ -23,6 +32,8 @@ public class CargaIntegridadValidator
         public string? FechaHechos { get; set; }
         public string? HoraHechos { get; set; }
         public string? IdVicf { get; set; }
+
+        public string? IdTipoVictima { get; set; }
 
         // Delitos
         public string? ClasfDeDto { get; set; }
@@ -265,6 +276,7 @@ public class CargaIntegridadValidator
                 IdCi = ObtenerValor(f, "id_ci")?.Trim(),
                 IdDelito = ObtenerValor(f, "id_delito")?.Trim(),
                 IdVicf = ObtenerValor(f, "id_vicf")?.Trim(),
+                IdTipoVictima = ObtenerValor(f, "id_tv")?.Trim(),
                 Sexo = ObtenerValor(f, "sexo")?.Trim()
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.IdCi))
@@ -272,7 +284,76 @@ public class CargaIntegridadValidator
 
         ValidarFeminicidioSexoHombre(victimas, delitosPorLlave, advertencias);
 
+        ValidarTipoVictimaPorBienJuridico(victimas, delitosPorLlave, advertencias);
+
         return advertencias;
+    }
+
+    private void ValidarTipoVictimaPorBienJuridico(List<RegistroIntegridad> victimas, Dictionary<string, RegistroIntegridad> delitosPorLlave, List<CargaValidacionError> advertencias)
+    {
+        var bienesJuridicosIncompatibles = new List<string>();
+
+        foreach (var victima in victimas)
+        {
+            if (!int.TryParse(victima.IdTipoVictima, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idTipoVictima) || idTipoVictima == 1 || string.IsNullOrWhiteSpace(victima.IdCi) || string.IsNullOrWhiteSpace(victima.IdDelito))
+            {
+                continue;
+            }
+
+            if (!delitosPorLlave.TryGetValue(CrearLlaveDelito(victima.IdCi!, victima.IdDelito!), out var delito))
+            {
+                continue;
+            }
+
+            var bienJuridico = ObtenerBienJuridicoPersonaFisica(delito.ClasfDeDto);
+
+            if (bienJuridico == null)
+            {
+                continue;
+            }
+
+            bienesJuridicosIncompatibles.Add(bienJuridico);
+        }
+
+        if (bienesJuridicosIncompatibles.Count == 0)
+        {
+            return;
+        }
+
+        var bienesJuridicos = BienesJuridicosPersonaFisica
+            .Where(bienesJuridicosIncompatibles.Contains)
+            .ToList();
+
+        advertencias.Add(new CargaValidacionError
+        {
+            Archivo = "victimas",
+            Fila = null,
+            Columna = "id_tv",
+            Campo = "id_tv",
+            Valor = bienesJuridicosIncompatibles.Count.ToString(CultureInfo.InvariantCulture),
+            Codigo = "INTEGRIDAD_TIPO_VICTIMA_BIEN_JURIDICO_ADVERTENCIA",
+            DescripcionResumen = "Tipo de víctima distinto de persona física para determinados bienes jurídicos",
+            Mensaje = $"Se están reportando ({bienesJuridicosIncompatibles.Count}) víctimas con tipo de persona distinta a persona física para el/los bienes jurídicos ({string.Join(", ", bienesJuridicos)}). ¿Desea confirmar que la información es correcta?"
+        });
+    }
+
+    private static string? ObtenerBienJuridicoPersonaFisica(string? clasificacionDelito)
+    {
+        if (string.IsNullOrWhiteSpace(clasificacionDelito))
+        {
+            return null;
+        }
+
+        var claveBienJuridico = clasificacionDelito.Split('.')[0].Trim().TrimStart('0');
+
+        return claveBienJuridico switch
+        {
+            "1" => BienesJuridicosPersonaFisica[0],
+            "2" => BienesJuridicosPersonaFisica[1],
+            "3" => BienesJuridicosPersonaFisica[2],
+            "5" => BienesJuridicosPersonaFisica[3],
+            _ => null
+        };
     }
 
     private void ValidarConteoDelitosVictimas(List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas, List<CargaValidacionError> errores)

@@ -175,29 +175,6 @@ public class DelitosValidator
             // Si viene vacío, en ceros o inválido, no bloqueamos la carga.
             ValidarCodigoPostalOpcional(fila, "cp", errores);
 
-            // Coordenadas obligatorias dentro de los límites de México.
-            ValidarCoordenadaOpcional(
-                fila,
-                "coord_x",
-                errores,
-                minimo: -118,
-                maximo: -86,
-                codigoFormato: "DELITOS_COORD_X_FORMATO_INCORRECTO",
-                codigoRango: "DELITOS_COORD_X_FUERA_RANGO",
-                descripcionFormato: "Formato coordenada X incorrecto",
-                descripcionRango: "Coordenada X fuera de rango");
-
-            ValidarCoordenadaOpcional(
-                fila,
-                "coord_y",
-                errores,
-                minimo: 13,
-                maximo: 34,
-                codigoFormato: "DELITOS_COORD_Y_FORMATO_INCORRECTO",
-                codigoRango: "DELITOS_COORD_Y_FUERA_RANGO",
-                descripcionFormato: "Formato coordenada Y incorrecto",
-                descripcionRango: "Coordenada Y fuera de rango");
-
             // Campos descriptivos/opcionales.
             // De momento no bloquean la carga porque lo fuerte se resolverá por claves/catálogos.
             ValidarTextoOpcional(fila, "nom_ent_hchos", errores);
@@ -217,6 +194,28 @@ public class DelitosValidator
 
         foreach (var fila in filas)
         {
+            ValidarCoordenadaOpcional(
+                fila,
+                "coord_x",
+                advertencias,
+                minimo: -118,
+                maximo: -86,
+                codigoFormato: "DELITOS_COORD_X_FORMATO_INCORRECTO_ADVERTENCIA",
+                codigoRango: "DELITOS_COORD_X_FUERA_RANGO_ADVERTENCIA",
+                descripcionFormato: "Formato coordenada X incorrecto",
+                descripcionRango: "Coordenada X fuera de rango");
+
+            ValidarCoordenadaOpcional(
+                fila,
+                "coord_y",
+                advertencias,
+                minimo: 13,
+                maximo: 34,
+                codigoFormato: "DELITOS_COORD_Y_FORMATO_INCORRECTO_ADVERTENCIA",
+                codigoRango: "DELITOS_COORD_Y_FUERA_RANGO_ADVERTENCIA",
+                descripcionFormato: "Formato coordenada Y incorrecto",
+                descripcionRango: "Coordenada Y fuera de rango");
+
             ValidarCoordenadaSinInformacion(
                 fila,
                 "coord_x",
@@ -231,6 +230,8 @@ public class DelitosValidator
                 "DELITOS_COORD_Y_SIN_INFORMACION_ADVERTENCIA",
                 "Coordenada Y sin información");
         }
+
+        ValidarConcentracionMismoPunto(filas, advertencias);
 
         return advertencias;
     }
@@ -518,6 +519,44 @@ public class DelitosValidator
         valor = valor.Trim();
 
         return valor.All(c => c == '0' || c == '.' || c == ',' || c == '-');
+    }
+
+    private void ValidarConcentracionMismoPunto(List<ArchivoFila> filas, List<CargaValidacionError> advertencias)
+    {
+        var puntos = new List<(ArchivoFila Fila, decimal CoordenadaX, decimal CoordenadaY)>();
+
+        foreach (var fila in filas)
+        {
+            var valorX = ObtenerValor(fila, "coord_x");
+            var valorY = ObtenerValor(fila, "coord_y");
+
+            if (EsCoordenadaSinInformacion(valorX) ||
+                EsCoordenadaSinInformacion(valorY) ||
+                !IntentarConvertirDecimal(valorX!, out var coordenadaX) ||
+                !IntentarConvertirDecimal(valorY!, out var coordenadaY) ||
+                coordenadaX < -118 || coordenadaX > -86 ||
+                coordenadaY < 13 || coordenadaY > 34)
+            {
+                continue;
+            }
+
+            puntos.Add((fila, coordenadaX, coordenadaY));
+        }
+
+        foreach (var grupo in puntos.GroupBy(x => (x.CoordenadaX, x.CoordenadaY)).Where(x => x.Count() > 5))
+        {
+            advertencias.Add(new CargaValidacionError
+            {
+                Archivo = NombreArchivo,
+                Fila = grupo.First().Fila.NumeroFila,
+                Columna = "coord_x+coord_y",
+                Campo = "coord_x+coord_y",
+                Valor = $"X={grupo.Key.CoordenadaX.ToString(CultureInfo.InvariantCulture)}, Y={grupo.Key.CoordenadaY.ToString(CultureInfo.InvariantCulture)}",
+                Codigo = "DELITOS_MAS_DE_CINCO_MISMAS_COORDENADAS_ADVERTENCIA",
+                DescripcionResumen = "Más de cinco delitos en un mismo punto geográfico",
+                Mensaje = "Se están registrando más de cinco delitos en un mismo punto geográfico. ¿Desea confirmar que la información es correcta?"
+            });
+        }
     }
 
     private bool IntentarConvertirFecha(string valor, out DateTime fecha)
