@@ -1851,7 +1851,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             pob.id_pertenece_poblacion_indigena,
             disc.id_presenta_discapacidad,
             COALESCE(TRY_CONVERT(date, NULLIF(v.fha_nac, ''), 103), TRY_CONVERT(date, NULLIF(v.fha_nac, ''))),
-            CASE WHEN TRY_CONVERT(int, NULLIF(v.edad, '')) = 999 THEN NULL ELSE TRY_CONVERT(tinyint, NULLIF(v.edad, '')) END,
+            TRY_CONVERT(smallint, NULLIF(v.edad, '')),
             @IdUsuarioRegistro,
             1
         FROM dbo.semanal_carga_tmp_victima v
