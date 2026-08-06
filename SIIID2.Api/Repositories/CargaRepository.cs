@@ -1539,7 +1539,9 @@ public class CargaRepository : ICargaRepository
         SET estado = 'RECHAZADO_ADMIN',
             fecha_confirmacion = SYSDATETIME(),
             id_usuario_confirmacion = @IdUsuarioRechazo,
-            mensaje_error = @Motivo
+            mensaje_error = @Motivo,
+            rechazo_visto = 0,
+            fecha_rechazo_visto = NULL
         WHERE id_carga = @IdCarga;
 
         UPDATE dbo.carga_tmp_carpeta
