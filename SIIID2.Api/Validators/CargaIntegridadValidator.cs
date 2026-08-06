@@ -293,27 +293,27 @@ public class CargaIntegridadValidator
     {
         var bienesJuridicosIncompatibles = new List<string>();
 
-        foreach (var victima in victimas)
-        {
-            if (!int.TryParse(victima.IdTipoVictima, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idTipoVictima) || idTipoVictima == 1 || string.IsNullOrWhiteSpace(victima.IdCi) || string.IsNullOrWhiteSpace(victima.IdDelito))
-            {
-                continue;
-            }
+        //foreach (var victima in victimas)
+        //{
+        //    if (!int.TryParse(victima.IdTipoVictima, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idTipoVictima) || idTipoVictima == 1 || string.IsNullOrWhiteSpace(victima.IdCi) || string.IsNullOrWhiteSpace(victima.IdDelito))
+        //    {
+        //        continue;
+        //    }
 
-            if (!delitosPorLlave.TryGetValue(CrearLlaveDelito(victima.IdCi!, victima.IdDelito!), out var delito))
-            {
-                continue;
-            }
+        //    if (!delitosPorLlave.TryGetValue(CrearLlaveDelito(victima.IdCi!, victima.IdDelito!), out var delito))
+        //    {
+        //        continue;
+        //    }
 
-            var bienJuridico = ObtenerBienJuridicoPersonaFisica(delito.ClasfDeDto);
+        //    var bienJuridico = ObtenerBienJuridicoPersonaFisica(delito.ClasfDeDto);
 
-            if (bienJuridico == null)
-            {
-                continue;
-            }
+        //    if (bienJuridico == null)
+        //    {
+        //        continue;
+        //    }
 
-            bienesJuridicosIncompatibles.Add(bienJuridico);
-        }
+        //    bienesJuridicosIncompatibles.Add(bienJuridico);
+        //}
 
         if (bienesJuridicosIncompatibles.Count == 0)
         {

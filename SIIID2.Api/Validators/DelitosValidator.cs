@@ -192,46 +192,47 @@ public class DelitosValidator
     {
         var advertencias = new List<CargaValidacionError>();
 
-        foreach (var fila in filas)
-        {
-            ValidarCoordenadaOpcional(
-                fila,
-                "coord_x",
-                advertencias,
-                minimo: -118,
-                maximo: -86,
-                codigoFormato: "DELITOS_COORD_X_FORMATO_INCORRECTO_ADVERTENCIA",
-                codigoRango: "DELITOS_COORD_X_FUERA_RANGO_ADVERTENCIA",
-                descripcionFormato: "Formato coordenada X incorrecto",
-                descripcionRango: "Coordenada X fuera de rango");
 
-            ValidarCoordenadaOpcional(
-                fila,
-                "coord_y",
-                advertencias,
-                minimo: 13,
-                maximo: 34,
-                codigoFormato: "DELITOS_COORD_Y_FORMATO_INCORRECTO_ADVERTENCIA",
-                codigoRango: "DELITOS_COORD_Y_FUERA_RANGO_ADVERTENCIA",
-                descripcionFormato: "Formato coordenada Y incorrecto",
-                descripcionRango: "Coordenada Y fuera de rango");
+        //foreach (var fila in filas)
+        //{
+        //    ValidarCoordenadaOpcional(
+        //        fila,
+        //        "coord_x",
+        //        advertencias,
+        //        minimo: -118,
+        //        maximo: -86,
+        //        codigoFormato: "DELITOS_COORD_X_FORMATO_INCORRECTO_ADVERTENCIA",
+        //        codigoRango: "DELITOS_COORD_X_FUERA_RANGO_ADVERTENCIA",
+        //        descripcionFormato: "Formato coordenada X incorrecto",
+        //        descripcionRango: "Coordenada X fuera de rango");
 
-            ValidarCoordenadaSinInformacion(
-                fila,
-                "coord_x",
-                advertencias,
-                "DELITOS_COORD_X_SIN_INFORMACION_ADVERTENCIA",
-                "Coordenada X sin información");
+        //    ValidarCoordenadaOpcional(
+        //        fila,
+        //        "coord_y",
+        //        advertencias,
+        //        minimo: 13,
+        //        maximo: 34,
+        //        codigoFormato: "DELITOS_COORD_Y_FORMATO_INCORRECTO_ADVERTENCIA",
+        //        codigoRango: "DELITOS_COORD_Y_FUERA_RANGO_ADVERTENCIA",
+        //        descripcionFormato: "Formato coordenada Y incorrecto",
+        //        descripcionRango: "Coordenada Y fuera de rango");
 
-            ValidarCoordenadaSinInformacion(
-                fila,
-                "coord_y",
-                advertencias,
-                "DELITOS_COORD_Y_SIN_INFORMACION_ADVERTENCIA",
-                "Coordenada Y sin información");
-        }
+        //    ValidarCoordenadaSinInformacion(
+        //        fila,
+        //        "coord_x",
+        //        advertencias,
+        //        "DELITOS_COORD_X_SIN_INFORMACION_ADVERTENCIA",
+        //        "Coordenada X sin información");
 
-        ValidarConcentracionMismoPunto(filas, advertencias);
+        //    ValidarCoordenadaSinInformacion(
+        //        fila,
+        //        "coord_y",
+        //        advertencias,
+        //        "DELITOS_COORD_Y_SIN_INFORMACION_ADVERTENCIA",
+        //        "Coordenada Y sin información");
+        //}
+
+        //ValidarConcentracionMismoPunto(filas, advertencias);
 
         return advertencias;
     }
