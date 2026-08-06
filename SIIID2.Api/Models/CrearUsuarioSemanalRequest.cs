@@ -15,6 +15,5 @@ public class CrearUsuarioSemanalRequest
     public string Rol { get; set; } = string.Empty;
     public bool HabilitaSemanal { get; set; }
     public bool HabilitaCargaSemanal { get; set; }
-    public bool HabilitaModificacionSemanal { get; set; }
     public bool AdministraDelitosSemanal { get; set; }
 }

@@ -88,9 +88,7 @@ public class SemanalEnviosService : ISemanalEnviosService
                 !esActualizacion && estadoRegistro == "VALIDADO_PENDIENTE" ||
                 esActualizacion && estadoRegistro == "VALIDADO_PENDIENTE_ACTUALIZACION";
 
-            var permisoOperacion = esActualizacion
-                ? usuario.HabilitaModificacion
-                : usuario.HabilitaCarga;
+            var permisoOperacion = usuario.HabilitaCarga;
 
             registro.PuedeResolverPendiente =
                 pendienteResoluble &&

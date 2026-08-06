@@ -204,23 +204,13 @@ public class SemanalCargaService : ISemanalCargaService
 
         var esActualizacion = string.Equals(tipoCargaNormalizado, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
 
-        if (!esActualizacion && !usuario.HabilitaCarga)
+        if (!usuario.HabilitaCarga)
         {
             return new SemanalSemanaDisponibilidadResponse
             {
                 EsValido = false,
                 Codigo = "SEMANAL_USUARIO_SIN_PERMISO_CARGA",
                 Mensaje = "El usuario no tiene habilitada la carga de información semanal."
-            };
-        }
-
-        if (esActualizacion && !usuario.HabilitaModificacion)
-        {
-            return new SemanalSemanaDisponibilidadResponse
-            {
-                EsValido = false,
-                Codigo = "SEMANAL_USUARIO_SIN_PERMISO_MODIFICACION",
-                Mensaje = "El usuario no tiene habilitada la actualización de información semanal."
             };
         }
 
@@ -390,9 +380,9 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
-        if (!usuarioCarga.HabilitaCarga && !usuarioCarga.HabilitaModificacion)
+        if (!usuarioCarga.HabilitaCarga)
         {
-            AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_PERMISOS_OPERACION", "Usuario sin permisos de operación semanal", "El usuario no tiene habilitada la carga ni la actualización de información en el módulo semanal.");
+            AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_PERMISO_CARGA", "Usuario sin permiso de carga semanal", "El usuario no tiene habilitada la carga de información semanal.");
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
         }
@@ -519,21 +509,11 @@ public class SemanalCargaService : ISemanalCargaService
         var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, idUsuarioCarga, response.Bloques.Min(x => x.FechaInicioTramo), response.Bloques.Max(x => x.FechaFinTramo));
         MarcarBloquesParaReemplazo(response.Bloques, bloquesConfirmados);
 
-        var tieneBloquesNuevos = response.Bloques.Any(x => !x.ReemplazaInformacion);
         var tieneBloquesReemplazo = response.Bloques.Any(x => x.ReemplazaInformacion);
 
         tipoCarga = tieneBloquesReemplazo ? "ACTUALIZACION" : "CARGA_INICIAL";
         response.TipoCarga = tipoCarga;
         var esActualizacion = tieneBloquesReemplazo;
-
-        if (tieneBloquesNuevos && !usuarioCarga.HabilitaCarga) AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_PERMISO_CARGA", "Usuario sin permiso de carga semanal", "Los archivos contienen bloques nuevos, pero el usuario no tiene habilitada la carga de información semanal.");
-        if (tieneBloquesReemplazo && !usuarioCarga.HabilitaModificacion) AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_PERMISO_MODIFICACION", "Usuario sin permiso de actualización semanal", "Los archivos contienen bloques que reemplazan información confirmada, pero el usuario no tiene habilitada la actualización semanal.");
-
-        if (response.Errores.Count > 0)
-        {
-            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
-            return response;
-        }
 
         var fechaInicioOperacion = response.Bloques.Min(x => x.FechaInicioTramo);
         var fechaFinOperacion = response.Bloques.Max(x => x.FechaFinTramo);

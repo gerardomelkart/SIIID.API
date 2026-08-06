@@ -20,7 +20,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         public bool EsSuperUsuario { get; set; }
         public bool HabilitaSemanal { get; set; }
         public bool HabilitaCarga { get; set; }
-        public bool HabilitaModificacion { get; set; }
         public string TipoCarga { get; set; } = string.Empty;
         public int MesCorte { get; set; }
         public int AnioCorte { get; set; }
@@ -42,8 +41,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             u.id_usuario AS IdUsuario,
             u.id_entidad_federativa AS IdEntidadFederativa,
             r.rol AS Rol,
-            CONVERT(bit, um.habilita_carga) AS HabilitaCarga,
-            CONVERT(bit, um.habilita_modificacion) AS HabilitaModificacion
+            CONVERT(bit, um.habilita_carga) AS HabilitaCarga
         FROM dbo.usuario u
         INNER JOIN dbo.roles r ON r.id_rol = u.id_rol AND r.activo = 1
         INNER JOIN dbo.usuario_modulo um ON um.id_usuario = u.id_usuario AND um.habilitado = 1 AND um.activo = 1
@@ -881,10 +879,10 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 return Error(codigoReferencia, carga.Estado, "Solo el usuario que realizó la carga puede aceptarla o rechazarla.");
             }
 
-            if (!carga.HabilitaSemanal || (esActualizacion ? !carga.HabilitaModificacion : !carga.HabilitaCarga))
+            if (!carga.HabilitaSemanal || !carga.HabilitaCarga)
             {
                 await transaction.RollbackAsync();
-                return Error(codigoReferencia, carga.Estado, esActualizacion ? "El usuario no tiene habilitada la modificación de información en el módulo semanal." : "El usuario no tiene habilitada la carga de información en el módulo semanal.");
+                return Error(codigoReferencia, carga.Estado, "El usuario no tiene habilitada la carga de información en el módulo semanal.");
             }
 
             if (carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
@@ -1311,7 +1309,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 ELSE 0 END) AS EsSuperUsuario,
             CONVERT(bit, CASE WHEN um.habilitado = 1 AND um.activo = 1 THEN 1 ELSE 0 END) AS HabilitaSemanal,
             CONVERT(bit, ISNULL(um.habilita_carga, 0)) AS HabilitaCarga,
-            CONVERT(bit, ISNULL(um.habilita_modificacion, 0)) AS HabilitaModificacion,
             sc.tipo_carga AS TipoCarga,
             sc.mes_corte AS MesCorte,
             sc.anio_corte AS AnioCorte,

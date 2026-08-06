@@ -78,7 +78,7 @@ public class UsuarioRepository : IUsuarioRepository
             m.clave AS Clave,
             m.nombre AS Nombre,
             COALESCE(um.habilita_carga, 0) AS HabilitaCarga,
-            COALESCE(um.habilita_modificacion, 0) AS HabilitaModificacion,
+            CONVERT(bit, CASE WHEN m.clave = N'MENSUAL' THEN ISNULL(um.habilita_modificacion, 0) ELSE 0 END) AS HabilitaModificacion,
             COALESCE(um.administra_delitos, 0) AS AdministraDelitos
         FROM usuario u
         INNER JOIN usuario_modulo um
@@ -134,7 +134,6 @@ public class UsuarioRepository : IUsuarioRepository
             COALESCE(h.habilita_modificacion, 0) AS HabilitaModificacion,
             COALESCE(ums.habilitado, 0) AS HabilitaSemanal,
             COALESCE(ums.habilita_carga, 0) AS HabilitaCargaSemanal,
-            COALESCE(ums.habilita_modificacion, 0) AS HabilitaModificacionSemanal,
             COALESCE(ums.administra_delitos, 0) AS AdministraDelitosSemanal,
             u.activo AS Activo
         FROM usuario u
@@ -425,7 +424,7 @@ public class UsuarioRepository : IUsuarioRepository
                 },
                 transaction);
 
-            await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.HabilitaModificacionSemanal, request.AdministraDelitosSemanal, idUsuarioAlta);
+            await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.AdministraDelitosSemanal, idUsuarioAlta);
 
             await transaction.CommitAsync();
 
@@ -642,7 +641,7 @@ public class UsuarioRepository : IUsuarioRepository
                 },
                 transaction);
 
-            await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.HabilitaModificacionSemanal, request.AdministraDelitosSemanal, idUsuarioModificacion);
+            await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.AdministraDelitosSemanal, idUsuarioModificacion);
 
             await transaction.CommitAsync();
         }
@@ -723,7 +722,7 @@ public class UsuarioRepository : IUsuarioRepository
                 UPDATE usuario_modulo
                 SET habilitado = @HabilitaSemanal,
                     habilita_carga = @HabilitaCargaSemanal,
-                    habilita_modificacion = @HabilitaModificacionSemanal,
+                    habilita_modificacion = 0,
                     administra_delitos = @AdministraDelitosSemanal,
                     fecha_modificacion = SYSDATETIME(),
                     id_usuario_modificacion = @IdUsuarioModificacion,
@@ -750,7 +749,7 @@ public class UsuarioRepository : IUsuarioRepository
                     @IdModuloSemanal,
                     @HabilitaSemanal,
                     @HabilitaCargaSemanal,
-                    @HabilitaModificacionSemanal,
+                                       0,
                     @AdministraDelitosSemanal,
                     @IdUsuarioModificacion,
                     1
@@ -763,7 +762,6 @@ public class UsuarioRepository : IUsuarioRepository
                 IdUsuario = idUsuario,
                 request.HabilitaSemanal,
                 request.HabilitaCargaSemanal,
-                request.HabilitaModificacionSemanal,
                 request.AdministraDelitosSemanal,
                 IdUsuarioModificacion = idUsuarioModificacion
             }, transaction);
@@ -804,7 +802,7 @@ public class UsuarioRepository : IUsuarioRepository
             UPDATE usuario_modulo
             SET habilitado = @HabilitaSemanal,
                 habilita_carga = @HabilitaCargaSemanal,
-                habilita_modificacion = @HabilitaModificacionSemanal,
+                habilita_modificacion = 0,
                 administra_delitos = @AdministraDelitosSemanal,
                 fecha_modificacion = SYSDATETIME(),
                 id_usuario_modificacion = @IdUsuarioModificacion,
@@ -831,7 +829,7 @@ public class UsuarioRepository : IUsuarioRepository
                 @IdModuloSemanal,
                 @HabilitaSemanal,
                 @HabilitaCargaSemanal,
-                @HabilitaModificacionSemanal,
+                0,
                 @AdministraDelitosSemanal,
                 @IdUsuarioModificacion,
                 1
@@ -846,7 +844,6 @@ public class UsuarioRepository : IUsuarioRepository
             IdUsuario = idUsuario,
             request.HabilitaSemanal,
             request.HabilitaCargaSemanal,
-            request.HabilitaModificacionSemanal,
             request.AdministraDelitosSemanal,
             IdUsuarioModificacion = idUsuarioModificacion
         });
@@ -1055,7 +1052,7 @@ public class UsuarioRepository : IUsuarioRepository
                 },
                 transaction);
 
-            await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, null, null, null, null, idUsuarioModificacion);
+            await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, null, null, null, idUsuarioModificacion);
 
             await transaction.CommitAsync();
         }
@@ -1162,7 +1159,7 @@ public class UsuarioRepository : IUsuarioRepository
                 UPDATE usuario_modulo
                 SET habilitado = @HabilitaSemanal,
                     habilita_carga = @HabilitaCargaSemanal,
-                    habilita_modificacion = @HabilitaModificacionSemanal,
+                    habilita_modificacion = 0,
                     administra_delitos = @AdministraDelitosSemanal,
                     fecha_modificacion = SYSDATETIME(),
                     id_usuario_modificacion = @IdUsuarioModificacion,
@@ -1189,7 +1186,7 @@ public class UsuarioRepository : IUsuarioRepository
                     @IdModuloSemanal,
                     @HabilitaSemanal,
                     @HabilitaCargaSemanal,
-                    @HabilitaModificacionSemanal,
+                                       0,
                     @AdministraDelitosSemanal,
                     @IdUsuarioModificacion,
                     1
@@ -1202,7 +1199,6 @@ public class UsuarioRepository : IUsuarioRepository
                 IdUsuario = idUsuario,
                 request.HabilitaSemanal,
                 request.HabilitaCargaSemanal,
-                request.HabilitaModificacionSemanal,
                 request.AdministraDelitosSemanal,
                 IdUsuarioModificacion = idUsuarioModificacion
             }, transaction);
@@ -1282,7 +1278,7 @@ public class UsuarioRepository : IUsuarioRepository
         return registrosAfectados > 0;
     }
 
-    private static async Task GuardarPermisosModularesAsync(SqlConnection connection, SqlTransaction transaction, int idUsuario, bool habilitaMensual, bool habilitaCargaMensual, bool habilitaModificacionMensual, bool? habilitaSemanal, bool? habilitaCargaSemanal, bool? habilitaModificacionSemanal, bool? administraDelitosSemanal, int idUsuarioModificacion)
+    private static async Task GuardarPermisosModularesAsync(SqlConnection connection, SqlTransaction transaction, int idUsuario, bool habilitaMensual, bool habilitaCargaMensual, bool habilitaModificacionMensual, bool? habilitaSemanal, bool? habilitaCargaSemanal, bool? administraDelitosSemanal, int idUsuarioModificacion)
     {
         var sql = @"
         DECLARE @IdModuloMensual TINYINT =
@@ -1362,7 +1358,7 @@ public class UsuarioRepository : IUsuarioRepository
             UPDATE usuario_modulo
             SET habilitado = COALESCE(@HabilitaSemanal, habilitado),
                 habilita_carga = COALESCE(@HabilitaCargaSemanal, habilita_carga),
-                habilita_modificacion = COALESCE(@HabilitaModificacionSemanal, habilita_modificacion),
+                habilita_modificacion = 0,
                 administra_delitos = COALESCE(@AdministraDelitosSemanal, administra_delitos),
                 fecha_modificacion = SYSDATETIME(),
                 id_usuario_modificacion = @IdUsuarioModificacion,
@@ -1389,7 +1385,7 @@ public class UsuarioRepository : IUsuarioRepository
                 @IdModuloSemanal,
                 COALESCE(@HabilitaSemanal, 0),
                 COALESCE(@HabilitaCargaSemanal, 0),
-                COALESCE(@HabilitaModificacionSemanal, 0),
+                0,
                 COALESCE(@AdministraDelitosSemanal, 0),
                 @IdUsuarioModificacion,
                 1
@@ -1405,7 +1401,6 @@ public class UsuarioRepository : IUsuarioRepository
             HabilitaModificacionMensual = habilitaModificacionMensual,
             HabilitaSemanal = habilitaSemanal,
             HabilitaCargaSemanal = habilitaCargaSemanal,
-            HabilitaModificacionSemanal = habilitaModificacionSemanal,
             AdministraDelitosSemanal = administraDelitosSemanal,
             IdUsuarioModificacion = idUsuarioModificacion
         }, transaction);

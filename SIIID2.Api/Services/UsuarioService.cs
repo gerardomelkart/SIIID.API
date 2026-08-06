@@ -147,7 +147,6 @@ public class UsuarioService : IUsuarioService
             request.HabilitaCarga = false;
             request.HabilitaModificacion = false;
             request.HabilitaCargaSemanal = false;
-            request.HabilitaModificacionSemanal = false;
         }
 
         if (rol != "SUPER_USUARIO")
@@ -164,7 +163,6 @@ public class UsuarioService : IUsuarioService
         if (!request.HabilitaSemanal)
         {
             request.HabilitaCargaSemanal = false;
-            request.HabilitaModificacionSemanal = false;
             request.AdministraDelitosSemanal = false;
         }
 
@@ -243,7 +241,6 @@ public class UsuarioService : IUsuarioService
             HabilitaModificacion = false,
             HabilitaSemanal = request.HabilitaSemanal,
             HabilitaCargaSemanal = request.HabilitaCargaSemanal,
-            HabilitaModificacionSemanal = request.HabilitaModificacionSemanal,
             AdministraDelitosSemanal = request.AdministraDelitosSemanal
         };
 
@@ -347,7 +344,6 @@ public class UsuarioService : IUsuarioService
             request.HabilitaCarga = false;
             request.HabilitaModificacion = false;
             request.HabilitaCargaSemanal = false;
-            request.HabilitaModificacionSemanal = false;
         }
 
         if (rol != "SUPER_USUARIO")
@@ -364,7 +360,6 @@ public class UsuarioService : IUsuarioService
         if (request.HabilitaSemanal == false)
         {
             request.HabilitaCargaSemanal = false;
-            request.HabilitaModificacionSemanal = false;
             request.AdministraDelitosSemanal = false;
         }
 
@@ -540,7 +535,6 @@ public class UsuarioService : IUsuarioService
             HabilitaModificacion = false,
             HabilitaSemanal = request.HabilitaSemanal,
             HabilitaCargaSemanal = request.HabilitaCargaSemanal,
-            HabilitaModificacionSemanal = request.HabilitaModificacionSemanal,
             AdministraDelitosSemanal = request.AdministraDelitosSemanal
         };
 
@@ -567,7 +561,6 @@ public class UsuarioService : IUsuarioService
         if (rol == "CONSULTA")
         {
             request.HabilitaCargaSemanal = false;
-            request.HabilitaModificacionSemanal = false;
         }
 
         if (rol != "SUPER_USUARIO") request.AdministraDelitosSemanal = false;
@@ -575,7 +568,6 @@ public class UsuarioService : IUsuarioService
         if (!request.HabilitaSemanal)
         {
             request.HabilitaCargaSemanal = false;
-            request.HabilitaModificacionSemanal = false;
             request.AdministraDelitosSemanal = false;
         }
 
@@ -696,7 +688,6 @@ public class UsuarioService : IUsuarioService
         if (rol == "CONSULTA")
         {
             request.HabilitaCargaSemanal = false;
-            request.HabilitaModificacionSemanal = false;
         }
 
         if (rol != "SUPER_USUARIO")
@@ -707,13 +698,12 @@ public class UsuarioService : IUsuarioService
         if (!request.HabilitaSemanal)
         {
             request.HabilitaCargaSemanal = false;
-            request.HabilitaModificacionSemanal = false;
             request.AdministraDelitosSemanal = false;
         }
 
         await _usuarioRepository.ActualizarPermisosSemanalesAsync(idUsuario, request, idUsuarioModificacion);
 
-        _logger.LogInformation("Permisos semanales actualizados. IdUsuario: {IdUsuario}, HabilitaSemanal: {HabilitaSemanal}, HabilitaCargaSemanal: {HabilitaCargaSemanal}, HabilitaModificacionSemanal: {HabilitaModificacionSemanal}, AdministraDelitosSemanal: {AdministraDelitosSemanal}, UsuarioModificacion: {IdUsuarioModificacion}", idUsuario, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.HabilitaModificacionSemanal, request.AdministraDelitosSemanal, idUsuarioModificacion);
+        _logger.LogInformation("Permisos semanales actualizados. IdUsuario: {IdUsuario}, HabilitaSemanal: {HabilitaSemanal}, HabilitaCargaSemanal: {HabilitaCargaSemanal}, AdministraDelitosSemanal: {AdministraDelitosSemanal}, UsuarioModificacion: {IdUsuarioModificacion}", idUsuario, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.AdministraDelitosSemanal, idUsuarioModificacion);
 
         return new UsuarioOperacionResponse
         {
@@ -1028,7 +1018,6 @@ public class UsuarioService : IUsuarioService
         if (rol == "CONSULTA")
         {
             request.HabilitaCargaSemanal = false;
-            request.HabilitaModificacionSemanal = false;
         }
 
         if (rol != "SUPER_USUARIO") request.AdministraDelitosSemanal = false;
@@ -1036,7 +1025,6 @@ public class UsuarioService : IUsuarioService
         if (!request.HabilitaSemanal)
         {
             request.HabilitaCargaSemanal = false;
-            request.HabilitaModificacionSemanal = false;
             request.AdministraDelitosSemanal = false;
         }
 
