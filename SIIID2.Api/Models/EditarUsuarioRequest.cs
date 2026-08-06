@@ -18,6 +18,5 @@ public class EditarUsuarioRequest
     public bool HabilitaModificacion { get; set; }
     public bool? HabilitaSemanal { get; set; }
     public bool? HabilitaCargaSemanal { get; set; }
-    public bool? HabilitaModificacionSemanal { get; set; }
     public bool? AdministraDelitosSemanal { get; set; }
 }

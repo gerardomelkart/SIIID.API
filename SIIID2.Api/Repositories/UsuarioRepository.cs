@@ -193,7 +193,6 @@ public class UsuarioRepository : IUsuarioRepository
             COALESCE(h.habilita_modificacion, 0) AS HabilitaModificacion,
             COALESCE(ums.habilitado, 0) AS HabilitaSemanal,
             COALESCE(ums.habilita_carga, 0) AS HabilitaCargaSemanal,
-            COALESCE(ums.habilita_modificacion, 0) AS HabilitaModificacionSemanal,
             COALESCE(ums.administra_delitos, 0) AS AdministraDelitosSemanal,
             u.fecha_alta AS FechaAlta,
             u.fecha_modificacion AS FechaModificacion,
@@ -749,7 +748,7 @@ public class UsuarioRepository : IUsuarioRepository
                     @IdModuloSemanal,
                     @HabilitaSemanal,
                     @HabilitaCargaSemanal,
-                                       0,
+                    0,
                     @AdministraDelitosSemanal,
                     @IdUsuarioModificacion,
                     1
