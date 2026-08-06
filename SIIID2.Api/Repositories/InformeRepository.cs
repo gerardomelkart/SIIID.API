@@ -446,102 +446,126 @@ public class InformeRepository : IInformeRepository
 
     public async Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int? mesCorte, int? anioCorte)
     {
-        // Reporte de cargas por entidad y periodo.
-        // Solo SUPER_USUARIO consume este reporte.
-        //
-        // Si no se envían filtros, regresa todos los periodos que tengan intentos.
-        // Cada fila representa entidad + mes_corte + anio_corte.
         var sql = @"
-        WITH periodos AS (
-        SELECT
-            c.id_entidad_federativa,
+    WITH periodos_disponibles AS
+    (
+        SELECT DISTINCT
             c.mes_corte,
-            c.anio_corte,
-            COUNT(1) AS intentos
-        FROM carga c
+            c.anio_corte
+        FROM dbo.carga c
         WHERE c.activo = 1
           AND c.mes_corte IS NOT NULL
           AND c.anio_corte IS NOT NULL
-          AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
           AND (@MesCorte IS NULL OR c.mes_corte = @MesCorte)
           AND (@AnioCorte IS NULL OR c.anio_corte = @AnioCorte)
-        GROUP BY
-            c.id_entidad_federativa,
-            c.mes_corte,
-            c.anio_corte
-        )
+    ),
+    entidades AS
+    (
         SELECT
-        ef.id_entidad_federativa AS IdEntidadFederativa,
-        ef.nombre AS EntidadFederativa,
-        ef.clave AS ClaveEntidad,
-        p.mes_corte AS MesCorte,
-        p.anio_corte AS AnioCorte,
-        p.intentos AS Intentos,
+            ef.id_entidad_federativa,
+            ef.nombre AS entidad_federativa,
+            ef.clave AS clave_entidad
+        FROM dbo.catalogo_entidad_federativa ef
+        WHERE ef.activo = 1
+          AND TRY_CONVERT(int, ef.clave) BETWEEN 1 AND 32
+          AND (@IdEntidadFederativa IS NULL OR ef.id_entidad_federativa = @IdEntidadFederativa)
+    ),
+    periodos AS
+    (
+        SELECT
+            entidad.id_entidad_federativa,
+            entidad.entidad_federativa,
+            entidad.clave_entidad,
+            periodo.mes_corte,
+            periodo.anio_corte,
+            COUNT(DISTINCT carga.id_carga) AS intentos
+        FROM entidades entidad
+        CROSS JOIN periodos_disponibles periodo
+        LEFT JOIN dbo.carga carga
+            ON carga.id_entidad_federativa = entidad.id_entidad_federativa
+           AND carga.mes_corte = periodo.mes_corte
+           AND carga.anio_corte = periodo.anio_corte
+           AND carga.activo = 1
+        GROUP BY
+            entidad.id_entidad_federativa,
+            entidad.entidad_federativa,
+            entidad.clave_entidad,
+            periodo.mes_corte,
+            periodo.anio_corte
+    )
+    SELECT
+        periodo.id_entidad_federativa AS IdEntidadFederativa,
+        periodo.entidad_federativa AS EntidadFederativa,
+        periodo.clave_entidad AS ClaveEntidad,
+        periodo.mes_corte AS MesCorte,
+        periodo.anio_corte AS AnioCorte,
+        periodo.intentos AS Intentos,
         ultimo.codigo_referencia AS UltimoIntento,
         ultimo.tipo_carga AS TipoCargaUltimoIntento,
         ultimo.estado AS EstatusUltimoIntento,
         ultimo.fecha_carga_actualizacion AS FechaCargaActualizacion,
         ultimo.fecha_aprobacion AS FechaAprobacion,
         exitosa.fecha_carga_exitosa AS FechaCargaExitosa
-        FROM periodos p
-        INNER JOIN catalogo_entidad_federativa ef
-        ON ef.id_entidad_federativa = p.id_entidad_federativa
-        AND ef.activo = 1
-        OUTER APPLY (
-        SELECT TOP 1
-            c.codigo_referencia,
-            c.tipo_carga,
-            c.estado,
+    FROM periodos periodo
+    OUTER APPLY
+    (
+        SELECT TOP (1)
+            carga.codigo_referencia,
+            carga.tipo_carga,
+            carga.estado,
             CASE
-                WHEN c.estado IN (
-                    'VALIDADO_PENDIENTE',
-                    'VALIDADO_PENDIENTE_ACTUALIZACION',
-                    'PENDIENTE_APROBACION',
-                    'CONFIRMADO',
-                    'CONFIRMADO_ACTUALIZACION',
-                    'RECHAZADO_ADMIN'
+                WHEN carga.estado IN
+                (
+                    N'VALIDADO_PENDIENTE',
+                    N'VALIDADO_PENDIENTE_ACTUALIZACION',
+                    N'PENDIENTE_APROBACION',
+                    N'CONFIRMADO',
+                    N'CONFIRMADO_ACTUALIZACION',
+                    N'RECHAZADO_ADMIN'
                 )
-                THEN c.fecha_validacion
+                THEN carga.fecha_validacion
                 ELSE NULL
             END AS fecha_carga_actualizacion,
             CASE
-                WHEN c.estado IN (
-                    'CONFIRMADO',
-                    'CONFIRMADO_ACTUALIZACION'
+                WHEN carga.estado IN
+                (
+                    N'CONFIRMADO',
+                    N'CONFIRMADO_ACTUALIZACION'
                 )
-                THEN c.fecha_confirmacion
+                THEN carga.fecha_confirmacion
                 ELSE NULL
             END AS fecha_aprobacion
-        FROM carga c
-        WHERE c.activo = 1
-          AND c.id_entidad_federativa = p.id_entidad_federativa
-          AND c.mes_corte = p.mes_corte
-          AND c.anio_corte = p.anio_corte
+        FROM dbo.carga carga
+        WHERE carga.activo = 1
+          AND carga.id_entidad_federativa = periodo.id_entidad_federativa
+          AND carga.mes_corte = periodo.mes_corte
+          AND carga.anio_corte = periodo.anio_corte
         ORDER BY
-            COALESCE(c.fecha_confirmacion, c.fecha_validacion) DESC,
-            c.id_carga DESC
-        ) ultimo
-        OUTER APPLY (
-        SELECT
-            MIN(c.fecha_validacion) AS fecha_carga_exitosa
-        FROM carga c
-        WHERE c.activo = 1
-          AND c.id_entidad_federativa = p.id_entidad_federativa
-          AND c.mes_corte = p.mes_corte
-          AND c.anio_corte = p.anio_corte
-          AND c.estado IN (
-              'VALIDADO_PENDIENTE',
-              'VALIDADO_PENDIENTE_ACTUALIZACION',
-              'PENDIENTE_APROBACION',
-              'CONFIRMADO',
-              'CONFIRMADO_ACTUALIZACION'
+            COALESCE(carga.fecha_confirmacion, carga.fecha_validacion) DESC,
+            carga.id_carga DESC
+    ) ultimo
+    OUTER APPLY
+    (
+        SELECT MIN(carga.fecha_validacion) AS fecha_carga_exitosa
+        FROM dbo.carga carga
+        WHERE carga.activo = 1
+          AND carga.id_entidad_federativa = periodo.id_entidad_federativa
+          AND carga.mes_corte = periodo.mes_corte
+          AND carga.anio_corte = periodo.anio_corte
+          AND carga.estado IN
+          (
+              N'VALIDADO_PENDIENTE',
+              N'VALIDADO_PENDIENTE_ACTUALIZACION',
+              N'PENDIENTE_APROBACION',
+              N'CONFIRMADO',
+              N'CONFIRMADO_ACTUALIZACION'
           )
-        ) exitosa
-        ORDER BY
-        p.anio_corte DESC,
-        p.mes_corte DESC,
-        ef.nombre;
-        ";
+    ) exitosa
+    ORDER BY
+        periodo.anio_corte DESC,
+        periodo.mes_corte DESC,
+        periodo.entidad_federativa;
+    ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 

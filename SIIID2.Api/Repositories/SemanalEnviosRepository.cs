@@ -406,49 +406,149 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 AND bloque.activo = 1
           )
     ),
-    periodos AS
+    periodos_disponibles AS
+    (
+        SELECT DISTINCT
+            bloque.anio_corte,
+            bloque.mes_corte
+        FROM bloques_carga bloque
+        WHERE (@AnioCorte IS NULL OR bloque.anio_corte = @AnioCorte)
+          AND (@MesCorte IS NULL OR bloque.mes_corte = @MesCorte)
+    ),
+    usuarios_esperados AS
+    (
+        SELECT DISTINCT
+            usuario.id_entidad_federativa,
+            entidad.nombre AS entidad_federativa,
+            entidad.clave AS clave_entidad,
+            usuario.id_usuario AS id_usuario_carga,
+            usuario.usuario AS usuario_carga,
+            COALESCE
+            (
+                NULLIF
+                (
+                    LTRIM(RTRIM(CONCAT
+                    (
+                        usuario.nombre,
+                        N' ',
+                        usuario.primer_apellido,
+                        CASE
+                            WHEN NULLIF(usuario.segundo_apellido, N'') IS NULL THEN N''
+                            ELSE CONCAT(N' ', usuario.segundo_apellido)
+                        END
+                    ))),
+                    N''
+                ),
+                usuario.usuario
+            ) AS nombre_usuario_carga
+        FROM dbo.usuario usuario
+        INNER JOIN dbo.roles rol
+            ON rol.id_rol = usuario.id_rol
+           AND rol.activo = 1
+           AND rol.rol = N'ENLACE_ESTATAL'
+        INNER JOIN dbo.usuario_modulo usuario_modulo
+            ON usuario_modulo.id_usuario = usuario.id_usuario
+           AND usuario_modulo.habilitado = 1
+           AND usuario_modulo.activo = 1
+        INNER JOIN dbo.catalogo_modulo modulo
+            ON modulo.id_modulo = usuario_modulo.id_modulo
+           AND modulo.clave = N'SEMANAL'
+           AND modulo.activo = 1
+        INNER JOIN dbo.catalogo_entidad_federativa entidad
+            ON entidad.id_entidad_federativa = usuario.id_entidad_federativa
+           AND entidad.activo = 1
+        WHERE usuario.activo = 1
+          AND (@IdEntidadFederativa IS NULL OR usuario.id_entidad_federativa = @IdEntidadFederativa)
+          AND (@IdUsuarioCarga IS NULL OR usuario.id_usuario = @IdUsuarioCarga)
+    ),
+    base AS
     (
         SELECT
+            usuario.id_entidad_federativa,
+            usuario.entidad_federativa,
+            usuario.clave_entidad,
+            usuario.id_usuario_carga,
+            usuario.usuario_carga,
+            usuario.nombre_usuario_carga,
+            periodo.anio_corte,
+            periodo.mes_corte
+        FROM usuarios_esperados usuario
+        CROSS JOIN periodos_disponibles periodo
+
+        UNION
+
+        SELECT DISTINCT
             bloque.id_entidad_federativa,
+            entidad.nombre,
+            entidad.clave,
             bloque.id_usuario_carga,
+            usuario.usuario,
+            COALESCE
+            (
+                NULLIF
+                (
+                    LTRIM(RTRIM(CONCAT
+                    (
+                        usuario.nombre,
+                        N' ',
+                        usuario.primer_apellido,
+                        CASE
+                            WHEN NULLIF(usuario.segundo_apellido, N'') IS NULL THEN N''
+                            ELSE CONCAT(N' ', usuario.segundo_apellido)
+                        END
+                    ))),
+                    N''
+                ),
+                usuario.usuario
+            ),
             bloque.anio_corte,
-            bloque.mes_corte,
-            COUNT(DISTINCT bloque.id_semanal_carga) AS intentos
+            bloque.mes_corte
         FROM bloques_carga bloque
+        INNER JOIN dbo.usuario usuario
+            ON usuario.id_usuario = bloque.id_usuario_carga
+        INNER JOIN dbo.catalogo_entidad_federativa entidad
+            ON entidad.id_entidad_federativa = bloque.id_entidad_federativa
+           AND entidad.activo = 1
         WHERE (@IdEntidadFederativa IS NULL OR bloque.id_entidad_federativa = @IdEntidadFederativa)
           AND (@IdUsuarioCarga IS NULL OR bloque.id_usuario_carga = @IdUsuarioCarga)
           AND (@AnioCorte IS NULL OR bloque.anio_corte = @AnioCorte)
           AND (@MesCorte IS NULL OR bloque.mes_corte = @MesCorte)
+    ),
+    periodos AS
+    (
+        SELECT
+            base.id_entidad_federativa,
+            base.entidad_federativa,
+            base.clave_entidad,
+            base.id_usuario_carga,
+            base.usuario_carga,
+            base.nombre_usuario_carga,
+            base.anio_corte,
+            base.mes_corte,
+            COUNT(DISTINCT bloque.id_semanal_carga) AS intentos
+        FROM base
+        LEFT JOIN bloques_carga bloque
+            ON bloque.id_entidad_federativa = base.id_entidad_federativa
+           AND bloque.id_usuario_carga = base.id_usuario_carga
+           AND bloque.anio_corte = base.anio_corte
+           AND bloque.mes_corte = base.mes_corte
         GROUP BY
-            bloque.id_entidad_federativa,
-            bloque.id_usuario_carga,
-            bloque.anio_corte,
-            bloque.mes_corte
+            base.id_entidad_federativa,
+            base.entidad_federativa,
+            base.clave_entidad,
+            base.id_usuario_carga,
+            base.usuario_carga,
+            base.nombre_usuario_carga,
+            base.anio_corte,
+            base.mes_corte
     )
     SELECT
-        ef.id_entidad_federativa AS IdEntidadFederativa,
-        ef.nombre AS EntidadFederativa,
-        ef.clave AS ClaveEntidad,
+        periodo.id_entidad_federativa AS IdEntidadFederativa,
+        periodo.entidad_federativa AS EntidadFederativa,
+        periodo.clave_entidad AS ClaveEntidad,
         periodo.id_usuario_carga AS IdUsuarioCarga,
-        usuario.usuario AS UsuarioCarga,
-        COALESCE
-        (
-            NULLIF
-            (
-                LTRIM(RTRIM(CONCAT
-                (
-                    usuario.nombre,
-                    N' ',
-                    usuario.primer_apellido,
-                    CASE
-                        WHEN NULLIF(usuario.segundo_apellido, N'') IS NULL THEN N''
-                        ELSE CONCAT(N' ', usuario.segundo_apellido)
-                    END
-                ))),
-                N''
-            ),
-            usuario.usuario
-        ) AS NombreUsuarioCarga,
+        periodo.usuario_carga AS UsuarioCarga,
+        periodo.nombre_usuario_carga AS NombreUsuarioCarga,
         periodo.anio_corte AS AnioCorte,
         periodo.mes_corte AS MesCorte,
         periodo.intentos AS Intentos,
@@ -459,11 +559,6 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         ultimo.fecha_aprobacion AS FechaAprobacion,
         exitosa.fecha_carga_exitosa AS FechaCargaExitosa
     FROM periodos periodo
-    INNER JOIN dbo.catalogo_entidad_federativa ef
-        ON ef.id_entidad_federativa = periodo.id_entidad_federativa
-       AND ef.activo = 1
-    INNER JOIN dbo.usuario usuario
-        ON usuario.id_usuario = periodo.id_usuario_carga
     OUTER APPLY
     (
         SELECT TOP (1)
@@ -484,7 +579,11 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 ELSE NULL
             END AS fecha_carga_actualizacion,
             CASE
-                WHEN bloque.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+                WHEN bloque.estado IN
+                (
+                    N'CONFIRMADO',
+                    N'CONFIRMADO_ACTUALIZACION'
+                )
                 THEN bloque.fecha_confirmacion
                 ELSE NULL
             END AS fecha_aprobacion
@@ -517,8 +616,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     ORDER BY
         periodo.anio_corte DESC,
         periodo.mes_corte DESC,
-        ef.nombre,
-        usuario.usuario;
+        periodo.entidad_federativa,
+        periodo.usuario_carga;
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
