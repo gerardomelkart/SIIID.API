@@ -24,6 +24,19 @@ public class SemanalDelitoService : ISemanalDelitoService
         return RespuestaCorrecta(modalidades, "Configuración semanal consultada correctamente.");
     }
 
+    public async Task<DelitosSemanalesHabilitadosResponse> ObtenerDelitosHabilitadosAsync()
+    {
+        var delitos = await _semanalDelitoRepository.ObtenerDelitosHabilitadosAsync();
+
+        return new DelitosSemanalesHabilitadosResponse
+        {
+            EsValido = true,
+            Codigo = "SEMANAL_DELITOS_HABILITADOS_OK",
+            Mensaje = "Delitos habilitados consultados correctamente.",
+            Delitos = delitos
+        };
+    }
+
     public async Task<ConfiguracionDelitosSemanalesResponse> GuardarConfiguracionAsync(ActualizarConfiguracionDelitosSemanalesRequest request, int idUsuario)
     {
         if (!await _semanalDelitoRepository.PuedeAdministrarDelitosAsync(idUsuario)) return SinPermiso();

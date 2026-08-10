@@ -6,5 +6,6 @@ public interface ISemanalDelitoRepository
 {
     Task<bool> PuedeAdministrarDelitosAsync(int idUsuario);
     Task<List<ConfiguracionModalidadSemanalItem>> ObtenerConfiguracionAsync();
+    Task<List<DelitoSemanalHabilitadoItem>> ObtenerDelitosHabilitadosAsync();
     Task GuardarConfiguracionAsync(List<ConfiguracionModalidadSemanalItem> modalidades, int idUsuarioModificacion);
 }

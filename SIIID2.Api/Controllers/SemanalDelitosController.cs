@@ -25,6 +25,13 @@ public class SemanalDelitosController : ControllerBase
         return resultado.EsValido ? Ok(resultado) : StatusCode(StatusCodes.Status403Forbidden, resultado);
     }
 
+    [HttpGet("habilitados")]
+    public async Task<IActionResult> ObtenerDelitosHabilitados()
+    {
+        var resultado = await _semanalDelitoService.ObtenerDelitosHabilitadosAsync();
+        return Ok(resultado);
+    }
+
     [HttpPut]
     public async Task<IActionResult> GuardarConfiguracion([FromBody] ActualizarConfiguracionDelitosSemanalesRequest request)
     {

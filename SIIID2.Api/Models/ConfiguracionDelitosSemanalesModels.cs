@@ -39,3 +39,18 @@ public class ConfiguracionDelitosSemanalesResponse
     public int TotalSeleccionados { get; set; }
     public List<ConfiguracionModalidadSemanalItem> Modalidades { get; set; } = new();
 }
+
+public class DelitoSemanalHabilitadoItem
+{
+    public int IdDelito { get; set; }
+    public string Delito { get; set; } = string.Empty;
+    public short Orden { get; set; }
+}
+
+public class DelitosSemanalesHabilitadosResponse
+{
+    public bool EsValido { get; set; }
+    public string Codigo { get; set; } = string.Empty;
+    public string Mensaje { get; set; } = string.Empty;
+    public List<DelitoSemanalHabilitadoItem> Delitos { get; set; } = new();
+}

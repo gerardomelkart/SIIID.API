@@ -63,6 +63,32 @@ public class SemanalDelitoRepository : ISemanalDelitoRepository
         return (await connection.QueryAsync<ConfiguracionModalidadSemanalItem>(sql)).ToList();
     }
 
+    public async Task<List<DelitoSemanalHabilitadoItem>> ObtenerDelitosHabilitadosAsync()
+    {
+        const string sql = @"
+        SELECT
+            cd.id_delito AS IdDelito,
+            cd.delito AS Delito,
+            MIN(configuracion.orden) AS Orden
+        FROM dbo.semanal_configuracion_delito configuracion
+        INNER JOIN dbo.catalogo_modalidad_delito md ON md.id_modalidad_delito = configuracion.id_modalidad_delito AND md.activo = 1
+        INNER JOIN dbo.catalogo_subtipo_delito sd ON sd.id_subtipo_delito = md.id_subtipo_delito AND sd.activo = 1
+        INNER JOIN dbo.catalogo_delito cd ON cd.id_delito = sd.id_delito AND cd.activo = 1
+        WHERE configuracion.activo = 1
+        GROUP BY
+            cd.id_delito,
+            cd.clave2,
+            cd.delito
+        ORDER BY
+            MIN(configuracion.orden),
+            cd.clave2;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return (await connection.QueryAsync<DelitoSemanalHabilitadoItem>(sql)).ToList();
+    }
+
     public async Task GuardarConfiguracionAsync(List<ConfiguracionModalidadSemanalItem> modalidades, int idUsuarioModificacion)
     {
         const string sqlDesactivar = @"
