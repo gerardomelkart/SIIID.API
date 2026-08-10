@@ -96,76 +96,157 @@ public class RecordatoriosCargaController : ControllerBase
         var fechaFin = fechaInicio.AddDays(6);
 
         const string sql = @"
-        SELECT CONVERT
+        WITH delitos_habilitados AS
         (
-            bit,
-            CASE
-                WHEN EXISTS
+            SELECT
+                cd.id_delito,
+                cd.clave2,
+                cd.delito,
+                MIN(configuracion.orden) AS orden
+            FROM dbo.semanal_configuracion_delito configuracion
+            INNER JOIN dbo.catalogo_modalidad_delito md
+                ON md.id_modalidad_delito = configuracion.id_modalidad_delito
+               AND md.activo = 1
+            INNER JOIN dbo.catalogo_subtipo_delito sd
+                ON sd.id_subtipo_delito = md.id_subtipo_delito
+               AND sd.activo = 1
+            INNER JOIN dbo.catalogo_delito cd
+                ON cd.id_delito = sd.id_delito
+               AND cd.activo = 1
+            WHERE configuracion.activo = 1
+            GROUP BY
+                cd.id_delito,
+                cd.clave2,
+                cd.delito
+        ),
+        cargas_periodo AS
+        (
+            SELECT DISTINCT
+                sc.id_semanal_carga,
+                sc.estado,
+                COALESCE
                 (
-                    SELECT 1
-                    FROM dbo.semanal_carga sc
-                    INNER JOIN dbo.semanal_carga_bloque bloque
-                        ON bloque.id_semanal_carga = sc.id_semanal_carga
-                       AND bloque.activo = 1
-                    WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-                      AND sc.id_usuario_carga = @IdUsuario
-                      AND bloque.fecha_inicio_semana = @FechaInicioSemana
-                      AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-                      AND sc.estado IN
-                      (
-                          N'PENDIENTE_APROBACION',
-                          N'CONFIRMADO',
-                          N'CONFIRMADO_ACTUALIZACION'
-                      )
-                      AND sc.activo = 1
-                )
-                THEN 1
-                ELSE 0
-            END
-        );
+                    sc.fecha_confirmacion,
+                    sc.fecha_validacion,
+                    sc.fecha_carga
+                ) AS fecha_movimiento
+            FROM dbo.semanal_carga sc
+            INNER JOIN dbo.semanal_carga_bloque bloque
+                ON bloque.id_semanal_carga = sc.id_semanal_carga
+               AND bloque.activo = 1
+            WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+              AND bloque.fecha_inicio_semana = @FechaInicioSemana
+              AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+              AND sc.activo = 1
+        ),
+        delitos_operacion AS
+        (
+            SELECT DISTINCT
+                carga.id_semanal_carga,
+                carga.estado,
+                carga.fecha_movimiento,
+                sd.id_delito
+            FROM cargas_periodo carga
+            INNER JOIN dbo.semanal_carga_tmp_delito delito
+                ON delito.id_semanal_carga = carga.id_semanal_carga
+               AND delito.incluido = 1
+               AND delito.activo = 1
+            INNER JOIN dbo.semanal_carga_tmp_carpeta carpeta
+                ON carpeta.id_semanal_carga = delito.id_semanal_carga
+               AND carpeta.id_ci = delito.id_ci
+               AND carpeta.incluido = 1
+               AND carpeta.activo = 1
+            INNER JOIN dbo.catalogo_modalidad_delito md
+                ON LTRIM(RTRIM(md.clave4)) = LTRIM(RTRIM(delito.clasf_de_dto))
+               AND md.activo = 1
+            INNER JOIN dbo.catalogo_subtipo_delito sd
+                ON sd.id_subtipo_delito = md.id_subtipo_delito
+               AND sd.activo = 1
+            WHERE COALESCE
+            (
+                TRY_CONVERT(date, carpeta.fha_de_ini, 103),
+                TRY_CONVERT(date, carpeta.fha_de_ini)
+            ) >= @FechaInicioSemana
+              AND COALESCE
+              (
+                  TRY_CONVERT(date, carpeta.fha_de_ini, 103),
+                  TRY_CONVERT(date, carpeta.fha_de_ini)
+              ) < DATEADD(DAY, 1, @FechaFinSemana)
 
+            UNION
+
+            SELECT DISTINCT
+                carga.id_semanal_carga,
+                carga.estado,
+                carga.fecha_movimiento,
+                sd.id_delito
+            FROM cargas_periodo carga
+            INNER JOIN dbo.semanal_delito delito
+                ON delito.id_semanal_carga = carga.id_semanal_carga
+               AND delito.activo = 1
+            INNER JOIN dbo.semanal_carpeta_investigacion carpeta
+                ON carpeta.id_semanal_carpeta_investigacion = delito.id_semanal_carpeta_investigacion
+               AND carpeta.id_semanal_carga = delito.id_semanal_carga
+               AND carpeta.activo = 1
+            INNER JOIN dbo.catalogo_modalidad_delito md
+                ON md.id_modalidad_delito = delito.id_modalidad_delito
+               AND md.activo = 1
+            INNER JOIN dbo.catalogo_subtipo_delito sd
+                ON sd.id_subtipo_delito = md.id_subtipo_delito
+               AND sd.activo = 1
+            WHERE carpeta.fecha_inicio >= @FechaInicioSemana
+              AND carpeta.fecha_inicio < DATEADD(DAY, 1, @FechaFinSemana)
+        ),
+        ultimo_estado_delito AS
+        (
+            SELECT
+                operacion.id_delito,
+                operacion.estado,
+                ROW_NUMBER() OVER
+                (
+                    PARTITION BY operacion.id_delito
+                    ORDER BY
+                        operacion.fecha_movimiento DESC,
+                        operacion.id_semanal_carga DESC
+                ) AS numero
+            FROM delitos_operacion operacion
+        )
         SELECT
-            cd.delito
-        FROM dbo.semanal_configuracion_delito configuracion
-        INNER JOIN dbo.catalogo_modalidad_delito md
-            ON md.id_modalidad_delito = configuracion.id_modalidad_delito
-           AND md.activo = 1
-        INNER JOIN dbo.catalogo_subtipo_delito sd
-            ON sd.id_subtipo_delito = md.id_subtipo_delito
-           AND sd.activo = 1
-        INNER JOIN dbo.catalogo_delito cd
-            ON cd.id_delito = sd.id_delito
-           AND cd.activo = 1
-        WHERE configuracion.activo = 1
-        GROUP BY
-            cd.id_delito,
-            cd.clave2,
-            cd.delito
+            habilitado.delito
+        FROM delitos_habilitados habilitado
+        LEFT JOIN ultimo_estado_delito ultimo
+            ON ultimo.id_delito = habilitado.id_delito
+           AND ultimo.numero = 1
+           AND ultimo.estado IN
+           (
+               N'PENDIENTE_APROBACION',
+               N'CONFIRMADO',
+               N'CONFIRMADO_ACTUALIZACION'
+           )
+        WHERE ultimo.id_delito IS NULL
         ORDER BY
-            MIN(configuracion.orden),
-            cd.clave2;";
+            habilitado.orden,
+            habilitado.clave2;";
 
         using var connection = _dbConnectionFactory.CrearConexion();
-        using var resultados = await connection.QueryMultipleAsync(sql, new
+
+        var delitos = (await connection.QueryAsync<string>(sql, new
         {
-            IdUsuario = idUsuario,
             usuario!.IdEntidadFederativa,
-            FechaInicioSemana = fechaInicio
-        });
+            FechaInicioSemana = fechaInicio,
+            FechaFinSemana = fechaFin
+        })).ToList();
 
-        var cargaEnviada = await resultados.ReadSingleAsync<bool>();
-        var delitos = (await resultados.ReadAsync<string>()).ToList();
-
-        if (cargaEnviada) return Ok(SinPendiente());
+        if (delitos.Count == 0) return Ok(SinPendiente());
 
         var periodo = FormatearRango(fechaInicio, fechaFin);
-        var detalleDelitos = delitos.Count > 0 ? $" para: {string.Join(", ", delitos)}" : string.Empty;
+        var detalleDelitos = $" para: {string.Join(", ", delitos)}";
 
         return Ok(new RecordatorioCargaResponse
         {
             HayPendiente = true,
             Titulo = "Carga preliminar pendiente",
-            Mensaje = $"Falta cargar la información correspondiente a la semana {periodo}{detalleDelitos}. Favor de realizar la carga correspondiente a su usuario.",
+            Mensaje = $"Falta cargar la información correspondiente a la semana {periodo}{detalleDelitos}. Favor de realizar la carga correspondiente a la entidad.",
             Periodo = periodo,
             Delitos = delitos
         });
