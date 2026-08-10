@@ -1366,7 +1366,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
     }
 
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte, int? idEntidadFederativa, string modoPlano, int mesUltimoCorte, int? idUsuarioCarga)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte, int? idEntidadFederativa, int? idUsuarioCarga, string modoPlano, int mesUltimoCorte)
     {
         var sql = @"
             WITH periodos_carga AS
@@ -1690,10 +1690,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         OPTION (RECOMPILE);
         ";
 
-        return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa, modoPlano, mesUltimoCorte);
+        return await QueryDictionarySabanaAsync(sql, anioCorte, idEntidadFederativa, idUsuarioCarga, modoPlano, mesUltimoCorte);
     }
 
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte, int? idEntidadFederativa, string modoPlano, int mesUltimoCorte, int? idUsuarioCarga)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte, int? idEntidadFederativa, int? idUsuarioCarga, string modoPlano, int mesUltimoCorte)
     {
         var sql = @"
             WITH periodos_carga AS
@@ -2042,13 +2042,13 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         OPTION (RECOMPILE);
         ";
 
-        return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa, modoPlano, mesUltimoCorte);
+        return await QueryDictionarySabanaAsync(sql, anioCorte, idEntidadFederativa, idUsuarioCarga, modoPlano, mesUltimoCorte);
     }
 
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalVictimasAsync(int anioCorte, int? idEntidadFederativa, string modoPlano, int mesUltimoCorte, int? idUsuarioCarga)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalVictimasAsync(int anioCorte, int? idEntidadFederativa, int? idUsuarioCarga, string modoPlano, int mesUltimoCorte)
     {
         var sql = @"
-                              WITH periodos_carga AS
+            WITH periodos_carga AS
             (
                 SELECT
                     sc.id_semanal_carga,
@@ -2458,150 +2458,225 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         OPTION (RECOMPILE);
         ";
 
-        return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa, modoPlano, mesUltimoCorte);
+        return await QueryDictionarySabanaAsync(sql, anioCorte, idEntidadFederativa, idUsuarioCarga, modoPlano, mesUltimoCorte);
     }
 
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(int anioCorte, int? idEntidadFederativa, string modoPlano, int mesUltimoCorte, int? idUsuarioCarga)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(int anioCorte, int? idEntidadFederativa, int? idUsuarioCarga, string modoPlano, int mesUltimoCorte)
     {
         var sql = @"
-                WITH pendientes_rankeadas AS (
-            SELECT
-                c.id_carga,
-                c.id_entidad_federativa,
-                c.mes_corte,
-                c.anio_corte,
-                ROW_NUMBER() OVER (
-                    PARTITION BY c.id_entidad_federativa, c.mes_corte, c.anio_corte
-                    ORDER BY c.fecha_validacion DESC, c.id_carga DESC
-                ) AS rn
-            FROM carga c
-            WHERE c.activo = 1
-              AND c.estado = 'PENDIENTE_APROBACION'
-              AND c.anio_corte = @AnioCorte
-              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
-        ),
-        pendientes AS (
-            SELECT
-                id_carga,
-                id_entidad_federativa,
-                mes_corte,
-                anio_corte
-            FROM pendientes_rankeadas
-            WHERE rn = 1
-        ),
-        fuente_victimas AS (
-            SELECT
-                c.anio_corte,
-                c.mes_corte,
-                c.id_entidad_federativa AS id_entidad_carga,
-                d.id_entidad_federativa AS id_entidad_hechos,
-                d.id_municipio,
-                d.id_modalidad_delito,
-                d.id_grado_consumacion,
-                d.id_instrumento_comision,
-                d.id_forma_accion,
-                tv.clave AS tipo_victima_clave,
-                sx.clave AS sexo_clave,
-                sx.descripcion AS sexo_descripcion,
-                TRY_CONVERT(int, v.edad) AS edad
-            FROM victima v
-            INNER JOIN delito d
-                ON d.id_delito = v.id_delito
-               AND d.activo = 1
-            INNER JOIN carga c
-                ON c.id_carga = v.id_carga
-               AND c.activo = 1
-               AND c.anio_corte = @AnioCorte
-               AND (
-                      (c.tipo_carga = 'CARGA_INICIAL' AND c.estado = 'CONFIRMADO')
-                   OR (c.tipo_carga = 'ACTUALIZACION' AND c.estado = 'CONFIRMADO_ACTUALIZACION')
-               )
-            INNER JOIN catalogo_tipo_victima tv
-                ON tv.id_tipo_victima = v.id_tipo_victima
-               AND tv.activo = 1
-            LEFT JOIN catalogo_sexo sx
-                ON sx.id_sexo = v.id_sexo
-               AND sx.activo = 1
-            WHERE v.activo = 1
-              AND (@IdEntidadFederativa IS NULL OR c.id_entidad_federativa = @IdEntidadFederativa)
-                AND (
-                    @ModoPlano = 'CONFIRMADO'
-                    OR (
-                        @ModoPlano = 'PREVIO'
-                        AND NOT EXISTS (
-                            SELECT 1
-                            FROM pendientes p
-                            WHERE p.anio_corte = c.anio_corte
-                              AND p.mes_corte = c.mes_corte
-                        )
-                    )
-                    OR (
-                        @ModoPlano = 'MIXTO'
-                        AND NOT EXISTS (
-                            SELECT 1
-                            FROM pendientes p
-                            WHERE p.id_entidad_federativa = c.id_entidad_federativa
-                              AND p.anio_corte = c.anio_corte
-                              AND p.mes_corte = c.mes_corte
-                        )
-                    )
-                )
+            WITH periodos_carga AS
+            (
+                SELECT
+                    sc.id_semanal_carga,
+                    sc.id_entidad_federativa,
+                    sc.id_usuario_carga,
+                    bloque.anio_corte,
+                    bloque.mes_corte,
+                    sc.fecha_validacion
+                FROM dbo.semanal_carga sc
+                INNER JOIN dbo.semanal_carga_bloque bloque
+                    ON bloque.id_semanal_carga = sc.id_semanal_carga
+                   AND bloque.activo = 1
+                WHERE sc.activo = 1
+                  AND sc.estado = N'PENDIENTE_APROBACION'
 
-            UNION ALL
+                UNION ALL
 
-            SELECT
-                p.anio_corte,
-                p.mes_corte,
-                p.id_entidad_federativa,
-                ef.id_entidad_federativa,
-                mun.id_municipio,
-                md.id_modalidad_delito,
-                gc.id_grado_consumacion,
-                ic.id_instrumento_comision,
-                fa.id_forma_accion,
-                tv.clave,
-                sx.clave,
-                sx.descripcion,
-                CASE
-                    WHEN TRY_CONVERT(int, NULLIF(v.edad, '')) = 999 THEN NULL
-                    ELSE TRY_CONVERT(int, NULLIF(v.edad, ''))
-                END
-            FROM pendientes p
-            INNER JOIN carga_tmp_victima v
-                ON v.id_carga = p.id_carga
-               AND v.activo = 1
-            INNER JOIN carga_tmp_delito d
-                ON d.id_carga = v.id_carga
-               AND d.id_ci = v.id_ci
-               AND d.id_delito = v.id_delito
-               AND d.activo = 1
-            INNER JOIN catalogo_modalidad_delito md
-                ON md.clave4 = d.clasf_de_dto
-               AND md.activo = 1
-            INNER JOIN catalogo_forma_accion fa
-                ON fa.clave = TRY_CONVERT(tinyint, d.forma_acc)
-               AND fa.activo = 1
-            INNER JOIN catalogo_instrumento_comision ic
-                ON ic.clave = TRY_CONVERT(tinyint, d.emto_com_dto)
-               AND ic.activo = 1
-            INNER JOIN catalogo_grado_consumacion gc
-                ON gc.clave = TRY_CONVERT(tinyint, d.grdo_cons)
-               AND gc.activo = 1
-            INNER JOIN catalogo_entidad_federativa ef
-                ON ef.id_entidad_federativa = TRY_CONVERT(tinyint, d.id_ent_hchos)
-               AND ef.activo = 1
-            INNER JOIN catalogo_municipio mun
-                ON mun.id_entidad_federativa = ef.id_entidad_federativa
-               AND TRY_CONVERT(int, mun.clave) = TRY_CONVERT(int, d.id_mun_hchos)
-               AND mun.activo = 1
-            INNER JOIN catalogo_tipo_victima tv
-                ON tv.clave = TRY_CONVERT(tinyint, v.id_tv)
-               AND tv.activo = 1
-            LEFT JOIN catalogo_sexo sx
-                ON sx.clave = TRY_CONVERT(tinyint, NULLIF(v.sexo, ''))
-               AND sx.activo = 1
-            WHERE @ModoPlano IN ('PREVIO', 'MIXTO')
-        ),
+                SELECT
+                    sc.id_semanal_carga,
+                    sc.id_entidad_federativa,
+                    sc.id_usuario_carga,
+                    sc.anio_corte,
+                    sc.mes_corte,
+                    sc.fecha_validacion
+                FROM dbo.semanal_carga sc
+                WHERE sc.activo = 1
+                  AND sc.estado = N'PENDIENTE_APROBACION'
+                  AND NOT EXISTS
+                  (
+                      SELECT 1
+                      FROM dbo.semanal_carga_bloque bloque
+                      WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                        AND bloque.activo = 1
+                  )
+            ),
+            pendientes_rankeadas AS
+            (
+                SELECT
+                    periodo.id_semanal_carga,
+                    periodo.id_entidad_federativa,
+                    periodo.id_usuario_carga,
+                    periodo.anio_corte,
+                    periodo.mes_corte,
+                    ROW_NUMBER() OVER
+                    (
+                        PARTITION BY
+                            periodo.id_entidad_federativa,
+                            periodo.id_usuario_carga,
+                            periodo.anio_corte,
+                            periodo.mes_corte
+                        ORDER BY
+                            periodo.fecha_validacion DESC,
+                            periodo.id_semanal_carga DESC
+                    ) AS rn
+                FROM periodos_carga periodo
+                WHERE periodo.anio_corte = @AnioCorte
+                  AND (@IdEntidadFederativa IS NULL OR periodo.id_entidad_federativa = @IdEntidadFederativa)
+                  AND (@IdUsuarioCarga IS NULL OR periodo.id_usuario_carga = @IdUsuarioCarga)
+            ),
+            pendientes AS
+            (
+                SELECT
+                    id_semanal_carga,
+                    id_entidad_federativa,
+                    id_usuario_carga,
+                    anio_corte,
+                    mes_corte
+                FROM pendientes_rankeadas
+                WHERE rn = 1
+            ),
+            fuente_victimas AS
+            (
+                SELECT
+                    YEAR(ci.fecha_inicio) AS anio_corte,
+                    MONTH(ci.fecha_inicio) AS mes_corte,
+                    sc.id_entidad_federativa AS id_entidad_carga,
+                    sc.id_usuario_carga,
+                    d.id_entidad_federativa AS id_entidad_hechos,
+                    d.id_municipio,
+                    d.id_modalidad_delito,
+                    d.id_grado_consumacion,
+                    d.id_instrumento_comision,
+                    d.id_forma_accion,
+                    tv.clave AS tipo_victima_clave,
+                    sx.clave AS sexo_clave,
+                    sx.descripcion AS sexo_descripcion,
+                    TRY_CONVERT(int, v.edad) AS edad
+                FROM dbo.semanal_victima v
+                INNER JOIN dbo.semanal_delito d
+                    ON d.id_semanal_delito = v.id_semanal_delito
+                   AND d.activo = 1
+                INNER JOIN dbo.semanal_carpeta_investigacion ci
+                    ON ci.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
+                   AND ci.activo = 1
+                INNER JOIN dbo.semanal_carga sc
+                    ON sc.id_semanal_carga = v.id_semanal_carga
+                   AND sc.activo = 1
+                   AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+                   AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+                INNER JOIN dbo.catalogo_tipo_victima tv
+                    ON tv.id_tipo_victima = v.id_tipo_victima
+                   AND tv.activo = 1
+                LEFT JOIN dbo.catalogo_sexo sx
+                    ON sx.id_sexo = v.id_sexo
+                   AND sx.activo = 1
+                WHERE v.activo = 1
+                  AND YEAR(ci.fecha_inicio) = @AnioCorte
+                  AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
+                  AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
+                  AND
+                  (
+                      @ModoPlano = N'CONFIRMADO'
+                      OR
+                      (
+                          @ModoPlano = N'PREVIO'
+                          AND NOT EXISTS
+                          (
+                              SELECT 1
+                              FROM pendientes p
+                              WHERE p.anio_corte = YEAR(ci.fecha_inicio)
+                                AND p.mes_corte = MONTH(ci.fecha_inicio)
+                          )
+                      )
+                      OR
+                      (
+                          @ModoPlano = N'MIXTO'
+                          AND NOT EXISTS
+                          (
+                              SELECT 1
+                              FROM pendientes p
+                              WHERE p.id_entidad_federativa = sc.id_entidad_federativa
+                                AND p.id_usuario_carga = sc.id_usuario_carga
+                                AND p.anio_corte = YEAR(ci.fecha_inicio)
+                                AND p.mes_corte = MONTH(ci.fecha_inicio)
+                          )
+                      )
+                  )
+
+                UNION ALL
+
+                SELECT
+                    p.anio_corte,
+                    p.mes_corte,
+                    p.id_entidad_federativa,
+                    p.id_usuario_carga,
+                    ef.id_entidad_federativa,
+                    mun.id_municipio,
+                    md.id_modalidad_delito,
+                    gc.id_grado_consumacion,
+                    ic.id_instrumento_comision,
+                    fa.id_forma_accion,
+                    tv.clave,
+                    sx.clave,
+                    sx.descripcion,
+                    CASE
+                        WHEN TRY_CONVERT(int, NULLIF(v.edad, N'')) = 999 THEN NULL
+                        ELSE TRY_CONVERT(int, NULLIF(v.edad, N''))
+                    END
+                FROM pendientes p
+                INNER JOIN dbo.semanal_carga_tmp_carpeta carpeta
+                    ON carpeta.id_semanal_carga = p.id_semanal_carga
+                   AND carpeta.incluido = 1
+                   AND carpeta.activo = 1
+                INNER JOIN dbo.semanal_carga_tmp_delito d
+                    ON d.id_semanal_carga = carpeta.id_semanal_carga
+                   AND d.id_ci = carpeta.id_ci
+                   AND d.incluido = 1
+                   AND d.activo = 1
+                INNER JOIN dbo.semanal_carga_tmp_victima v
+                    ON v.id_semanal_carga = d.id_semanal_carga
+                   AND v.id_ci = d.id_ci
+                   AND v.id_delito = d.id_delito
+                   AND v.incluido = 1
+                   AND v.activo = 1
+                CROSS APPLY
+                (
+                    SELECT COALESCE
+                    (
+                        TRY_CONVERT(date, NULLIF(LTRIM(RTRIM(carpeta.fha_de_ini)), N''), 103),
+                        TRY_CONVERT(date, NULLIF(LTRIM(RTRIM(carpeta.fha_de_ini)), N''))
+                    ) AS fecha_inicio
+                ) fecha
+                INNER JOIN dbo.catalogo_modalidad_delito md
+                    ON LTRIM(RTRIM(md.clave4)) = LTRIM(RTRIM(d.clasf_de_dto))
+                   AND md.activo = 1
+                INNER JOIN dbo.catalogo_forma_accion fa
+                    ON fa.clave = TRY_CONVERT(tinyint, d.forma_acc)
+                   AND fa.activo = 1
+                INNER JOIN dbo.catalogo_instrumento_comision ic
+                    ON ic.clave = TRY_CONVERT(tinyint, d.emto_com_dto)
+                   AND ic.activo = 1
+                INNER JOIN dbo.catalogo_grado_consumacion gc
+                    ON gc.clave = TRY_CONVERT(tinyint, d.grdo_cons)
+                   AND gc.activo = 1
+                INNER JOIN dbo.catalogo_entidad_federativa ef
+                    ON ef.id_entidad_federativa = TRY_CONVERT(tinyint, d.id_ent_hchos)
+                   AND ef.activo = 1
+                INNER JOIN dbo.catalogo_municipio mun
+                    ON mun.id_entidad_federativa = ef.id_entidad_federativa
+                   AND TRY_CONVERT(int, mun.clave) = TRY_CONVERT(int, d.id_mun_hchos)
+                   AND mun.activo = 1
+                INNER JOIN dbo.catalogo_tipo_victima tv
+                    ON tv.clave = TRY_CONVERT(tinyint, v.id_tv)
+                   AND tv.activo = 1
+                LEFT JOIN dbo.catalogo_sexo sx
+                    ON sx.clave = TRY_CONVERT(tinyint, NULLIF(v.sexo, N''))
+                   AND sx.activo = 1
+                WHERE @ModoPlano IN (N'PREVIO', N'MIXTO')
+                  AND fecha.fecha_inicio IS NOT NULL
+                  AND YEAR(fecha.fecha_inicio) = p.anio_corte
+                  AND MONTH(fecha.fecha_inicio) = p.mes_corte
+            ),
         sabana AS (
         SELECT
             MIN(COALESCE(ol.orden_municipal_victimas, ol.orden_general, s.id_delito_sabana)) AS orden_sabana,
@@ -2900,6 +2975,6 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             END
         OPTION (RECOMPILE);";
 
-        return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa, modoPlano, mesUltimoCorte);
+        return await QueryDictionarySabanaAsync(sql, anioCorte, idEntidadFederativa, idUsuarioCarga, modoPlano, mesUltimoCorte);
     }
 }
