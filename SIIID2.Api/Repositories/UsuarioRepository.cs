@@ -258,7 +258,8 @@ public class UsuarioRepository : IUsuarioRepository
             'rfc' AS Campo,
             'USUARIO_RFC_DUPLICADO' AS Codigo,
             'Ya existe un usuario registrado con ese RFC.' AS Mensaje
-        WHERE EXISTS (
+        WHERE @Rfc IS NOT NULL
+          AND EXISTS (
             SELECT 1
             FROM usuario
             WHERE rfc = @Rfc
@@ -270,7 +271,8 @@ public class UsuarioRepository : IUsuarioRepository
             'curp' AS Campo,
             'USUARIO_CURP_DUPLICADO' AS Codigo,
             'Ya existe un usuario registrado con esa CURP.' AS Mensaje
-        WHERE EXISTS (
+        WHERE @Curp IS NOT NULL
+          AND EXISTS (
             SELECT 1
             FROM usuario
             WHERE curp = @Curp
@@ -283,8 +285,8 @@ public class UsuarioRepository : IUsuarioRepository
         {
             Usuario = usuario.Trim(),
             CorreoElectronico = correoElectronico.Trim(),
-            Rfc = rfc.Trim().ToUpperInvariant(),
-            Curp = curp.Trim().ToUpperInvariant()
+            Rfc = NormalizarIdentificadorOpcional(rfc),
+            Curp = NormalizarIdentificadorOpcional(curp)
         });
 
         return errores.ToList();
@@ -389,8 +391,8 @@ public class UsuarioRepository : IUsuarioRepository
                     PrimerApellido = request.PrimerApellido.Trim(),
                     SegundoApellido = string.IsNullOrWhiteSpace(request.SegundoApellido) ? null : request.SegundoApellido.Trim(),
                     CorreoElectronico = request.CorreoElectronico.Trim(),
-                    Rfc = request.Rfc.Trim().ToUpperInvariant(),
-                    Curp = request.Curp.Trim().ToUpperInvariant(),
+                    Rfc = NormalizarIdentificadorOpcional(request.Rfc),
+                    Curp = NormalizarIdentificadorOpcional(request.Curp),
                     TelefonoContacto = string.IsNullOrWhiteSpace(request.TelefonoContacto) ? null : request.TelefonoContacto.Trim(),
                     IdEntidadFederativa = request.IdEntidadFederativa,
                     IdUsuarioAlta = idUsuarioAlta,
@@ -506,11 +508,12 @@ public class UsuarioRepository : IUsuarioRepository
             'rfc' AS Campo,
             'USUARIO_RFC_DUPLICADO' AS Codigo,
             'Ya existe otro usuario registrado con ese RFC.' AS Mensaje
-         WHERE @Rfc IS NOT NULL
+        WHERE @Rfc IS NOT NULL
           AND EXISTS (
             SELECT 1
             FROM usuario
             WHERE rfc = @Rfc
+              AND id_usuario <> @IdUsuario
         )
 
         UNION ALL
@@ -524,6 +527,7 @@ public class UsuarioRepository : IUsuarioRepository
             SELECT 1
             FROM usuario
             WHERE curp = @Curp
+              AND id_usuario <> @IdUsuario
         );
     ";
 
@@ -534,8 +538,8 @@ public class UsuarioRepository : IUsuarioRepository
             IdUsuario = idUsuario,
             Usuario = usuario.Trim(),
             CorreoElectronico = correoElectronico.Trim(),
-            Rfc = rfc.Trim().ToUpperInvariant(),
-            Curp = curp.Trim().ToUpperInvariant()
+            Rfc = NormalizarIdentificadorOpcional(rfc),
+            Curp = NormalizarIdentificadorOpcional(curp)
         });
 
         return errores.ToList();
@@ -590,8 +594,8 @@ public class UsuarioRepository : IUsuarioRepository
                     PrimerApellido = request.PrimerApellido.Trim(),
                     SegundoApellido = string.IsNullOrWhiteSpace(request.SegundoApellido) ? null : request.SegundoApellido.Trim(),
                     CorreoElectronico = request.CorreoElectronico.Trim(),
-                    Rfc = request.Rfc.Trim().ToUpperInvariant(),
-                    Curp = request.Curp.Trim().ToUpperInvariant(),
+                    Rfc = NormalizarIdentificadorOpcional(request.Rfc),
+                    Curp = NormalizarIdentificadorOpcional(request.Curp),
                     TelefonoContacto = string.IsNullOrWhiteSpace(request.TelefonoContacto) ? null : request.TelefonoContacto.Trim(),
                     IdEntidadFederativa = request.IdEntidadFederativa,
                     IdRol = idRol,
@@ -687,8 +691,8 @@ public class UsuarioRepository : IUsuarioRepository
                 PrimerApellido = request.PrimerApellido.Trim(),
                 SegundoApellido = string.IsNullOrWhiteSpace(request.SegundoApellido) ? null : request.SegundoApellido.Trim(),
                 CorreoElectronico = request.CorreoElectronico.Trim(),
-                Rfc = request.Rfc.Trim().ToUpperInvariant(),
-                Curp = request.Curp.Trim().ToUpperInvariant(),
+                Rfc = NormalizarIdentificadorOpcional(request.Rfc),
+                Curp = NormalizarIdentificadorOpcional(request.Curp),
                 TelefonoContacto = string.IsNullOrWhiteSpace(request.TelefonoContacto) ? null : request.TelefonoContacto.Trim(),
                 IdEntidadFederativa = request.IdEntidadFederativa,
                 IdRol = idRol,
@@ -1404,4 +1408,6 @@ public class UsuarioRepository : IUsuarioRepository
             IdUsuarioModificacion = idUsuarioModificacion
         }, transaction);
     }
+
+    private static string? NormalizarIdentificadorOpcional(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim().ToUpperInvariant();
 }
