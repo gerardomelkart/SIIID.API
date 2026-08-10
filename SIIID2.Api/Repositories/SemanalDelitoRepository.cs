@@ -93,10 +93,11 @@ public class SemanalDelitoRepository : ISemanalDelitoRepository
     {
         const string sqlDesactivar = @"
         UPDATE dbo.semanal_configuracion_delito
-        SET activo = 0,
+        SET es_obligatorio = 0,
+            conservar_entre_periodos = 0,
+            activo = 0,
             fecha_modificacion = SYSDATETIME(),
-            id_usuario_modificacion = @IdUsuarioModificacion
-        WHERE es_obligatorio = 0;
+            id_usuario_modificacion = @IdUsuarioModificacion;
     ";
 
         const string sqlGuardar = @"

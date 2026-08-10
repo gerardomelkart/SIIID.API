@@ -5,7 +5,6 @@ namespace SIIID2.Api.Services;
 
 public class SemanalDelitoService : ISemanalDelitoService
 {
-    private const string ClaveDelitoExtorsion = "4.04";
     private readonly ISemanalDelitoRepository _semanalDelitoRepository;
     private readonly ILogger<SemanalDelitoService> _logger;
 
@@ -42,10 +41,6 @@ public class SemanalDelitoService : ISemanalDelitoService
         if (!await _semanalDelitoRepository.PuedeAdministrarDelitosAsync(idUsuario)) return SinPermiso();
 
         var catalogo = await _semanalDelitoRepository.ObtenerConfiguracionAsync();
-        var extorsiones = catalogo.Where(x => x.ClaveDelito == ClaveDelitoExtorsion).ToList();
-
-        if (extorsiones.Count == 0) return Error("SEMANAL_EXTORSION_NO_ENCONTRADA", "No se encontraron modalidades activas de Extorsión para la clave 4.04.");
-
         var solicitudes = request.Modalidades ?? new List<ConfiguracionModalidadSemanalRequest>();
         var duplicados = solicitudes.GroupBy(x => x.IdModalidadDelito).Where(x => x.Count() > 1).Select(x => x.Key).ToList();
 
@@ -55,8 +50,11 @@ public class SemanalDelitoService : ISemanalDelitoService
 
         if (solicitudes.Any(x => !catalogoPorId.ContainsKey(x.IdModalidadDelito))) return Error("SEMANAL_MODALIDAD_INVALIDA", "La solicitud contiene una modalidad inexistente o inactiva.");
 
-        var idsExtorsion = extorsiones.Select(x => x.IdModalidadDelito).ToHashSet();
-        var seleccionadas = solicitudes.Where(x => x.Seleccionado && !idsExtorsion.Contains(x.IdModalidadDelito)).Select(x => catalogoPorId[x.IdModalidadDelito]).OrderBy(x => x.ClaveModalidad).ToList();
+        var seleccionadas = solicitudes
+            .Where(x => x.Seleccionado)
+            .Select(x => catalogoPorId[x.IdModalidadDelito])
+            .OrderBy(x => x.ClaveModalidad)
+            .ToList();
 
         foreach (var modalidad in seleccionadas)
         {
@@ -64,16 +62,6 @@ public class SemanalDelitoService : ISemanalDelitoService
             modalidad.EsObligatorio = false;
             modalidad.ConservarEntrePeriodos = false;
         }
-
-        foreach (var extorsion in extorsiones)
-        {
-            extorsion.Seleccionado = true;
-            extorsion.EsObligatorio = true;
-            extorsion.ConservarEntrePeriodos = true;
-        }
-
-        seleccionadas.AddRange(extorsiones);
-        seleccionadas = seleccionadas.OrderBy(x => x.ClaveModalidad).ToList();
 
         for (var indice = 0; indice < seleccionadas.Count; indice++) seleccionadas[indice].Orden = checked((short)(indice + 1));
 
