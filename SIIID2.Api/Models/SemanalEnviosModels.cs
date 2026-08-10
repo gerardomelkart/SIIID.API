@@ -32,6 +32,7 @@ public class SemanalEnvioItem
     public int IdEntidadFederativa { get; set; }
     public string EntidadFederativa { get; set; } = string.Empty;
     public string ClaveEntidad { get; set; } = string.Empty;
+    public List<string> Delitos { get; set; } = [];
     public int AnioSemana { get; set; }
     public int NumeroSemana { get; set; }
     public DateTime FechaInicioSemana { get; set; }
@@ -85,3 +86,17 @@ public class SemanalEnvioReferenciaInfo
     public int MesCorte { get; set; }
 }
 
+public class SemanalCargaDelitoItem
+{
+    public long IdSemanalCarga { get; set; }
+    public string Delito { get; set; } = string.Empty;
+}
+
+public class SemanalReporteCargaDelitoItem
+{
+    public int IdEntidadFederativa { get; set; }
+    public int IdUsuarioCarga { get; set; }
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
+    public string Delito { get; set; } = string.Empty;
+}

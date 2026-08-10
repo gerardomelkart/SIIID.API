@@ -5,6 +5,7 @@ public class SemanalReporteCargaItem
     public int IdEntidadFederativa { get; set; }
     public string EntidadFederativa { get; set; } = string.Empty;
     public string ClaveEntidad { get; set; } = string.Empty;
+    public List<string> Delitos { get; set; } = [];
     public int IdUsuarioCarga { get; set; }
     public string UsuarioCarga { get; set; } = string.Empty;
     public string NombreUsuarioCarga { get; set; } = string.Empty;

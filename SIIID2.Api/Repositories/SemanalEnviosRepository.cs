@@ -295,6 +295,57 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         visible.mes_corte;
     ";
 
+
+        const string sqlDelitos = @"
+    WITH delitos_carga AS
+    (
+        SELECT
+            delito.id_semanal_carga,
+            cd.clave2,
+            cd.delito
+        FROM dbo.semanal_delito delito
+        INNER JOIN dbo.catalogo_modalidad_delito md
+            ON md.id_modalidad_delito = delito.id_modalidad_delito
+           AND md.activo = 1
+        INNER JOIN dbo.catalogo_subtipo_delito sd
+            ON sd.id_subtipo_delito = md.id_subtipo_delito
+           AND sd.activo = 1
+        INNER JOIN dbo.catalogo_delito cd
+            ON cd.id_delito = sd.id_delito
+           AND cd.activo = 1
+        WHERE delito.id_semanal_carga IN @Ids
+          AND delito.activo = 1
+
+        UNION
+
+        SELECT
+            delito.id_semanal_carga,
+            cd.clave2,
+            cd.delito
+        FROM dbo.semanal_carga_tmp_delito delito
+        INNER JOIN dbo.catalogo_modalidad_delito md
+            ON LTRIM(RTRIM(md.clave4)) = LTRIM(RTRIM(delito.clasf_de_dto))
+           AND md.activo = 1
+        INNER JOIN dbo.catalogo_subtipo_delito sd
+            ON sd.id_subtipo_delito = md.id_subtipo_delito
+           AND sd.activo = 1
+        INNER JOIN dbo.catalogo_delito cd
+            ON cd.id_delito = sd.id_delito
+           AND cd.activo = 1
+        WHERE delito.id_semanal_carga IN @Ids
+          AND delito.incluido = 1
+          AND delito.activo = 1
+    )
+    SELECT
+        delito.id_semanal_carga AS IdSemanalCarga,
+        delito.delito AS Delito
+    FROM delitos_carga delito
+    ORDER BY
+        delito.id_semanal_carga,
+        delito.clave2,
+        delito.delito;
+    ";
+
         using var connection = _dbConnectionFactory.CrearConexion();
 
         var cargas = (await connection.QueryAsync<SemanalEnvioItem>(sql, new
@@ -319,10 +370,23 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         var periodos = (await connection.QueryAsync<SemanalEnvioPeriodoItem>(sqlPeriodos, new { Ids = ids })).ToList();
         var periodosPorCarga = periodos.GroupBy(x => x.IdSemanalCarga).ToDictionary(x => x.Key, x => x.ToList());
 
+        var delitos = (await connection.QueryAsync<SemanalCargaDelitoItem>(sqlDelitos, new { Ids = ids })).ToList();
+        var delitosPorCarga = delitos
+            .GroupBy(x => x.IdSemanalCarga)
+            .ToDictionary
+            (
+                x => x.Key,
+                x => x
+                    .Select(y => y.Delito)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+            );
+
         foreach (var carga in cargas)
         {
             if (bloquesPorCarga.TryGetValue(carga.IdSemanalCarga, out var bloquesCarga)) carga.Bloques = bloquesCarga;
             if (periodosPorCarga.TryGetValue(carga.IdSemanalCarga, out var periodosCarga)) carga.Periodos = periodosCarga;
+            if (delitosPorCarga.TryGetValue(carga.IdSemanalCarga, out var delitosCarga)) carga.Delitos = delitosCarga;
         }
 
         return cargas;
@@ -620,6 +684,103 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         periodo.usuario_carga;
     ";
 
+        const string sqlDelitos = @"
+    WITH bloques_carga AS
+    (
+        SELECT
+            sc.id_semanal_carga,
+            sc.id_entidad_federativa,
+            sc.id_usuario_carga,
+            bloque.anio_corte,
+            bloque.mes_corte
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.semanal_carga_bloque bloque
+            ON bloque.id_semanal_carga = sc.id_semanal_carga
+           AND bloque.activo = 1
+        WHERE sc.activo = 1
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.id_entidad_federativa IS NOT NULL
+
+        UNION ALL
+
+        SELECT
+            sc.id_semanal_carga,
+            sc.id_entidad_federativa,
+            sc.id_usuario_carga,
+            sc.anio_corte,
+            sc.mes_corte
+        FROM dbo.semanal_carga sc
+        WHERE sc.activo = 1
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.id_entidad_federativa IS NOT NULL
+          AND NOT EXISTS
+          (
+              SELECT 1
+              FROM dbo.semanal_carga_bloque bloque
+              WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                AND bloque.activo = 1
+          )
+    ),
+    delitos_carga AS
+    (
+        SELECT
+            delito.id_semanal_carga,
+            cd.clave2,
+            cd.delito
+        FROM dbo.semanal_delito delito
+        INNER JOIN dbo.catalogo_modalidad_delito md
+            ON md.id_modalidad_delito = delito.id_modalidad_delito
+           AND md.activo = 1
+        INNER JOIN dbo.catalogo_subtipo_delito sd
+            ON sd.id_subtipo_delito = md.id_subtipo_delito
+           AND sd.activo = 1
+        INNER JOIN dbo.catalogo_delito cd
+            ON cd.id_delito = sd.id_delito
+           AND cd.activo = 1
+        WHERE delito.activo = 1
+
+        UNION
+
+        SELECT
+            delito.id_semanal_carga,
+            cd.clave2,
+            cd.delito
+        FROM dbo.semanal_carga_tmp_delito delito
+        INNER JOIN dbo.catalogo_modalidad_delito md
+            ON LTRIM(RTRIM(md.clave4)) = LTRIM(RTRIM(delito.clasf_de_dto))
+           AND md.activo = 1
+        INNER JOIN dbo.catalogo_subtipo_delito sd
+            ON sd.id_subtipo_delito = md.id_subtipo_delito
+           AND sd.activo = 1
+        INNER JOIN dbo.catalogo_delito cd
+            ON cd.id_delito = sd.id_delito
+           AND cd.activo = 1
+        WHERE delito.incluido = 1
+          AND delito.activo = 1
+    )
+    SELECT DISTINCT
+        bloque.id_entidad_federativa AS IdEntidadFederativa,
+        bloque.id_usuario_carga AS IdUsuarioCarga,
+        bloque.anio_corte AS AnioCorte,
+        bloque.mes_corte AS MesCorte,
+        delito.clave2 AS ClaveDelito,
+        delito.delito AS Delito
+    FROM bloques_carga bloque
+    INNER JOIN delitos_carga delito
+        ON delito.id_semanal_carga = bloque.id_semanal_carga
+    WHERE (@IdEntidadFederativa IS NULL OR bloque.id_entidad_federativa = @IdEntidadFederativa)
+      AND (@IdUsuarioCarga IS NULL OR bloque.id_usuario_carga = @IdUsuarioCarga)
+      AND (@AnioCorte IS NULL OR bloque.anio_corte = @AnioCorte)
+      AND (@MesCorte IS NULL OR bloque.mes_corte = @MesCorte)
+    ORDER BY
+        bloque.id_entidad_federativa,
+        bloque.id_usuario_carga,
+        bloque.anio_corte,
+        bloque.mes_corte,
+        delito.clave2,
+        delito.delito;
+    ";
+
         using var connection = _dbConnectionFactory.CrearConexion();
 
         var registros = (await connection.QueryAsync<SemanalReporteCargaItem>(sql, new
@@ -630,6 +791,31 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             MesCorte = mesCorte
         })).ToList();
 
+        var delitos = (await connection.QueryAsync<SemanalReporteCargaDelitoItem>(sqlDelitos, new
+        {
+            IdEntidadFederativa = idEntidadFederativa,
+            IdUsuarioCarga = idUsuarioCarga,
+            AnioCorte = anioCorte,
+            MesCorte = mesCorte
+        })).ToList();
+
+        var delitosPorPeriodo = delitos
+            .GroupBy(x => new
+            {
+                x.IdEntidadFederativa,
+                x.IdUsuarioCarga,
+                x.AnioCorte,
+                x.MesCorte
+            })
+            .ToDictionary
+            (
+                x => x.Key,
+                x => x
+                    .Select(y => y.Delito)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+            );
+
         var cultura = CultureInfo.GetCultureInfo("es-MX");
 
         foreach (var registro in registros)
@@ -639,6 +825,17 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             registro.Periodo = $"{nombreMes} {registro.AnioCorte}";
             registro.FechaCargaActualizacionTexto = registro.FechaCargaActualizacion.HasValue ? registro.FechaCargaActualizacion.Value.ToString("yyyy-MM-dd HH:mm:ss") : string.Empty;
             registro.FechaAprobacionTexto = registro.FechaAprobacion.HasValue ? registro.FechaAprobacion.Value.ToString("yyyy-MM-dd HH:mm:ss") : string.Empty;
+
+            if (delitosPorPeriodo.TryGetValue(new
+            {
+                registro.IdEntidadFederativa,
+                registro.IdUsuarioCarga,
+                registro.AnioCorte,
+                registro.MesCorte
+            }, out var delitosRegistro))
+            {
+                registro.Delitos = delitosRegistro;
+            }
         }
 
         return registros;
