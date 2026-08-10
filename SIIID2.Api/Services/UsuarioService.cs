@@ -1082,22 +1082,14 @@ public class UsuarioService : IUsuarioService
             errores.Add(ErrorUsuario("correoElectronico", "USUARIO_CORREO_FORMATO_INVALIDO", "El correo electrónico no tiene un formato válido."));
         }
 
-        // RFC.
-        if (string.IsNullOrWhiteSpace(request.Rfc))
-        {
-            errores.Add(ErrorUsuario("rfc", "USUARIO_RFC_OBLIGATORIO", "Debe enviar el RFC."));
-        }
-        else if (!Regex.IsMatch(request.Rfc.Trim().ToUpperInvariant(), RegexRfc))
+        // RFC opcional; si se captura, se valida el formato.
+        if (!string.IsNullOrWhiteSpace(request.Rfc) && !Regex.IsMatch(request.Rfc.Trim().ToUpperInvariant(), RegexRfc))
         {
             errores.Add(ErrorUsuario("rfc", "USUARIO_RFC_FORMATO_INVALIDO", "El RFC no tiene un formato válido."));
         }
 
-        // CURP.
-        if (string.IsNullOrWhiteSpace(request.Curp))
-        {
-            errores.Add(ErrorUsuario("curp", "USUARIO_CURP_OBLIGATORIO", "Debe enviar la CURP."));
-        }
-        else if (!Regex.IsMatch(request.Curp.Trim().ToUpperInvariant(), RegexCurp))
+        // CURP opcional; si se captura, se valida el formato.
+        if (!string.IsNullOrWhiteSpace(request.Curp) && !Regex.IsMatch(request.Curp.Trim().ToUpperInvariant(), RegexCurp))
         {
             errores.Add(ErrorUsuario("curp", "USUARIO_CURP_FORMATO_INVALIDO", "La CURP no tiene un formato válido."));
         }
@@ -1146,22 +1138,14 @@ public class UsuarioService : IUsuarioService
             errores.Add(ErrorUsuario("correoElectronico", "USUARIO_CORREO_FORMATO_INVALIDO", "El correo electrónico no tiene un formato válido."));
         }
 
-        // RFC.
-        if (string.IsNullOrWhiteSpace(request.Rfc))
-        {
-            errores.Add(ErrorUsuario("rfc", "USUARIO_RFC_OBLIGATORIO", "Debe enviar el RFC."));
-        }
-        else if (!Regex.IsMatch(request.Rfc.Trim().ToUpperInvariant(), RegexRfc))
+        // RFC opcional; si se captura, se valida el formato.
+        if (!string.IsNullOrWhiteSpace(request.Rfc) && !Regex.IsMatch(request.Rfc.Trim().ToUpperInvariant(), RegexRfc))
         {
             errores.Add(ErrorUsuario("rfc", "USUARIO_RFC_FORMATO_INVALIDO", "El RFC no tiene un formato válido."));
         }
 
-        // CURP.
-        if (string.IsNullOrWhiteSpace(request.Curp))
-        {
-            errores.Add(ErrorUsuario("curp", "USUARIO_CURP_OBLIGATORIO", "Debe enviar la CURP."));
-        }
-        else if (!Regex.IsMatch(request.Curp.Trim().ToUpperInvariant(), RegexCurp))
+        // CURP opcional; si se captura, se valida el formato.
+        if (!string.IsNullOrWhiteSpace(request.Curp) && !Regex.IsMatch(request.Curp.Trim().ToUpperInvariant(), RegexCurp))
         {
             errores.Add(ErrorUsuario("curp", "USUARIO_CURP_FORMATO_INVALIDO", "La CURP no tiene un formato válido."));
         }

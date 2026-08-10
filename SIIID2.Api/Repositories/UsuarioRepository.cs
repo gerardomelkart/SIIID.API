@@ -225,7 +225,7 @@ public class UsuarioRepository : IUsuarioRepository
         });
     }
 
-    public async Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioAsync(string usuario, string correoElectronico, string rfc, string curp)
+    public async Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioAsync(string usuario, string correoElectronico, string? rfc, string? curp)
     {
         // Regresa todos los campos duplicados encontrados.
         // Esto permite informar al front todos los problemas en una sola respuesta.
@@ -471,7 +471,7 @@ public class UsuarioRepository : IUsuarioRepository
         return await connection.ExecuteScalarAsync<int>(sql);
     }
 
-    public async Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioEdicionAsync(int idUsuario, string usuario, string correoElectronico, string rfc, string curp)
+    public async Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioEdicionAsync(int idUsuario, string usuario, string correoElectronico, string? rfc, string? curp)
     {
         // Regresa todos los duplicados encontrados,
         // excluyendo al propio usuario que se está editando.
@@ -506,11 +506,11 @@ public class UsuarioRepository : IUsuarioRepository
             'rfc' AS Campo,
             'USUARIO_RFC_DUPLICADO' AS Codigo,
             'Ya existe otro usuario registrado con ese RFC.' AS Mensaje
-        WHERE EXISTS (
+         WHERE @Rfc IS NOT NULL
+          AND EXISTS (
             SELECT 1
             FROM usuario
             WHERE rfc = @Rfc
-              AND id_usuario <> @IdUsuario
         )
 
         UNION ALL
@@ -519,11 +519,11 @@ public class UsuarioRepository : IUsuarioRepository
             'curp' AS Campo,
             'USUARIO_CURP_DUPLICADO' AS Codigo,
             'Ya existe otro usuario registrado con esa CURP.' AS Mensaje
-        WHERE EXISTS (
+        WHERE @Curp IS NOT NULL
+          AND EXISTS (
             SELECT 1
             FROM usuario
             WHERE curp = @Curp
-              AND id_usuario <> @IdUsuario
         );
     ";
 

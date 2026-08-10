@@ -11,7 +11,7 @@ public interface IUsuarioRepository
     Task<UsuarioAuthInfo?> ObtenerUsuarioAuthAsync(string usuario);
 
     // Revisa si ya existe usuario, correo, RFC o CURP.
-    Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioAsync(string usuario, string correoElectronico, string rfc, string curp);
+    Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioAsync(string usuario, string correoElectronico, string? rfc, string? curp);
 
     // Obtiene el id del rol por nombre.
     Task<int?> ObtenerIdRolActivoAsync(string rol);
@@ -35,7 +35,7 @@ public interface IUsuarioRepository
     Task<int> ContarSuperUsuariosActivosAsync();
 
     // Revisa duplicados excluyendo al usuario que se está editando.
-    Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioEdicionAsync(int idUsuario, string usuario, string correoElectronico, string rfc, string curp);
+    Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioEdicionAsync(int idUsuario, string usuario, string correoElectronico, string? rfc, string? curp);
 
     // Edita usuario y permisos.
     Task EditarUsuarioAsync(int idUsuario, EditarUsuarioRequest request, int idRol, string? passwordHash, int idUsuarioModificacion);
