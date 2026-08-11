@@ -10,4 +10,5 @@ public interface ISemanalEnviosService
     Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte);
     Task<SemanalReportePreliminarOpcionesResponse> ObtenerOpcionesReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int? idEntidadFederativa);
     Task<SemanalReportePreliminarArchivoResponse> GenerarReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int idDelito, int? idEntidadFederativa);
+    Task<InformeArchivoZipResponse> GenerarZipSabanasAsync(int idUsuarioConsulta, int anioCorte, string? tipoSabana, string? modoPlano);
 }
