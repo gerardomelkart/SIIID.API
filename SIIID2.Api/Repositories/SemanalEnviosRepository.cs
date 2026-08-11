@@ -2977,4 +2977,108 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
 
         return await QueryDictionarySabanaAsync(sql, anioCorte, idEntidadFederativa, idUsuarioCarga, modoPlano, mesUltimoCorte);
     }
+
+    public async Task<InformeSabanaFirma> ObtenerFirmaSabanaAsync(int anioCorte, int? idEntidadFederativa, int? idUsuarioCarga)
+    {
+        const string sql = @"
+            WITH periodos_carga AS
+            (
+                SELECT
+                    sc.id_semanal_carga,
+                    sc.tipo_carga,
+                    sc.estado,
+                    bloque.anio_corte,
+                    bloque.mes_corte,
+                    sc.fecha_confirmacion,
+                    sc.fecha_validacion
+                FROM dbo.semanal_carga sc
+                INNER JOIN dbo.semanal_carga_bloque bloque
+                    ON bloque.id_semanal_carga = sc.id_semanal_carga
+                   AND bloque.activo = 1
+                WHERE sc.activo = 1
+                  AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
+                  AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
+
+                UNION ALL
+
+                SELECT
+                    sc.id_semanal_carga,
+                    sc.tipo_carga,
+                    sc.estado,
+                    sc.anio_corte,
+                    sc.mes_corte,
+                    sc.fecha_confirmacion,
+                    sc.fecha_validacion
+                FROM dbo.semanal_carga sc
+                WHERE sc.activo = 1
+                  AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
+                  AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
+                  AND NOT EXISTS
+                  (
+                      SELECT 1
+                      FROM dbo.semanal_carga_bloque bloque
+                      WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                        AND bloque.activo = 1
+                  )
+            ),
+            cargas_relevantes AS
+            (
+                SELECT DISTINCT
+                    periodo.id_semanal_carga,
+                    periodo.tipo_carga,
+                    periodo.estado,
+                    periodo.mes_corte,
+                    periodo.fecha_confirmacion,
+                    periodo.fecha_validacion
+                FROM periodos_carga periodo
+                WHERE periodo.anio_corte = @AnioCorte
+                  AND
+                  (
+                      periodo.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+                      OR periodo.estado = N'PENDIENTE_APROBACION'
+                  )
+            )
+            SELECT
+                ISNULL(MAX(id_semanal_carga), 0) AS UltimoIdCarga,
+                CONVERT(bigint, COUNT(DISTINCT CASE
+                    WHEN estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+                    THEN id_semanal_carga
+                END)) AS TotalCargasConfirmadas,
+                CONVERT(bigint, COUNT(DISTINCT CASE
+                    WHEN estado = N'PENDIENTE_APROBACION'
+                    THEN id_semanal_carga
+                END)) AS TotalCargasPendientes,
+                MAX(mes_corte) AS MesUltimoCorte,
+                MAX(COALESCE(fecha_confirmacion, fecha_validacion)) AS UltimaFechaMovimiento
+            FROM cargas_relevantes;
+        ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        return await connection.QuerySingleAsync<InformeSabanaFirma>(sql, new
+        {
+            AnioCorte = anioCorte,
+            IdEntidadFederativa = idEntidadFederativa,
+            IdUsuarioCarga = idUsuarioCarga
+        });
+    }
+
+    private async Task<List<IDictionary<string, object?>>> QueryDictionarySabanaAsync(string sql, int anioCorte, int? idEntidadFederativa, int? idUsuarioCarga, string modoPlano, int mesUltimoCorte)
+    {
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var filas = await connection.QueryAsync(sql, new
+        {
+            AnioCorte = anioCorte,
+            IdEntidadFederativa = idEntidadFederativa,
+            IdUsuarioCarga = idUsuarioCarga,
+            ModoPlano = modoPlano,
+            MesUltimoCorte = mesUltimoCorte
+        }, commandTimeout: 300);
+
+        return filas
+            .Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase))
+            .Cast<IDictionary<string, object?>>()
+            .ToList();
+    }
 }
