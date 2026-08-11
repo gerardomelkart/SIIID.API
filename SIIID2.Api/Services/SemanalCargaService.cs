@@ -34,52 +34,77 @@ public class SemanalCargaService : ISemanalCargaService
 
     private static readonly string[] ColumnasCarpetasComparacion =
     {
-    "id_ci",
-    "ntra_ci",
-    "fha_de_ini",
-    "hra_de_ini",
-    "rmen_de_hchos"
-};
+        "id_ci",
+        "ntra_ci",
+        "fha_de_ini",
+        "hra_de_ini",
+        "rmen_de_hchos",
+        "denuncia_anonima",
+        "denuncia_anonima_089",
+        "denuncia_anonima_otro_medio"
+    };
+
+    private static readonly string[] ColumnasDenunciaAnonima =
+    {
+        "denuncia_anonima",
+        "denuncia_anonima_089",
+        "denuncia_anonima_otro_medio"
+    };
+
+    private static readonly HashSet<string> ClavesExtorsion =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+        "4.04.01",
+        "4.04.02"
+        };
+
+    private static readonly HashSet<string> ValoresControlDenunciaAnonima =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+        "SI",
+        "NO",
+        "SE DESCONOCE"
+        };
 
     private static readonly string[] ColumnasDelitosComparacion =
     {
-    "id_ci",
-    "id_delito",
-    "dto",
-    "moda_dto",
-    "forma_acc",
-    "fha_de_hchos",
-    "hra_de_hchos",
-    "emto_com_dto",
-    "grdo_cons",
-    "clasf_de_dto",
-    "id_ent_hchos",
-    "id_mun_hchos",
-    "id_loc_hchos",
-    "nom_loc_hchos",
-    "id_col_hchos",
-    "nom_col_hchos",
-    "cp",
-    "coord_x",
-    "coord_y",
-    "dom_hchos"
-};
+        "id_ci",
+        "id_delito",
+        "dto",
+        "moda_dto",
+        "forma_acc",
+        "fha_de_hchos",
+        "hra_de_hchos",
+        "emto_com_dto",
+        "grdo_cons",
+        "clasf_de_dto",
+        "id_ent_hchos",
+        "id_mun_hchos",
+        "id_loc_hchos",
+        "nom_loc_hchos",
+        "id_col_hchos",
+        "nom_col_hchos",
+        "cp",
+        "coord_x",
+        "coord_y",
+        "dom_hchos"
+    };
 
     private static readonly string[] ColumnasVictimasComparacion =
     {
-    "id_ci",
-    "id_delito",
-    "id_vicf",
-    "id_tv",
-    "id_tpm",
-    "sexo",
-    "genero",
-    "pob",
-    "disc",
-    "fha_nac",
-    "edad",
-    "nacional"
-};
+        "id_ci",
+        "id_delito",
+        "id_vicf",
+        "id_tv",
+        "id_tpm",
+        "sexo",
+        "genero",
+        "pob",
+        "disc",
+        "fha_nac",
+        "edad",
+        "nacional"
+    };
 
     private static readonly HashSet<string> ColumnasFechaComparacion =
         new(StringComparer.OrdinalIgnoreCase)
@@ -426,6 +451,9 @@ public class SemanalCargaService : ISemanalCargaService
         var filasVictimas =
             await _archivoReader.LeerAsync(request.Victimas!);
 
+        NormalizarColumnasExtorsion(filasCarpetas);
+        NormalizarGradoConsumacionExtorsion(filasDelitos);
+
         response.Errores.AddRange(
             _carpetasValidator.Validar(
                 filasCarpetas,
@@ -583,6 +611,8 @@ public class SemanalCargaService : ISemanalCargaService
                 carpetasIncluidas,
                 delitosIncluidos,
                 victimasIncluidas));
+
+        ValidarExtorsionDenunciaAnonima(carpetasIncluidas, delitosIncluidos, response.Errores);
 
         ValidarHomicidioTentativa(delitosIncluidos, response.Errores);
 
@@ -1483,6 +1513,186 @@ public class SemanalCargaService : ISemanalCargaService
                 Mensaje = "El módulo preliminar no admite registros de ningún tipo de homicidio en grado de tentativa."
             });
         }
+    }
+
+    private static void NormalizarColumnasExtorsion(List<ArchivoFila> filasCarpetas)
+    {
+        foreach (var fila in filasCarpetas)
+        {
+            CopiarColumnaAlias(fila, "denuncia_anonima", "se_inicio_por_denuncia_anonima");
+            CopiarColumnaAlias(fila, "denuncia_anonima_089", "se_inicio_por_denuncia_anonima_a_travez_del_0_89", "se_inicio_por_denuncia_anonima_a_traves_del_0_89", "se_inicio_por_denuncia_anonima_a_travez_del_089", "se_inicio_por_denuncia_anonima_a_traves_del_089");
+            CopiarColumnaAlias(fila, "denuncia_anonima_otro_medio", "o_se_inicio_por_otro_medio_denuncia_anonima_especifique", "se_inicio_por_otro_medio_denuncia_anonima_especifique");
+
+            foreach (var columna in ColumnasDenunciaAnonima)
+            {
+                if (!fila.Columnas.TryGetValue(columna, out var valor) || string.IsNullOrWhiteSpace(valor)) continue;
+                fila.Columnas[columna] = NormalizarValorDenunciaAnonima(valor);
+            }
+        }
+    }
+
+    private static void CopiarColumnaAlias(ArchivoFila fila, string columnaDestino, params string[] alias)
+    {
+        if (fila.Columnas.ContainsKey(columnaDestino)) return;
+
+        foreach (var columnaAlias in alias)
+        {
+            if (!fila.Columnas.TryGetValue(columnaAlias, out var valor)) continue;
+            fila.Columnas[columnaDestino] = valor;
+            return;
+        }
+    }
+
+    private static string NormalizarValorDenunciaAnonima(string valor)
+    {
+        var valorLimpio = valor.Trim();
+
+        if (string.Equals(valorLimpio, "SI", StringComparison.OrdinalIgnoreCase) || string.Equals(valorLimpio, "SÍ", StringComparison.OrdinalIgnoreCase)) return "SI";
+        if (string.Equals(valorLimpio, "NO", StringComparison.OrdinalIgnoreCase)) return "NO";
+        if (string.Equals(valorLimpio, "SE DESCONOCE", StringComparison.OrdinalIgnoreCase)) return "SE DESCONOCE";
+
+        return valorLimpio;
+    }
+
+    private static void NormalizarGradoConsumacionExtorsion(List<ArchivoFila> filasDelitos)
+    {
+        foreach (var fila in filasDelitos.Where(EsDelitoExtorsion))
+        {
+            if (string.IsNullOrWhiteSpace(ObtenerValor(fila, "grdo_cons"))) fila.Columnas["grdo_cons"] = "3";
+        }
+    }
+
+    private static void ValidarExtorsionDenunciaAnonima(List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    {
+        var idCarpetasExtorsion = filasDelitos
+            .Where(EsDelitoExtorsion)
+            .Select(fila => ObtenerValor(fila, "id_ci")?.Trim())
+            .Where(idCi => !string.IsNullOrWhiteSpace(idCi))
+            .Select(idCi => idCi!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (idCarpetasExtorsion.Count == 0) return;
+
+        var columnasArchivo = filasCarpetas.SelectMany(fila => fila.Columnas.Keys).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var columnasFaltantes = ColumnasDenunciaAnonima.Where(columna => !columnasArchivo.Contains(columna)).ToList();
+
+        foreach (var columna in columnasFaltantes)
+        {
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "carpetas",
+                Fila = 1,
+                Columna = columna,
+                Campo = columna,
+                Codigo = "SEMANAL_EXTORSION_COLUMNA_OBLIGATORIA_NO_ENCONTRADA",
+                DescripcionResumen = "Columna de extorsión no encontrada",
+                Mensaje = $"El archivo de carpetas contiene delitos de extorsión y no incluye la columna obligatoria \"{columna}\"."
+            });
+        }
+
+        if (columnasFaltantes.Count > 0) return;
+
+        var carpetasPorId = filasCarpetas
+            .Select(fila => new { Fila = fila, IdCi = ObtenerValor(fila, "id_ci")?.Trim() })
+            .Where(item => !string.IsNullOrWhiteSpace(item.IdCi))
+            .GroupBy(item => item.IdCi!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(grupo => grupo.Key, grupo => grupo.First().Fila, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var idCi in idCarpetasExtorsion.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            if (!carpetasPorId.TryGetValue(idCi, out var carpeta)) continue;
+
+            var denunciaAnonima = ObtenerValor(carpeta, "denuncia_anonima")?.Trim();
+            var denunciaAnonima089 = ObtenerValor(carpeta, "denuncia_anonima_089")?.Trim();
+            var denunciaAnonimaOtroMedio = ObtenerValor(carpeta, "denuncia_anonima_otro_medio")?.Trim();
+            var valores = new Dictionary<string, string?>
+            {
+                ["denuncia_anonima"] = denunciaAnonima,
+                ["denuncia_anonima_089"] = denunciaAnonima089,
+                ["denuncia_anonima_otro_medio"] = denunciaAnonimaOtroMedio
+            };
+
+            foreach (var valor in valores.Where(item => string.IsNullOrWhiteSpace(item.Value)))
+            {
+                errores.Add(new CargaValidacionError
+                {
+                    Archivo = "carpetas",
+                    Fila = carpeta.NumeroFila,
+                    Columna = valor.Key,
+                    Campo = valor.Key,
+                    Valor = valor.Value,
+                    Codigo = "SEMANAL_EXTORSION_DENUNCIA_ANONIMA_SIN_INFORMACION",
+                    DescripcionResumen = "Variable de denuncia anónima sin información",
+                    Mensaje = $"La carpeta {idCi} contiene un delito de extorsión y el campo {valor.Key} es obligatorio."
+                });
+            }
+
+            if (valores.Any(item => string.IsNullOrWhiteSpace(item.Value))) continue;
+
+            var respuestasCerradasValidas = true;
+
+            foreach (var valor in valores.Where(item => item.Key != "denuncia_anonima_otro_medio" && !ValoresControlDenunciaAnonima.Contains(item.Value!)))
+            {
+                respuestasCerradasValidas = false;
+
+                errores.Add(new CargaValidacionError
+                {
+                    Archivo = "carpetas",
+                    Fila = carpeta.NumeroFila,
+                    Columna = valor.Key,
+                    Campo = valor.Key,
+                    Valor = valor.Value,
+                    Codigo = "SEMANAL_EXTORSION_DENUNCIA_ANONIMA_VALOR_INVALIDO",
+                    DescripcionResumen = "Valor de denuncia anónima inválido",
+                    Mensaje = $"El campo {valor.Key} únicamente admite SI, NO o SE DESCONOCE."
+                });
+            }
+
+            if (denunciaAnonimaOtroMedio!.Length > 500)
+            {
+                errores.Add(new CargaValidacionError
+                {
+                    Archivo = "carpetas",
+                    Fila = carpeta.NumeroFila,
+                    Columna = "denuncia_anonima_otro_medio",
+                    Campo = "denuncia_anonima_otro_medio",
+                    Valor = denunciaAnonimaOtroMedio,
+                    Codigo = "SEMANAL_EXTORSION_OTRO_MEDIO_LONGITUD_EXCEDIDA",
+                    DescripcionResumen = "Otro medio con longitud excedida",
+                    Mensaje = "El campo denuncia_anonima_otro_medio excede la longitud máxima permitida de 500 caracteres."
+                });
+
+                continue;
+            }
+
+            if (!respuestasCerradasValidas) continue;
+
+            var combinacionValida =
+                denunciaAnonima == "SI" && denunciaAnonima089 == "SI" && denunciaAnonimaOtroMedio == "NO" ||
+                denunciaAnonima == "SI" && denunciaAnonima089 == "NO" && !ValoresControlDenunciaAnonima.Contains(denunciaAnonimaOtroMedio) ||
+                denunciaAnonima == "NO" && denunciaAnonima089 == "NO" && denunciaAnonimaOtroMedio == "NO" ||
+                denunciaAnonima == "SE DESCONOCE" && denunciaAnonima089 == "SE DESCONOCE" && denunciaAnonimaOtroMedio == "SE DESCONOCE";
+
+            if (combinacionValida) continue;
+
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "carpetas",
+                Fila = carpeta.NumeroFila,
+                Columna = "denuncia_anonima",
+                Campo = "denuncia_anonima",
+                Valor = $"{denunciaAnonima} | {denunciaAnonima089} | {denunciaAnonimaOtroMedio}",
+                Codigo = "SEMANAL_EXTORSION_DENUNCIA_ANONIMA_COMBINACION_INVALIDA",
+                DescripcionResumen = "Combinación de denuncia anónima inválida",
+                Mensaje = $"La combinación de denuncia anónima de la carpeta {idCi} no es válida. Use SI/SI/NO, SI/NO/[medio especificado], NO/NO/NO o SE DESCONOCE/SE DESCONOCE/SE DESCONOCE."
+            });
+        }
+    }
+
+    private static bool EsDelitoExtorsion(ArchivoFila fila)
+    {
+        var clasificacion = ObtenerValor(fila, "clasf_de_dto")?.Trim();
+        return !string.IsNullOrWhiteSpace(clasificacion) && ClavesExtorsion.Contains(clasificacion);
     }
 
     private static void ValidarModalidadesConfiguradas(List<ArchivoFila> filasDelitos, List<ConfiguracionModalidadSemanalItem> configuracion, List<CargaValidacionError> errores)

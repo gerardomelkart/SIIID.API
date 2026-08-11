@@ -933,7 +933,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 WHEN CONVERT(time, ci.fecha_inicio) = '00:00:00' THEN ''
                 ELSE CONVERT(varchar(8), ci.fecha_inicio, 108)
             END AS hra_de_ini,
-            ci.resumen_hechos AS rmen_de_hchos
+            ci.resumen_hechos AS rmen_de_hchos,
+            ci.denuncia_anonima AS denuncia_anonima,
+            ci.denuncia_anonima_089 AS denuncia_anonima_089,
+            ci.denuncia_anonima_otro_medio AS denuncia_anonima_otro_medio
         FROM dbo.semanal_carpeta_investigacion ci
         INNER JOIN dbo.semanal_carga sc
             ON sc.id_semanal_carga = ci.id_semanal_carga

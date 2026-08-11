@@ -530,7 +530,10 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                     ci.nomenclatura_carpeta_fiscalia AS ntra_ci,
                     CONVERT(varchar(10), ci.fecha_inicio, 23) AS fha_de_ini,
                     CONVERT(varchar(8), ci.fecha_inicio, 108) AS hra_de_ini,
-                    ci.resumen_hechos AS rmen_de_hchos
+                    ci.resumen_hechos AS rmen_de_hchos,
+                    ci.denuncia_anonima AS denuncia_anonima,
+                    ci.denuncia_anonima_089 AS denuncia_anonima_089,
+                    ci.denuncia_anonima_otro_medio AS denuncia_anonima_otro_medio
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
             ) AS Datos
         FROM dbo.semanal_carpeta_investigacion ci
@@ -742,7 +745,10 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                     c.ntra_ci AS ntra_ci,
                     c.fha_de_ini AS fha_de_ini,
                     c.hra_de_ini AS hra_de_ini,
-                    c.rmen_de_hchos AS rmen_de_hchos
+                    c.rmen_de_hchos AS rmen_de_hchos,
+                    c.denuncia_anonima AS denuncia_anonima,
+                    c.denuncia_anonima_089 AS denuncia_anonima_089,
+                    c.denuncia_anonima_otro_medio AS denuncia_anonima_otro_medio
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
             ) AS Datos
         FROM dbo.semanal_carga_tmp_carpeta c
@@ -1224,6 +1230,9 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         tabla.Columns.Add("fha_de_ini", typeof(string));
         tabla.Columns.Add("hra_de_ini", typeof(string));
         tabla.Columns.Add("rmen_de_hchos", typeof(string));
+        tabla.Columns.Add("denuncia_anonima", typeof(string));
+        tabla.Columns.Add("denuncia_anonima_089", typeof(string));
+        tabla.Columns.Add("denuncia_anonima_otro_medio", typeof(string));
         tabla.Columns.Add("incluido", typeof(bool));
         tabla.Columns.Add("codigo_exclusion", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
@@ -1231,7 +1240,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
 
         foreach (var item in filas)
         {
-            tabla.Rows.Add(idSemanalCarga, item.Fila.NumeroFila ?? 0, ValorTextoStaging(ObtenerValor(item.Fila, "id_ci")), ValorTextoStaging(ObtenerValor(item.Fila, "ntra_ci")), ValorTextoStaging(ObtenerValor(item.Fila, "fha_de_ini")), ValorTextoStaging(ObtenerValor(item.Fila, "hra_de_ini")), ValorTextoStaging(ObtenerValor(item.Fila, "rmen_de_hchos")), item.Incluido, item.CodigoExclusion == null ? DBNull.Value : item.CodigoExclusion, "PENDIENTE", true);
+            tabla.Rows.Add(idSemanalCarga, item.Fila.NumeroFila ?? 0, ValorTextoStaging(ObtenerValor(item.Fila, "id_ci")), ValorTextoStaging(ObtenerValor(item.Fila, "ntra_ci")), ValorTextoStaging(ObtenerValor(item.Fila, "fha_de_ini")), ValorTextoStaging(ObtenerValor(item.Fila, "hra_de_ini")), ValorTextoStaging(ObtenerValor(item.Fila, "rmen_de_hchos")), ValorTextoStaging(ObtenerValor(item.Fila, "denuncia_anonima")), ValorTextoStaging(ObtenerValor(item.Fila, "denuncia_anonima_089")), ValorTextoStaging(ObtenerValor(item.Fila, "denuncia_anonima_otro_medio")), item.Incluido, item.CodigoExclusion == null ? DBNull.Value : item.CodigoExclusion, "PENDIENTE", true);
         }
 
         await EscribirBulkAsync(connection, transaction, "dbo.semanal_carga_tmp_carpeta", tabla);
@@ -1632,6 +1641,9 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             nomenclatura_carpeta_fiscalia,
             fecha_inicio,
             resumen_hechos,
+            denuncia_anonima,
+            denuncia_anonima_089,
+            denuncia_anonima_otro_medio,
             id_usuario_registro,
             fecha_registro,
             id_usuario_modificacion,
@@ -1647,6 +1659,9 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             ci.nomenclatura_carpeta_fiscalia,
             ci.fecha_inicio,
             ci.resumen_hechos,
+            ci.denuncia_anonima,
+            ci.denuncia_anonima_089,
+            ci.denuncia_anonima_otro_medio,
             ci.id_usuario_registro,
             ci.fecha_registro,
             @IdUsuarioModificacion,
@@ -1700,6 +1715,9 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             nomenclatura_carpeta_fiscalia,
             fecha_inicio,
             resumen_hechos,
+            denuncia_anonima,
+            denuncia_anonima_089,
+            denuncia_anonima_otro_medio,
             id_usuario_registro,
             activo
         )
@@ -1718,6 +1736,9 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 TRY_CONVERT(datetime2, c.fha_de_ini)
             ),
             c.rmen_de_hchos,
+            NULLIF(LTRIM(RTRIM(c.denuncia_anonima)), ''),
+            NULLIF(LTRIM(RTRIM(c.denuncia_anonima_089)), ''),
+            NULLIF(LTRIM(RTRIM(c.denuncia_anonima_otro_medio)), ''),
             @IdUsuarioRegistro,
             1
         FROM dbo.semanal_carga_tmp_carpeta c

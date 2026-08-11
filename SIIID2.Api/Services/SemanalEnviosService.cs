@@ -313,7 +313,11 @@ public class SemanalEnviosService : ISemanalEnviosService
 
         using var workbook = new XLWorkbook();
 
-        AgregarHojaReportePreliminar(workbook, "Carpetas", carpetas, ["Nombre entidad", "id_ci", "ntra_ci", "fha_de_ini", "hra_de_ini", "rmen_de_hchos"]);
+        var columnasCarpetas = new List<string> { "Nombre entidad", "id_ci", "ntra_ci", "fha_de_ini", "hra_de_ini", "rmen_de_hchos" };
+
+        if (string.Equals(delito.ClaveDelito, "4.04", StringComparison.OrdinalIgnoreCase)) columnasCarpetas.AddRange(["denuncia_anonima", "denuncia_anonima_089", "denuncia_anonima_otro_medio"]);
+
+        AgregarHojaReportePreliminar(workbook, "Carpetas", carpetas, columnasCarpetas);
         AgregarHojaReportePreliminar(workbook, "Delitos", delitos, ["Nombre entidad", "id_ci", "id_delito", "dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "id_ent_hchos", "id_mun_hchos", "id_loc_hchos", "nom_loc_hchos", "id_col_hchos", "nom_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos"]);
         AgregarHojaReportePreliminar(workbook, "Víctimas", victimas, ["Nombre entidad", "id_ci", "id_delito", "id_vicf", "id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional"]);
 
