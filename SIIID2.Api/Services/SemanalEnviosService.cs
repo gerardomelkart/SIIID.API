@@ -346,7 +346,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         }
 
         var idEntidadFederativa = usuario.EsSuperUsuario ? null : usuario.IdEntidadFederativa;
-        int? idUsuarioCarga = usuario.EsSuperUsuario ? null : idUsuarioConsulta;
+        int? idUsuarioCarga = null;
         var firma = await _semanalEnviosRepository.ObtenerFirmaSabanaAsync(anioCorte, idEntidadFederativa, idUsuarioCarga);
 
         if (!firma.MesUltimoCorte.HasValue)
@@ -365,7 +365,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         }
 
         var mesUltimoCorte = firma.MesUltimoCorte.Value;
-        var alcance = usuario.EsSuperUsuario ? "NACIONAL" : $"USUARIO:{idUsuarioConsulta}";
+        var alcance = usuario.EsSuperUsuario ? "NACIONAL" : $"ENTIDAD:{usuario.IdEntidadFederativa}";
         var cacheKey = $"SABANAS_PRELIMINARES:{alcance}:{tipo}:{modo}:{anioCorte}:{mesUltimoCorte}:{firma.UltimoIdCarga}:{firma.TotalCargasConfirmadas}:{firma.TotalCargasPendientes}:{firma.UltimaFechaMovimiento:O}";
 
         if (_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var archivoCacheado))
