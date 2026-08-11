@@ -1,5 +1,6 @@
 ﻿using System.IO.Compression;
 using ClosedXML.Excel;
+using Microsoft.Extensions.Caching.Memory;
 using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 
@@ -11,13 +12,15 @@ public class SemanalEnviosService : ISemanalEnviosService
     private readonly ISemanalCargaRepository _semanalCargaRepository;
     private readonly ISemanalAdministracionCargasRepository _administracionRepository;
     private readonly ISemanalAcusePdfService _acusePdfService;
+    private readonly IMemoryCache _cache;
 
-    public SemanalEnviosService(ISemanalEnviosRepository semanalEnviosRepository, ISemanalCargaRepository semanalCargaRepository, ISemanalAdministracionCargasRepository administracionRepository, ISemanalAcusePdfService acusePdfService)
+    public SemanalEnviosService(ISemanalEnviosRepository semanalEnviosRepository, ISemanalCargaRepository semanalCargaRepository, ISemanalAdministracionCargasRepository administracionRepository, ISemanalAcusePdfService acusePdfService, IMemoryCache cache)
     {
         _semanalEnviosRepository = semanalEnviosRepository;
         _semanalCargaRepository = semanalCargaRepository;
         _administracionRepository = administracionRepository;
         _acusePdfService = acusePdfService;
+        _cache = cache;
     }
 
     public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte, string? tipoCarga, string? estado)
@@ -328,6 +331,89 @@ public class SemanalEnviosService : ISemanalEnviosService
         };
     }
 
+    public async Task<InformeArchivoZipResponse> GenerarZipSabanasAsync(int idUsuarioConsulta, int anioCorte, string? tipoSabana, string? modoPlano)
+    {
+        var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
+
+        if (anioCorte < 2000 || anioCorte > 2100) throw new InvalidOperationException("El año de corte no es válido.");
+
+        var tipo = NormalizarTipoSabana(tipoSabana);
+        var modo = NormalizarModoPlano(modoPlano);
+
+        if (!usuario.EsSuperUsuario && modo != "CONFIRMADO")
+        {
+            throw new UnauthorizedAccessException("Sólo el SUPER_USUARIO puede generar planos previos o mixtos.");
+        }
+
+        var idEntidadFederativa = usuario.EsSuperUsuario ? null : usuario.IdEntidadFederativa;
+        int? idUsuarioCarga = usuario.EsSuperUsuario ? null : idUsuarioConsulta;
+        var firma = await _semanalEnviosRepository.ObtenerFirmaSabanaAsync(anioCorte, idEntidadFederativa, idUsuarioCarga);
+
+        if (!firma.MesUltimoCorte.HasValue)
+        {
+            throw new InvalidOperationException($"No existe información preliminar disponible para el año {anioCorte}.");
+        }
+
+        if (modo == "CONFIRMADO" && firma.TotalCargasConfirmadas == 0)
+        {
+            throw new InvalidOperationException($"No existe información preliminar confirmada para el año {anioCorte}.");
+        }
+
+        if (modo == "PREVIO" && firma.TotalCargasPendientes == 0)
+        {
+            throw new InvalidOperationException($"No existen cargas preliminares pendientes de aprobación para el año {anioCorte}.");
+        }
+
+        var mesUltimoCorte = firma.MesUltimoCorte.Value;
+        var alcance = usuario.EsSuperUsuario ? "NACIONAL" : $"USUARIO:{idUsuarioConsulta}";
+        var cacheKey = $"SABANAS_PRELIMINARES:{alcance}:{tipo}:{modo}:{anioCorte}:{mesUltimoCorte}:{firma.UltimoIdCarga}:{firma.TotalCargasConfirmadas}:{firma.TotalCargasPendientes}:{firma.UltimaFechaMovimiento:O}";
+
+        if (_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var archivoCacheado))
+        {
+            return archivoCacheado!;
+        }
+
+        var tareas = new List<(string Archivo, string Hoja, Task<List<IDictionary<string, object?>>> Consulta)>();
+
+        if (tipo is "COMPLETA" or "ESTATALES")
+        {
+            tareas.Add(("estatal-delitos.xlsx", "estatal-delitos", _semanalEnviosRepository.ObtenerSabanaEstatalDelitosAsync(anioCorte, idEntidadFederativa, idUsuarioCarga, modo, mesUltimoCorte)));
+            tareas.Add(("estatal-victimas.xlsx", "estatal-victimas", _semanalEnviosRepository.ObtenerSabanaEstatalVictimasAsync(anioCorte, idEntidadFederativa, idUsuarioCarga, modo, mesUltimoCorte)));
+        }
+
+        if (tipo is "COMPLETA" or "MUNICIPALES")
+        {
+            tareas.Add(("municipal-delitos.xlsx", "municipal-delitos", _semanalEnviosRepository.ObtenerSabanaMunicipalDelitosAsync(anioCorte, idEntidadFederativa, idUsuarioCarga, modo, mesUltimoCorte)));
+            tareas.Add(("municipal-victimas.xlsx", "municipal-victimas", _semanalEnviosRepository.ObtenerSabanaMunicipalVictimasAsync(anioCorte, idEntidadFederativa, idUsuarioCarga, modo, mesUltimoCorte)));
+        }
+
+        await Task.WhenAll(tareas.Select(x => x.Consulta));
+
+        using var zipStream = new MemoryStream();
+
+        using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var tarea in tareas)
+            {
+                AgregarSabanaExcelAlZip(archive, tarea.Archivo, tarea.Hoja, tarea.Consulta.Result);
+            }
+        }
+
+        var respuesta = new InformeArchivoZipResponse
+        {
+            Archivo = zipStream.ToArray(),
+            NombreArchivo = ObtenerNombreZipSabanas(tipo, anioCorte, idEntidadFederativa, modo)
+        };
+
+        _cache.Set(cacheKey, respuesta, new MemoryCacheEntryOptions
+        {
+            SlidingExpiration = TimeSpan.FromMinutes(30),
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(4)
+        });
+
+        return respuesta;
+    }
+
     private async Task<(int? IdEntidadFederativa, int? IdUsuarioCarga, List<SemanalReportePreliminarEntidadItem> Entidades, List<SemanalReportePreliminarDelitoItem> Delitos)> ObtenerContextoReportePreliminarAsync(int idUsuarioConsulta, int anioCorte, int mesCorte, int? idEntidadFederativa)
     {
         if (anioCorte < 2000 || anioCorte > 2100) throw new InvalidOperationException("El año de corte no es válido.");
@@ -500,6 +586,137 @@ public class SemanalEnviosService : ISemanalEnviosService
 
         worksheet.SheetView.FreezeRows(1);
         worksheet.Range(1, 1, Math.Max(1, filas.Count + 1), columnas.Count).SetAutoFilter();
+    }
+
+    private static void AgregarSabanaExcelAlZip(ZipArchive archive, string nombreArchivo, string nombreHoja, List<IDictionary<string, object?>> filas)
+    {
+        var entry = archive.CreateEntry(nombreArchivo, CompressionLevel.Fastest);
+
+        using var entryStream = entry.Open();
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add(nombreHoja);
+
+        if (filas.Count == 0)
+        {
+            worksheet.Cell(1, 1).Value = "Sin registros";
+            workbook.SaveAs(entryStream);
+            return;
+        }
+
+        var columnas = filas.First().Keys.ToList();
+
+        for (var columna = 0; columna < columnas.Count; columna++)
+        {
+            worksheet.Cell(1, columna + 1).Value = columnas[columna];
+            worksheet.Cell(1, columna + 1).Style.Font.Bold = true;
+
+            if (columnas[columna] == "Clave_Ent") worksheet.Column(columna + 1).Style.NumberFormat.Format = "@";
+        }
+
+        for (var fila = 0; fila < filas.Count; fila++)
+        {
+            for (var columna = 0; columna < columnas.Count; columna++)
+            {
+                var nombreColumna = columnas[columna];
+                var valor = filas[fila].TryGetValue(nombreColumna, out var dato) ? dato : null;
+                var celda = worksheet.Cell(fila + 2, columna + 1);
+
+                if (nombreColumna == "Clave_Ent")
+                {
+                    celda.Style.NumberFormat.Format = "@";
+                    celda.Value = valor?.ToString() ?? string.Empty;
+                }
+                else
+                {
+                    celda.Value = ConvertirValorSabanaExcel(valor);
+                }
+            }
+        }
+
+        AplicarAnchosSabana(worksheet, columnas);
+        workbook.SaveAs(entryStream);
+    }
+
+    private static void AplicarAnchosSabana(IXLWorksheet worksheet, IReadOnlyList<string> columnas)
+    {
+        for (var indice = 0; indice < columnas.Count; indice++)
+        {
+            var nombre = columnas[indice];
+            var columna = worksheet.Column(indice + 1);
+
+            if (nombre.Contains("Entidad", StringComparison.OrdinalIgnoreCase) || nombre.Contains("Municipio", StringComparison.OrdinalIgnoreCase))
+            {
+                columna.Width = 28;
+                continue;
+            }
+
+            if (nombre.Contains("Bien jurídico", StringComparison.OrdinalIgnoreCase) || nombre.Contains("Tipo de delito", StringComparison.OrdinalIgnoreCase) || nombre.Contains("Subtipo", StringComparison.OrdinalIgnoreCase) || nombre.Contains("Modalidad", StringComparison.OrdinalIgnoreCase))
+            {
+                columna.Width = 32;
+                continue;
+            }
+
+            if (nombre.Contains("Rango", StringComparison.OrdinalIgnoreCase))
+            {
+                columna.Width = 18;
+                continue;
+            }
+
+            columna.Width = nombre is "Enero" or "Febrero" or "Marzo" or "Abril" or "Mayo" or "Junio" or "Julio" or "Agosto" or "Septiembre" or "Octubre" or "Noviembre" or "Diciembre" ? 12 : 14;
+        }
+
+        worksheet.SheetView.FreezeRows(1);
+    }
+
+    private static XLCellValue ConvertirValorSabanaExcel(object? valor)
+    {
+        if (valor == null || valor == DBNull.Value) return string.Empty;
+        if (valor is DateTime fecha) return fecha;
+        if (valor is int entero) return entero;
+        if (valor is long enteroLargo) return enteroLargo;
+        if (valor is decimal numeroDecimal) return numeroDecimal;
+        if (valor is double numeroDouble) return numeroDouble;
+        if (valor is float numeroFloat) return numeroFloat;
+        if (valor is bool booleano) return booleano;
+
+        return valor.ToString() ?? string.Empty;
+    }
+
+    private static string NormalizarModoPlano(string? modoPlano)
+    {
+        var modo = (modoPlano ?? "CONFIRMADO").Trim().ToUpperInvariant();
+
+        return modo switch
+        {
+            "PREVIO" => "PREVIO",
+            "MIXTO" => "MIXTO",
+            _ => "CONFIRMADO"
+        };
+    }
+
+    private static string NormalizarTipoSabana(string? tipoSabana)
+    {
+        var tipo = (tipoSabana ?? "COMPLETA").Trim().ToUpperInvariant();
+
+        return tipo switch
+        {
+            "COMPLETA" => "COMPLETA",
+            "ESTATALES" => "ESTATALES",
+            "MUNICIPALES" => "MUNICIPALES",
+            _ => throw new InvalidOperationException("El tipo de plano no es válido.")
+        };
+    }
+
+    private static string ObtenerNombreZipSabanas(string tipo, int anioCorte, int? idEntidadFederativa, string modo)
+    {
+        var sufijoEntidad = idEntidadFederativa.HasValue ? $"_ENTIDAD_{idEntidadFederativa.Value:00}" : string.Empty;
+
+        return tipo switch
+        {
+            "ESTATALES" => $"PLANO_ESTATAL_PRELIMINAR_{modo}{sufijoEntidad}_{anioCorte}.zip",
+            "MUNICIPALES" => $"PLANO_MUNICIPAL_PRELIMINAR_{modo}{sufijoEntidad}_{anioCorte}.zip",
+            _ => $"PLANO_ESTADISTICO_PRELIMINAR_{modo}{sufijoEntidad}_{anioCorte}.zip"
+        };
     }
 
     private static string NormalizarNombreArchivo(string valor)
