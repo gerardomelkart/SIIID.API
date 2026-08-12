@@ -431,7 +431,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 FROM dbo.semanal_carga sc
                 WHERE sc.id_entidad_federativa = @IdEntidadFederativa
                   AND sc.id_usuario_carga = @IdUsuarioCarga
-                  AND sc.id_delito = @IdDelito
                   AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
                   AND sc.activo = 1
                   AND
@@ -474,7 +473,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             FROM dbo.semanal_carga sc
             WHERE sc.id_entidad_federativa = @IdEntidadFederativa
               AND sc.id_usuario_carga = @IdUsuarioCarga
-              AND sc.id_delito = @IdDelito
               AND sc.estado IN
               (
                   N'VALIDADO_PENDIENTE',
@@ -553,6 +551,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             ON sc.id_semanal_carga = ci.id_semanal_carga
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.id_usuario_carga = @IdUsuarioCarga
+          AND sc.id_delito = @IdDelito
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
@@ -617,6 +616,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             ON cp.id_codigo_postal = d.id_codigo_postal
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.id_usuario_carga = @IdUsuarioCarga
+          AND sc.id_delito = @IdDelito
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
@@ -678,6 +678,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             ON disc.id_presenta_discapacidad = v.id_presenta_discapacidad
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.id_usuario_carga = @IdUsuarioCarga
+          AND sc.id_delito = @IdDelito
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1
@@ -1501,6 +1502,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                       ON sc.id_semanal_carga = ci.id_semanal_carga
                     WHERE sc.id_entidad_federativa = bloque.id_entidad_federativa
                       AND sc.id_usuario_carga = @IdUsuarioCarga
+                      AND sc.id_delito = @IdDelito
                       AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
                     AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
                     AND ci.activo = 1
