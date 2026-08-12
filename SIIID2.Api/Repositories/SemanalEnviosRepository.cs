@@ -20,6 +20,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             sc.id_semanal_carga,
             sc.id_entidad_federativa,
             sc.id_usuario_carga,
+            sc.id_delito,
             bloque.anio_corte,
             bloque.mes_corte,
             COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) AS fecha_movimiento
