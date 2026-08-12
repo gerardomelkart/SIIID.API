@@ -41,17 +41,38 @@ public class CatalogoRepository : ICatalogoRepository
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
-    public async Task<HashSet<string>> ObtenerClavesLocalidadesInegiPorEntidadAsync(int idEntidadFederativa)
+    public async Task<bool> CoordenadasCorrespondenMunicipioAsync(int idEntidadFederativa, int idMunicipio, decimal coordX, decimal coordY)
     {
         const string sql = @"
-        SELECT cvegeo
-        FROM dbo.cat_localidades_inegi
-        WHERE cve_ent = @ClaveEntidad;
+        DECLARE @Punto geometry = geometry::Point(@CoordX, @CoordY, 4326);
+
+        SELECT CAST(
+            CASE
+                WHEN EXISTS
+                (
+                    SELECT 1
+                    FROM dbo.cat_municipios_inegi
+                    WHERE cve_ent = @ClaveEntidad
+                      AND cve_mun = @ClaveMunicipio
+                      AND poligono.STIntersects(@Punto) = 1
+                )
+                THEN 1
+                ELSE 0
+            END
+        AS bit);
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
-        var claves = await connection.QueryAsync<string>(sql, new { ClaveEntidad = idEntidadFederativa.ToString("00") });
-        return claves.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return await connection.ExecuteScalarAsync<bool>(
+            sql,
+            new
+            {
+                ClaveEntidad = idEntidadFederativa.ToString("00"),
+                ClaveMunicipio = idMunicipio.ToString("000"),
+                CoordX = coordX,
+                CoordY = coordY
+            });
     }
 
     public async Task<HashSet<int>> ObtenerClavesNumericasActivasAsync(string tabla, string columnaClave)

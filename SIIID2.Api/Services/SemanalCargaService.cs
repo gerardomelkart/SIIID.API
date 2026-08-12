@@ -657,7 +657,7 @@ public class SemanalCargaService : ISemanalCargaService
 
         ValidarHomicidioDolosoTipoVictima(delitosIncluidos, victimasIncluidas, response.Errores);
 
-        response.Errores.AddRange(await _catalogosValidator.ValidarLocalidadesHomicidioDolosoSemanalAsync(delitosIncluidos));
+        response.Errores.AddRange(await _catalogosValidator.ValidarCoordenadasHomicidioDolosoSemanalAsync(delitosIncluidos));
 
         ValidarLongitudIdentificadorDelito(delitosIncluidos, response.Errores);
 

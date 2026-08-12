@@ -161,15 +161,9 @@ public class DelitosValidator
                 "DELITOS_ID_MUN_HCHOS_SIN_INFORMACION",
                 "Clave de municipio sin información");
 
-            // ID_LOC_HCHOS puede venir como 090110001.
-            // Lo validamos como texto para no perder ceros a la izquierda.
-            ValidarTextoObligatorio(
-                fila,
-                "id_loc_hchos",
-                errores,
-                250,
-                "DELITOS_ID_LOC_HCHOS_SIN_INFORMACION",
-                "Clave de localidad sin información");
+            // ID_LOC_HCHOS puede venir vacío.
+            // No participa en la validación geográfica de las coordenadas.
+            ValidarTextoOpcional(fila, "id_loc_hchos", errores);
 
             // CP no es obligatorio.
             // Si viene vacío, en ceros o inválido, no bloqueamos la carga.

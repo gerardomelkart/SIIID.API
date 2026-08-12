@@ -25,41 +25,77 @@ public class CatalogosValidator
         return errores;
     }
 
-    public async Task<List<CargaValidacionError>> ValidarLocalidadesHomicidioDolosoSemanalAsync(List<ArchivoFila> filasDelitos)
+    public async Task<List<CargaValidacionError>> ValidarCoordenadasHomicidioDolosoSemanalAsync(List<ArchivoFila> filasDelitos)
     {
         var errores = new List<CargaValidacionError>();
-        var filasValidar = filasDelitos.Where(fila => EsHomicidioDoloso(fila) && (string.IsNullOrWhiteSpace(ObtenerValor(fila, "coord_x")) || string.IsNullOrWhiteSpace(ObtenerValor(fila, "coord_y")))).ToList();
 
-        foreach (var grupoEntidad in filasValidar.GroupBy(fila => ObtenerEntidad(fila)))
+        foreach (var fila in filasDelitos.Where(EsHomicidioDoloso))
         {
-            if (!grupoEntidad.Key.HasValue) continue;
+            var valorX = ObtenerValor(fila, "coord_x")?.Trim();
+            var valorY = ObtenerValor(fila, "coord_y")?.Trim();
 
-            var localidades = await _catalogoRepository.ObtenerClavesLocalidadesInegiPorEntidadAsync(grupoEntidad.Key.Value);
-
-            foreach (var fila in grupoEntidad)
+            if (EsCoordenadaSinInformacion(valorX) || EsCoordenadaSinInformacion(valorY))
             {
-                var claveLocalidad = NormalizarClaveLocalidadInegi(ObtenerValor(fila, "id_loc_hchos"));
-                var claveMunicipio = NormalizarClaveMunicipioInegi(ObtenerValor(fila, "id_mun_hchos"));
-                var prefijoEsperado = $"{grupoEntidad.Key.Value:00}{claveMunicipio}";
-
-                if (!string.IsNullOrWhiteSpace(claveLocalidad) && !string.IsNullOrWhiteSpace(claveMunicipio) && claveLocalidad.StartsWith(prefijoEsperado, StringComparison.OrdinalIgnoreCase) && localidades.Contains(claveLocalidad)) continue;
-
-                var valorEntidad = ObtenerValor(fila, "id_ent_hchos")?.Trim();
-                var valorMunicipio = ObtenerValor(fila, "id_mun_hchos")?.Trim();
-                var valorLocalidad = ObtenerValor(fila, "id_loc_hchos")?.Trim();
-
                 errores.Add(new CargaValidacionError
                 {
                     Archivo = "delitos",
                     Fila = fila.NumeroFila,
-                    Columna = "id_loc_hchos",
-                    Campo = "id_loc_hchos",
-                    Valor = valorLocalidad,
-                    Codigo = "SEMANAL_HOMICIDIO_DOLOSO_LOCALIDAD_NO_CORRESPONDE",
-                    DescripcionResumen = "Localidad de homicidio doloso no corresponde con INEGI",
-                    Mensaje = $"La localidad {valorLocalidad} no existe en el catálogo INEGI o no corresponde con la entidad {valorEntidad} y el municipio {valorMunicipio}. Como COORD_X o COORD_Y está vacío, debe informar una localidad válida."
+                    Columna = "coord_x+coord_y",
+                    Campo = "coord_x+coord_y",
+                    Valor = $"X={valorX}, Y={valorY}",
+                    Codigo = "SEMANAL_HOMICIDIO_DOLOSO_COORDENADAS_SIN_INFORMACION",
+                    DescripcionResumen = "Homicidio doloso sin coordenadas",
+                    Mensaje = "Para homicidio doloso los campos COORD_X y COORD_Y deben contener información."
                 });
+
+                continue;
             }
+
+            if (!IntentarConvertirCoordenada(valorX!, out var coordX) || !IntentarConvertirCoordenada(valorY!, out var coordY))
+            {
+                errores.Add(new CargaValidacionError
+                {
+                    Archivo = "delitos",
+                    Fila = fila.NumeroFila,
+                    Columna = "coord_x+coord_y",
+                    Campo = "coord_x+coord_y",
+                    Valor = $"X={valorX}, Y={valorY}",
+                    Codigo = "SEMANAL_HOMICIDIO_DOLOSO_COORDENADAS_FORMATO_INCORRECTO",
+                    DescripcionResumen = "Coordenadas de homicidio doloso con formato incorrecto",
+                    Mensaje = "Los campos COORD_X y COORD_Y deben contener coordenadas numéricas válidas."
+                });
+
+                continue;
+            }
+
+            var valorEntidad = ObtenerValor(fila, "id_ent_hchos")?.Trim();
+            var valorMunicipio = ObtenerValor(fila, "id_mun_hchos")?.Trim();
+
+            if (!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidadFederativa) ||
+                !int.TryParse(valorMunicipio, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idMunicipio))
+            {
+                continue;
+            }
+
+            var corresponde = await _catalogoRepository.CoordenadasCorrespondenMunicipioAsync(
+                idEntidadFederativa,
+                idMunicipio,
+                coordX,
+                coordY);
+
+            if (corresponde) continue;
+
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "delitos",
+                Fila = fila.NumeroFila,
+                Columna = "coord_x+coord_y",
+                Campo = "coord_x+coord_y",
+                Valor = $"X={valorX}, Y={valorY}",
+                Codigo = "SEMANAL_HOMICIDIO_DOLOSO_COORDENADAS_NO_CORRESPONDEN_MUNICIPIO",
+                DescripcionResumen = "Coordenadas de homicidio doloso fuera del municipio",
+                Mensaje = $"Las coordenadas informadas no corresponden con la entidad {valorEntidad} y el municipio {valorMunicipio}."
+            });
         }
 
         return errores;
@@ -280,31 +316,28 @@ public class CatalogosValidator
         return valor.All(c => c == '0');
     }
 
+    private static bool EsCoordenadaSinInformacion(string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor)) return true;
+        return IntentarConvertirCoordenada(valor, out var coordenada) && coordenada == 0;
+    }
+
+    private static bool IntentarConvertirCoordenada(string valor, out decimal coordenada)
+    {
+        coordenada = default;
+
+        if (string.IsNullOrWhiteSpace(valor)) return false;
+
+        valor = valor.Trim().Replace(',', '.');
+
+        return decimal.TryParse(
+            valor,
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out coordenada);
+    }
+
     private static bool EsHomicidioDoloso(ArchivoFila fila) => string.Equals(ObtenerValor(fila, "clasf_de_dto")?.Trim(), "1.01.01", StringComparison.OrdinalIgnoreCase);
-
-    private static int? ObtenerEntidad(ArchivoFila fila)
-    {
-        var valor = ObtenerValor(fila, "id_ent_hchos")?.Trim();
-        return int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var entidad) ? entidad : null;
-    }
-
-    private static string? NormalizarClaveLocalidadInegi(string? valor)
-    {
-        if (string.IsNullOrWhiteSpace(valor)) return null;
-
-        valor = valor.Trim();
-
-        if (!valor.All(char.IsDigit)) return null;
-        if (valor.Length == 8) valor = valor.PadLeft(9, '0');
-
-        return valor.Length == 9 ? valor : null;
-    }
-
-    private static string? NormalizarClaveMunicipioInegi(string? valor)
-    {
-        if (string.IsNullOrWhiteSpace(valor)) return null;
-        return int.TryParse(valor.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var municipio) ? municipio.ToString("000") : null;
-    }
 
     private static string? ObtenerValor(ArchivoFila fila, string columna)
     {

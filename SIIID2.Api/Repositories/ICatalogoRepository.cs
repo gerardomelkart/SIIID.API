@@ -14,8 +14,7 @@ public interface ICatalogoRepository
     // Obtiene las combinaciones activas entidad + municipio.
     Task<HashSet<string>> ObtenerMunicipiosPorEntidadActivosAsync();
 
-    // Obtiene las claves de localidades INEGI de una entidad federativa.
-    Task<HashSet<string>> ObtenerClavesLocalidadesInegiPorEntidadAsync(int idEntidadFederativa);
+    Task<bool> CoordenadasCorrespondenMunicipioAsync(int idEntidadFederativa, int idMunicipio, decimal coordX, decimal coordY);
 
     // Obtiene las entidades federativas activas para formularios del front.
     Task<List<EntidadFederativaCatalogoItem>> ObtenerEntidadesFederativasActivasAsync();
