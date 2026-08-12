@@ -42,6 +42,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             sc.id_semanal_carga,
             sc.id_entidad_federativa,
             sc.id_usuario_carga,
+            sc.id_delito,
             sc.anio_corte,
             sc.mes_corte,
             COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga)
@@ -72,6 +73,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 PARTITION BY
                     bloque.id_entidad_federativa,
                     bloque.id_usuario_carga,
+                    bloque.id_delito,
                     bloque.anio_corte,
                     bloque.mes_corte
                 ORDER BY
@@ -224,6 +226,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             sc.id_semanal_carga,
             sc.id_entidad_federativa,
             sc.id_usuario_carga,
+            sc.id_delito,
             bloque.anio_corte,
             bloque.mes_corte,
             COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) AS fecha_movimiento
@@ -245,6 +248,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             sc.id_semanal_carga,
             sc.id_entidad_federativa,
             sc.id_usuario_carga,
+            sc.id_delito,
             sc.anio_corte,
             sc.mes_corte,
             COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga)
@@ -275,6 +279,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 PARTITION BY
                     bloque.id_entidad_federativa,
                     bloque.id_usuario_carga,
+                    bloque.id_delito,
                     bloque.anio_corte,
                     bloque.mes_corte
                 ORDER BY

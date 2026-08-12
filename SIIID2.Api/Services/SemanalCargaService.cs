@@ -58,6 +58,8 @@ public class SemanalCargaService : ISemanalCargaService
         "4.04.02"
         };
 
+    private static readonly HashSet<int> ElementosComisionLesionesDolosasAdvertencia = new() { 6, 7, 8 };
+
     private static readonly HashSet<string> ValoresControlDenunciaAnonima =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -674,6 +676,7 @@ public class SemanalCargaService : ISemanalCargaService
         {
             response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(delitosIncluidos));
             response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(delitosIncluidos, victimasIncluidas));
+            ValidarLesionesDolosasElementoComision(delitosIncluidos, response.Advertencias);
         }
 
         FinalizarRespuesta(
@@ -1507,6 +1510,33 @@ public class SemanalCargaService : ISemanalCargaService
         response.TotalCarpetasExcluidas = carpetas.Count - response.TotalCarpetasIncluidas;
         response.TotalDelitosExcluidos = delitos.Count - response.TotalDelitosIncluidos;
         response.TotalVictimasExcluidas = victimas.Count - response.TotalVictimasIncluidas;
+    }
+
+    private static void ValidarLesionesDolosasElementoComision(List<ArchivoFila> filasDelitos, List<CargaValidacionError> advertencias)
+    {
+        var filasLesionesDolosas = filasDelitos
+            .Where(fila => string.Equals(ObtenerValor(fila, "clasf_de_dto")?.Trim(), "1.02.01", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (filasLesionesDolosas.Count == 0 ||
+            !filasLesionesDolosas.All(fila =>
+                int.TryParse(ObtenerValor(fila, "emto_com_dto")?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var elementoComision) &&
+                ElementosComisionLesionesDolosasAdvertencia.Contains(elementoComision)))
+        {
+            return;
+        }
+
+        advertencias.Add(new CargaValidacionError
+        {
+            Archivo = "delitos",
+            Fila = null,
+            Columna = "emto_com_dto",
+            Campo = "emto_com_dto",
+            Valor = "6, 7 y/o 8",
+            Codigo = "SEMANAL_LESIONES_DOLOSAS_ELEMENTO_COMISION_ADVERTENCIA",
+            DescripcionResumen = "Lesiones dolosas sin elemento de comisión específico",
+            Mensaje = "Todos los registros de lesiones dolosas contienen como elemento de comisión Con otro instrumento, No identificado o No aplica. La carga puede continuar, pero debe revisar la información."
+        });
     }
 
     private static void ValidarHomicidioTentativa(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
