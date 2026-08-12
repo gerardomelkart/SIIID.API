@@ -12,7 +12,6 @@ public interface ISemanalCargaRepository
     Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int idUsuarioCarga, int anioSemana, int numeroSemana);
     Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, int idUsuarioCarga, int idDelito, DateTime fechaInicio, DateTime fechaFin);
     Task<List<SemanalCargaBloquePendiente>> ObtenerBloquesPendientesAsync(int idEntidadFederativa, int idUsuarioCarga, int idDelito, DateTime fechaInicio, DateTime fechaFin);
-    Task<SemanalCargaBloquePendiente?> ObtenerOperacionPendienteAsync(int idEntidadFederativa, int idUsuarioCarga, int idDelito, int anioSemana, int numeroSemana);
     Task<SemanalCargaDiferenciasInfo?> ObtenerCargaParaDiferenciasAsync(string codigoReferencia);
     Task<long?> GuardarIntentoCargaAsync(SemanalCargaPersistencia carga);
     Task<ConfirmarCargaResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion);

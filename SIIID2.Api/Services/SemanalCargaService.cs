@@ -589,23 +589,6 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
-        var operacionPendiente = await _semanalCargaRepository.ObtenerOperacionPendienteAsync(idEntidadFederativa.Value, idUsuarioCarga, idDelitoCarga, periodo.AnioSemana, periodo.NumeroSemana);
-
-        if (operacionPendiente != null)
-        {
-            AgregarErrorGeneral(
-                response.Errores,
-                "SEMANAL_OPERACION_PENDIENTE_DELITO",
-                "Operación pendiente para el delito",
-                $"Ya existe una operación del mismo delito pendiente de resolver para la semana {periodo.NumeroSemana}/{periodo.AnioSemana}. Estado: {operacionPendiente.Estado}. Código de referencia: {operacionPendiente.CodigoReferencia}.",
-                "periodo",
-                $"{periodo.AnioSemana}-W{periodo.NumeroSemana:00}");
-
-            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
-            return response;
-        }
-
-
         var carpetasIncluidas = carpetasEtiquetadas
             .Where(x => x.Incluido)
             .Select(x => x.Fila)
@@ -735,9 +718,9 @@ public class SemanalCargaService : ISemanalCargaService
         {
             AgregarErrorGeneral(
                 response,
-                "SEMANAL_OPERACION_PENDIENTE_DELITO",
-                "Operación pendiente para el delito",
-                $"Ya existe una operación del mismo delito pendiente de resolver para la semana {periodo.NumeroSemana}/{periodo.AnioSemana}.");
+                "SEMANAL_BLOQUE_CON_CARGA_PENDIENTE",
+                "Bloque con una carga pendiente",
+                "Uno o más bloques lunes-domingo del mismo delito ya forman parte de otra carga pendiente.");
 
             FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
             return response;

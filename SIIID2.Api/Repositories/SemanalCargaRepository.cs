@@ -421,47 +421,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         })).ToList();
     }
 
-    public async Task<SemanalCargaBloquePendiente?> ObtenerOperacionPendienteAsync(int idEntidadFederativa, int idUsuarioCarga, int idDelito, int anioSemana, int numeroSemana)
-    {
-        const string sql = @"
-        SELECT TOP (1)
-            sc.codigo_referencia AS CodigoReferencia,
-            sc.estado AS Estado,
-            sc.anio_semana AS AnioSemana,
-            sc.numero_semana AS NumeroSemana,
-            sc.fecha_inicio_semana AS FechaInicioSemana,
-            sc.anio_corte AS AnioCorte,
-            sc.mes_corte AS MesCorte
-        FROM dbo.semanal_carga sc
-        WHERE sc.id_usuario_carga = @IdUsuarioCarga
-          AND sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.id_delito = @IdDelito
-          AND sc.anio_semana = @AnioSemana
-          AND sc.numero_semana = @NumeroSemana
-          AND sc.activo = 1
-          AND sc.estado IN
-          (
-              N'VALIDADO_PENDIENTE',
-              N'VALIDADO_PENDIENTE_ACTUALIZACION',
-              N'PENDIENTE_APROBACION'
-          )
-        ORDER BY
-            sc.fecha_validacion DESC,
-            sc.id_semanal_carga DESC;
-    ";
-
-        using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<SemanalCargaBloquePendiente>(sql, new
-        {
-            IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga,
-            IdDelito = idDelito,
-            AnioSemana = anioSemana,
-            NumeroSemana = numeroSemana
-        });
-    }
-
     public async Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int idUsuarioCarga, int anioSemana, int numeroSemana)
     {
         const string sql = @"
@@ -902,7 +861,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             return idSemanalCarga;
         }
 
-        catch (SqlException ex) when ((ex.Number == 2601 || ex.Number == 2627) && ex.Message.Contains("UX_semanal_carga_operacion_pendiente", StringComparison.OrdinalIgnoreCase))
+        catch (SqlException ex) when ((ex.Number == 2601 || ex.Number == 2627) && ex.Message.Contains("UX_semanal_carga_bloque_pendiente", StringComparison.OrdinalIgnoreCase))
         {
             await transaction.RollbackAsync();
             return null;
@@ -1201,6 +1160,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             id_semanal_carga,
             id_entidad_federativa,
             id_usuario_carga,
+            id_delito,
             anio_semana,
             numero_semana,
             fecha_inicio_semana,
@@ -1220,6 +1180,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             @IdSemanalCarga,
             @IdEntidadFederativa,
             @IdUsuarioCarga,
+            @IdDelito,
             @AnioSemana,
             @NumeroSemana,
             @FechaInicioSemana,
@@ -1243,6 +1204,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             IdSemanalCarga = idSemanalCarga,
             carga.IdEntidadFederativa,
             carga.IdUsuarioCarga,
+            carga.IdDelito,
             bloque.AnioSemana,
             bloque.NumeroSemana,
             FechaInicioSemana = bloque.FechaInicioSemana.Date,
