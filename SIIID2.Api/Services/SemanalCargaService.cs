@@ -532,9 +532,37 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
+        var configuracion = await _semanalDelitoRepository.ObtenerConfiguracionAsync();
+
+        var clavesModalidadCarga = delitosPeriodo
+            .Select(x => ObtenerValor(x, "clasf_de_dto")?.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var idsDelitosCarga = configuracion
+            .Where(x => clavesModalidadCarga.Contains(x.ClaveModalidad))
+            .Select(x => x.IdDelito)
+            .Distinct()
+            .ToList();
+
+        if (idsDelitosCarga.Count != 1)
+        {
+            AgregarErrorGeneral(
+                response,
+                "SEMANAL_CARGA_DEBE_CONTENER_UN_DELITO",
+                "No fue posible identificar un único delito",
+                "Cada paquete del módulo preliminar debe contener información de un solo delito. Homicidio, Extorsión y los demás delitos deben cargarse en paquetes independientes.");
+
+            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+            return response;
+        }
+
+        var idDelitoCarga = idsDelitosCarga[0];
+
         response.Bloques = ObtenerBloquesCarga(carpetasPeriodo, delitosPeriodo, victimasPeriodo);
 
-        var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, idUsuarioCarga, response.Bloques.Min(x => x.FechaInicioTramo), response.Bloques.Max(x => x.FechaFinTramo));
+        var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, idUsuarioCarga, idDelitoCarga, response.Bloques.Min(x => x.FechaInicioTramo), response.Bloques.Max(x => x.FechaFinTramo));
         MarcarBloquesParaReemplazo(response.Bloques, bloquesConfirmados);
 
         var tieneBloquesReemplazo = response.Bloques.Any(x => x.ReemplazaInformacion);
@@ -545,7 +573,7 @@ public class SemanalCargaService : ISemanalCargaService
 
         var fechaInicioOperacion = response.Bloques.Min(x => x.FechaInicioTramo);
         var fechaFinOperacion = response.Bloques.Max(x => x.FechaFinTramo);
-        var bloquesPendientes = await _semanalCargaRepository.ObtenerBloquesPendientesAsync(idEntidadFederativa.Value, idUsuarioCarga, fechaInicioOperacion, fechaFinOperacion);
+        var bloquesPendientes = await _semanalCargaRepository.ObtenerBloquesPendientesAsync(idEntidadFederativa.Value, idUsuarioCarga, idDelitoCarga, fechaInicioOperacion, fechaFinOperacion);
         var clavesBloquesOperacion = response.Bloques.Select(x => (x.FechaInicioSemana.Date, x.AnioCorte, x.MesCorte)).ToHashSet();
 
         foreach (var pendiente in bloquesPendientes.Where(x => clavesBloquesOperacion.Contains((x.FechaInicioSemana.Date, x.AnioCorte, x.MesCorte))).OrderBy(x => x.FechaInicioSemana).ThenBy(x => x.AnioCorte).ThenBy(x => x.MesCorte))
@@ -620,10 +648,6 @@ public class SemanalCargaService : ISemanalCargaService
             delitosIncluidos,
             response.Errores);
 
-        var configuracion =
-            await _semanalDelitoRepository
-                .ObtenerConfiguracionAsync();
-
         var modalidadesConfiguradas = configuracion
             .Where(x => x.Seleccionado)
             .OrderBy(x => x.Orden)
@@ -668,6 +692,7 @@ public class SemanalCargaService : ISemanalCargaService
             {
                 IdUsuarioCarga = idUsuarioCarga,
                 IdEntidadFederativa = idEntidadFederativa.Value,
+                IdDelito = idDelitoCarga,
                 CodigoReferencia = response.CodigoReferencia,
                 TipoCarga = tipoCarga,
                 Periodo = periodo,

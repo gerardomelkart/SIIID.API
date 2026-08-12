@@ -94,6 +94,7 @@ public class SemanalCargaPersistencia
 {
     public int IdUsuarioCarga { get; set; }
     public int IdEntidadFederativa { get; set; }
+    public int IdDelito { get; set; }
     public string CodigoReferencia { get; set; } = string.Empty;
     public string TipoCarga { get; set; } = "CARGA_INICIAL";
     public SemanalPeriodoCarga Periodo { get; set; } = new();

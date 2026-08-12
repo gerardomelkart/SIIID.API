@@ -339,7 +339,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         })).ToList();
     }
 
-    public async Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, int idUsuarioCarga, DateTime fechaInicio, DateTime fechaFin)
+    public async Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, int idUsuarioCarga, int idDelito, DateTime fechaInicio, DateTime fechaFin)
     {
         const string sql = @"
         SELECT DISTINCT
@@ -351,6 +351,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             ON sc.id_semanal_carga = ci.id_semanal_carga
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.id_usuario_carga = @IdUsuarioCarga
+          AND sc.id_delito = @IdDelito
           AND ci.fecha_inicio >= @FechaInicio
           AND ci.fecha_inicio < @FechaFinExclusiva
           AND ci.activo = 1
@@ -368,12 +369,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         {
             IdEntidadFederativa = idEntidadFederativa,
             IdUsuarioCarga = idUsuarioCarga,
+            IdDelito = idDelito,
             FechaInicio = fechaInicio.Date,
             FechaFinExclusiva = fechaFin.Date.AddDays(1)
         })).ToList();
     }
 
-    public async Task<List<SemanalCargaBloquePendiente>> ObtenerBloquesPendientesAsync(int idEntidadFederativa, int idUsuarioCarga, DateTime fechaInicio, DateTime fechaFin)
+    public async Task<List<SemanalCargaBloquePendiente>> ObtenerBloquesPendientesAsync(int idEntidadFederativa, int idUsuarioCarga, int idDelito, DateTime fechaInicio, DateTime fechaFin)
     {
         const string sql = @"
         SELECT DISTINCT
@@ -390,6 +392,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
            AND bloque.activo = 1
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.id_usuario_carga = @IdUsuarioCarga
+          AND sc.id_delito = @IdDelito
           AND bloque.fecha_inicio_tramo <= @FechaFin
           AND bloque.fecha_fin_tramo >= @FechaInicio
           AND sc.estado IN
@@ -412,11 +415,12 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         {
             IdEntidadFederativa = idEntidadFederativa,
             IdUsuarioCarga = idUsuarioCarga,
+            IdDelito = idDelito,
             FechaInicio = fechaInicio.Date,
             FechaFin = fechaFin.Date
         })).ToList();
     }
-    
+
     public async Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int idUsuarioCarga, int anioSemana, int numeroSemana)
     {
         const string sql = @"
@@ -427,6 +431,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 FROM dbo.semanal_carga sc
                 WHERE sc.id_entidad_federativa = @IdEntidadFederativa
                   AND sc.id_usuario_carga = @IdUsuarioCarga
+                  AND sc.id_delito = @IdDelito
                   AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
                   AND sc.activo = 1
                   AND
@@ -469,6 +474,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             FROM dbo.semanal_carga sc
             WHERE sc.id_entidad_federativa = @IdEntidadFederativa
               AND sc.id_usuario_carga = @IdUsuarioCarga
+              AND sc.id_delito = @IdDelito
               AND sc.estado IN
               (
                   N'VALIDADO_PENDIENTE',
@@ -520,6 +526,12 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(long idSemanalCarga, int idEntidadFederativa, int idUsuarioCarga)
     {
         const string sql = @"
+        DECLARE @IdDelito INT =
+        (
+            SELECT id_delito
+            FROM dbo.semanal_carga
+            WHERE id_semanal_carga = @IdSemanalCarga
+        );
         SELECT
             sc.id_semanal_carga AS IdSemanalCarga,
             sc.fecha_confirmacion AS FechaConfirmacion,
@@ -1054,6 +1066,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         (
             id_usuario_carga,
             id_entidad_federativa,
+            id_delito,
             codigo_referencia,
             tipo_carga,
             tipo_contenido,
@@ -1081,6 +1094,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         (
             @IdUsuarioCarga,
             @IdEntidadFederativa,
+            @IdDelito,
             @CodigoReferencia,
             @TipoCarga,
             @TipoContenido,
@@ -1109,6 +1123,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         {
             carga.IdUsuarioCarga,
             carga.IdEntidadFederativa,
+            carga.IdDelito,
             carga.CodigoReferencia,
             carga.TipoCarga,
             EstadoInicial = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "VALIDADO_PENDIENTE",
@@ -1439,6 +1454,17 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     private static async Task PrepararReemplazoBloquesAsync(SqlConnection connection, SqlTransaction transaction, SemanalCargaConfirmacionInfo carga, int idUsuarioModificacion)
     {
         const string sql = @"
+        DECLARE @IdDelito INT =
+        (
+            SELECT id_delito
+            FROM dbo.semanal_carga
+            WHERE id_semanal_carga = @IdSemanalCargaNueva
+        );
+
+        IF @IdDelito IS NULL
+        BEGIN
+            THROW 50041, 'No fue posible identificar el delito de la actualización semanal.', 1;
+        END;
         SELECT DISTINCT
             ci.id_semanal_carpeta_investigacion
         INTO #CarpetasVersionAnterior
@@ -1454,6 +1480,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
            AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.id_usuario_carga = @IdUsuarioCarga
+          AND sc.id_delito = @IdDelito
           AND ci.activo = 1
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
           AND sc.activo = 1;
