@@ -41,6 +41,19 @@ public class CatalogoRepository : ICatalogoRepository
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
+    public async Task<HashSet<string>> ObtenerClavesLocalidadesInegiPorEntidadAsync(int idEntidadFederativa)
+    {
+        const string sql = @"
+        SELECT cvegeo
+        FROM dbo.cat_localidades_inegi
+        WHERE cve_ent = @ClaveEntidad;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+        var claves = await connection.QueryAsync<string>(sql, new { ClaveEntidad = idEntidadFederativa.ToString("00") });
+        return claves.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
     public async Task<HashSet<int>> ObtenerClavesNumericasActivasAsync(string tabla, string columnaClave)
     {
         // Carga todas las claves activas del catálogo una sola vez.

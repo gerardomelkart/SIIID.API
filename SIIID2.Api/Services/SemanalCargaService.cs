@@ -653,7 +653,13 @@ public class SemanalCargaService : ISemanalCargaService
 
         ValidarHomicidioTentativa(delitosIncluidos, response.Errores);
 
-        ValidarLongitudIdentificadorDelito(delitosIncluidos,response.Errores);
+        ValidarHomicidioDolosoGradoConsumacion(delitosIncluidos, response.Errores);
+
+        ValidarHomicidioDolosoTipoVictima(delitosIncluidos, victimasIncluidas, response.Errores);
+
+        response.Errores.AddRange(await _catalogosValidator.ValidarLocalidadesHomicidioDolosoSemanalAsync(delitosIncluidos));
+
+        ValidarLongitudIdentificadorDelito(delitosIncluidos, response.Errores);
 
         ValidarRoboVehiculoFormaAccion(delitosIncluidos, response.Errores);
 
@@ -683,6 +689,7 @@ public class SemanalCargaService : ISemanalCargaService
         {
             response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(delitosIncluidos));
             response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(delitosIncluidos, victimasIncluidas));
+            ValidarHomicidioDolosoResumenHechos(carpetasIncluidas, delitosIncluidos, response.Advertencias);
             ValidarLesionesDolosasElementoComision(delitosIncluidos, response.Advertencias);
         }
 
@@ -1614,6 +1621,81 @@ public class SemanalCargaService : ISemanalCargaService
                 Mensaje = "El módulo preliminar no admite registros de ningún tipo de homicidio en grado de tentativa."
             });
         }
+    }
+
+    private static void ValidarHomicidioDolosoGradoConsumacion(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    {
+        foreach (var fila in filasDelitos.Where(EsHomicidioDoloso))
+        {
+            var valor = ObtenerValor(fila, "grdo_cons")?.Trim();
+
+            if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var gradoConsumacion) || gradoConsumacion != 3) continue;
+
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "delitos",
+                Fila = fila.NumeroFila,
+                Columna = "grdo_cons",
+                Campo = "grdo_cons",
+                Valor = valor,
+                Codigo = "SEMANAL_HOMICIDIO_DOLOSO_GRADO_CONSUMACION_NO_IDENTIFICADO",
+                DescripcionResumen = "Homicidio doloso con grado de consumación no identificado",
+                Mensaje = "Para homicidio doloso el campo GRDO_CONS solo permite la clave 1, Consumado. La clave 3, No identificado, impide la carga."
+            });
+        }
+    }
+
+    private static void ValidarHomicidioDolosoTipoVictima(List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas, List<CargaValidacionError> errores)
+    {
+        var delitosHomicidioDoloso = filasDelitos.Where(EsHomicidioDoloso).Select(CrearLlaveDelito).Where(x => !string.IsNullOrWhiteSpace(x)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var fila in filasVictimas.Where(fila => delitosHomicidioDoloso.Contains(CrearLlaveDelito(fila))))
+        {
+            var valor = ObtenerValor(fila, "id_tv")?.Trim();
+
+            if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tipoVictima) || tipoVictima == 1) continue;
+
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "victimas",
+                Fila = fila.NumeroFila,
+                Columna = "id_tv",
+                Campo = "id_tv",
+                Valor = valor,
+                Codigo = "SEMANAL_HOMICIDIO_DOLOSO_TIPO_VICTIMA_NO_PERMITIDO",
+                DescripcionResumen = "Tipo de víctima no permitido para homicidio doloso",
+                Mensaje = "Para víctimas relacionadas con homicidio doloso el campo ID_TV solo permite la clave 1, Persona física."
+            });
+        }
+    }
+
+    private static void ValidarHomicidioDolosoResumenHechos(List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<CargaValidacionError> advertencias)
+    {
+        var carpetasHomicidioDoloso = filasDelitos.Where(EsHomicidioDoloso).Select(fila => ObtenerValor(fila, "id_ci")?.Trim()).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var fila in filasCarpetas.Where(fila => carpetasHomicidioDoloso.Contains(ObtenerValor(fila, "id_ci")?.Trim() ?? string.Empty) && string.IsNullOrWhiteSpace(ObtenerValor(fila, "rmen_de_hchos"))))
+        {
+            advertencias.Add(new CargaValidacionError
+            {
+                Archivo = "carpetas",
+                Fila = fila.NumeroFila,
+                Columna = "rmen_de_hchos",
+                Campo = "rmen_de_hchos",
+                Valor = ObtenerValor(fila, "rmen_de_hchos"),
+                Codigo = "SEMANAL_HOMICIDIO_DOLOSO_RESUMEN_HECHOS_VACIO_ADVERTENCIA",
+                DescripcionResumen = "Homicidio doloso sin resumen de hechos",
+                Mensaje = "El campo RMEN_DE_HCHOS está vacío en una carpeta relacionada con homicidio doloso. La carga puede continuar, pero debe revisar la información."
+            });
+        }
+    }
+
+    private static bool EsHomicidioDoloso(ArchivoFila fila) => string.Equals(ObtenerValor(fila, "clasf_de_dto")?.Trim(), "1.01.01", StringComparison.OrdinalIgnoreCase);
+
+    private static string CrearLlaveDelito(ArchivoFila fila)
+    {
+        var idCi = ObtenerValor(fila, "id_ci")?.Trim();
+        var idDelito = ObtenerValor(fila, "id_delito")?.Trim();
+        return string.IsNullOrWhiteSpace(idCi) || string.IsNullOrWhiteSpace(idDelito) ? string.Empty : $"{idCi}|{idDelito}";
     }
 
     private static void NormalizarColumnasExtorsion(List<ArchivoFila> filasCarpetas)
