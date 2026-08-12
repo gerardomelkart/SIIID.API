@@ -58,6 +58,13 @@ public class SemanalCargaService : ISemanalCargaService
         "4.04.02"
         };
 
+    private static readonly HashSet<string> ClavesRoboVehiculo =
+    new(StringComparer.OrdinalIgnoreCase)
+    {
+        "4.01.02.01",
+        "4.01.02.02"
+    };
+
     private static readonly HashSet<int> ElementosComisionLesionesDolosasAdvertencia = new() { 6, 7, 8 };
 
     private static readonly HashSet<string> ValoresControlDenunciaAnonima =
@@ -646,9 +653,9 @@ public class SemanalCargaService : ISemanalCargaService
 
         ValidarHomicidioTentativa(delitosIncluidos, response.Errores);
 
-        ValidarLongitudIdentificadorDelito(
-            delitosIncluidos,
-            response.Errores);
+        ValidarLongitudIdentificadorDelito(delitosIncluidos,response.Errores);
+
+        ValidarRoboVehiculoFormaAccion(delitosIncluidos, response.Errores);
 
         var modalidadesConfiguradas = configuracion
             .Where(x => x.Seleccionado)
@@ -1522,6 +1529,33 @@ public class SemanalCargaService : ISemanalCargaService
         response.TotalCarpetasExcluidas = carpetas.Count - response.TotalCarpetasIncluidas;
         response.TotalDelitosExcluidos = delitos.Count - response.TotalDelitosIncluidos;
         response.TotalVictimasExcluidas = victimas.Count - response.TotalVictimasIncluidas;
+    }
+
+    private static void ValidarRoboVehiculoFormaAccion(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    {
+        var filasRoboVehiculo = filasDelitos
+            .Where(fila => ClavesRoboVehiculo.Contains(ObtenerValor(fila, "clasf_de_dto")?.Trim() ?? string.Empty))
+            .ToList();
+
+        if (filasRoboVehiculo.Count == 0 ||
+            !filasRoboVehiculo.All(fila =>
+                int.TryParse(ObtenerValor(fila, "forma_acc")?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var formaAccion) &&
+                formaAccion == 3))
+        {
+            return;
+        }
+
+        errores.Add(new CargaValidacionError
+        {
+            Archivo = "delitos",
+            Fila = null,
+            Columna = "forma_acc",
+            Campo = "forma_acc",
+            Valor = "3",
+            Codigo = "SEMANAL_ROBO_VEHICULO_FORMA_ACCION_NO_IDENTIFICADA",
+            DescripcionResumen = "Robo de vehículo sin forma de acción identificada",
+            Mensaje = "Todos los registros de robo de vehículo contienen la clave 3, No identificado, en FORMA_ACC. Debe existir al menos un registro con clave 1, Con violencia, o clave 2, Sin violencia."
+        });
     }
 
     private static void ValidarLesionesDolosasElementoComision(List<ArchivoFila> filasDelitos, List<CargaValidacionError> advertencias)
