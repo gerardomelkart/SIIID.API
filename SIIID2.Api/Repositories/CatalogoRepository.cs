@@ -51,7 +51,7 @@ public class CatalogoRepository : ICatalogoRepository
                 WHEN EXISTS
                 (
                     SELECT 1
-                    FROM dbo.cat_municipios_inegi
+                    FROM dbo.catalogo_municipios_inegi
                     WHERE cve_ent = @ClaveEntidad
                       AND cve_mun = @ClaveMunicipio
                       AND poligono.STIntersects(@Punto) = 1
