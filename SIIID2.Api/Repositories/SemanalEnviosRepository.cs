@@ -21,6 +21,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             sc.id_entidad_federativa,
             sc.id_usuario_carga,
             sc.id_delito,
+            bloque.fecha_inicio_semana,
             bloque.anio_corte,
             bloque.mes_corte,
             COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) AS fecha_movimiento
@@ -43,6 +44,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             sc.id_entidad_federativa,
             sc.id_usuario_carga,
             sc.id_delito,
+            sc.fecha_inicio_semana,
             sc.anio_corte,
             sc.mes_corte,
             COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga)
@@ -74,6 +76,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                     bloque.id_entidad_federativa,
                     bloque.id_usuario_carga,
                     bloque.id_delito,
+                    bloque.fecha_inicio_semana,
                     bloque.anio_corte,
                     bloque.mes_corte
                 ORDER BY
@@ -227,6 +230,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             sc.id_entidad_federativa,
             sc.id_usuario_carga,
             sc.id_delito,
+            bloque.fecha_inicio_semana,
             bloque.anio_corte,
             bloque.mes_corte,
             COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) AS fecha_movimiento
@@ -249,6 +253,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             sc.id_entidad_federativa,
             sc.id_usuario_carga,
             sc.id_delito,
+            sc.fecha_inicio_semana,
             sc.anio_corte,
             sc.mes_corte,
             COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga)
@@ -280,6 +285,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                     bloque.id_entidad_federativa,
                     bloque.id_usuario_carga,
                     bloque.id_delito,
+                    bloque.fecha_inicio_semana,
                     bloque.anio_corte,
                     bloque.mes_corte
                 ORDER BY
@@ -288,7 +294,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             ) AS rn
         FROM bloques_operacion bloque
     )
-    SELECT
+    SELECT DISTINCT
         visible.id_semanal_carga AS IdSemanalCarga,
         visible.anio_corte AS AnioCorte,
         visible.mes_corte AS MesCorte
@@ -434,6 +440,9 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             sc.id_semanal_carga,
             sc.id_entidad_federativa,
             sc.id_usuario_carga,
+            sc.id_delito,
+            bloque.fecha_inicio_semana,
+            bloque.fecha_fin_semana,
             bloque.anio_corte,
             bloque.mes_corte,
             sc.codigo_referencia,
@@ -449,6 +458,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         WHERE sc.activo = 1
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.id_entidad_federativa IS NOT NULL
+          AND sc.id_delito IS NOT NULL
 
         UNION ALL
 
@@ -456,6 +466,9 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             sc.id_semanal_carga,
             sc.id_entidad_federativa,
             sc.id_usuario_carga,
+            sc.id_delito,
+            sc.fecha_inicio_semana,
+            sc.fecha_fin_semana,
             sc.anio_corte,
             sc.mes_corte,
             sc.codigo_referencia,
@@ -468,6 +481,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         WHERE sc.activo = 1
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.id_entidad_federativa IS NOT NULL
+          AND sc.id_delito IS NOT NULL
           AND NOT EXISTS
           (
               SELECT 1
@@ -476,149 +490,59 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 AND bloque.activo = 1
           )
     ),
-    periodos_disponibles AS
-    (
-        SELECT DISTINCT
-            bloque.anio_corte,
-            bloque.mes_corte
-        FROM bloques_carga bloque
-        WHERE (@AnioCorte IS NULL OR bloque.anio_corte = @AnioCorte)
-          AND (@MesCorte IS NULL OR bloque.mes_corte = @MesCorte)
-    ),
-    usuarios_esperados AS
-    (
-        SELECT DISTINCT
-            usuario.id_entidad_federativa,
-            entidad.nombre AS entidad_federativa,
-            entidad.clave AS clave_entidad,
-            usuario.id_usuario AS id_usuario_carga,
-            usuario.usuario AS usuario_carga,
-            COALESCE
-            (
-                NULLIF
-                (
-                    LTRIM(RTRIM(CONCAT
-                    (
-                        usuario.nombre,
-                        N' ',
-                        usuario.primer_apellido,
-                        CASE
-                            WHEN NULLIF(usuario.segundo_apellido, N'') IS NULL THEN N''
-                            ELSE CONCAT(N' ', usuario.segundo_apellido)
-                        END
-                    ))),
-                    N''
-                ),
-                usuario.usuario
-            ) AS nombre_usuario_carga
-        FROM dbo.usuario usuario
-        INNER JOIN dbo.roles rol
-            ON rol.id_rol = usuario.id_rol
-           AND rol.activo = 1
-           AND rol.rol = N'ENLACE_ESTATAL'
-        INNER JOIN dbo.usuario_modulo usuario_modulo
-            ON usuario_modulo.id_usuario = usuario.id_usuario
-           AND usuario_modulo.habilitado = 1
-           AND usuario_modulo.activo = 1
-        INNER JOIN dbo.catalogo_modulo modulo
-            ON modulo.id_modulo = usuario_modulo.id_modulo
-           AND modulo.clave = N'SEMANAL'
-           AND modulo.activo = 1
-        INNER JOIN dbo.catalogo_entidad_federativa entidad
-            ON entidad.id_entidad_federativa = usuario.id_entidad_federativa
-           AND entidad.activo = 1
-        WHERE usuario.activo = 1
-          AND (@IdEntidadFederativa IS NULL OR usuario.id_entidad_federativa = @IdEntidadFederativa)
-          AND (@IdUsuarioCarga IS NULL OR usuario.id_usuario = @IdUsuarioCarga)
-    ),
-    base AS
+    periodos AS
     (
         SELECT
-            usuario.id_entidad_federativa,
-            usuario.entidad_federativa,
-            usuario.clave_entidad,
-            usuario.id_usuario_carga,
-            usuario.usuario_carga,
-            usuario.nombre_usuario_carga,
-            periodo.anio_corte,
-            periodo.mes_corte
-        FROM usuarios_esperados usuario
-        CROSS JOIN periodos_disponibles periodo
-
-        UNION
-
-        SELECT DISTINCT
             bloque.id_entidad_federativa,
-            entidad.nombre,
-            entidad.clave,
             bloque.id_usuario_carga,
-            usuario.usuario,
-            COALESCE
-            (
-                NULLIF
-                (
-                    LTRIM(RTRIM(CONCAT
-                    (
-                        usuario.nombre,
-                        N' ',
-                        usuario.primer_apellido,
-                        CASE
-                            WHEN NULLIF(usuario.segundo_apellido, N'') IS NULL THEN N''
-                            ELSE CONCAT(N' ', usuario.segundo_apellido)
-                        END
-                    ))),
-                    N''
-                ),
-                usuario.usuario
-            ),
+            bloque.id_delito,
+            bloque.fecha_inicio_semana,
+            bloque.fecha_fin_semana,
             bloque.anio_corte,
-            bloque.mes_corte
+            bloque.mes_corte,
+            COUNT(DISTINCT bloque.id_semanal_carga) AS intentos
         FROM bloques_carga bloque
-        INNER JOIN dbo.usuario usuario
-            ON usuario.id_usuario = bloque.id_usuario_carga
-        INNER JOIN dbo.catalogo_entidad_federativa entidad
-            ON entidad.id_entidad_federativa = bloque.id_entidad_federativa
-           AND entidad.activo = 1
         WHERE (@IdEntidadFederativa IS NULL OR bloque.id_entidad_federativa = @IdEntidadFederativa)
           AND (@IdUsuarioCarga IS NULL OR bloque.id_usuario_carga = @IdUsuarioCarga)
           AND (@AnioCorte IS NULL OR bloque.anio_corte = @AnioCorte)
           AND (@MesCorte IS NULL OR bloque.mes_corte = @MesCorte)
-    ),
-    periodos AS
-    (
-        SELECT
-            base.id_entidad_federativa,
-            base.entidad_federativa,
-            base.clave_entidad,
-            base.id_usuario_carga,
-            base.usuario_carga,
-            base.nombre_usuario_carga,
-            base.anio_corte,
-            base.mes_corte,
-            COUNT(DISTINCT bloque.id_semanal_carga) AS intentos
-        FROM base
-        LEFT JOIN bloques_carga bloque
-            ON bloque.id_entidad_federativa = base.id_entidad_federativa
-           AND bloque.id_usuario_carga = base.id_usuario_carga
-           AND bloque.anio_corte = base.anio_corte
-           AND bloque.mes_corte = base.mes_corte
         GROUP BY
-            base.id_entidad_federativa,
-            base.entidad_federativa,
-            base.clave_entidad,
-            base.id_usuario_carga,
-            base.usuario_carga,
-            base.nombre_usuario_carga,
-            base.anio_corte,
-            base.mes_corte
+            bloque.id_entidad_federativa,
+            bloque.id_usuario_carga,
+            bloque.id_delito,
+            bloque.fecha_inicio_semana,
+            bloque.fecha_fin_semana,
+            bloque.anio_corte,
+            bloque.mes_corte
     )
     SELECT
         periodo.id_entidad_federativa AS IdEntidadFederativa,
-        periodo.entidad_federativa AS EntidadFederativa,
-        periodo.clave_entidad AS ClaveEntidad,
+        entidad.nombre AS EntidadFederativa,
+        entidad.clave AS ClaveEntidad,
+        periodo.id_delito AS IdDelito,
+        catalogo_delito.delito AS Delito,
         periodo.id_usuario_carga AS IdUsuarioCarga,
-        periodo.usuario_carga AS UsuarioCarga,
-        periodo.nombre_usuario_carga AS NombreUsuarioCarga,
+        usuario.usuario AS UsuarioCarga,
+        COALESCE
+        (
+            NULLIF
+            (
+                LTRIM(RTRIM(CONCAT
+                (
+                    usuario.nombre,
+                    N' ',
+                    usuario.primer_apellido,
+                    CASE
+                        WHEN NULLIF(usuario.segundo_apellido, N'') IS NULL THEN N''
+                        ELSE CONCAT(N' ', usuario.segundo_apellido)
+                    END
+                ))),
+                N''
+            ),
+            usuario.usuario
+        ) AS NombreUsuarioCarga,
+        periodo.fecha_inicio_semana AS FechaInicioSemana,
+        periodo.fecha_fin_semana AS FechaFinSemana,
         periodo.anio_corte AS AnioCorte,
         periodo.mes_corte AS MesCorte,
         periodo.intentos AS Intentos,
@@ -629,6 +553,12 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         ultimo.fecha_aprobacion AS FechaAprobacion,
         exitosa.fecha_carga_exitosa AS FechaCargaExitosa
     FROM periodos periodo
+    INNER JOIN dbo.usuario usuario
+        ON usuario.id_usuario = periodo.id_usuario_carga
+    INNER JOIN dbo.catalogo_entidad_federativa entidad
+        ON entidad.id_entidad_federativa = periodo.id_entidad_federativa
+    INNER JOIN dbo.catalogo_delito catalogo_delito
+        ON catalogo_delito.id_delito = periodo.id_delito
     OUTER APPLY
     (
         SELECT TOP (1)
@@ -660,6 +590,9 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         FROM bloques_carga bloque
         WHERE bloque.id_entidad_federativa = periodo.id_entidad_federativa
           AND bloque.id_usuario_carga = periodo.id_usuario_carga
+          AND bloque.id_delito = periodo.id_delito
+          AND bloque.fecha_inicio_semana = periodo.fecha_inicio_semana
+          AND bloque.fecha_fin_semana = periodo.fecha_fin_semana
           AND bloque.anio_corte = periodo.anio_corte
           AND bloque.mes_corte = periodo.mes_corte
         ORDER BY
@@ -672,6 +605,9 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         FROM bloques_carga bloque
         WHERE bloque.id_entidad_federativa = periodo.id_entidad_federativa
           AND bloque.id_usuario_carga = periodo.id_usuario_carga
+          AND bloque.id_delito = periodo.id_delito
+          AND bloque.fecha_inicio_semana = periodo.fecha_inicio_semana
+          AND bloque.fecha_fin_semana = periodo.fecha_fin_semana
           AND bloque.anio_corte = periodo.anio_corte
           AND bloque.mes_corte = periodo.mes_corte
           AND bloque.estado IN
@@ -686,105 +622,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     ORDER BY
         periodo.anio_corte DESC,
         periodo.mes_corte DESC,
-        periodo.entidad_federativa,
-        periodo.usuario_carga;
-    ";
-
-        const string sqlDelitos = @"
-    WITH bloques_carga AS
-    (
-        SELECT
-            sc.id_semanal_carga,
-            sc.id_entidad_federativa,
-            sc.id_usuario_carga,
-            bloque.anio_corte,
-            bloque.mes_corte
-        FROM dbo.semanal_carga sc
-        INNER JOIN dbo.semanal_carga_bloque bloque
-            ON bloque.id_semanal_carga = sc.id_semanal_carga
-           AND bloque.activo = 1
-        WHERE sc.activo = 1
-          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-          AND sc.id_entidad_federativa IS NOT NULL
-
-        UNION ALL
-
-        SELECT
-            sc.id_semanal_carga,
-            sc.id_entidad_federativa,
-            sc.id_usuario_carga,
-            sc.anio_corte,
-            sc.mes_corte
-        FROM dbo.semanal_carga sc
-        WHERE sc.activo = 1
-          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-          AND sc.id_entidad_federativa IS NOT NULL
-          AND NOT EXISTS
-          (
-              SELECT 1
-              FROM dbo.semanal_carga_bloque bloque
-              WHERE bloque.id_semanal_carga = sc.id_semanal_carga
-                AND bloque.activo = 1
-          )
-    ),
-    delitos_carga AS
-    (
-        SELECT
-            delito.id_semanal_carga,
-            cd.clave2,
-            cd.delito
-        FROM dbo.semanal_delito delito
-        INNER JOIN dbo.catalogo_modalidad_delito md
-            ON md.id_modalidad_delito = delito.id_modalidad_delito
-           AND md.activo = 1
-        INNER JOIN dbo.catalogo_subtipo_delito sd
-            ON sd.id_subtipo_delito = md.id_subtipo_delito
-           AND sd.activo = 1
-        INNER JOIN dbo.catalogo_delito cd
-            ON cd.id_delito = sd.id_delito
-           AND cd.activo = 1
-        WHERE delito.activo = 1
-
-        UNION
-
-        SELECT
-            delito.id_semanal_carga,
-            cd.clave2,
-            cd.delito
-        FROM dbo.semanal_carga_tmp_delito delito
-        INNER JOIN dbo.catalogo_modalidad_delito md
-            ON LTRIM(RTRIM(md.clave4)) = LTRIM(RTRIM(delito.clasf_de_dto))
-           AND md.activo = 1
-        INNER JOIN dbo.catalogo_subtipo_delito sd
-            ON sd.id_subtipo_delito = md.id_subtipo_delito
-           AND sd.activo = 1
-        INNER JOIN dbo.catalogo_delito cd
-            ON cd.id_delito = sd.id_delito
-           AND cd.activo = 1
-        WHERE delito.incluido = 1
-          AND delito.activo = 1
-    )
-    SELECT DISTINCT
-        bloque.id_entidad_federativa AS IdEntidadFederativa,
-        bloque.id_usuario_carga AS IdUsuarioCarga,
-        bloque.anio_corte AS AnioCorte,
-        bloque.mes_corte AS MesCorte,
-        delito.clave2 AS ClaveDelito,
-        delito.delito AS Delito
-    FROM bloques_carga bloque
-    INNER JOIN delitos_carga delito
-        ON delito.id_semanal_carga = bloque.id_semanal_carga
-    WHERE (@IdEntidadFederativa IS NULL OR bloque.id_entidad_federativa = @IdEntidadFederativa)
-      AND (@IdUsuarioCarga IS NULL OR bloque.id_usuario_carga = @IdUsuarioCarga)
-      AND (@AnioCorte IS NULL OR bloque.anio_corte = @AnioCorte)
-      AND (@MesCorte IS NULL OR bloque.mes_corte = @MesCorte)
-    ORDER BY
-        bloque.id_entidad_federativa,
-        bloque.id_usuario_carga,
-        bloque.anio_corte,
-        bloque.mes_corte,
-        delito.clave2,
-        delito.delito;
+        periodo.fecha_inicio_semana DESC,
+        entidad.nombre,
+        usuario.usuario,
+        catalogo_delito.delito;
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
@@ -797,31 +638,6 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             MesCorte = mesCorte
         })).ToList();
 
-        var delitos = (await connection.QueryAsync<SemanalReporteCargaDelitoItem>(sqlDelitos, new
-        {
-            IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga,
-            AnioCorte = anioCorte,
-            MesCorte = mesCorte
-        })).ToList();
-
-        var delitosPorPeriodo = delitos
-            .GroupBy(x => new
-            {
-                x.IdEntidadFederativa,
-                x.IdUsuarioCarga,
-                x.AnioCorte,
-                x.MesCorte
-            })
-            .ToDictionary
-            (
-                x => x.Key,
-                x => x
-                    .Select(y => y.Delito)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList()
-            );
-
         var cultura = CultureInfo.GetCultureInfo("es-MX");
 
         foreach (var registro in registros)
@@ -829,19 +645,9 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             var nombreMes = cultura.TextInfo.ToTitleCase(cultura.DateTimeFormat.GetMonthName(registro.MesCorte));
 
             registro.Periodo = $"{nombreMes} {registro.AnioCorte}";
+            registro.Delitos = string.IsNullOrWhiteSpace(registro.Delito) ? new List<string>() : new List<string> { registro.Delito };
             registro.FechaCargaActualizacionTexto = registro.FechaCargaActualizacion.HasValue ? registro.FechaCargaActualizacion.Value.ToString("yyyy-MM-dd HH:mm:ss") : string.Empty;
             registro.FechaAprobacionTexto = registro.FechaAprobacion.HasValue ? registro.FechaAprobacion.Value.ToString("yyyy-MM-dd HH:mm:ss") : string.Empty;
-
-            if (delitosPorPeriodo.TryGetValue(new
-            {
-                registro.IdEntidadFederativa,
-                registro.IdUsuarioCarga,
-                registro.AnioCorte,
-                registro.MesCorte
-            }, out var delitosRegistro))
-            {
-                registro.Delitos = delitosRegistro;
-            }
         }
 
         return registros;
