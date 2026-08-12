@@ -589,6 +589,23 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
+        var operacionPendiente = await _semanalCargaRepository.ObtenerOperacionPendienteAsync(idEntidadFederativa.Value, idUsuarioCarga, idDelitoCarga, periodo.AnioSemana, periodo.NumeroSemana);
+
+        if (operacionPendiente != null)
+        {
+            AgregarErrorGeneral(
+                response.Errores,
+                "SEMANAL_OPERACION_PENDIENTE_DELITO",
+                "Operación pendiente para el delito",
+                $"Ya existe una operación del mismo delito pendiente de resolver para la semana {periodo.NumeroSemana}/{periodo.AnioSemana}. Estado: {operacionPendiente.Estado}. Código de referencia: {operacionPendiente.CodigoReferencia}.",
+                "periodo",
+                $"{periodo.AnioSemana}-W{periodo.NumeroSemana:00}");
+
+            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+            return response;
+        }
+
+
         var carpetasIncluidas = carpetasEtiquetadas
             .Where(x => x.Incluido)
             .Select(x => x.Fila)
@@ -690,7 +707,7 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
-        await _semanalCargaRepository.GuardarIntentoCargaAsync(
+        var idSemanalCargaGuardada = await _semanalCargaRepository.GuardarIntentoCargaAsync(
             new SemanalCargaPersistencia
             {
                 IdUsuarioCarga = idUsuarioCarga,
@@ -713,6 +730,18 @@ public class SemanalCargaService : ISemanalCargaService
                 Delitos = delitosEtiquetados,
                 Victimas = victimasEtiquetadas
             });
+
+        if (!idSemanalCargaGuardada.HasValue)
+        {
+            AgregarErrorGeneral(
+                response,
+                "SEMANAL_OPERACION_PENDIENTE_DELITO",
+                "Operación pendiente para el delito",
+                $"Ya existe una operación del mismo delito pendiente de resolver para la semana {periodo.NumeroSemana}/{periodo.AnioSemana}.");
+
+            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+            return response;
+        }
 
         await _ultimosArchivosEntidadService.GuardarSemanalAsync(
             idEntidadFederativa.Value,
