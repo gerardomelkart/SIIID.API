@@ -208,6 +208,12 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser();
         policy.AddRequirements(new ModuloHabilitadoRequirement("SEMANAL"));
     });
+
+    options.AddPolicy("MODULO_FEDERAL", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new ModuloHabilitadoRequirement("FEDERAL"));
+    });
 });
 
 //para los logs

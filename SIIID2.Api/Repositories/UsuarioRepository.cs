@@ -78,7 +78,7 @@ public class UsuarioRepository : IUsuarioRepository
             m.clave AS Clave,
             m.nombre AS Nombre,
             COALESCE(um.habilita_carga, 0) AS HabilitaCarga,
-            CONVERT(bit, CASE WHEN m.clave = N'MENSUAL' THEN ISNULL(um.habilita_modificacion, 0) ELSE 0 END) AS HabilitaModificacion,
+            CONVERT(bit, CASE WHEN m.clave IN (N'MENSUAL', N'FEDERAL') THEN ISNULL(um.habilita_modificacion, 0) ELSE 0 END) AS HabilitaModificacion,
             COALESCE(um.administra_delitos, 0) AS AdministraDelitos
         FROM usuario u
         INNER JOIN usuario_modulo um
