@@ -74,6 +74,7 @@ builder.Services.AddScoped<IDbConnectionFactory, SqlServerConnectionFactory>();
 
 // Registro de repositorios.
 builder.Services.AddScoped<ICatalogoRepository, CatalogoRepository>();
+builder.Services.AddScoped<IFederalCatalogoRepository, FederalCatalogoRepository>();
 
 // Registro de validadores específicos por archivo, validación cruzada y catálogos.
 builder.Services.AddScoped<CarpetasValidator>();
