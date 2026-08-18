@@ -363,11 +363,6 @@ public class UsuarioService : IUsuarioService
             request.AdministraDelitosSemanal = false;
         }
 
-        if (!request.HabilitaMensual && !(request.HabilitaSemanal ?? usuarioExistente.HabilitaSemanal))
-        {
-            errores.Add(ErrorUsuario("modulos", "USUARIO_MODULO_OBLIGATORIO", "Debe habilitar al menos un módulo para el usuario."));
-        }
-
         // Se valida que el rol exista en base.
         // Solo consultamos base si el rol trae algún valor para evitar mensajes redundantes.
         int? idRol = null;
@@ -668,17 +663,6 @@ public class UsuarioService : IUsuarioService
                 EsValido = false,
                 Codigo = "USUARIO_NO_PUEDE_DESHABILITAR_SU_ACCESO_SEMANAL",
                 Mensaje = "No puede deshabilitar su propio acceso al módulo semanal.",
-                IdUsuario = idUsuario
-            };
-        }
-
-        if (!usuario.HabilitaMensual && !request.HabilitaSemanal)
-        {
-            return new UsuarioOperacionResponse
-            {
-                EsValido = false,
-                Codigo = "USUARIO_MODULO_OBLIGATORIO",
-                Mensaje = "Debe habilitar al menos un módulo para el usuario.",
                 IdUsuario = idUsuario
             };
         }
