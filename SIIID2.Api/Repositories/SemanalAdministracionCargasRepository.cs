@@ -244,7 +244,10 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
                 c.ntra_ci,
                 c.fha_de_ini,
                 c.hra_de_ini,
-                c.rmen_de_hchos
+                c.rmen_de_hchos,
+                c.denuncia_anonima,
+                c.denuncia_anonima_089,
+                c.denuncia_anonima_otro_medio
             FROM dbo.semanal_carga_tmp_carpeta c
             WHERE c.id_semanal_carga = @IdSemanalCarga
               AND c.activo = 1

@@ -97,6 +97,8 @@ public class SemanalAdministracionCargasService : ISemanalAdministracionCargasSe
         var delitos = await _administracionRepository.ObtenerDelitosPendientesAsync(detalle.IdSemanalCarga);
         var victimas = await _administracionRepository.ObtenerVictimasPendientesAsync(detalle.IdSemanalCarga);
 
+        AjustarColumnasExtorsion(carpetas, delitos);
+
         using var zipStream = new MemoryStream();
 
         using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
@@ -122,6 +124,28 @@ public class SemanalAdministracionCargasService : ISemanalAdministracionCargasSe
         if (usuario == null || !usuario.EsSuperUsuario)
         {
             throw new UnauthorizedAccessException("Solo un superusuario con acceso al módulo semanal puede revisar y resolver cargas pendientes.");
+        }
+    }
+
+    private static void AjustarColumnasExtorsion(List<IDictionary<string, object?>> carpetas, List<IDictionary<string, object?>> delitos)
+    {
+        var esExtorsion = delitos.Any(fila =>
+        {
+            if (!fila.TryGetValue("clasf_de_dto", out var valor)) return false;
+
+            var clave = valor?.ToString()?.Trim();
+
+            return !string.IsNullOrWhiteSpace(clave) &&
+                   clave.StartsWith("4.04", StringComparison.OrdinalIgnoreCase);
+        });
+
+        if (esExtorsion) return;
+
+        foreach (var carpeta in carpetas)
+        {
+            carpeta.Remove("denuncia_anonima");
+            carpeta.Remove("denuncia_anonima_089");
+            carpeta.Remove("denuncia_anonima_otro_medio");
         }
     }
 

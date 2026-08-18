@@ -155,6 +155,8 @@ public class SemanalEnviosService : ISemanalEnviosService
             victimas = await _administracionRepository.ObtenerVictimasPendientesAsync(referencia.IdSemanalCarga);
         }
 
+        AjustarColumnasExtorsion(carpetas, delitos);
+
         if (carpetas.Count == 0 && delitos.Count == 0 && victimas.Count == 0)
         {
             var mensaje = esConfirmada
@@ -515,6 +517,28 @@ public class SemanalEnviosService : ISemanalEnviosService
             "EXPIRADO" => $"{char.ToUpper(operacion[0])}{operacion[1..]} expirada",
             _ => estado.Replace("_", " ")
         };
+    }
+
+    private static void AjustarColumnasExtorsion(List<IDictionary<string, object?>> carpetas, List<IDictionary<string, object?>> delitos)
+    {
+        var esExtorsion = delitos.Any(fila =>
+        {
+            if (!fila.TryGetValue("clasf_de_dto", out var valor)) return false;
+
+            var clave = valor?.ToString()?.Trim();
+
+            return !string.IsNullOrWhiteSpace(clave) &&
+                   clave.StartsWith("4.04", StringComparison.OrdinalIgnoreCase);
+        });
+
+        if (esExtorsion) return;
+
+        foreach (var carpeta in carpetas)
+        {
+            carpeta.Remove("denuncia_anonima");
+            carpeta.Remove("denuncia_anonima_089");
+            carpeta.Remove("denuncia_anonima_otro_medio");
+        }
     }
 
     private static void AgregarExcelAlZip(ZipArchive archive, string nombreArchivo, string nombreHoja, List<IDictionary<string, object?>> filas)
