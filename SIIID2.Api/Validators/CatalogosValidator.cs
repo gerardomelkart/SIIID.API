@@ -77,11 +77,13 @@ public class CatalogosValidator
                 continue;
             }
 
+            NormalizarCoordenadasMunicipio(coordX, coordY, out var longitud, out var latitud);
+
             var corresponde = await _catalogoRepository.CoordenadasCorrespondenMunicipioAsync(
                 idEntidadFederativa,
                 idMunicipio,
-                coordX,
-                coordY);
+                longitud,
+                latitud);
 
             if (corresponde) continue;
 
@@ -336,6 +338,23 @@ public class CatalogosValidator
             CultureInfo.InvariantCulture,
             out coordenada);
     }
+
+    private static void NormalizarCoordenadasMunicipio(decimal coordX, decimal coordY, out decimal longitud, out decimal latitud)
+    {
+        if (EsLatitudMexico(coordX) && EsLongitudMexico(coordY))
+        {
+            longitud = coordY;
+            latitud = coordX;
+            return;
+        }
+
+        longitud = coordX;
+        latitud = coordY;
+    }
+
+    private static bool EsLatitudMexico(decimal valor) => valor >= 13m && valor <= 34m;
+
+    private static bool EsLongitudMexico(decimal valor) => valor >= -118m && valor <= -86m;
 
     private static bool EsHomicidioDoloso(ArchivoFila fila) => string.Equals(ObtenerValor(fila, "clasf_de_dto")?.Trim(), "1.01.01", StringComparison.OrdinalIgnoreCase);
 
