@@ -1908,7 +1908,7 @@ public class SemanalCargaService : ISemanalCargaService
         {
             var identificador = ObtenerValor(fila, "id_delito")?.Trim();
 
-            if (string.IsNullOrWhiteSpace(identificador) || identificador.Length <= 50) continue;
+            if (string.IsNullOrWhiteSpace(identificador) || identificador.Length <= 250) continue;
 
             errores.Add(new CargaValidacionError
             {
@@ -1919,7 +1919,7 @@ public class SemanalCargaService : ISemanalCargaService
                 Valor = identificador,
                 Codigo = "SEMANAL_ID_DELITO_LONGITUD_EXCEDIDA",
                 DescripcionResumen = "Identificador de delito con longitud excedida",
-                Mensaje = "El campo id_delito excede la longitud máxima semanal de 50 caracteres."
+                Mensaje = "El campo id_delito excede la longitud máxima semanal de 250 caracteres."
             });
         }
     }
