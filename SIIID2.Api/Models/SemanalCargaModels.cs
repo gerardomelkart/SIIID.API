@@ -15,6 +15,12 @@ public class SemanalCargaValidacionRequest
     public int? IdEntidadFederativa { get; set; }
 }
 
+public class SemanalCargaCeroRequest
+{
+    public int IdDelito { get; set; }
+    public int? IdEntidadFederativa { get; set; }
+}
+
 public class SemanalPeriodoCarga
 {
     public string TipoContenido { get; set; } = string.Empty;

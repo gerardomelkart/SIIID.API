@@ -229,12 +229,16 @@ public class SemanalCargaRepository : ISemanalCargaRepository
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
+        var resumen = (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
         {
             IdSemanalCarga = idSemanalCarga,
             FechaInicio = fechaInicio,
             FechaFinExclusiva = fechaFinExclusiva
         })).ToList();
+
+        if (resumen.Count > 0) return resumen;
+
+        return await ObtenerResumenCargaCeroAsync(connection, idSemanalCarga, anioCorte, mesCorte);
     }
 
     public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idSemanalCarga, int? anioCorte = null, int? mesCorte = null)
@@ -331,31 +335,39 @@ public class SemanalCargaRepository : ISemanalCargaRepository
 
         using var connection = _dbConnectionFactory.CrearConexion();
 
-        return (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
+        var resumen = (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
         {
             IdSemanalCarga = idSemanalCarga,
             FechaInicio = fechaInicio,
             FechaFinExclusiva = fechaFinExclusiva
         })).ToList();
+
+        if (resumen.Count > 0) return resumen;
+
+        return await ObtenerResumenCargaCeroAsync(connection, idSemanalCarga, anioCorte, mesCorte);
     }
 
     public async Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, int idUsuarioCarga, int idDelito, DateTime fechaInicio, DateTime fechaFin)
     {
         const string sql = @"
         SELECT DISTINCT
-            DATEADD(DAY, -(DATEDIFF(DAY, CONVERT(date, '19000101', 112), CONVERT(date, ci.fecha_inicio)) % 7), CONVERT(date, ci.fecha_inicio)) AS FechaInicioSemana,
-            YEAR(ci.fecha_inicio) AS AnioCorte,
-            MONTH(ci.fecha_inicio) AS MesCorte
-        FROM dbo.semanal_carpeta_investigacion ci
-        INNER JOIN dbo.semanal_carga sc
-            ON sc.id_semanal_carga = ci.id_semanal_carga
+            bloque.fecha_inicio_semana AS FechaInicioSemana,
+            bloque.anio_corte AS AnioCorte,
+            bloque.mes_corte AS MesCorte
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.semanal_carga_bloque bloque
+            ON bloque.id_semanal_carga = sc.id_semanal_carga
+           AND bloque.activo = 1
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
           AND sc.id_usuario_carga = @IdUsuarioCarga
           AND sc.id_delito = @IdDelito
-          AND ci.fecha_inicio >= @FechaInicio
-          AND ci.fecha_inicio < @FechaFinExclusiva
-          AND ci.activo = 1
-          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+          AND bloque.fecha_inicio_tramo <= @FechaFin
+          AND bloque.fecha_fin_tramo >= @FechaInicio
+          AND sc.estado IN
+          (
+              N'CONFIRMADO',
+              N'CONFIRMADO_ACTUALIZACION'
+          )
           AND sc.activo = 1
         ORDER BY
             FechaInicioSemana,
@@ -371,7 +383,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             IdUsuarioCarga = idUsuarioCarga,
             IdDelito = idDelito,
             FechaInicio = fechaInicio.Date,
-            FechaFinExclusiva = fechaFin.Date.AddDays(1)
+            FechaFin = fechaFin.Date
         })).ToList();
     }
 
@@ -1954,6 +1966,48 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     {
         fila.Columnas.TryGetValue(columna, out var valor);
         return valor;
+    }
+
+    private static async Task<List<CargaAcuseResumenItem>> ObtenerResumenCargaCeroAsync(IDbConnection connection, long idSemanalCarga, int? anioCorte, int? mesCorte)
+    {
+        const string sql = @"
+        SELECT
+            cd.clave2 AS ClaveDelito,
+            cd.delito AS TipoDelito,
+            N'' AS ClaveSubtipo,
+            N'Carga reportada en cero' AS SubtipoDelito,
+            0 AS TotalDelitos,
+            0 AS TotalVictimas
+        FROM dbo.semanal_carga sc
+        INNER JOIN dbo.catalogo_delito cd
+            ON cd.id_delito = sc.id_delito
+           AND cd.activo = 1
+        WHERE sc.id_semanal_carga = @IdSemanalCarga
+          AND sc.total_carpetas_incluidas = 0
+          AND sc.total_delitos_incluidos = 0
+          AND sc.total_victimas_incluidas = 0
+          AND sc.activo = 1
+          AND
+          (
+              @AnioCorte IS NULL
+              OR EXISTS
+              (
+                  SELECT 1
+                  FROM dbo.semanal_carga_bloque bloque
+                  WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                    AND bloque.anio_corte = @AnioCorte
+                    AND bloque.mes_corte = @MesCorte
+                    AND bloque.activo = 1
+              )
+          );
+    ";
+
+        return (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
+        {
+            IdSemanalCarga = idSemanalCarga,
+            AnioCorte = anioCorte,
+            MesCorte = mesCorte
+        })).ToList();
     }
 
     private static string ValorTextoStaging(string? valor) => string.IsNullOrWhiteSpace(valor) ? string.Empty : valor.Trim();

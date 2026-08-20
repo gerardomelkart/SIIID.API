@@ -347,6 +347,22 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         WHERE delito.id_semanal_carga IN @Ids
           AND delito.incluido = 1
           AND delito.activo = 1
+
+        UNION
+
+        SELECT
+            carga.id_semanal_carga,
+            cd.clave2,
+            cd.delito
+        FROM dbo.semanal_carga carga
+        INNER JOIN dbo.catalogo_delito cd
+            ON cd.id_delito = carga.id_delito
+           AND cd.activo = 1
+        WHERE carga.id_semanal_carga IN @Ids
+          AND carga.total_carpetas_incluidas = 0
+          AND carga.total_delitos_incluidos = 0
+          AND carga.total_victimas_incluidas = 0
+          AND carga.activo = 1
     )
     SELECT
         delito.id_semanal_carga AS IdSemanalCarga,
@@ -356,7 +372,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         delito.id_semanal_carga,
         delito.clave2,
         delito.delito;
-    ";
+";
 
         using var connection = _dbConnectionFactory.CrearConexion();
 

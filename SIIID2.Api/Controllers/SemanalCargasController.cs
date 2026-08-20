@@ -55,6 +55,16 @@ public class SemanalCargasController : ControllerBase
             : BadRequest(resultado);
     }
 
+    [HttpPost("validar-cero")]
+    public async Task<IActionResult> ValidarCargaCero([FromBody] SemanalCargaCeroRequest request)
+    {
+        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
+
+        var resultado = await _semanalCargaService.ValidarCargaCeroAsync(request, idUsuario);
+
+        return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
+    }
+
     [HttpGet("{codigoReferencia}/diferencias")]
     public async Task<IActionResult> ObtenerDiferencias(string codigoReferencia, [FromQuery] int limitePorSeccion = 100)
     {

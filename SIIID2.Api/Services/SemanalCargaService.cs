@@ -382,6 +382,160 @@ public class SemanalCargaService : ISemanalCargaService
         };
     }
 
+    public async Task<SemanalCargaValidacionResponse> ValidarCargaCeroAsync(SemanalCargaCeroRequest request, int idUsuarioCarga)
+    {
+        var fechaActual = DateTime.Today;
+        var fechaInicioSemana = ObtenerInicioSemana(fechaActual).AddDays(-7);
+        var fechaFinSemana = fechaInicioSemana.AddDays(6);
+
+        var response = new SemanalCargaValidacionResponse
+        {
+            CodigoReferencia = GenerarCodigoReferencia(),
+            TipoCarga = "CARGA_INICIAL",
+            Periodo = new SemanalPeriodoCarga
+            {
+                TipoContenido = "ACUMULADO_MES",
+                AnioSemana = ISOWeek.GetYear(fechaInicioSemana),
+                NumeroSemana = ISOWeek.GetWeekOfYear(fechaInicioSemana),
+                FechaInicioSemana = fechaInicioSemana,
+                FechaFinSemana = fechaFinSemana,
+                FechaInicioTramo = fechaInicioSemana,
+                FechaFinTramo = fechaFinSemana,
+                MesCorte = fechaFinSemana.Month,
+                AnioCorte = fechaFinSemana.Year
+            },
+            Ventana = new SemanalVentanaCarga
+            {
+                FechaMinimaPermitida = fechaInicioSemana,
+                FechaMaximaPermitida = fechaFinSemana,
+                PermiteMesAnterior = fechaInicioSemana.Month != fechaFinSemana.Month
+            }
+        };
+
+        if (request.IdDelito <= 0)
+        {
+            AgregarErrorGeneral(response, "SEMANAL_CARGA_CERO_DELITO_OBLIGATORIO", "Delito obligatorio", "Debe seleccionar el delito que desea reportar en cero.");
+            FinalizarRespuesta(response, 0, 0, 0);
+            return response;
+        }
+
+        var usuarioCarga = await _semanalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioCarga);
+
+        if (usuarioCarga == null)
+        {
+            AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_ACCESO", "Usuario sin acceso semanal", "El usuario no existe, está inactivo o no tiene habilitado el módulo semanal.");
+            FinalizarRespuesta(response, 0, 0, 0);
+            return response;
+        }
+
+        if (!usuarioCarga.HabilitaCarga)
+        {
+            AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_PERMISO_CARGA", "Usuario sin permiso de carga semanal", "El usuario no tiene habilitada la carga de información semanal.");
+            FinalizarRespuesta(response, 0, 0, 0);
+            return response;
+        }
+
+        int? idEntidadFederativa;
+
+        if (usuarioCarga.EsSuperUsuario)
+        {
+            if (!request.IdEntidadFederativa.HasValue || request.IdEntidadFederativa.Value <= 0)
+            {
+                AgregarErrorGeneral(response, "SEMANAL_CARGA_CERO_ENTIDAD_OBLIGATORIA", "Entidad federativa obligatoria", "Debe seleccionar la entidad federativa que reportará la semana en cero.");
+                FinalizarRespuesta(response, 0, 0, 0);
+                return response;
+            }
+
+            idEntidadFederativa = request.IdEntidadFederativa.Value;
+        }
+        else
+        {
+            idEntidadFederativa = usuarioCarga.IdEntidadFederativa;
+
+            if (!idEntidadFederativa.HasValue)
+            {
+                AgregarErrorGeneral(response, "SEMANAL_USUARIO_SIN_ENTIDAD", "Usuario sin entidad federativa", "El usuario no tiene una entidad federativa asignada.");
+                FinalizarRespuesta(response, 0, 0, 0);
+                return response;
+            }
+        }
+
+        var configuracion = await _semanalDelitoRepository.ObtenerConfiguracionAsync();
+
+        var modalidadesConfiguradas = configuracion
+            .Where(x => x.Seleccionado && x.IdDelito == request.IdDelito)
+            .OrderBy(x => x.Orden)
+            .ThenBy(x => x.ClaveModalidad)
+            .ToList();
+
+        if (modalidadesConfiguradas.Count == 0)
+        {
+            AgregarErrorGeneral(response, "SEMANAL_CARGA_CERO_DELITO_NO_HABILITADO", "Delito no habilitado", "El delito seleccionado no está habilitado en la configuración semanal.");
+            FinalizarRespuesta(response, 0, 0, 0);
+            return response;
+        }
+
+        response.Bloques = ObtenerBloquesCargaCero(fechaInicioSemana, fechaFinSemana);
+
+        var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, idUsuarioCarga, request.IdDelito, fechaInicioSemana, fechaFinSemana);
+
+        if (bloquesConfirmados.Count > 0)
+        {
+            AgregarErrorGeneral(response, "SEMANAL_CARGA_CERO_YA_REGISTRADA", "Semana previamente registrada", $"El delito seleccionado ya tiene una carga confirmada para la semana del {fechaInicioSemana:dd/MM/yyyy} al {fechaFinSemana:dd/MM/yyyy}. Si necesita agregar información debe realizar una actualización.");
+            FinalizarRespuesta(response, 0, 0, 0);
+            return response;
+        }
+
+        var bloquesPendientes = await _semanalCargaRepository.ObtenerBloquesPendientesAsync(idEntidadFederativa.Value, idUsuarioCarga, request.IdDelito, fechaInicioSemana, fechaFinSemana);
+
+        if (bloquesPendientes.Count > 0)
+        {
+            var pendiente = bloquesPendientes.OrderByDescending(x => x.FechaInicioSemana).First();
+
+            AgregarErrorGeneral(response, "SEMANAL_CARGA_CERO_PENDIENTE", "Existe una operación pendiente", $"Ya existe una carga pendiente para ese delito y semana. Código de referencia: {pendiente.CodigoReferencia}.");
+            FinalizarRespuesta(response, 0, 0, 0);
+            return response;
+        }
+
+        FinalizarRespuesta(response, 0, 0, 0);
+
+        var idSemanalCargaGuardada = await _semanalCargaRepository.GuardarIntentoCargaAsync(new SemanalCargaPersistencia
+        {
+            IdUsuarioCarga = idUsuarioCarga,
+            IdEntidadFederativa = idEntidadFederativa.Value,
+            IdDelito = request.IdDelito,
+            CodigoReferencia = response.CodigoReferencia,
+            TipoCarga = "CARGA_INICIAL",
+            Periodo = response.Periodo!,
+            Ventana = response.Ventana,
+            Bloques = response.Bloques,
+            TotalCarpetasIncluidas = 0,
+            TotalDelitosIncluidos = 0,
+            TotalVictimasIncluidas = 0,
+            TotalCarpetasExcluidas = 0,
+            TotalDelitosExcluidos = 0,
+            TotalVictimasExcluidas = 0,
+            Advertencias = new List<CargaValidacionError>(),
+            ModalidadesConfiguradas = modalidadesConfiguradas,
+            Carpetas = new List<SemanalArchivoFilaCarga>(),
+            Delitos = new List<SemanalArchivoFilaCarga>(),
+            Victimas = new List<SemanalArchivoFilaCarga>()
+        });
+
+        if (!idSemanalCargaGuardada.HasValue)
+        {
+            AgregarErrorGeneral(response, "SEMANAL_CARGA_CERO_PENDIENTE", "Existe una operación pendiente", "La semana seleccionada ya forma parte de otra operación pendiente.");
+            FinalizarRespuesta(response, 0, 0, 0);
+            return response;
+        }
+
+        response.Mensaje = $"La carga en cero del delito seleccionado para la semana del {fechaInicioSemana:dd/MM/yyyy} al {fechaFinSemana:dd/MM/yyyy} fue preparada correctamente. Revise el informe previo antes de confirmarla.";
+
+        _logger.LogInformation("Carga semanal en cero validada. Referencia: {CodigoReferencia}, Entidad: {IdEntidad}, Delito: {IdDelito}, Semana: {FechaInicio:yyyy-MM-dd} a {FechaFin:yyyy-MM-dd}", response.CodigoReferencia, idEntidadFederativa.Value, request.IdDelito, fechaInicioSemana, fechaFinSemana);
+
+        return response;
+    }
+
     public async Task<SemanalCargaValidacionResponse> ValidarArchivosAsync(SemanalCargaValidacionRequest request, int idUsuarioCarga)
     {
         var tipoCarga = (request.TipoCarga ?? string.Empty).Trim().ToUpperInvariant();
@@ -902,7 +1056,7 @@ public class SemanalCargaService : ISemanalCargaService
         return new SemanalVentanaCarga
         {
             FechaMinimaPermitida = fechaInicioMesActual,
-            FechaMaximaPermitida = fechaActual,
+            FechaMaximaPermitida = fechaActual.AddDays(-1),
             PermiteMesAnterior = fechaActual.Day <= 7
         };
     }
@@ -999,7 +1153,7 @@ public class SemanalCargaService : ISemanalCargaService
             FechaInicioSemana = fechaInicioSemanaActual,
             FechaFinSemana = fechaFinSemanaActual,
             FechaInicioTramo = fechaInicioMesActual,
-            FechaFinTramo = fechaActual,
+            FechaFinTramo = fechaActual.AddDays(-1),
             MesCorte = fechaActual.Month,
             AnioCorte = fechaActual.Year
         };
@@ -1052,27 +1206,58 @@ public class SemanalCargaService : ISemanalCargaService
 
     private static void ValidarFechasFueraVentana(List<SemanalArchivoFilaCarga> carpetas, SemanalVentanaCarga ventana, List<CargaValidacionError> errores)
     {
-        foreach (var carpeta in carpetas.Where(x => !x.Incluido))
+        var fechaActual = ventana.FechaMaximaPermitida.Date.AddDays(1);
+
+        foreach (var item in carpetas.Where(x => !x.Incluido))
         {
-            var valor = ObtenerValor(carpeta.Fila, "fha_de_ini")?.Trim();
+            var valorFecha = ObtenerValor(item.Fila, "fha_de_ini");
 
-            if (!IntentarConvertirFecha(valor, out var fechaInicio)) continue;
-            if (EsFechaMesAnteriorPermitida(fechaInicio, ventana)) continue;
+            if (!IntentarConvertirFecha(valorFecha, out var fechaInicio)) continue;
 
-            var fechaFutura = fechaInicio.Date > ventana.FechaMaximaPermitida.Date;
+            if (fechaInicio.Date == fechaActual)
+            {
+                errores.Add(new CargaValidacionError
+                {
+                    Archivo = "carpetas",
+                    Fila = item.Fila.NumeroFila,
+                    Columna = "fha_de_ini",
+                    Campo = "fha_de_ini",
+                    Valor = valorFecha,
+                    Codigo = "SEMANAL_FECHA_DIA_ACTUAL_NO_PERMITIDA",
+                    DescripcionResumen = "Registro correspondiente al día en curso",
+                    Mensaje = $"La fecha {fechaInicio:dd/MM/yyyy} corresponde al día en curso. La carga semanal únicamente puede contener información hasta el día anterior."
+                });
+
+                continue;
+            }
+
+            if (fechaInicio.Date > fechaActual)
+            {
+                errores.Add(new CargaValidacionError
+                {
+                    Archivo = "carpetas",
+                    Fila = item.Fila.NumeroFila,
+                    Columna = "fha_de_ini",
+                    Campo = "fha_de_ini",
+                    Valor = valorFecha,
+                    Codigo = "SEMANAL_FECHA_FUTURA_NO_PERMITIDA",
+                    DescripcionResumen = "Fecha futura no permitida",
+                    Mensaje = $"La fecha {fechaInicio:dd/MM/yyyy} es posterior al día actual. No se permiten fechas futuras."
+                });
+
+                continue;
+            }
 
             errores.Add(new CargaValidacionError
             {
                 Archivo = "carpetas",
-                Fila = carpeta.Fila.NumeroFila,
+                Fila = item.Fila.NumeroFila,
                 Columna = "fha_de_ini",
                 Campo = "fha_de_ini",
-                Valor = valor,
-                Codigo = fechaFutura ? "SEMANAL_FECHA_FUTURA_NO_PERMITIDA" : "SEMANAL_FECHA_MES_ANTERIOR_NO_PERMITIDA",
-                DescripcionResumen = fechaFutura ? "Fecha futura no permitida" : "Fecha de mes anterior no permitida",
-                Mensaje = fechaFutura
-                    ? $"La fecha de inicio {fechaInicio:dd/MM/yyyy} es posterior a la fecha actual {ventana.FechaMaximaPermitida:dd/MM/yyyy}. No se permiten fechas futuras."
-                    : $"La fecha de inicio {fechaInicio:dd/MM/yyyy} pertenece a un periodo anterior. Únicamente se permite información del mes inmediato anterior cuando la carga se realiza del día 1 al 7 del mes en curso."
+                Valor = valorFecha,
+                Codigo = "SEMANAL_FECHA_FUERA_VENTANA",
+                DescripcionResumen = "Fecha fuera de la ventana permitida",
+                Mensaje = $"La fecha {fechaInicio:dd/MM/yyyy} está fuera de la ventana permitida, del {ventana.FechaMinimaPermitida:dd/MM/yyyy} al {ventana.FechaMaximaPermitida:dd/MM/yyyy}."
             });
         }
     }
@@ -1170,6 +1355,40 @@ public class SemanalCargaService : ISemanalCargaService
         var diasDesdeLunes = ((int)fecha.DayOfWeek + 6) % 7;
 
         return fecha.Date.AddDays(-diasDesdeLunes);
+    }
+
+    private static List<SemanalCargaBloque> ObtenerBloquesCargaCero(DateTime fechaInicioSemana, DateTime fechaFinSemana)
+    {
+        var bloques = new List<SemanalCargaBloque>();
+        var fechaInicioTramo = fechaInicioSemana.Date;
+        var anioSemana = ISOWeek.GetYear(fechaInicioSemana);
+        var numeroSemana = ISOWeek.GetWeekOfYear(fechaInicioSemana);
+
+        while (fechaInicioTramo <= fechaFinSemana.Date)
+        {
+            var fechaFinMes = new DateTime(fechaInicioTramo.Year, fechaInicioTramo.Month, 1).AddMonths(1).AddDays(-1);
+            var fechaFinTramo = fechaFinSemana.Date < fechaFinMes ? fechaFinSemana.Date : fechaFinMes;
+
+            bloques.Add(new SemanalCargaBloque
+            {
+                AnioSemana = anioSemana,
+                NumeroSemana = numeroSemana,
+                FechaInicioSemana = fechaInicioSemana.Date,
+                FechaFinSemana = fechaFinSemana.Date,
+                AnioCorte = fechaInicioTramo.Year,
+                MesCorte = fechaInicioTramo.Month,
+                FechaInicioTramo = fechaInicioTramo,
+                FechaFinTramo = fechaFinTramo,
+                TotalCarpetas = 0,
+                TotalDelitos = 0,
+                TotalVictimas = 0,
+                ReemplazaInformacion = false
+            });
+
+            fechaInicioTramo = fechaFinTramo.AddDays(1);
+        }
+
+        return bloques;
     }
 
     private static string NormalizarValorComparacion(string columna, string? valor)
