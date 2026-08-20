@@ -123,7 +123,11 @@ public class RecordatoriosCargaController : ControllerBase
         (
             SELECT DISTINCT
                 sc.id_semanal_carga,
+                sc.id_delito,
                 sc.estado,
+                sc.total_carpetas_incluidas,
+                sc.total_delitos_incluidos,
+                sc.total_victimas_incluidas,
                 COALESCE
                 (
                     sc.fecha_confirmacion,
@@ -196,6 +200,18 @@ public class RecordatoriosCargaController : ControllerBase
                AND sd.activo = 1
             WHERE carpeta.fecha_inicio >= @FechaInicioSemana
               AND carpeta.fecha_inicio < DATEADD(DAY, 1, @FechaFinSemana)
+
+            UNION
+
+            SELECT DISTINCT
+                carga.id_semanal_carga,
+                carga.estado,
+                carga.fecha_movimiento,
+                carga.id_delito
+            FROM cargas_periodo carga
+            WHERE carga.total_carpetas_incluidas = 0
+              AND carga.total_delitos_incluidos = 0
+              AND carga.total_victimas_incluidas = 0
         ),
         ultimo_estado_delito AS
         (
