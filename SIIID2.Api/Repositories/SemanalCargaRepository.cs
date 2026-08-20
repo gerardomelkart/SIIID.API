@@ -1521,18 +1521,37 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                   FROM dbo.semanal_carpeta_investigacion ci WITH (UPDLOCK, HOLDLOCK)
                   INNER JOIN dbo.semanal_carga sc
                       ON sc.id_semanal_carga = ci.id_semanal_carga
-                    WHERE sc.id_entidad_federativa = bloque.id_entidad_federativa
-                      AND sc.id_usuario_carga = @IdUsuarioCarga
-                      AND sc.id_delito = @IdDelito
-                      AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                  WHERE sc.id_entidad_federativa = bloque.id_entidad_federativa
+                    AND sc.id_usuario_carga = @IdUsuarioCarga
+                    AND sc.id_delito = @IdDelito
+                    AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
                     AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
                     AND ci.activo = 1
                     AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
                     AND sc.activo = 1
               )
+              AND NOT EXISTS
+              (
+                  SELECT 1
+                  FROM dbo.semanal_carga carga_cero
+                  INNER JOIN dbo.semanal_carga_bloque bloque_cero
+                      ON bloque_cero.id_semanal_carga = carga_cero.id_semanal_carga
+                     AND bloque_cero.activo = 1
+                  WHERE carga_cero.id_entidad_federativa = bloque.id_entidad_federativa
+                    AND carga_cero.id_usuario_carga = @IdUsuarioCarga
+                    AND carga_cero.id_delito = @IdDelito
+                    AND carga_cero.total_carpetas_incluidas = 0
+                    AND carga_cero.total_delitos_incluidos = 0
+                    AND carga_cero.total_victimas_incluidas = 0
+                    AND carga_cero.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+                    AND carga_cero.activo = 1
+                    AND bloque_cero.fecha_inicio_semana = bloque.fecha_inicio_semana
+                    AND bloque_cero.anio_corte = bloque.anio_corte
+                    AND bloque_cero.mes_corte = bloque.mes_corte
+              )
         )
         BEGIN
-            THROW 50040, 'Uno o más bloques marcados para reemplazo no tienen información semanal confirmada activa.', 1;
+            THROW 50040, 'Uno o más bloques marcados para reemplazo no tienen información semanal confirmada activa ni una carga confirmada en cero.', 1;
         END;
 
         SELECT d.id_semanal_delito

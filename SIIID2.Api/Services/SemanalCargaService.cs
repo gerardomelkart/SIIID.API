@@ -961,11 +961,6 @@ public class SemanalCargaService : ISemanalCargaService
 
         var datosComparacion = await _semanalCargaRepository.ObtenerDatosComparacionAsync(carga.IdSemanalCarga, carga.IdEntidadFederativa, carga.IdUsuarioCarga);
 
-        if (datosComparacion.CarpetasConfirmadas.Count == 0)
-        {
-            return ErrorDiferencias(codigoLimpio, "No se encontró información confirmada activa para los bloques que serán reemplazados.");
-        }
-
         var datosConfirmados = new SemanalDatosSemana();
         datosConfirmados.Carpetas.AddRange(datosComparacion.CarpetasConfirmadas.Select(ConvertirFilaComparacion));
         datosConfirmados.Delitos.AddRange(datosComparacion.DelitosConfirmados.Select(ConvertirFilaComparacion));
