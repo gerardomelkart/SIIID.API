@@ -14,7 +14,7 @@ public class CargaValidacionResponse
     public int TotalErrores => Errores.Count;
 
     // Total de advertencias encontradas.
-    public int TotalAdvertencias => Advertencias.Count;
+    public int TotalAdvertencias => Advertencias.Sum(x => x.TotalRegistrosAfectados);
 
     // Mensaje general del resultado de la validación.
     public string Mensaje { get; set; } = string.Empty;

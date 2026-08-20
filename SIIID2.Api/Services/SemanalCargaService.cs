@@ -657,7 +657,11 @@ public class SemanalCargaService : ISemanalCargaService
 
         ValidarHomicidioDolosoTipoVictima(delitosIncluidos, victimasIncluidas, response.Errores);
 
-        response.Errores.AddRange(await _catalogosValidator.ValidarCoordenadasHomicidioDolosoSemanalAsync(delitosIncluidos));
+        var validacionCoordenadas = await _catalogosValidator.ValidarCoordenadasHomicidioDolosoSemanalAsync(delitosIncluidos);
+
+        response.Errores.AddRange(validacionCoordenadas.Errores);
+
+        if (validacionCoordenadas.Advertencia is not null) response.Advertencias.Add(validacionCoordenadas.Advertencia);
 
         ValidarLongitudIdentificadorDelito(delitosIncluidos, response.Errores);
 
@@ -1986,8 +1990,8 @@ public class SemanalCargaService : ISemanalCargaService
             CrearResumen("victimas", "SEMANAL_VICTIMAS_EXCLUIDAS", "Registros fuera del tramo semanal", response.TotalVictimasExcluidas)
         };
 
-        resumen.AddRange(response.Errores.Where(x => !string.IsNullOrWhiteSpace(x.Codigo) && !string.IsNullOrWhiteSpace(x.DescripcionResumen)).GroupBy(x => new { x.Archivo, x.Codigo, x.DescripcionResumen }).Select(x => new CargaValidacionResumenItem { Archivo = x.Key.Archivo, Codigo = x.Key.Codigo, Descripcion = x.Key.DescripcionResumen, TotalRegistros = x.Count(), EsError = true }).OrderBy(x => x.Archivo).ThenBy(x => x.Codigo));
-        resumen.AddRange(response.Advertencias.Where(x => !string.IsNullOrWhiteSpace(x.Codigo) && !string.IsNullOrWhiteSpace(x.DescripcionResumen)).GroupBy(x => new { x.Archivo, x.Codigo, x.DescripcionResumen }).Select(x => new CargaValidacionResumenItem { Archivo = x.Key.Archivo, Codigo = x.Key.Codigo, Descripcion = x.Key.DescripcionResumen, TotalRegistros = x.Count(), EsError = false }).OrderBy(x => x.Archivo).ThenBy(x => x.Codigo));
+        resumen.AddRange(response.Errores.Where(x => !string.IsNullOrWhiteSpace(x.Codigo) && !string.IsNullOrWhiteSpace(x.DescripcionResumen)).GroupBy(x => new { x.Archivo, x.Codigo, x.DescripcionResumen }).Select(x => new CargaValidacionResumenItem { Archivo = x.Key.Archivo, Codigo = x.Key.Codigo, Descripcion = x.Key.DescripcionResumen, TotalRegistros = x.Sum(y => y.TotalRegistrosAfectados), EsError = true }).OrderBy(x => x.Archivo).ThenBy(x => x.Codigo));
+        resumen.AddRange(response.Advertencias.Where(x => !string.IsNullOrWhiteSpace(x.Codigo) && !string.IsNullOrWhiteSpace(x.DescripcionResumen)).GroupBy(x => new { x.Archivo, x.Codigo, x.DescripcionResumen }).Select(x => new CargaValidacionResumenItem { Archivo = x.Key.Archivo, Codigo = x.Key.Codigo, Descripcion = x.Key.DescripcionResumen, TotalRegistros = x.Sum(y => y.TotalRegistrosAfectados), EsError = false }).OrderBy(x => x.Archivo).ThenBy(x => x.Codigo));
         response.ResumenValidacion = resumen;
 
         var esActualizacion = string.Equals(response.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);

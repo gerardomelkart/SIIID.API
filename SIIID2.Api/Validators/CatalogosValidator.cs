@@ -25,9 +25,10 @@ public class CatalogosValidator
         return errores;
     }
 
-    public async Task<List<CargaValidacionError>> ValidarCoordenadasHomicidioDolosoSemanalAsync(List<ArchivoFila> filasDelitos)
+    public async Task<(List<CargaValidacionError> Errores, CargaValidacionError? Advertencia)> ValidarCoordenadasHomicidioDolosoSemanalAsync(List<ArchivoFila> filasDelitos)
     {
         var errores = new List<CargaValidacionError>();
+        var totalSinCoordenadas = 0;
 
         foreach (var fila in filasDelitos.Where(EsHomicidioDoloso))
         {
@@ -36,18 +37,7 @@ public class CatalogosValidator
 
             if (EsCoordenadaSinInformacion(valorX) || EsCoordenadaSinInformacion(valorY))
             {
-                errores.Add(new CargaValidacionError
-                {
-                    Archivo = "delitos",
-                    Fila = fila.NumeroFila,
-                    Columna = "coord_x+coord_y",
-                    Campo = "coord_x+coord_y",
-                    Valor = $"X={valorX}, Y={valorY}",
-                    Codigo = "SEMANAL_HOMICIDIO_DOLOSO_COORDENADAS_SIN_INFORMACION",
-                    DescripcionResumen = "Homicidio doloso sin coordenadas",
-                    Mensaje = "Para homicidio doloso los campos COORD_X y COORD_Y deben contener información."
-                });
-
+                totalSinCoordenadas++;
                 continue;
             }
 
@@ -100,7 +90,25 @@ public class CatalogosValidator
             });
         }
 
-        return errores;
+        CargaValidacionError? advertencia = null;
+
+        if (totalSinCoordenadas > 0)
+        {
+            advertencia = new CargaValidacionError
+            {
+                Archivo = "delitos",
+                Fila = null,
+                Columna = "coord_x+coord_y",
+                Campo = "coord_x+coord_y",
+                Valor = totalSinCoordenadas.ToString(CultureInfo.InvariantCulture),
+                Codigo = "SEMANAL_HOMICIDIO_DOLOSO_COORDENADAS_SIN_INFORMACION",
+                DescripcionResumen = "Homicidios dolosos sin coordenadas",
+                Mensaje = $"Se detectaron {totalSinCoordenadas} registros de homicidio doloso con una o ambas coordenadas vacías o con valor 0.",
+                TotalRegistrosAfectados = totalSinCoordenadas
+            };
+        }
+
+        return (errores, advertencia);
     }
 
     private async Task ValidarCatalogosVictimasAsync( List<ArchivoFila> filasVictimas, List<CargaValidacionError> errores)

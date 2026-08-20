@@ -19,4 +19,7 @@ public class CargaValidacionError
     public string DescripcionResumen { get; set; } = string.Empty;
     // Mensaje detallado del error.
     public string Mensaje { get; set; } = string.Empty;
+    // Cantidad de registros representados por este detalle.
+    // Normalmente es 1; las advertencias agrupadas pueden representar varios registros.
+    public int TotalRegistrosAfectados { get; set; } = 1;
 }
