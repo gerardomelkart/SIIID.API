@@ -10,6 +10,7 @@ public class SemanalCargaAcuseBloque
     public int MesCorte { get; set; }
     public DateTime FechaInicioTramo { get; set; }
     public DateTime FechaFinTramo { get; set; }
+    public DateTime? FechaFinInformacion { get; set; }
     public int TotalCarpetas { get; set; }
     public int TotalDelitos { get; set; }
     public int TotalVictimas { get; set; }

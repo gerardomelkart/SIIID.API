@@ -306,7 +306,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
         var esActualizacion = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
         var bloques = ObtenerBloquesAcuse(carga);
         var fechaInicio = bloques.Min(x => x.FechaInicioTramo);
-        var fechaFin = bloques.Max(x => x.FechaFinTramo);
+        var fechaFin = bloques.Max(x => x.FechaFinInformacion ?? x.FechaFinTramo);
         var periodos = bloques
             .Select(x => new { x.AnioCorte, x.MesCorte })
             .Distinct()

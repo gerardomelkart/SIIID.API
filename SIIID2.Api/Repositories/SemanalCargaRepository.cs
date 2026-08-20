@@ -101,6 +101,40 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             bloque.mes_corte AS MesCorte,
             bloque.fecha_inicio_tramo AS FechaInicioTramo,
             bloque.fecha_fin_tramo AS FechaFinTramo,
+            COALESCE
+            (
+                (
+                    SELECT MAX
+                    (
+                        COALESCE
+                        (
+                            TRY_CONVERT(date, carpeta_tmp.fha_de_ini, 103),
+                            TRY_CONVERT(date, carpeta_tmp.fha_de_ini)
+                        )
+                    )
+                    FROM dbo.semanal_carga_tmp_carpeta carpeta_tmp
+                    WHERE carpeta_tmp.id_semanal_carga = bloque.id_semanal_carga
+                      AND carpeta_tmp.incluido = 1
+                      AND carpeta_tmp.activo = 1
+                      AND COALESCE
+                      (
+                          TRY_CONVERT(date, carpeta_tmp.fha_de_ini, 103),
+                          TRY_CONVERT(date, carpeta_tmp.fha_de_ini)
+                      ) >= bloque.fecha_inicio_tramo
+                      AND COALESCE
+                      (
+                          TRY_CONVERT(date, carpeta_tmp.fha_de_ini, 103),
+                          TRY_CONVERT(date, carpeta_tmp.fha_de_ini)
+                      ) < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+                ),
+                (
+                    SELECT MAX(CONVERT(date, carpeta.fecha_inicio))
+                    FROM dbo.semanal_carpeta_investigacion carpeta
+                    WHERE carpeta.id_semanal_carga = bloque.id_semanal_carga
+                      AND carpeta.fecha_inicio >= bloque.fecha_inicio_tramo
+                      AND carpeta.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+                )
+            ) AS FechaFinInformacion,
             bloque.total_carpetas AS TotalCarpetas,
             bloque.total_delitos AS TotalDelitos,
             bloque.total_victimas AS TotalVictimas,
