@@ -43,6 +43,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         {
             var estadoRegistro = registro.Estado.Trim().ToUpperInvariant();
             var esActualizacion = string.Equals(registro.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+            var esCargaCero = registro.TotalCarpetasIncluidas == 0 && registro.TotalDelitosIncluidos == 0 && registro.TotalVictimasIncluidas == 0;
 
             registro.EsConfirmado = estadoRegistro is "CONFIRMADO" or "CONFIRMADO_ACTUALIZACION";
             registro.EsPendiente = estadoRegistro is "VALIDADO_PENDIENTE" or "VALIDADO_PENDIENTE_ACTUALIZACION" or "PENDIENTE_APROBACION";
@@ -72,7 +73,7 @@ public class SemanalEnviosService : ISemanalEnviosService
             if (registro.EsConfirmado)
             {
                 registro.EndpointAcuse = $"/api/semanal/cargas/{registro.CodigoReferencia}/acuse-confirmado";
-                registro.EndpointArchivos = $"/api/semanal/envios/{registro.CodigoReferencia}/archivos";
+                registro.EndpointArchivos = esCargaCero ? string.Empty : $"/api/semanal/envios/{registro.CodigoReferencia}/archivos";
             }
             else if (registro.EsPendiente || registro.EsRechazadoAdministrador && registro.TieneStagingDisponible)
             {
