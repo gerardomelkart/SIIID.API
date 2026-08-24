@@ -17,6 +17,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 COALESCE(bloque.id_delito, sc.id_delito) AS id_delito,
                 bloque.anio_corte,
                 bloque.mes_corte,
+                bloque.fecha_inicio_tramo,
+                bloque.fecha_fin_tramo,
                 sc.fecha_validacion
             FROM dbo.semanal_carga sc
             INNER JOIN dbo.semanal_carga_bloque bloque
@@ -25,6 +27,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             WHERE sc.activo = 1
               AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
               AND sc.estado = N'PENDIENTE_APROBACION'
+              AND bloque.anio_corte = @AnioCorte
+              AND bloque.mes_corte = @MesCorte
+              AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
+              AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
 
             UNION ALL
 
@@ -35,11 +41,17 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 sc.id_delito,
                 sc.anio_corte,
                 sc.mes_corte,
+                sc.fecha_inicio_tramo,
+                sc.fecha_fin_tramo,
                 sc.fecha_validacion
             FROM dbo.semanal_carga sc
             WHERE sc.activo = 1
               AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
               AND sc.estado = N'PENDIENTE_APROBACION'
+              AND sc.anio_corte = @AnioCorte
+              AND sc.mes_corte = @MesCorte
+              AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
+              AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
               AND NOT EXISTS
               (
                   SELECT 1
@@ -57,6 +69,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 periodo.id_delito,
                 periodo.anio_corte,
                 periodo.mes_corte,
+                periodo.fecha_inicio_tramo,
+                periodo.fecha_fin_tramo,
                 ROW_NUMBER() OVER
                 (
                     PARTITION BY
@@ -64,17 +78,15 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                         periodo.id_usuario_carga,
                         periodo.id_delito,
                         periodo.anio_corte,
-                        periodo.mes_corte
+                        periodo.mes_corte,
+                        periodo.fecha_inicio_tramo,
+                        periodo.fecha_fin_tramo
                     ORDER BY
                         periodo.fecha_validacion DESC,
                         periodo.id_semanal_carga DESC
                 ) AS rn
             FROM periodos_carga periodo
             WHERE periodo.id_delito IS NOT NULL
-              AND periodo.anio_corte = @AnioCorte
-              AND periodo.mes_corte = @MesCorte
-              AND (@IdEntidadFederativa IS NULL OR periodo.id_entidad_federativa = @IdEntidadFederativa)
-              AND (@IdUsuarioCarga IS NULL OR periodo.id_usuario_carga = @IdUsuarioCarga)
         ),
         pendientes AS
         (
@@ -84,7 +96,9 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 id_usuario_carga,
                 id_delito,
                 anio_corte,
-                mes_corte
+                mes_corte,
+                fecha_inicio_tramo,
+                fecha_fin_tramo
             FROM pendientes_rankeadas
             WHERE rn = 1
         )";
@@ -804,6 +818,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                       WHERE p.id_entidad_federativa = sc.id_entidad_federativa
                         AND p.id_usuario_carga = sc.id_usuario_carga
                         AND p.id_delito = d.id_catalogo_delito
+                        AND ci.fecha_inicio >= p.fecha_inicio_tramo
+                        AND ci.fecha_inicio < DATEADD(DAY, 1, p.fecha_fin_tramo)
                   )
               )
 
@@ -830,6 +846,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 ) AS fecha_inicio
             ) fecha
             WHERE @ModoReporte IN (N'PREVIO', N'MIXTO')
+              AND fecha.fecha_inicio >= p.fecha_inicio_tramo
+              AND fecha.fecha_inicio < DATEADD(DAY, 1, p.fecha_fin_tramo)
               AND fecha.fecha_inicio >= @FechaInicio
               AND fecha.fecha_inicio < @FechaFinExclusiva
         )
@@ -841,7 +859,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             ON ef.id_entidad_federativa = fuente.id_entidad_federativa
            AND ef.activo = 1
         ORDER BY
-            ef.nombre;
+            ef.nombre
+OPTION (RECOMPILE);
         ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
@@ -891,6 +910,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                       WHERE p.id_entidad_federativa = sc.id_entidad_federativa
                         AND p.id_usuario_carga = sc.id_usuario_carga
                         AND p.id_delito = d.id_catalogo_delito
+                        AND ci.fecha_inicio >= p.fecha_inicio_tramo
+                        AND ci.fecha_inicio < DATEADD(DAY, 1, p.fecha_fin_tramo)
                   )
               )
 
@@ -917,6 +938,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 ) AS fecha_inicio
             ) fecha
             WHERE @ModoReporte IN (N'PREVIO', N'MIXTO')
+              AND fecha.fecha_inicio >= p.fecha_inicio_tramo
+              AND fecha.fecha_inicio < DATEADD(DAY, 1, p.fecha_fin_tramo)
               AND fecha.fecha_inicio >= @FechaInicio
               AND fecha.fecha_inicio < @FechaFinExclusiva
         )
@@ -930,7 +953,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
            AND cd.activo = 1
         ORDER BY
             cd.clave2,
-            cd.delito;
+            cd.delito
+OPTION (RECOMPILE);
         ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
@@ -999,6 +1023,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                       WHERE p.id_entidad_federativa = sc.id_entidad_federativa
                         AND p.id_usuario_carga = sc.id_usuario_carga
                         AND p.id_delito = @IdDelito
+                        AND ci.fecha_inicio >= p.fecha_inicio_tramo
+                        AND ci.fecha_inicio < DATEADD(DAY, 1, p.fecha_fin_tramo)
                   )
               )
 
@@ -1031,6 +1057,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 ) AS fecha_inicio
             ) fecha
             WHERE @ModoReporte IN (N'PREVIO', N'MIXTO')
+              AND fecha.fecha_inicio >= p.fecha_inicio_tramo
+              AND fecha.fecha_inicio < DATEADD(DAY, 1, p.fecha_fin_tramo)
               AND p.id_delito = @IdDelito
               AND fecha.fecha_inicio >= @FechaInicio
               AND fecha.fecha_inicio < @FechaFinExclusiva
@@ -1048,7 +1076,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         FROM fuente
         ORDER BY
             [Nombre entidad],
-            id_ci;
+            id_ci
+OPTION (RECOMPILE);
         ";
 
         return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, modoReporte, idEntidadFederativa, idUsuarioCarga);
@@ -1186,7 +1215,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         ORDER BY
             [Nombre entidad],
             id_ci,
-            id_delito;
+            id_delito
+OPTION (RECOMPILE);
         ";
 
         return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, modoReporte, idEntidadFederativa, idUsuarioCarga);
@@ -1257,6 +1287,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                       WHERE p.id_entidad_federativa = sc.id_entidad_federativa
                         AND p.id_usuario_carga = sc.id_usuario_carga
                         AND p.id_delito = @IdDelito
+                        AND ci.fecha_inicio >= p.fecha_inicio_tramo
+                        AND ci.fecha_inicio < DATEADD(DAY, 1, p.fecha_fin_tramo)
                   )
               )
 
@@ -1304,6 +1336,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 ) AS fecha_inicio
             ) fecha
             WHERE @ModoReporte IN (N'PREVIO', N'MIXTO')
+              AND fecha.fecha_inicio >= p.fecha_inicio_tramo
+              AND fecha.fecha_inicio < DATEADD(DAY, 1, p.fecha_fin_tramo)
               AND p.id_delito = @IdDelito
               AND fecha.fecha_inicio >= @FechaInicio
               AND fecha.fecha_inicio < @FechaFinExclusiva
@@ -1314,7 +1348,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             [Nombre entidad],
             id_ci,
             id_delito,
-            id_vicf;
+            id_vicf
+OPTION (RECOMPILE);
         ";
 
         return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, modoReporte, idEntidadFederativa, idUsuarioCarga);

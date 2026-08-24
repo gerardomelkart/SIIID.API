@@ -443,12 +443,24 @@ public class SemanalEnviosService : ISemanalEnviosService
         int? idEntidadListado = usuarioConsulta.EsSuperUsuario ? null : idEntidadEfectiva;
         int? idUsuarioListado = usuarioConsulta.EsSuperUsuario ? null : idUsuarioCargaEfectivo;
 
-        var entidades = await _semanalEnviosRepository.ObtenerEntidadesReportePreliminarAsync(
+        var entidadesTask = _semanalEnviosRepository.ObtenerEntidadesReportePreliminarAsync(
             anioCorte,
             mesCorte,
             modo,
             idEntidadListado,
             idUsuarioListado);
+
+        var delitosTask = _semanalEnviosRepository.ObtenerDelitosReportePreliminarAsync(
+            anioCorte,
+            mesCorte,
+            modo,
+            idEntidadEfectiva,
+            idUsuarioCargaEfectivo);
+
+        await Task.WhenAll(entidadesTask, delitosTask);
+
+        var entidades = entidadesTask.Result;
+        var delitos = delitosTask.Result;
 
         if (usuarioConsulta.EsSuperUsuario &&
             idEntidadEfectiva.HasValue &&
@@ -456,13 +468,6 @@ public class SemanalEnviosService : ISemanalEnviosService
         {
             throw new InvalidOperationException("La entidad seleccionada no tiene información preliminar disponible para el periodo y estado solicitados.");
         }
-
-        var delitos = await _semanalEnviosRepository.ObtenerDelitosReportePreliminarAsync(
-            anioCorte,
-            mesCorte,
-            modo,
-            idEntidadEfectiva,
-            idUsuarioCargaEfectivo);
 
         return (modo, idEntidadEfectiva, idUsuarioCargaEfectivo, entidades, delitos);
     }
