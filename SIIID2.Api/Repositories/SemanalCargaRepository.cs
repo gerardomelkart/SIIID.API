@@ -576,6 +576,35 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             FROM dbo.semanal_carga
             WHERE id_semanal_carga = @IdSemanalCarga
         );
+
+        SELECT DISTINCT
+            bloque.fecha_inicio_tramo,
+            DATEADD(DAY, 1, bloque.fecha_fin_tramo) AS fecha_fin_exclusiva
+        INTO #BloquesComparacion
+        FROM dbo.semanal_carga_bloque bloque
+        WHERE bloque.id_semanal_carga = @IdSemanalCarga
+          AND bloque.id_entidad_federativa = @IdEntidadFederativa
+          AND bloque.reemplaza_informacion = 1
+          AND bloque.activo = 1;
+
+        CREATE CLUSTERED INDEX IX_BloquesComparacion
+        ON #BloquesComparacion(fecha_inicio_tramo, fecha_fin_exclusiva);
+
+        SELECT
+            sc.id_semanal_carga,
+            sc.fecha_confirmacion
+        INTO #CargasConfirmadas
+        FROM dbo.semanal_carga sc
+        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
+          AND sc.id_usuario_carga = @IdUsuarioCarga
+          AND sc.id_delito = @IdDelito
+          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+          AND sc.activo = 1;
+
+        CREATE UNIQUE CLUSTERED INDEX IX_CargasConfirmadas
+        ON #CargasConfirmadas(id_semanal_carga);
+
         SELECT
             sc.id_semanal_carga AS IdSemanalCarga,
             sc.fecha_confirmacion AS FechaConfirmacion,
@@ -593,25 +622,15 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES
             ) AS Datos
         FROM dbo.semanal_carpeta_investigacion ci
-        INNER JOIN dbo.semanal_carga sc
+        INNER JOIN #CargasConfirmadas sc
             ON sc.id_semanal_carga = ci.id_semanal_carga
-        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.id_usuario_carga = @IdUsuarioCarga
-          AND sc.id_delito = @IdDelito
-          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-          AND sc.activo = 1
-          AND ci.activo = 1
+        WHERE ci.activo = 1
           AND EXISTS
           (
               SELECT 1
-              FROM dbo.semanal_carga_bloque bloque
-              WHERE bloque.id_semanal_carga = @IdSemanalCarga
-                AND bloque.id_entidad_federativa = @IdEntidadFederativa
-                AND bloque.reemplaza_informacion = 1
-                AND bloque.activo = 1
-                AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
-                AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+              FROM #BloquesComparacion bloque
+              WHERE ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                AND ci.fecha_inicio < bloque.fecha_fin_exclusiva
           );
 
         SELECT
@@ -646,7 +665,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         INNER JOIN dbo.semanal_carpeta_investigacion ci
             ON ci.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
            AND ci.activo = 1
-        INNER JOIN dbo.semanal_carga sc
+        INNER JOIN #CargasConfirmadas sc
             ON sc.id_semanal_carga = d.id_semanal_carga
         INNER JOIN dbo.catalogo_forma_accion fa
             ON fa.id_forma_accion = d.id_forma_accion
@@ -660,23 +679,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             ON mun.id_municipio = d.id_municipio
         LEFT JOIN dbo.catalogo_codigo_postal cp
             ON cp.id_codigo_postal = d.id_codigo_postal
-        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.id_usuario_carga = @IdUsuarioCarga
-          AND sc.id_delito = @IdDelito
-          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-          AND sc.activo = 1
-          AND d.activo = 1
+        WHERE d.activo = 1
           AND EXISTS
           (
               SELECT 1
-              FROM dbo.semanal_carga_bloque bloque
-              WHERE bloque.id_semanal_carga = @IdSemanalCarga
-                AND bloque.id_entidad_federativa = @IdEntidadFederativa
-                AND bloque.reemplaza_informacion = 1
-                AND bloque.activo = 1
-                AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
-                AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+              FROM #BloquesComparacion bloque
+              WHERE ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                AND ci.fecha_inicio < bloque.fecha_fin_exclusiva
           );
 
         SELECT
@@ -706,7 +715,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         INNER JOIN dbo.semanal_carpeta_investigacion ci
             ON ci.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
            AND ci.activo = 1
-        INNER JOIN dbo.semanal_carga sc
+        INNER JOIN #CargasConfirmadas sc
             ON sc.id_semanal_carga = v.id_semanal_carga
         INNER JOIN dbo.catalogo_tipo_victima tv
             ON tv.id_tipo_victima = v.id_tipo_victima
@@ -722,24 +731,17 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             ON pob.id_pertenece_poblacion_indigena = v.id_pertenece_poblacion_indigena
         LEFT JOIN dbo.catalogo_presenta_discapacidad disc
             ON disc.id_presenta_discapacidad = v.id_presenta_discapacidad
-        WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.id_usuario_carga = @IdUsuarioCarga
-          AND sc.id_delito = @IdDelito
-          AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-          AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-          AND sc.activo = 1
-          AND v.activo = 1
+        WHERE v.activo = 1
           AND EXISTS
           (
               SELECT 1
-              FROM dbo.semanal_carga_bloque bloque
-              WHERE bloque.id_semanal_carga = @IdSemanalCarga
-                AND bloque.id_entidad_federativa = @IdEntidadFederativa
-                AND bloque.reemplaza_informacion = 1
-                AND bloque.activo = 1
-                AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
-                AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+              FROM #BloquesComparacion bloque
+              WHERE ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                AND ci.fecha_inicio < bloque.fecha_fin_exclusiva
           );
+
+        DROP TABLE #CargasConfirmadas;
+        DROP TABLE #BloquesComparacion;
         ";
 
         using var connection = _dbConnectionFactory.CrearConexion();

@@ -588,38 +588,73 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 AND bloque.activo = 1
           )
     ),
-    periodos AS
+    reporte AS
     (
         SELECT
-            bloque.id_entidad_federativa,
-            bloque.id_usuario_carga,
-            bloque.id_delito,
-            bloque.fecha_inicio_semana,
-            bloque.fecha_fin_semana,
-            bloque.anio_corte,
-            bloque.mes_corte,
-            COUNT(DISTINCT bloque.id_semanal_carga) AS intentos
+            bloque.*,
+            COUNT(1) OVER
+            (
+                PARTITION BY
+                    bloque.id_entidad_federativa,
+                    bloque.id_usuario_carga,
+                    bloque.id_delito,
+                    bloque.fecha_inicio_semana,
+                    bloque.fecha_fin_semana,
+                    bloque.anio_corte,
+                    bloque.mes_corte
+            ) AS intentos,
+            MIN
+            (
+                CASE
+                    WHEN bloque.estado IN
+                    (
+                        N'VALIDADO_PENDIENTE',
+                        N'VALIDADO_PENDIENTE_ACTUALIZACION',
+                        N'PENDIENTE_APROBACION',
+                        N'CONFIRMADO',
+                        N'CONFIRMADO_ACTUALIZACION'
+                    )
+                    THEN bloque.fecha_validacion
+                    ELSE NULL
+                END
+            ) OVER
+            (
+                PARTITION BY
+                    bloque.id_entidad_federativa,
+                    bloque.id_usuario_carga,
+                    bloque.id_delito,
+                    bloque.fecha_inicio_semana,
+                    bloque.fecha_fin_semana,
+                    bloque.anio_corte,
+                    bloque.mes_corte
+            ) AS fecha_carga_exitosa,
+            ROW_NUMBER() OVER
+            (
+                PARTITION BY
+                    bloque.id_entidad_federativa,
+                    bloque.id_usuario_carga,
+                    bloque.id_delito,
+                    bloque.fecha_inicio_semana,
+                    bloque.fecha_fin_semana,
+                    bloque.anio_corte,
+                    bloque.mes_corte
+                ORDER BY
+                    COALESCE(bloque.fecha_confirmacion, bloque.fecha_validacion, bloque.fecha_carga) DESC,
+                    bloque.id_semanal_carga DESC
+            ) AS rn
         FROM bloques_carga bloque
         WHERE (@IdEntidadFederativa IS NULL OR bloque.id_entidad_federativa = @IdEntidadFederativa)
           AND (@IdUsuarioCarga IS NULL OR bloque.id_usuario_carga = @IdUsuarioCarga)
           AND (@AnioCorte IS NULL OR bloque.anio_corte = @AnioCorte)
           AND (@MesCorte IS NULL OR bloque.mes_corte = @MesCorte)
-        GROUP BY
-            bloque.id_entidad_federativa,
-            bloque.id_usuario_carga,
-            bloque.id_delito,
-            bloque.fecha_inicio_semana,
-            bloque.fecha_fin_semana,
-            bloque.anio_corte,
-            bloque.mes_corte
     )
     SELECT
-        periodo.id_entidad_federativa AS IdEntidadFederativa,
+        ultimo.id_entidad_federativa AS IdEntidadFederativa,
         entidad.nombre AS EntidadFederativa,
         entidad.clave AS ClaveEntidad,
-        periodo.id_delito AS IdDelito,
+        ultimo.id_delito AS IdDelito,
         catalogo_delito.delito AS Delito,
-        periodo.id_usuario_carga AS IdUsuarioCarga,
+        ultimo.id_usuario_carga AS IdUsuarioCarga,
         usuario.usuario AS UsuarioCarga,
         COALESCE
         (
@@ -639,91 +674,49 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             ),
             usuario.usuario
         ) AS NombreUsuarioCarga,
-        periodo.fecha_inicio_semana AS FechaInicioSemana,
-        periodo.fecha_fin_semana AS FechaFinSemana,
-        periodo.anio_corte AS AnioCorte,
-        periodo.mes_corte AS MesCorte,
-        periodo.intentos AS Intentos,
+        ultimo.fecha_inicio_semana AS FechaInicioSemana,
+        ultimo.fecha_fin_semana AS FechaFinSemana,
+        ultimo.anio_corte AS AnioCorte,
+        ultimo.mes_corte AS MesCorte,
+        ultimo.intentos AS Intentos,
         ultimo.codigo_referencia AS UltimoIntento,
         ultimo.tipo_carga AS TipoCargaUltimoIntento,
         ultimo.estado AS EstatusUltimoIntento,
-        ultimo.fecha_carga_actualizacion AS FechaCargaActualizacion,
-        ultimo.fecha_aprobacion AS FechaAprobacion,
-        exitosa.fecha_carga_exitosa AS FechaCargaExitosa
-    FROM periodos periodo
+        CASE
+            WHEN ultimo.estado IN
+            (
+                N'VALIDADO_PENDIENTE',
+                N'VALIDADO_PENDIENTE_ACTUALIZACION',
+                N'PENDIENTE_APROBACION',
+                N'CONFIRMADO',
+                N'CONFIRMADO_ACTUALIZACION',
+                N'RECHAZADO_ADMIN'
+            )
+            THEN ultimo.fecha_validacion
+            ELSE NULL
+        END AS FechaCargaActualizacion,
+        CASE
+            WHEN ultimo.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
+            THEN ultimo.fecha_confirmacion
+            ELSE NULL
+        END AS FechaAprobacion,
+        ultimo.fecha_carga_exitosa AS FechaCargaExitosa
+    FROM reporte ultimo
     INNER JOIN dbo.usuario usuario
-        ON usuario.id_usuario = periodo.id_usuario_carga
+        ON usuario.id_usuario = ultimo.id_usuario_carga
     INNER JOIN dbo.catalogo_entidad_federativa entidad
-        ON entidad.id_entidad_federativa = periodo.id_entidad_federativa
+        ON entidad.id_entidad_federativa = ultimo.id_entidad_federativa
     INNER JOIN dbo.catalogo_delito catalogo_delito
-        ON catalogo_delito.id_delito = periodo.id_delito
-    OUTER APPLY
-    (
-        SELECT TOP (1)
-            bloque.codigo_referencia,
-            bloque.tipo_carga,
-            bloque.estado,
-            CASE
-                WHEN bloque.estado IN
-                (
-                    N'VALIDADO_PENDIENTE',
-                    N'VALIDADO_PENDIENTE_ACTUALIZACION',
-                    N'PENDIENTE_APROBACION',
-                    N'CONFIRMADO',
-                    N'CONFIRMADO_ACTUALIZACION',
-                    N'RECHAZADO_ADMIN'
-                )
-                THEN bloque.fecha_validacion
-                ELSE NULL
-            END AS fecha_carga_actualizacion,
-            CASE
-                WHEN bloque.estado IN
-                (
-                    N'CONFIRMADO',
-                    N'CONFIRMADO_ACTUALIZACION'
-                )
-                THEN bloque.fecha_confirmacion
-                ELSE NULL
-            END AS fecha_aprobacion
-        FROM bloques_carga bloque
-        WHERE bloque.id_entidad_federativa = periodo.id_entidad_federativa
-          AND bloque.id_usuario_carga = periodo.id_usuario_carga
-          AND bloque.id_delito = periodo.id_delito
-          AND bloque.fecha_inicio_semana = periodo.fecha_inicio_semana
-          AND bloque.fecha_fin_semana = periodo.fecha_fin_semana
-          AND bloque.anio_corte = periodo.anio_corte
-          AND bloque.mes_corte = periodo.mes_corte
-        ORDER BY
-            COALESCE(bloque.fecha_confirmacion, bloque.fecha_validacion, bloque.fecha_carga) DESC,
-            bloque.id_semanal_carga DESC
-    ) ultimo
-    OUTER APPLY
-    (
-        SELECT MIN(bloque.fecha_validacion) AS fecha_carga_exitosa
-        FROM bloques_carga bloque
-        WHERE bloque.id_entidad_federativa = periodo.id_entidad_federativa
-          AND bloque.id_usuario_carga = periodo.id_usuario_carga
-          AND bloque.id_delito = periodo.id_delito
-          AND bloque.fecha_inicio_semana = periodo.fecha_inicio_semana
-          AND bloque.fecha_fin_semana = periodo.fecha_fin_semana
-          AND bloque.anio_corte = periodo.anio_corte
-          AND bloque.mes_corte = periodo.mes_corte
-          AND bloque.estado IN
-          (
-              N'VALIDADO_PENDIENTE',
-              N'VALIDADO_PENDIENTE_ACTUALIZACION',
-              N'PENDIENTE_APROBACION',
-              N'CONFIRMADO',
-              N'CONFIRMADO_ACTUALIZACION'
-          )
-    ) exitosa
+        ON catalogo_delito.id_delito = ultimo.id_delito
+    WHERE ultimo.rn = 1
     ORDER BY
-        periodo.anio_corte DESC,
-        periodo.mes_corte DESC,
-        periodo.fecha_inicio_semana DESC,
+        ultimo.anio_corte DESC,
+        ultimo.mes_corte DESC,
+        ultimo.fecha_inicio_semana DESC,
         entidad.nombre,
         usuario.usuario,
-        catalogo_delito.delito;
+        catalogo_delito.delito
+    OPTION (RECOMPILE);
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();

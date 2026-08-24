@@ -130,21 +130,12 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
     private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasCarpetasAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
     {
         var sql = @"
-            ;WITH carpetas_actuales_base AS (
+            ;WITH carpetas_actuales AS (
                 SELECT
-                    ci.id_carpeta_investigacion,
                     ci.identificador_carpeta_fiscalia,
                     ci.nomenclatura_carpeta_fiscalia,
                     ci.fecha_inicio,
-                    ci.resumen_hechos,
-                    ROW_NUMBER() OVER
-                    (
-                        PARTITION BY ci.identificador_carpeta_fiscalia
-                        ORDER BY
-                            ISNULL(c.fecha_confirmacion, '19000101') DESC,
-                            ci.id_carga DESC,
-                            ci.id_carpeta_investigacion DESC
-                    ) AS rn
+                    ci.resumen_hechos
                 FROM carpeta_investigacion ci
                 INNER JOIN carga c
                     ON c.id_carga = ci.id_carga
@@ -154,15 +145,6 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                   AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
                   AND c.activo = 1
                   AND ci.activo = 1
-            ),
-            carpetas_actuales AS (
-                SELECT
-                    identificador_carpeta_fiscalia,
-                    nomenclatura_carpeta_fiscalia,
-                    fecha_inicio,
-                    resumen_hechos
-                FROM carpetas_actuales_base
-                WHERE rn = 1
             ),
             carpetas_tmp AS (
             SELECT
@@ -314,9 +296,8 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
     private static async Task<List<ActualizacionDiferenciaRow>>ObtenerDiferenciasDelitosAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
     {
         var sql = @"
-        ;WITH delitos_actuales_base AS (
+        ;WITH delitos_actuales AS (
             SELECT
-                d.id_delito,
                 ci.identificador_carpeta_fiscalia AS id_ci,
                 d.identificador_delito_fiscalia,
                 d.delito_fiscalia,
@@ -342,17 +323,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 md.clave4 AS clasf_de_dto_valor,
                 ef.clave AS id_ent_hchos_valor,
                 mun.clave AS id_mun_hchos_valor,
-                ccp.codigo_postal AS cp_valor,
-                ROW_NUMBER() OVER
-                (
-                    PARTITION BY
-                        ci.identificador_carpeta_fiscalia,
-                        d.identificador_delito_fiscalia
-                    ORDER BY
-                        ISNULL(c.fecha_confirmacion, '19000101') DESC,
-                        d.id_carga DESC,
-                        d.id_delito DESC
-                ) AS rn
+                ccp.codigo_postal AS cp_valor
             FROM delito d
             INNER JOIN carpeta_investigacion ci
                 ON ci.id_carpeta_investigacion = d.id_carpeta_investigacion
@@ -379,37 +350,6 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
               AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
               AND c.activo = 1
               AND d.activo = 1
-        ),
-delitos_actuales AS (
-    SELECT
-        id_ci,
-        identificador_delito_fiscalia,
-        delito_fiscalia,
-        modalidad_delito_fiscalia,
-        id_forma_accion,
-        fecha_hechos,
-        id_instrumento_comision,
-        id_grado_consumacion,
-        id_modalidad_delito,
-        id_entidad_federativa,
-        id_municipio,
-        id_localidad_fiscalia,
-        localidad_fiscalia_nombre,
-        id_colonia_fiscalia,
-        colonia_fiscalia_nombre,
-        id_codigo_postal,
-        coordenada_x,
-        coordenada_y,
-        domicilio_hechos,
-        forma_acc_valor,
-        emto_com_dto_valor,
-        grdo_cons_valor,
-        clasf_de_dto_valor,
-        id_ent_hchos_valor,
-        id_mun_hchos_valor,
-        cp_valor
-    FROM delitos_actuales_base
-    WHERE rn = 1
 ),
         delitos_tmp AS (
             SELECT
@@ -662,9 +602,8 @@ delitos_actuales AS (
     private static async Task<List<ActualizacionDiferenciaRow>>ObtenerDiferenciasVictimasAsync(IDbConnection connection, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
     {
         var sql = @"
-        ;WITH victimas_actuales_base AS (
+        ;WITH victimas_actuales AS (
             SELECT
-                v.id_victima,
                 ci.identificador_carpeta_fiscalia AS id_ci,
                 d.identificador_delito_fiscalia AS id_delito_fiscalia,
                 v.identificador_victima_fiscalia,
@@ -683,18 +622,7 @@ delitos_actuales AS (
                 CONVERT(varchar(50), gen.clave) AS genero_valor,
                 nac.clave AS nacional_valor,
                 CONVERT(varchar(50), pob.clave) AS pob_valor,
-                CONVERT(varchar(50), disc.clave) AS disc_valor,
-                ROW_NUMBER() OVER
-                (
-                    PARTITION BY
-                        ci.identificador_carpeta_fiscalia,
-                        d.identificador_delito_fiscalia,
-                        v.identificador_victima_fiscalia
-                    ORDER BY
-                        ISNULL(c.fecha_confirmacion, '19000101') DESC,
-                        v.id_carga DESC,
-                        v.id_victima DESC
-                ) AS rn
+                CONVERT(varchar(50), disc.clave) AS disc_valor
             FROM victima v
             INNER JOIN delito d
                 ON d.id_delito = v.id_delito
@@ -724,30 +652,6 @@ delitos_actuales AS (
               AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
               AND c.activo = 1
               AND v.activo = 1
-        ),
-victimas_actuales AS (
-    SELECT
-        id_ci,
-        id_delito_fiscalia,
-        identificador_victima_fiscalia,
-        id_tipo_victima,
-        id_tipo_victima_moral,
-        id_sexo,
-        id_genero,
-        id_nacionalidad,
-        id_pertenece_poblacion_indigena,
-        id_presenta_discapacidad,
-        fecha_nacimiento,
-        edad,
-        id_tv_valor,
-        id_tpm_valor,
-        sexo_valor,
-        genero_valor,
-        nacional_valor,
-        pob_valor,
-        disc_valor
-    FROM victimas_actuales_base
-    WHERE rn = 1
 ),
         victimas_tmp AS (
             SELECT
