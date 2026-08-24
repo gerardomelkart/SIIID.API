@@ -1157,6 +1157,8 @@ OPTION (RECOMPILE);
                       WHERE p.id_entidad_federativa = sc.id_entidad_federativa
                         AND p.id_usuario_carga = sc.id_usuario_carga
                         AND p.id_delito = @IdDelito
+                        AND ci.fecha_inicio >= p.fecha_inicio_tramo
+                        AND ci.fecha_inicio < DATEADD(DAY, 1, p.fecha_fin_tramo)
                   )
               )
 
@@ -1206,6 +1208,8 @@ OPTION (RECOMPILE);
                 ) AS fecha_inicio
             ) fecha
             WHERE @ModoReporte IN (N'PREVIO', N'MIXTO')
+              AND fecha.fecha_inicio >= p.fecha_inicio_tramo
+              AND fecha.fecha_inicio < DATEADD(DAY, 1, p.fecha_fin_tramo)
               AND p.id_delito = @IdDelito
               AND fecha.fecha_inicio >= @FechaInicio
               AND fecha.fecha_inicio < @FechaFinExclusiva
