@@ -76,6 +76,7 @@ builder.Services.AddScoped<IDbConnectionFactory, SqlServerConnectionFactory>();
 builder.Services.AddScoped<ICatalogoRepository, CatalogoRepository>();
 builder.Services.AddScoped<IFederalCatalogoRepository, FederalCatalogoRepository>();
 builder.Services.AddScoped<IFederalCargaRepository, FederalCargaRepository>();
+builder.Services.AddScoped<IFederalAcuseRepository, FederalAcuseRepository>();
 
 // Registro de validadores específicos por archivo, validación cruzada y catálogos.
 builder.Services.AddScoped<CarpetasValidator>();
@@ -107,6 +108,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Registro del servicio de generación de acuses PDF.
 builder.Services.AddScoped<IAcusePdfService, AcusePdfService>();
+builder.Services.AddScoped<IFederalAcusePdfService, FederalAcusePdfService>();
 
 // Registro del servicio de usuarios.
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();

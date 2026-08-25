@@ -14,11 +14,13 @@ public class FederalCargasController : ControllerBase
 {
     private readonly IFederalCargaArchivosService _federalCargaArchivosService;
     private readonly IFederalCargaRepository _federalCargaRepository;
+    private readonly IFederalAcusePdfService _federalAcusePdfService;
 
-    public FederalCargasController(IFederalCargaArchivosService federalCargaArchivosService, IFederalCargaRepository federalCargaRepository)
+    public FederalCargasController(IFederalCargaArchivosService federalCargaArchivosService, IFederalCargaRepository federalCargaRepository, IFederalAcusePdfService federalAcusePdfService)
     {
         _federalCargaArchivosService = federalCargaArchivosService;
         _federalCargaRepository = federalCargaRepository;
+        _federalAcusePdfService = federalAcusePdfService;
     }
 
     [HttpPost("validar")]
@@ -49,6 +51,36 @@ public class FederalCargasController : ControllerBase
         return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
     }
 
+    [HttpGet("{codigoReferencia}/acuse")]
+    public async Task<IActionResult> DescargarAcuse(string codigoReferencia)
+    {
+        if (!TryObtenerIdUsuario(out var idUsuarioConsulta)) return TokenInvalido();
+
+        try
+        {
+            var pdf = await _federalAcusePdfService.GenerarAcusePrevioAsync(codigoReferencia.Trim(), idUsuarioConsulta);
+            return File(pdf, "application/pdf", $"INFORME_PREVIO_FEDERAL_{codigoReferencia.Trim()}.pdf");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "FEDERAL_ACUSE_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "FEDERAL_ACUSE_NO_DISPONIBLE",
+                mensaje = ex.Message
+            });
+        }
+    }
+
     [HttpPost("confirmar")]
     public async Task<IActionResult> ConfirmarCarga([FromBody] ConfirmarCargaRequest request)
     {
@@ -66,6 +98,36 @@ public class FederalCargasController : ControllerBase
 
         var resultado = await _federalCargaRepository.ConfirmarCargaAsync(request.CodigoReferencia.Trim(), request.Aceptar, idUsuarioConfirmacion);
         return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
+    }
+
+    [HttpGet("{codigoReferencia}/acuse-confirmado")]
+    public async Task<IActionResult> DescargarAcuseConfirmado(string codigoReferencia)
+    {
+        if (!TryObtenerIdUsuario(out var idUsuarioConsulta)) return TokenInvalido();
+
+        try
+        {
+            var pdf = await _federalAcusePdfService.GenerarAcuseConfirmadoAsync(codigoReferencia.Trim(), idUsuarioConsulta);
+            return File(pdf, "application/pdf", $"ACUSE_CARGA_FEDERAL_{codigoReferencia.Trim()}.pdf");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "FEDERAL_ACUSE_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "FEDERAL_ACUSE_NO_DISPONIBLE",
+                mensaje = ex.Message
+            });
+        }
     }
 
     private bool TryObtenerIdUsuario(out int idUsuario)
