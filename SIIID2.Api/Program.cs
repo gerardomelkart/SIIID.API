@@ -75,6 +75,7 @@ builder.Services.AddScoped<IDbConnectionFactory, SqlServerConnectionFactory>();
 // Registro de repositorios.
 builder.Services.AddScoped<ICatalogoRepository, CatalogoRepository>();
 builder.Services.AddScoped<IFederalCatalogoRepository, FederalCatalogoRepository>();
+builder.Services.AddScoped<IFederalCargaRepository, FederalCargaRepository>();
 
 // Registro de validadores específicos por archivo, validación cruzada y catálogos.
 builder.Services.AddScoped<CarpetasValidator>();
@@ -97,6 +98,7 @@ builder.Services.AddScoped<ISemanalEnviosRepository, SemanalEnviosRepository>();
 // Registro del servicio principal de carga.
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.
 builder.Services.AddScoped<ICargaArchivosService, CargaArchivosService>();
+builder.Services.AddScoped<IFederalCargaArchivosService, FederalCargaArchivosService>();
 // Registro del servicio de actualizaciones.
 builder.Services.AddScoped<IActualizacionArchivosService, ActualizacionArchivosService>();
 

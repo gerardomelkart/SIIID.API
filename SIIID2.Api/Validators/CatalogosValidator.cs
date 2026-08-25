@@ -15,12 +15,22 @@ public class CatalogosValidator
 
     public async Task<List<CargaValidacionError>> ValidarAsync(List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
     {
+        return await ValidarAsync(filasCarpetas, filasDelitos, filasVictimas, "catalogo_modalidad_delito");
+    }
+
+    public async Task<List<CargaValidacionError>> ValidarFederalAsync(List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    {
+        return await ValidarAsync(filasCarpetas, filasDelitos, filasVictimas, "federal_catalogo_modalidad_delito");
+    }
+
+    private async Task<List<CargaValidacionError>> ValidarAsync(List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas, string tablaModalidadesDelito)
+    {
         var errores = new List<CargaValidacionError>();
 
         // Primero validamos catálogos del archivo de víctimas.
         await ValidarCatalogosVictimasAsync(filasVictimas, errores);
         // Validamos catálogos del archivo de delitos.
-        await ValidarCatalogosDelitosAsync(filasDelitos, errores);
+        await ValidarCatalogosDelitosAsync(filasDelitos, errores, tablaModalidadesDelito);
         // Lo dejamos separado para no mezclar demasiadas reglas en un solo paso.
         return errores;
     }
@@ -190,7 +200,7 @@ public class CatalogosValidator
         }
     }
 
-    private async Task ValidarCatalogosDelitosAsync(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    private async Task ValidarCatalogosDelitosAsync(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores, string tablaModalidadesDelito)
     {
         // Cargamos cada catálogo una sola vez.
         var formasAccion = await _catalogoRepository.ObtenerClavesNumericasActivasAsync("catalogo_forma_accion", "clave");
@@ -199,7 +209,7 @@ public class CatalogosValidator
 
         var gradosConsumacion = await _catalogoRepository.ObtenerClavesNumericasActivasAsync("catalogo_grado_consumacion", "clave");
 
-        var modalidadesDelito = await _catalogoRepository.ObtenerClavesTextoActivasAsync("catalogo_modalidad_delito", "clave4");
+        var modalidadesDelito = await _catalogoRepository.ObtenerClavesTextoActivasAsync(tablaModalidadesDelito, "clave4");
 
         var idsEntidadesFederativas = await _catalogoRepository.ObtenerClavesNumericasActivasAsync("catalogo_entidad_federativa", "id_entidad_federativa");
 
