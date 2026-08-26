@@ -94,20 +94,7 @@ public class ActualizacionesController : ControllerBase
             });
         }
 
-        if (limitePorSeccion < 0)
-        {
-            limitePorSeccion = 100;
-        }
-
-        if (limitePorSeccion <= 0)
-        {
-            limitePorSeccion = 100;
-        }
-
-        if (limitePorSeccion > 200)
-        {
-            limitePorSeccion = 200;
-        }
+        limitePorSeccion = Math.Clamp(limitePorSeccion, 0, 200);
 
         var resultado = await _actualizacionArchivosService.ObtenerDetalleDiferenciasAsync(
             codigoReferencia,
@@ -119,7 +106,7 @@ public class ActualizacionesController : ControllerBase
             return BadRequest(resultado);
         }
 
-        await CodigoPostalActualizacionHelper.AplicarDetalleAsync(_dbConnectionFactory, codigoReferencia, resultado, limitePorSeccion);
+        if (limitePorSeccion > 0) await CodigoPostalActualizacionHelper.AplicarDetalleAsync(_dbConnectionFactory, codigoReferencia, resultado, limitePorSeccion);
 
         return Ok(resultado);
     }

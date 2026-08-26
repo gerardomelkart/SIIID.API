@@ -59,6 +59,18 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             return null;
         }
 
+        if (limitePorSeccion == 0)
+        {
+            return new ActualizacionDiferenciasResponse
+            {
+                IdCarga = contexto.IdCarga,
+                EsValido = true,
+                CodigoReferencia = codigoReferencia,
+                LimitePorSeccion = 0,
+                Mensaje = "Resumen de diferencias obtenido correctamente."
+            };
+        }
+
         var filas = new List<ActualizacionDiferenciaRow>();
 
         filas.AddRange(await ObtenerDiferenciasCarpetasAsync(

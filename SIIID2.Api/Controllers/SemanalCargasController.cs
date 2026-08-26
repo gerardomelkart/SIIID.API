@@ -75,7 +75,7 @@ public class SemanalCargasController : ControllerBase
 
         limitePorSeccion = Math.Clamp(
             limitePorSeccion,
-            1,
+            0,
             200);
 
         var resultado =

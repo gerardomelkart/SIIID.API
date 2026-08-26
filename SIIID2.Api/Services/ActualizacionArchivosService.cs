@@ -1012,12 +1012,14 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             else if (item.Codigo.EndsWith("_ELIMINADO", StringComparison.OrdinalIgnoreCase)) destino.Eliminados += item.TotalRegistros;
         }
 
-        response.ResumenTotal = new ActualizacionDiferenciasResumen
+        if (response.LimitePorSeccion == 0)
         {
-            Nuevos = response.ResumenCarpetas.Nuevos + response.ResumenDelitos.Nuevos + response.ResumenVictimas.Nuevos,
-            Modificados = response.ResumenCarpetas.Modificados + response.ResumenDelitos.Modificados + response.ResumenVictimas.Modificados,
-            Eliminados = response.ResumenCarpetas.Eliminados + response.ResumenDelitos.Eliminados + response.ResumenVictimas.Eliminados
-        };
+            response.TotalCarpetas = response.ResumenCarpetas.Nuevos + response.ResumenCarpetas.Modificados + response.ResumenCarpetas.Eliminados;
+            response.TotalDelitos = response.ResumenDelitos.Nuevos + response.ResumenDelitos.Modificados + response.ResumenDelitos.Eliminados;
+            response.TotalVictimas = response.ResumenVictimas.Nuevos + response.ResumenVictimas.Modificados + response.ResumenVictimas.Eliminados;
+            response.TotalDiferencias = response.TotalCarpetas + response.TotalDelitos + response.TotalVictimas;
+            response.DetalleLimitado = response.TotalDiferencias > 0;
+        }
     }
 
     public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(ConfirmarCargaRequest request, int idUsuarioConfirmacion)

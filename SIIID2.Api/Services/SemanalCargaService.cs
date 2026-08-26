@@ -978,30 +978,30 @@ public class SemanalCargaService : ISemanalCargaService
             LimitePorSeccion = limitePorSeccion
         };
 
-        AgregarDiferenciasSeccion(
-            datosNuevos.Carpetas,
-            datosConfirmados.Carpetas,
-            new[] { "id_ci" },
-            ColumnasCarpetasComparacion,
-            response.Carpetas);
+        response.ResumenCarpetas = AgregarDiferenciasSeccion(
+           datosNuevos.Carpetas,
+           datosConfirmados.Carpetas,
+           new[] { "id_ci" },
+           ColumnasCarpetasComparacion,
+           response.Carpetas,
+           limitePorSeccion);
 
-        AgregarDiferenciasSeccion(
+        response.ResumenDelitos = AgregarDiferenciasSeccion(
             datosNuevos.Delitos,
             datosConfirmados.Delitos,
             new[] { "id_ci", "id_delito" },
             ColumnasDelitosComparacion,
-            response.Delitos);
+            response.Delitos,
+            limitePorSeccion);
 
-        AgregarDiferenciasSeccion(
+        response.ResumenVictimas = AgregarDiferenciasSeccion(
             datosNuevos.Victimas,
             datosConfirmados.Victimas,
             new[] { "id_ci", "id_delito", "id_vicf" },
             ColumnasVictimasComparacion,
-            response.Victimas);
+            response.Victimas,
+            limitePorSeccion);
 
-        response.ResumenCarpetas = CrearResumenMovimientos(response.Carpetas);
-        response.ResumenDelitos = CrearResumenMovimientos(response.Delitos);
-        response.ResumenVictimas = CrearResumenMovimientos(response.Victimas);
         response.ResumenTotal = new ActualizacionDiferenciasResumen
         {
             Nuevos = response.ResumenCarpetas.Nuevos + response.ResumenDelitos.Nuevos + response.ResumenVictimas.Nuevos,
@@ -1009,30 +1009,18 @@ public class SemanalCargaService : ISemanalCargaService
             Eliminados = response.ResumenCarpetas.Eliminados + response.ResumenDelitos.Eliminados + response.ResumenVictimas.Eliminados
         };
 
-        response.TotalCarpetas = response.Carpetas.Count;
-        response.TotalDelitos = response.Delitos.Count;
-        response.TotalVictimas = response.Victimas.Count;
+        response.TotalCarpetas = response.ResumenCarpetas.Nuevos + response.ResumenCarpetas.Modificados + response.ResumenCarpetas.Eliminados;
+        response.TotalDelitos = response.ResumenDelitos.Nuevos + response.ResumenDelitos.Modificados + response.ResumenDelitos.Eliminados;
+        response.TotalVictimas = response.ResumenVictimas.Nuevos + response.ResumenVictimas.Modificados + response.ResumenVictimas.Eliminados;
         response.TotalDiferencias =
             response.TotalCarpetas +
             response.TotalDelitos +
             response.TotalVictimas;
 
         response.DetalleLimitado =
-            response.TotalCarpetas > limitePorSeccion ||
-            response.TotalDelitos > limitePorSeccion ||
-            response.TotalVictimas > limitePorSeccion;
-
-        response.Carpetas = response.Carpetas
-            .Take(limitePorSeccion)
-            .ToList();
-
-        response.Delitos = response.Delitos
-            .Take(limitePorSeccion)
-            .ToList();
-
-        response.Victimas = response.Victimas
-            .Take(limitePorSeccion)
-            .ToList();
+            response.TotalCarpetas > response.Carpetas.Count ||
+            response.TotalDelitos > response.Delitos.Count ||
+            response.TotalVictimas > response.Victimas.Count;
 
         response.Mensaje = response.TotalDiferencias == 0
             ? "No se detectaron diferencias entre la actualización y la versión confirmada."
@@ -1620,29 +1608,16 @@ public class SemanalCargaService : ISemanalCargaService
         return false;
     }
 
-    private static ActualizacionDiferenciasResumen CrearResumenMovimientos(IEnumerable<ActualizacionDiferenciaRegistro> registros)
+    private static ActualizacionDiferenciasResumen AgregarDiferenciasSeccion(List<ArchivoFila> nuevas, List<ArchivoFila> confirmadas, IReadOnlyCollection<string> camposIdentificador, IReadOnlyCollection<string> columnas, List<ActualizacionDiferenciaRegistro> destino, int limitePorSeccion)
     {
         var resumen = new ActualizacionDiferenciasResumen();
-
-        foreach (var registro in registros)
-        {
-            var tipoMovimiento = (registro.TipoMovimiento ?? string.Empty).Trim().ToUpperInvariant();
-
-            if (tipoMovimiento == "NUEVO") resumen.Nuevos++;
-            else if (tipoMovimiento == "MODIFICADO") resumen.Modificados++;
-            else if (tipoMovimiento == "ELIMINADO" || tipoMovimiento == "BAJA") resumen.Eliminados++;
-        }
-
-        return resumen;
-    }
-
-    private static void AgregarDiferenciasSeccion(List<ArchivoFila> nuevas, List<ArchivoFila> confirmadas, IReadOnlyCollection<string> camposIdentificador, IReadOnlyCollection<string> columnas, List<ActualizacionDiferenciaRegistro> destino)
-    {
         var nuevasPorIdentificador = CrearIndiceDiferencias(nuevas, camposIdentificador);
         var confirmadasPorIdentificador = CrearIndiceDiferencias(confirmadas, camposIdentificador);
-        var identificadores = nuevasPorIdentificador.Keys.Union(confirmadasPorIdentificador.Keys, StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        var identificadores = nuevasPorIdentificador.Keys.Union(confirmadasPorIdentificador.Keys, StringComparer.OrdinalIgnoreCase);
+        if (limitePorSeccion > 0) identificadores = identificadores.OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
         var campoIdentificador = string.Join("+", camposIdentificador);
         var camposIdentificadorSet = camposIdentificador.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var columnasComparacion = columnas.Where(columna => !camposIdentificadorSet.Contains(columna)).ToArray();
 
         foreach (var identificador in identificadores)
         {
@@ -1651,7 +1626,9 @@ public class SemanalCargaService : ISemanalCargaService
 
             if (filaAnterior == null && filaNueva != null)
             {
-                destino.Add(new ActualizacionDiferenciaRegistro
+                resumen.Nuevos++;
+
+                if (destino.Count < limitePorSeccion) destino.Add(new ActualizacionDiferenciaRegistro
                 {
                     TipoMovimiento = "NUEVO",
                     CampoIdentificador = campoIdentificador,
@@ -1669,7 +1646,9 @@ public class SemanalCargaService : ISemanalCargaService
 
             if (filaAnterior != null && filaNueva == null)
             {
-                destino.Add(new ActualizacionDiferenciaRegistro
+                resumen.Eliminados++;
+
+                if (destino.Count < limitePorSeccion) destino.Add(new ActualizacionDiferenciaRegistro
                 {
                     TipoMovimiento = "ELIMINADO",
                     CampoIdentificador = campoIdentificador,
@@ -1687,9 +1666,11 @@ public class SemanalCargaService : ISemanalCargaService
 
             if (filaAnterior == null || filaNueva == null) continue;
 
-            var camposModificados = new List<ActualizacionCampoDiferencia>();
+            var incluirDetalle = destino.Count < limitePorSeccion;
+            var modificado = false;
+            var camposModificados = incluirDetalle ? new List<ActualizacionCampoDiferencia>() : null;
 
-            foreach (var columna in columnas.Where(columna => !camposIdentificadorSet.Contains(columna)))
+            foreach (var columna in columnasComparacion)
             {
                 var valorAnterior = ObtenerValor(filaAnterior, columna);
                 var valorNuevo = ObtenerValor(filaNueva, columna);
@@ -1698,7 +1679,9 @@ public class SemanalCargaService : ISemanalCargaService
 
                 if (string.Equals(comparacionAnterior, comparacionNueva, StringComparison.Ordinal)) continue;
 
-                camposModificados.Add(new ActualizacionCampoDiferencia
+                modificado = true;
+
+                if (incluirDetalle) camposModificados!.Add(new ActualizacionCampoDiferencia
                 {
                     Campo = columna,
                     ValorAnterior = valorAnterior,
@@ -1706,16 +1689,20 @@ public class SemanalCargaService : ISemanalCargaService
                 });
             }
 
-            if (camposModificados.Count == 0) continue;
+            if (!modificado) continue;
 
-            destino.Add(new ActualizacionDiferenciaRegistro
+            resumen.Modificados++;
+
+            if (incluirDetalle) destino.Add(new ActualizacionDiferenciaRegistro
             {
                 TipoMovimiento = "MODIFICADO",
                 CampoIdentificador = campoIdentificador,
                 IdentificadorFiscalia = identificador,
-                CamposModificados = camposModificados
+                CamposModificados = camposModificados!
             });
         }
+
+        return resumen;
     }
 
     private static Dictionary<string, ArchivoFila> CrearIndiceDiferencias(IEnumerable<ArchivoFila> filas, IReadOnlyCollection<string> camposIdentificador)
