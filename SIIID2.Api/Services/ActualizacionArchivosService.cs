@@ -956,7 +956,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         return (mesCorte, anioCorte);
     }
 
-    public async Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta, int limitePorSeccion)
+    public async Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta, int limitePorSeccion, bool incluirResumen = true)
     {
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
 
@@ -986,9 +986,11 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
-        var resumen = await _actualizacionCargaRepository.ObtenerResumenDiferenciasActualizacionAsync(detalle.IdCarga);
-
-        AplicarResumenMovimientos(detalle, resumen);
+        if (incluirResumen)
+        {
+            var resumen = await _actualizacionCargaRepository.ObtenerResumenDiferenciasActualizacionAsync(detalle.IdCarga);
+            AplicarResumenMovimientos(detalle, resumen);
+        }
 
         return detalle;
     }

@@ -921,7 +921,7 @@ public class SemanalCargaService : ISemanalCargaService
         return response;
     }
 
-    public async Task<ActualizacionDiferenciasResponse> ObtenerDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta, int limitePorSeccion)
+    public async Task<ActualizacionDiferenciasResponse> ObtenerDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta, int limitePorSeccion, bool soloMuestra = false)
     {
         var codigoLimpio = codigoReferencia?.Trim() ?? string.Empty;
 
@@ -979,12 +979,13 @@ public class SemanalCargaService : ISemanalCargaService
         };
 
         response.ResumenCarpetas = AgregarDiferenciasSeccion(
-           datosNuevos.Carpetas,
-           datosConfirmados.Carpetas,
-           new[] { "id_ci" },
-           ColumnasCarpetasComparacion,
-           response.Carpetas,
-           limitePorSeccion);
+            datosNuevos.Carpetas,
+            datosConfirmados.Carpetas,
+            new[] { "id_ci" },
+            ColumnasCarpetasComparacion,
+            response.Carpetas,
+            limitePorSeccion,
+            soloMuestra);
 
         response.ResumenDelitos = AgregarDiferenciasSeccion(
             datosNuevos.Delitos,
@@ -992,7 +993,8 @@ public class SemanalCargaService : ISemanalCargaService
             new[] { "id_ci", "id_delito" },
             ColumnasDelitosComparacion,
             response.Delitos,
-            limitePorSeccion);
+            limitePorSeccion,
+            soloMuestra);
 
         response.ResumenVictimas = AgregarDiferenciasSeccion(
             datosNuevos.Victimas,
@@ -1000,7 +1002,8 @@ public class SemanalCargaService : ISemanalCargaService
             new[] { "id_ci", "id_delito", "id_vicf" },
             ColumnasVictimasComparacion,
             response.Victimas,
-            limitePorSeccion);
+            limitePorSeccion,
+            soloMuestra);
 
         response.ResumenTotal = new ActualizacionDiferenciasResumen
         {
@@ -1017,10 +1020,13 @@ public class SemanalCargaService : ISemanalCargaService
             response.TotalDelitos +
             response.TotalVictimas;
 
-        response.DetalleLimitado =
-            response.TotalCarpetas > response.Carpetas.Count ||
-            response.TotalDelitos > response.Delitos.Count ||
-            response.TotalVictimas > response.Victimas.Count;
+        response.DetalleLimitado = soloMuestra && limitePorSeccion > 0
+            ? response.Carpetas.Count >= limitePorSeccion ||
+              response.Delitos.Count >= limitePorSeccion ||
+              response.Victimas.Count >= limitePorSeccion
+            : response.TotalCarpetas > response.Carpetas.Count ||
+              response.TotalDelitos > response.Delitos.Count ||
+              response.TotalVictimas > response.Victimas.Count;
 
         response.Mensaje = response.TotalDiferencias == 0
             ? "No se detectaron diferencias entre la actualización y la versión confirmada."
@@ -1608,19 +1614,31 @@ public class SemanalCargaService : ISemanalCargaService
         return false;
     }
 
-    private static ActualizacionDiferenciasResumen AgregarDiferenciasSeccion(List<ArchivoFila> nuevas, List<ArchivoFila> confirmadas, IReadOnlyCollection<string> camposIdentificador, IReadOnlyCollection<string> columnas, List<ActualizacionDiferenciaRegistro> destino, int limitePorSeccion)
+    private static ActualizacionDiferenciasResumen AgregarDiferenciasSeccion(
+        List<ArchivoFila> nuevas,
+        List<ArchivoFila> confirmadas,
+        IReadOnlyCollection<string> camposIdentificador,
+        IReadOnlyCollection<string> columnas,
+        List<ActualizacionDiferenciaRegistro> destino,
+        int limitePorSeccion,
+        bool soloMuestra = false)
     {
         var resumen = new ActualizacionDiferenciasResumen();
         var nuevasPorIdentificador = CrearIndiceDiferencias(nuevas, camposIdentificador);
         var confirmadasPorIdentificador = CrearIndiceDiferencias(confirmadas, camposIdentificador);
-        var identificadores = nuevasPorIdentificador.Keys.Union(confirmadasPorIdentificador.Keys, StringComparer.OrdinalIgnoreCase);
-        if (limitePorSeccion > 0) identificadores = identificadores.OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+        var identificadores = nuevasPorIdentificador.Keys.Union(
+            confirmadasPorIdentificador.Keys,
+            StringComparer.OrdinalIgnoreCase);
         var campoIdentificador = string.Join("+", camposIdentificador);
         var camposIdentificadorSet = camposIdentificador.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var columnasComparacion = columnas.Where(columna => !camposIdentificadorSet.Contains(columna)).ToArray();
+        var columnasComparacion = columnas
+            .Where(columna => !camposIdentificadorSet.Contains(columna))
+            .ToArray();
 
         foreach (var identificador in identificadores)
         {
+            if (soloMuestra && limitePorSeccion > 0 && destino.Count >= limitePorSeccion) break;
+
             nuevasPorIdentificador.TryGetValue(identificador, out var filaNueva);
             confirmadasPorIdentificador.TryGetValue(identificador, out var filaAnterior);
 
@@ -1628,18 +1646,21 @@ public class SemanalCargaService : ISemanalCargaService
             {
                 resumen.Nuevos++;
 
-                if (destino.Count < limitePorSeccion) destino.Add(new ActualizacionDiferenciaRegistro
+                if (destino.Count < limitePorSeccion)
                 {
-                    TipoMovimiento = "NUEVO",
-                    CampoIdentificador = campoIdentificador,
-                    IdentificadorFiscalia = identificador,
-                    CamposModificados = columnas.Select(columna => new ActualizacionCampoDiferencia
+                    destino.Add(new ActualizacionDiferenciaRegistro
                     {
-                        Campo = columna,
-                        ValorAnterior = null,
-                        ValorNuevo = ObtenerValor(filaNueva, columna)
-                    }).ToList()
-                });
+                        TipoMovimiento = "NUEVO",
+                        CampoIdentificador = campoIdentificador,
+                        IdentificadorFiscalia = identificador,
+                        CamposModificados = columnas.Select(columna => new ActualizacionCampoDiferencia
+                        {
+                            Campo = columna,
+                            ValorAnterior = null,
+                            ValorNuevo = ObtenerValor(filaNueva, columna)
+                        }).ToList()
+                    });
+                }
 
                 continue;
             }
@@ -1648,18 +1669,21 @@ public class SemanalCargaService : ISemanalCargaService
             {
                 resumen.Eliminados++;
 
-                if (destino.Count < limitePorSeccion) destino.Add(new ActualizacionDiferenciaRegistro
+                if (destino.Count < limitePorSeccion)
                 {
-                    TipoMovimiento = "ELIMINADO",
-                    CampoIdentificador = campoIdentificador,
-                    IdentificadorFiscalia = identificador,
-                    CamposModificados = columnas.Select(columna => new ActualizacionCampoDiferencia
+                    destino.Add(new ActualizacionDiferenciaRegistro
                     {
-                        Campo = columna,
-                        ValorAnterior = ObtenerValor(filaAnterior, columna),
-                        ValorNuevo = null
-                    }).ToList()
-                });
+                        TipoMovimiento = "ELIMINADO",
+                        CampoIdentificador = campoIdentificador,
+                        IdentificadorFiscalia = identificador,
+                        CamposModificados = columnas.Select(columna => new ActualizacionCampoDiferencia
+                        {
+                            Campo = columna,
+                            ValorAnterior = ObtenerValor(filaAnterior, columna),
+                            ValorNuevo = null
+                        }).ToList()
+                    });
+                }
 
                 continue;
             }
@@ -1668,7 +1692,9 @@ public class SemanalCargaService : ISemanalCargaService
 
             var incluirDetalle = destino.Count < limitePorSeccion;
             var modificado = false;
-            var camposModificados = incluirDetalle ? new List<ActualizacionCampoDiferencia>() : null;
+            var camposModificados = incluirDetalle
+                ? new List<ActualizacionCampoDiferencia>()
+                : null;
 
             foreach (var columna in columnasComparacion)
             {
@@ -1681,25 +1707,31 @@ public class SemanalCargaService : ISemanalCargaService
 
                 modificado = true;
 
-                if (incluirDetalle) camposModificados!.Add(new ActualizacionCampoDiferencia
+                if (incluirDetalle)
                 {
-                    Campo = columna,
-                    ValorAnterior = valorAnterior,
-                    ValorNuevo = valorNuevo
-                });
+                    camposModificados!.Add(new ActualizacionCampoDiferencia
+                    {
+                        Campo = columna,
+                        ValorAnterior = valorAnterior,
+                        ValorNuevo = valorNuevo
+                    });
+                }
             }
 
             if (!modificado) continue;
 
             resumen.Modificados++;
 
-            if (incluirDetalle) destino.Add(new ActualizacionDiferenciaRegistro
+            if (incluirDetalle)
             {
-                TipoMovimiento = "MODIFICADO",
-                CampoIdentificador = campoIdentificador,
-                IdentificadorFiscalia = identificador,
-                CamposModificados = camposModificados!
-            });
+                destino.Add(new ActualizacionDiferenciaRegistro
+                {
+                    TipoMovimiento = "MODIFICADO",
+                    CampoIdentificador = campoIdentificador,
+                    IdentificadorFiscalia = identificador,
+                    CamposModificados = camposModificados!
+                });
+            }
         }
 
         return resumen;

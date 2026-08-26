@@ -79,7 +79,7 @@ public class ActualizacionesController : ControllerBase
 
     [Authorize]
     [HttpGet("diferencias/{codigoReferencia}")]
-    public async Task<IActionResult> ObtenerDiferencias(string codigoReferencia, [FromQuery] int limitePorSeccion = 100)
+    public async Task<IActionResult> ObtenerDiferencias(string codigoReferencia, [FromQuery] int limitePorSeccion = 100, [FromQuery] bool incluirResumen = true)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -99,14 +99,17 @@ public class ActualizacionesController : ControllerBase
         var resultado = await _actualizacionArchivosService.ObtenerDetalleDiferenciasAsync(
             codigoReferencia,
             idUsuarioConsulta,
-            limitePorSeccion);
+            limitePorSeccion,
+            incluirResumen);
 
-        if (!resultado.EsValido)
-        {
-            return BadRequest(resultado);
-        }
+        if (!resultado.EsValido) return BadRequest(resultado);
 
-        if (limitePorSeccion > 0) await CodigoPostalActualizacionHelper.AplicarDetalleAsync(_dbConnectionFactory, codigoReferencia, resultado, limitePorSeccion);
+        if (limitePorSeccion > 0)
+            await CodigoPostalActualizacionHelper.AplicarDetalleAsync(
+                _dbConnectionFactory,
+                codigoReferencia,
+                resultado,
+                limitePorSeccion);
 
         return Ok(resultado);
     }

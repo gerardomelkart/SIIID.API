@@ -600,7 +600,21 @@ public class SemanalCargaRepository : ISemanalCargaRepository
           AND sc.id_delito = @IdDelito
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-          AND sc.activo = 1;
+          AND sc.activo = 1
+          AND EXISTS
+          (
+              SELECT 1
+              FROM dbo.semanal_carpeta_investigacion ci
+              WHERE ci.id_semanal_carga = sc.id_semanal_carga
+                AND ci.activo = 1
+                AND EXISTS
+                (
+                    SELECT 1
+                    FROM #BloquesComparacion bloque
+                    WHERE ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                      AND ci.fecha_inicio < bloque.fecha_fin_exclusiva
+                )
+          );
 
         CREATE UNIQUE CLUSTERED INDEX IX_CargasConfirmadas
         ON #CargasConfirmadas(id_semanal_carga);
