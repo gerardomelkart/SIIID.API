@@ -1012,6 +1012,13 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             else if (item.Codigo.EndsWith("_ELIMINADO", StringComparison.OrdinalIgnoreCase)) destino.Eliminados += item.TotalRegistros;
         }
 
+        response.ResumenTotal = new ActualizacionDiferenciasResumen
+        {
+            Nuevos = response.ResumenCarpetas.Nuevos + response.ResumenDelitos.Nuevos + response.ResumenVictimas.Nuevos,
+            Modificados = response.ResumenCarpetas.Modificados + response.ResumenDelitos.Modificados + response.ResumenVictimas.Modificados,
+            Eliminados = response.ResumenCarpetas.Eliminados + response.ResumenDelitos.Eliminados + response.ResumenVictimas.Eliminados
+        };
+
         if (response.LimitePorSeccion == 0)
         {
             response.TotalCarpetas = response.ResumenCarpetas.Nuevos + response.ResumenCarpetas.Modificados + response.ResumenCarpetas.Eliminados;
