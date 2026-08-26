@@ -110,6 +110,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte, string? tipoCarga, string? estado)
     {
         const string sql = @"
+    SET NOCOUNT ON;
+
     WITH bloques_operacion AS
     (
         SELECT
@@ -126,12 +128,11 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             ON bloque.id_semanal_carga = sc.id_semanal_carga
            AND bloque.activo = 1
         WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-          AND
-          (
-              sc.estado NOT LIKE N'RECHAZADO%'
-              OR sc.estado = N'RECHAZADO_ADMIN'
-          )
+          AND (sc.estado NOT LIKE N'RECHAZADO%' OR sc.estado = N'RECHAZADO_ADMIN')
           AND sc.activo = 1
+          AND (@EsSuperUsuario = 1 OR sc.id_usuario_carga = @IdUsuarioConsulta)
+          AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
+          AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
 
         UNION ALL
 
@@ -146,12 +147,11 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga)
         FROM dbo.semanal_carga sc
         WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-          AND
-          (
-              sc.estado NOT LIKE N'RECHAZADO%'
-              OR sc.estado = N'RECHAZADO_ADMIN'
-          )
+          AND (sc.estado NOT LIKE N'RECHAZADO%' OR sc.estado = N'RECHAZADO_ADMIN')
           AND sc.activo = 1
+          AND (@EsSuperUsuario = 1 OR sc.id_usuario_carga = @IdUsuarioConsulta)
+          AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
+          AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
           AND NOT EXISTS
           (
               SELECT 1
@@ -175,20 +175,33 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                     bloque.fecha_inicio_semana,
                     bloque.anio_corte,
                     bloque.mes_corte
-                ORDER BY
-                    bloque.fecha_movimiento DESC,
-                    bloque.id_semanal_carga DESC
+                ORDER BY bloque.fecha_movimiento DESC, bloque.id_semanal_carga DESC
             ) AS rn
         FROM bloques_operacion bloque
-    ),
-    cargas_visibles AS
-    (
-        SELECT DISTINCT visible.id_semanal_carga
-        FROM ultimo_visible visible
-        WHERE visible.rn = 1
-          AND (@AnioCorte IS NULL OR visible.anio_corte = @AnioCorte)
-          AND (@MesCorte IS NULL OR visible.mes_corte = @MesCorte)
     )
+    SELECT
+        visible.id_semanal_carga,
+        visible.anio_corte,
+        visible.mes_corte
+    INTO #PeriodosVisibles
+    FROM ultimo_visible visible
+    WHERE visible.rn = 1
+    OPTION (RECOMPILE);
+
+    CREATE CLUSTERED INDEX IX_PeriodosVisibles ON #PeriodosVisibles(id_semanal_carga, anio_corte, mes_corte);
+
+    SELECT DISTINCT periodo.id_semanal_carga
+    INTO #CargasVisibles
+    FROM #PeriodosVisibles periodo
+    INNER JOIN dbo.semanal_carga sc ON sc.id_semanal_carga = periodo.id_semanal_carga
+    WHERE (@AnioCorte IS NULL OR periodo.anio_corte = @AnioCorte)
+      AND (@MesCorte IS NULL OR periodo.mes_corte = @MesCorte)
+      AND (@TipoCarga IS NULL OR sc.tipo_carga = @TipoCarga)
+      AND (@Estado IS NULL OR sc.estado = @Estado)
+    OPTION (RECOMPILE);
+
+    CREATE UNIQUE CLUSTERED INDEX IX_CargasVisibles ON #CargasVisibles(id_semanal_carga);
+
     SELECT
         sc.id_semanal_carga AS IdSemanalCarga,
         sc.codigo_referencia AS CodigoReferencia,
@@ -215,10 +228,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                     u.nombre,
                     N' ',
                     u.primer_apellido,
-                    CASE
-                        WHEN NULLIF(u.segundo_apellido, N'') IS NULL THEN N''
-                        ELSE CONCAT(N' ', u.segundo_apellido)
-                    END
+                    CASE WHEN NULLIF(u.segundo_apellido, N'') IS NULL THEN N'' ELSE CONCAT(N' ', u.segundo_apellido) END
                 ))),
                 N''
             ),
@@ -238,10 +248,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         sc.fecha_validacion AS FechaValidacion,
         sc.fecha_confirmacion AS FechaConfirmacion,
         COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) AS FechaMovimiento,
-        CASE
-            WHEN sc.estado = N'RECHAZADO_ADMIN' THEN sc.mensaje_error
-            ELSE NULL
-        END AS MotivoRechazo,
+        CASE WHEN sc.estado = N'RECHAZADO_ADMIN' THEN sc.mensaje_error ELSE NULL END AS MotivoRechazo,
         usuario_resolucion.usuario AS UsuarioResolucion,
         CONVERT
         (
@@ -272,28 +279,13 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
                 ELSE 0
             END
         ) AS TieneStagingDisponible
-    FROM cargas_visibles visible
-    INNER JOIN dbo.semanal_carga sc
-        ON sc.id_semanal_carga = visible.id_semanal_carga
-    INNER JOIN dbo.usuario u
-        ON u.id_usuario = sc.id_usuario_carga
-    LEFT JOIN dbo.catalogo_entidad_federativa ef
-        ON ef.id_entidad_federativa = sc.id_entidad_federativa
-    LEFT JOIN dbo.usuario usuario_resolucion
-        ON usuario_resolucion.id_usuario = sc.id_usuario_confirmacion
-    WHERE (@EsSuperUsuario = 1 OR sc.id_usuario_carga = @IdUsuarioConsulta)
-      AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
-      AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
-      AND (@TipoCarga IS NULL OR sc.tipo_carga = @TipoCarga)
-      AND (@Estado IS NULL OR sc.estado = @Estado)
-    ORDER BY
-        ef.nombre,
-        u.usuario,
-        COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) DESC,
-        sc.id_semanal_carga DESC;
-    ";
+    FROM #CargasVisibles visible
+    INNER JOIN dbo.semanal_carga sc ON sc.id_semanal_carga = visible.id_semanal_carga
+    INNER JOIN dbo.usuario u ON u.id_usuario = sc.id_usuario_carga
+    LEFT JOIN dbo.catalogo_entidad_federativa ef ON ef.id_entidad_federativa = sc.id_entidad_federativa
+    LEFT JOIN dbo.usuario usuario_resolucion ON usuario_resolucion.id_usuario = sc.id_usuario_confirmacion
+    ORDER BY ef.nombre, u.usuario, COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) DESC, sc.id_semanal_carga DESC;
 
-        const string sqlBloques = @"
     SELECT
         bloque.id_semanal_carga AS IdSemanalCarga,
         bloque.anio_semana AS AnioSemana,
@@ -309,102 +301,18 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         bloque.total_victimas AS TotalVictimas,
         CONVERT(bit, bloque.reemplaza_informacion) AS ReemplazaInformacion
     FROM dbo.semanal_carga_bloque bloque
-    WHERE bloque.id_semanal_carga IN @Ids
-      AND bloque.activo = 1
-    ORDER BY
-        bloque.id_semanal_carga,
-        bloque.fecha_inicio_semana,
-        bloque.anio_corte,
-        bloque.mes_corte;
-    ";
+    INNER JOIN #CargasVisibles visible ON visible.id_semanal_carga = bloque.id_semanal_carga
+    WHERE bloque.activo = 1
+    ORDER BY bloque.id_semanal_carga, bloque.fecha_inicio_semana, bloque.anio_corte, bloque.mes_corte;
 
-        const string sqlPeriodos = @"
-    WITH bloques_operacion AS
-    (
-        SELECT
-            sc.id_semanal_carga,
-            sc.id_entidad_federativa,
-            sc.id_usuario_carga,
-            sc.id_delito,
-            bloque.fecha_inicio_semana,
-            bloque.anio_corte,
-            bloque.mes_corte,
-            COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga) AS fecha_movimiento
-        FROM dbo.semanal_carga sc
-        INNER JOIN dbo.semanal_carga_bloque bloque
-            ON bloque.id_semanal_carga = sc.id_semanal_carga
-           AND bloque.activo = 1
-        WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-          AND
-          (
-              sc.estado NOT LIKE N'RECHAZADO%'
-              OR sc.estado = N'RECHAZADO_ADMIN'
-          )
-          AND sc.activo = 1
-
-        UNION ALL
-
-        SELECT
-            sc.id_semanal_carga,
-            sc.id_entidad_federativa,
-            sc.id_usuario_carga,
-            sc.id_delito,
-            sc.fecha_inicio_semana,
-            sc.anio_corte,
-            sc.mes_corte,
-            COALESCE(sc.fecha_confirmacion, sc.fecha_validacion, sc.fecha_carga)
-        FROM dbo.semanal_carga sc
-        WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
-          AND
-          (
-              sc.estado NOT LIKE N'RECHAZADO%'
-              OR sc.estado = N'RECHAZADO_ADMIN'
-          )
-          AND sc.activo = 1
-          AND NOT EXISTS
-          (
-              SELECT 1
-              FROM dbo.semanal_carga_bloque bloque
-              WHERE bloque.id_semanal_carga = sc.id_semanal_carga
-                AND bloque.activo = 1
-          )
-    ),
-    ultimo_visible AS
-    (
-        SELECT
-            bloque.id_semanal_carga,
-            bloque.anio_corte,
-            bloque.mes_corte,
-            ROW_NUMBER() OVER
-            (
-                PARTITION BY
-                    bloque.id_entidad_federativa,
-                    bloque.id_usuario_carga,
-                    bloque.id_delito,
-                    bloque.fecha_inicio_semana,
-                    bloque.anio_corte,
-                    bloque.mes_corte
-                ORDER BY
-                    bloque.fecha_movimiento DESC,
-                    bloque.id_semanal_carga DESC
-            ) AS rn
-        FROM bloques_operacion bloque
-    )
     SELECT DISTINCT
-        visible.id_semanal_carga AS IdSemanalCarga,
-        visible.anio_corte AS AnioCorte,
-        visible.mes_corte AS MesCorte
-    FROM ultimo_visible visible
-    WHERE visible.rn = 1
-      AND visible.id_semanal_carga IN @Ids
-    ORDER BY
-        visible.id_semanal_carga,
-        visible.anio_corte,
-        visible.mes_corte;
-    ";
+        periodo.id_semanal_carga AS IdSemanalCarga,
+        periodo.anio_corte AS AnioCorte,
+        periodo.mes_corte AS MesCorte
+    FROM #PeriodosVisibles periodo
+    INNER JOIN #CargasVisibles visible ON visible.id_semanal_carga = periodo.id_semanal_carga
+    ORDER BY periodo.id_semanal_carga, periodo.anio_corte, periodo.mes_corte;
 
-
-        const string sqlDelitos = @"
     WITH delitos_carga AS
     (
         SELECT
@@ -412,17 +320,11 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             cd.clave2,
             cd.delito
         FROM dbo.semanal_delito delito
-        INNER JOIN dbo.catalogo_modalidad_delito md
-            ON md.id_modalidad_delito = delito.id_modalidad_delito
-           AND md.activo = 1
-        INNER JOIN dbo.catalogo_subtipo_delito sd
-            ON sd.id_subtipo_delito = md.id_subtipo_delito
-           AND sd.activo = 1
-        INNER JOIN dbo.catalogo_delito cd
-            ON cd.id_delito = sd.id_delito
-           AND cd.activo = 1
-        WHERE delito.id_semanal_carga IN @Ids
-          AND delito.activo = 1
+        INNER JOIN #CargasVisibles visible ON visible.id_semanal_carga = delito.id_semanal_carga
+        INNER JOIN dbo.catalogo_modalidad_delito md ON md.id_modalidad_delito = delito.id_modalidad_delito AND md.activo = 1
+        INNER JOIN dbo.catalogo_subtipo_delito sd ON sd.id_subtipo_delito = md.id_subtipo_delito AND sd.activo = 1
+        INNER JOIN dbo.catalogo_delito cd ON cd.id_delito = sd.id_delito AND cd.activo = 1
+        WHERE delito.activo = 1
 
         UNION
 
@@ -431,17 +333,11 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             cd.clave2,
             cd.delito
         FROM dbo.semanal_carga_tmp_delito delito
-        INNER JOIN dbo.catalogo_modalidad_delito md
-            ON LTRIM(RTRIM(md.clave4)) = LTRIM(RTRIM(delito.clasf_de_dto))
-           AND md.activo = 1
-        INNER JOIN dbo.catalogo_subtipo_delito sd
-            ON sd.id_subtipo_delito = md.id_subtipo_delito
-           AND sd.activo = 1
-        INNER JOIN dbo.catalogo_delito cd
-            ON cd.id_delito = sd.id_delito
-           AND cd.activo = 1
-        WHERE delito.id_semanal_carga IN @Ids
-          AND delito.incluido = 1
+        INNER JOIN #CargasVisibles visible ON visible.id_semanal_carga = delito.id_semanal_carga
+        INNER JOIN dbo.catalogo_modalidad_delito md ON LTRIM(RTRIM(md.clave4)) = LTRIM(RTRIM(delito.clasf_de_dto)) AND md.activo = 1
+        INNER JOIN dbo.catalogo_subtipo_delito sd ON sd.id_subtipo_delito = md.id_subtipo_delito AND sd.activo = 1
+        INNER JOIN dbo.catalogo_delito cd ON cd.id_delito = sd.id_delito AND cd.activo = 1
+        WHERE delito.incluido = 1
           AND delito.activo = 1
 
         UNION
@@ -451,11 +347,9 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             cd.clave2,
             cd.delito
         FROM dbo.semanal_carga carga
-        INNER JOIN dbo.catalogo_delito cd
-            ON cd.id_delito = carga.id_delito
-           AND cd.activo = 1
-        WHERE carga.id_semanal_carga IN @Ids
-          AND carga.total_carpetas_incluidas = 0
+        INNER JOIN #CargasVisibles visible ON visible.id_semanal_carga = carga.id_semanal_carga
+        INNER JOIN dbo.catalogo_delito cd ON cd.id_delito = carga.id_delito AND cd.activo = 1
+        WHERE carga.total_carpetas_incluidas = 0
           AND carga.total_delitos_incluidos = 0
           AND carga.total_victimas_incluidas = 0
           AND carga.activo = 1
@@ -464,15 +358,14 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         delito.id_semanal_carga AS IdSemanalCarga,
         delito.delito AS Delito
     FROM delitos_carga delito
-    ORDER BY
-        delito.id_semanal_carga,
-        delito.clave2,
-        delito.delito;
-";
+    ORDER BY delito.id_semanal_carga, delito.clave2, delito.delito;
+
+    DROP TABLE #CargasVisibles;
+    DROP TABLE #PeriodosVisibles;
+    ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var cargas = (await connection.QueryAsync<SemanalEnvioItem>(sql, new
+        using var resultados = await connection.QueryMultipleAsync(sql, new
         {
             EsSuperUsuario = esSuperUsuario,
             IdUsuarioConsulta = idUsuarioConsulta,
@@ -482,29 +375,18 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             MesCorte = mesCorte,
             TipoCarga = tipoCarga,
             Estado = estado
-        })).ToList();
+        });
+
+        var cargas = (await resultados.ReadAsync<SemanalEnvioItem>()).ToList();
+        var bloques = (await resultados.ReadAsync<SemanalEnvioBloqueItem>()).ToList();
+        var periodos = (await resultados.ReadAsync<SemanalEnvioPeriodoItem>()).ToList();
+        var delitos = (await resultados.ReadAsync<SemanalCargaDelitoItem>()).ToList();
 
         if (cargas.Count == 0) return cargas;
 
-        var ids = cargas.Select(x => x.IdSemanalCarga).Distinct().ToArray();
-
-        var bloques = (await connection.QueryAsync<SemanalEnvioBloqueItem>(sqlBloques, new { Ids = ids })).ToList();
         var bloquesPorCarga = bloques.GroupBy(x => x.IdSemanalCarga).ToDictionary(x => x.Key, x => x.ToList());
-
-        var periodos = (await connection.QueryAsync<SemanalEnvioPeriodoItem>(sqlPeriodos, new { Ids = ids })).ToList();
         var periodosPorCarga = periodos.GroupBy(x => x.IdSemanalCarga).ToDictionary(x => x.Key, x => x.ToList());
-
-        var delitos = (await connection.QueryAsync<SemanalCargaDelitoItem>(sqlDelitos, new { Ids = ids })).ToList();
-        var delitosPorCarga = delitos
-            .GroupBy(x => x.IdSemanalCarga)
-            .ToDictionary
-            (
-                x => x.Key,
-                x => x
-                    .Select(y => y.Delito)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList()
-            );
+        var delitosPorCarga = delitos.GroupBy(x => x.IdSemanalCarga).ToDictionary(x => x.Key, x => x.Select(y => y.Delito).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
 
         foreach (var carga in cargas)
         {
