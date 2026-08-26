@@ -25,6 +25,8 @@ public class SemanalCargaPendienteAdministracionItem
     public string CodigoReferencia { get; set; } = string.Empty;
     public string TipoCarga { get; set; } = string.Empty;
     public string TipoContenido { get; set; } = string.Empty;
+    public int IdDelito { get; set; }
+    public string Delito { get; set; } = string.Empty;
     public int? IdEntidadFederativa { get; set; }
     public string EntidadFederativa { get; set; } = string.Empty;
     public int AnioSemana { get; set; }

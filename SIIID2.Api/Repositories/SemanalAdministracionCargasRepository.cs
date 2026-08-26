@@ -18,6 +18,8 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
                 sc.codigo_referencia AS CodigoReferencia,
                 sc.tipo_carga AS TipoCarga,
                 sc.tipo_contenido AS TipoContenido,
+                sc.id_delito AS IdDelito,
+                ISNULL(cd.delito, N'') AS Delito,
                 sc.id_entidad_federativa AS IdEntidadFederativa,
                 ISNULL(ef.nombre, N'') AS EntidadFederativa,
                 sc.anio_semana AS AnioSemana,
@@ -55,6 +57,8 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
             FROM dbo.semanal_carga sc
             INNER JOIN dbo.usuario u
                 ON u.id_usuario = sc.id_usuario_carga
+            LEFT JOIN dbo.catalogo_delito cd
+                ON cd.id_delito = sc.id_delito
             LEFT JOIN dbo.catalogo_entidad_federativa ef
                 ON ef.id_entidad_federativa = sc.id_entidad_federativa
             WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
@@ -115,6 +119,8 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
                 sc.codigo_referencia AS CodigoReferencia,
                 sc.tipo_carga AS TipoCarga,
                 sc.tipo_contenido AS TipoContenido,
+                sc.id_delito AS IdDelito,
+                ISNULL(cd.delito, N'') AS Delito,
                 sc.id_entidad_federativa AS IdEntidadFederativa,
                 ISNULL(ef.nombre, N'') AS EntidadFederativa,
                 sc.anio_semana AS AnioSemana,
@@ -152,6 +158,8 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
             FROM dbo.semanal_carga sc
             INNER JOIN dbo.usuario u
                 ON u.id_usuario = sc.id_usuario_carga
+            LEFT JOIN dbo.catalogo_delito cd
+                ON cd.id_delito = sc.id_delito
             LEFT JOIN dbo.catalogo_entidad_federativa ef
                 ON ef.id_entidad_federativa = sc.id_entidad_federativa
             WHERE sc.codigo_referencia = @CodigoReferencia
