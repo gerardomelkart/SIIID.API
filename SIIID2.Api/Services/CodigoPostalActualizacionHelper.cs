@@ -13,11 +13,11 @@ public static class CodigoPostalActualizacionHelper
         public string? ValorNuevo { get; set; }
     }
 
-    public static async Task AplicarDetalleAsync(IDbConnectionFactory dbConnectionFactory, string codigoReferencia, ActualizacionDiferenciasResponse response, int limitePorSeccion)
+    public static async Task AplicarDetalleAsync(IDbConnectionFactory dbConnectionFactory, string codigoReferencia, ActualizacionDiferenciasResponse response, int limitePorSeccion, bool soloMuestra = false)
     {
         if (!response.EsValido || string.IsNullOrWhiteSpace(codigoReferencia)) return;
 
-        var diferencias = await ObtenerDiferenciasAsync(dbConnectionFactory, codigoReferencia);
+        var diferencias = await ObtenerDiferenciasAsync(dbConnectionFactory, codigoReferencia, soloMuestra ? limitePorSeccion : int.MaxValue);
         var agregados = 0;
 
         foreach (var diferencia in diferencias)
@@ -56,7 +56,7 @@ public static class CodigoPostalActualizacionHelper
         if (response.TotalDelitos > response.Delitos.Count) response.DetalleLimitado = true;
     }
 
-    private static async Task<List<DiferenciaCpRow>> ObtenerDiferenciasAsync(IDbConnectionFactory dbConnectionFactory, string codigoReferencia)
+    private static async Task<List<DiferenciaCpRow>> ObtenerDiferenciasAsync(IDbConnectionFactory dbConnectionFactory, string codigoReferencia, int limiteFilas)
     {
         const string sql = @"
             ;WITH ctx AS (
@@ -83,7 +83,7 @@ public static class CodigoPostalActualizacionHelper
                 LEFT JOIN dbo.catalogo_codigo_postal cp ON cp.id_codigo_postal = d.id_codigo_postal
                 WHERE c.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION') AND c.activo = 1 AND d.activo = 1
             )
-            SELECT
+            SELECT TOP (@LimiteFilas)
                 CONCAT(tmp.id_ci, N' | ', tmp.id_delito) AS IdentificadorFiscalia,
                 a.cp_actual AS ValorAnterior,
                 NULLIF(LTRIM(RTRIM(tmp.cp)), N'') AS ValorNuevo
@@ -94,7 +94,7 @@ public static class CodigoPostalActualizacionHelper
               AND ISNULL(a.cp_actual, N'') <> ISNULL(NULLIF(LTRIM(RTRIM(tmp.cp)), N''), N'');";
 
         using var connection = dbConnectionFactory.CrearConexion();
-        var filas = await connection.QueryAsync<DiferenciaCpRow>(sql, new { CodigoReferencia = codigoReferencia }, commandTimeout: 180);
+        var filas = await connection.QueryAsync<DiferenciaCpRow>(sql, new { CodigoReferencia = codigoReferencia, LimiteFilas = limiteFilas }, commandTimeout: 180);
         return filas.ToList();
     }
 }

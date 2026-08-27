@@ -4,6 +4,7 @@ using SIIID2.Api.Readers;
 using SIIID2.Api.Repositories;
 using SIIID2.Api.Validators;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace SIIID2.Api.Services;
 
@@ -11,6 +12,7 @@ public class SemanalCargaService : ISemanalCargaService
 {
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
     private const string CodigoExclusionFueraPeriodo = "FUERA_PERIODO_CARGA";
+    private readonly IMemoryCache _cache;
 
     private static readonly HashSet<string> TiposContenidoPermitidos =
         new(StringComparer.OrdinalIgnoreCase)
@@ -167,13 +169,13 @@ public class SemanalCargaService : ISemanalCargaService
         "coord_y"
         };
 
-    private sealed class SemanalDatosSemana
+    private sealed class SemanalDiferenciasCache
     {
-        public List<ArchivoFila> Carpetas { get; } = new();
-        public List<ArchivoFila> Delitos { get; } = new();
-        public List<ArchivoFila> Victimas { get; } = new();
+        public int IdUsuarioCarga { get; init; }
+        public int IdEntidadFederativa { get; init; }
+        public int LimiteDetalle { get; init; }
+        public string ResponseJson { get; init; } = string.Empty;
     }
-
 
     private readonly IArchivoReader _archivoReader;
     private readonly CarpetasValidator _carpetasValidator;
@@ -186,7 +188,7 @@ public class SemanalCargaService : ISemanalCargaService
     private readonly ILogger<SemanalCargaService> _logger;
     private readonly IUltimosArchivosEntidadService _ultimosArchivosEntidadService;
 
-    public SemanalCargaService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ISemanalDelitoRepository semanalDelitoRepository, ISemanalCargaRepository semanalCargaRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService, ILogger<SemanalCargaService> logger)
+    public SemanalCargaService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ISemanalDelitoRepository semanalDelitoRepository, ISemanalCargaRepository semanalCargaRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService, ILogger<SemanalCargaService> logger, IMemoryCache cache)
     {
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
@@ -198,6 +200,7 @@ public class SemanalCargaService : ISemanalCargaService
         _semanalCargaRepository = semanalCargaRepository;
         _ultimosArchivosEntidadService = ultimosArchivosEntidadService;
         _logger = logger;
+        _cache = cache;
     }
 
     public async Task<SemanalSemanaDisponibilidadResponse> ValidarSemanaAsync(string tipoCarga, int anioSemana, int numeroSemana, int? idEntidadFederativa, int idUsuario)
@@ -941,6 +944,16 @@ public class SemanalCargaService : ISemanalCargaService
                 "El usuario no existe, está inactivo o no tiene acceso al módulo semanal.");
         }
 
+        var cacheKey = $"SEMANAL_DIFERENCIAS:{codigoLimpio}";
+
+        if (_cache.TryGetValue<SemanalDiferenciasCache>(cacheKey, out var cache) && cache != null && (limitePorSeccion == 0 || limitePorSeccion <= cache.LimiteDetalle))
+        {
+            if (!usuario.EsSuperUsuario && (cache.IdUsuarioCarga != idUsuarioConsulta || usuario.IdEntidadFederativa != cache.IdEntidadFederativa))
+                return ErrorDiferencias(codigoLimpio, "El usuario no tiene permiso para consultar las diferencias de esta actualización semanal.");
+
+            return PrepararDiferenciasCache(cache.ResponseJson, limitePorSeccion);
+        }
+
         var carga = await _semanalCargaRepository.ObtenerCargaParaDiferenciasAsync(codigoLimpio);
 
         if (carga == null)
@@ -1031,6 +1044,21 @@ public class SemanalCargaService : ISemanalCargaService
         response.Mensaje = response.TotalDiferencias == 0
             ? "No se detectaron diferencias entre la actualización y la versión confirmada."
             : "Revise los registros nuevos, modificados y eliminados antes de continuar al informe previo.";
+
+        if (!soloMuestra && limitePorSeccion > 0)
+        {
+            _cache.Set(cacheKey, new SemanalDiferenciasCache
+            {
+                IdUsuarioCarga = carga.IdUsuarioCarga,
+                IdEntidadFederativa = carga.IdEntidadFederativa,
+                LimiteDetalle = limitePorSeccion,
+                ResponseJson = JsonSerializer.Serialize(response)
+            }, new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromHours(12),
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(48)
+            });
+        }
 
         return response;
     }
@@ -1612,6 +1640,28 @@ public class SemanalCargaService : ISemanalCargaService
         }
 
         return false;
+    }
+
+    private static ActualizacionDiferenciasResponse PrepararDiferenciasCache(string json, int limitePorSeccion)
+    {
+        var response = JsonSerializer.Deserialize<ActualizacionDiferenciasResponse>(json) ?? new ActualizacionDiferenciasResponse();
+        response.LimitePorSeccion = limitePorSeccion;
+
+        if (limitePorSeccion == 0)
+        {
+            response.Carpetas.Clear();
+            response.Delitos.Clear();
+            response.Victimas.Clear();
+            response.DetalleLimitado = response.TotalDiferencias > 0;
+            return response;
+        }
+
+        response.Carpetas = response.Carpetas.Take(limitePorSeccion).ToList();
+        response.Delitos = response.Delitos.Take(limitePorSeccion).ToList();
+        response.Victimas = response.Victimas.Take(limitePorSeccion).ToList();
+        response.DetalleLimitado = response.TotalCarpetas > response.Carpetas.Count || response.TotalDelitos > response.Delitos.Count || response.TotalVictimas > response.Victimas.Count;
+
+        return response;
     }
 
     private static ActualizacionDiferenciasResumen AgregarDiferenciasSeccion(

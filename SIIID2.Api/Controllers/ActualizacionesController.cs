@@ -104,12 +104,7 @@ public class ActualizacionesController : ControllerBase
 
         if (!resultado.EsValido) return BadRequest(resultado);
 
-        if (limitePorSeccion > 0)
-            await CodigoPostalActualizacionHelper.AplicarDetalleAsync(
-                _dbConnectionFactory,
-                codigoReferencia,
-                resultado,
-                limitePorSeccion);
+        if (limitePorSeccion > 0) await CodigoPostalActualizacionHelper.AplicarDetalleAsync(_dbConnectionFactory, codigoReferencia, resultado, limitePorSeccion, !incluirResumen);
 
         return Ok(resultado);
     }
