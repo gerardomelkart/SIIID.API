@@ -22,8 +22,28 @@ public class SemanalEnviosController : ControllerBase
         _cache = cache;
     }
 
+    [HttpGet("opciones")]
+    public async Task<IActionResult> ObtenerOpciones()
+    {
+        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
+
+        try
+        {
+            return Ok(await _semanalEnviosService.ObtenerOpcionesEnviosAsync(idUsuario));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                esValido = false,
+                codigo = "SEMANAL_ENVIOS_SIN_PERMISO",
+                mensaje = ex.Message
+            });
+        }
+    }
+
     [HttpGet]
-    public async Task<IActionResult> ObtenerEnvios([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? idUsuarioCarga = null, [FromQuery] int? anioCorte = null, [FromQuery] int? mesCorte = null, [FromQuery] string? tipoCarga = null, [FromQuery] string? estado = null)
+    public async Task<IActionResult> ObtenerEnvios([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? idUsuarioCarga = null, [FromQuery] int? anioCorte = null, [FromQuery] int? mesCorte = null, [FromQuery] int? anioSemana = null, [FromQuery] int? numeroSemana = null, [FromQuery] string? tipoCarga = null, [FromQuery] string? estado = null)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
@@ -35,6 +55,8 @@ public class SemanalEnviosController : ControllerBase
                 idUsuarioCarga,
                 anioCorte,
                 mesCorte,
+                anioSemana,
+                numeroSemana,
                 tipoCarga,
                 estado);
 

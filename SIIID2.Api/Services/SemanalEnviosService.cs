@@ -23,7 +23,13 @@ public class SemanalEnviosService : ISemanalEnviosService
         _cache = cache;
     }
 
-    public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte, string? tipoCarga, string? estado)
+    public async Task<SemanalEnviosOpcionesResponse> ObtenerOpcionesEnviosAsync(int idUsuarioConsulta)
+    {
+        var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
+        return await _semanalEnviosRepository.ObtenerOpcionesEnviosAsync(usuario.EsSuperUsuario, idUsuarioConsulta);
+    }
+
+    public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte, int? anioSemana, int? numeroSemana, string? tipoCarga, string? estado)
     {
         var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
         var tipoCargaNormalizado = NormalizarFiltro(tipoCarga);
@@ -36,6 +42,8 @@ public class SemanalEnviosService : ISemanalEnviosService
             idUsuarioCarga,
             anioCorte,
             mesCorte,
+            anioSemana,
+            numeroSemana,
             tipoCargaNormalizado,
             estadoNormalizado);
 
@@ -196,6 +204,8 @@ public class SemanalEnviosService : ISemanalEnviosService
             usuarioConsulta.EsSuperUsuario ? idUsuarioCarga : null,
             anioCorte,
             mesCorte,
+            null,
+            null,
             null,
             null);
 

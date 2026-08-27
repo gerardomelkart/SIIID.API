@@ -24,6 +24,29 @@ public class SemanalEnvioPeriodoItem
     public int MesCorte { get; set; }
 }
 
+public class SemanalEnvioPeriodoOpcionItem
+{
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
+}
+
+public class SemanalEnvioSemanaOpcionItem
+{
+    public int AnioCorte { get; set; }
+    public int MesCorte { get; set; }
+    public int AnioSemana { get; set; }
+    public int NumeroSemana { get; set; }
+    public DateTime FechaInicioSemana { get; set; }
+    public DateTime FechaFinSemana { get; set; }
+}
+
+public class SemanalEnviosOpcionesResponse
+{
+    public bool EsValido { get; set; } = true;
+    public List<SemanalEnvioPeriodoOpcionItem> Periodos { get; set; } = [];
+    public List<SemanalEnvioSemanaOpcionItem> Semanas { get; set; } = [];
+}
+
 public class SemanalEnvioItem
 {
     public long IdSemanalCarga { get; set; }

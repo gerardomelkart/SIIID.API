@@ -107,7 +107,99 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
 
     public SemanalEnviosRepository(IDbConnectionFactory dbConnectionFactory) => _dbConnectionFactory = dbConnectionFactory;
 
-    public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte, string? tipoCarga, string? estado)
+    public async Task<SemanalEnviosOpcionesResponse> ObtenerOpcionesEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta)
+    {
+        const string sql = @"
+        SET NOCOUNT ON;
+
+        SELECT DISTINCT
+            fuente.anio_corte,
+            fuente.mes_corte,
+            fuente.anio_semana,
+            fuente.numero_semana,
+            fuente.fecha_inicio_semana,
+            fuente.fecha_fin_semana
+        INTO #Opciones
+        FROM
+        (
+            SELECT
+                bloque.anio_corte,
+                bloque.mes_corte,
+                bloque.anio_semana,
+                bloque.numero_semana,
+                bloque.fecha_inicio_semana,
+                bloque.fecha_fin_semana
+            FROM dbo.semanal_carga sc
+            INNER JOIN dbo.semanal_carga_bloque bloque
+                ON bloque.id_semanal_carga = sc.id_semanal_carga
+               AND bloque.activo = 1
+            WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+              AND (sc.estado NOT LIKE N'RECHAZADO%' OR sc.estado = N'RECHAZADO_ADMIN')
+              AND sc.activo = 1
+              AND (@EsSuperUsuario = 1 OR sc.id_usuario_carga = @IdUsuarioConsulta)
+
+            UNION ALL
+
+            SELECT
+                sc.anio_corte,
+                sc.mes_corte,
+                sc.anio_semana,
+                sc.numero_semana,
+                sc.fecha_inicio_semana,
+                sc.fecha_fin_semana
+            FROM dbo.semanal_carga sc
+            WHERE sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+              AND (sc.estado NOT LIKE N'RECHAZADO%' OR sc.estado = N'RECHAZADO_ADMIN')
+              AND sc.activo = 1
+              AND (@EsSuperUsuario = 1 OR sc.id_usuario_carga = @IdUsuarioConsulta)
+              AND NOT EXISTS
+              (
+                  SELECT 1
+                  FROM dbo.semanal_carga_bloque bloque
+                  WHERE bloque.id_semanal_carga = sc.id_semanal_carga
+                    AND bloque.activo = 1
+              )
+        ) fuente;
+
+        CREATE CLUSTERED INDEX IX_Opciones
+        ON #Opciones(anio_corte, mes_corte, fecha_inicio_semana);
+
+        SELECT DISTINCT
+            anio_corte AS AnioCorte,
+            mes_corte AS MesCorte
+        FROM #Opciones
+        WHERE mes_corte BETWEEN 1 AND 12
+          AND anio_corte BETWEEN 2000 AND 2100
+        ORDER BY anio_corte DESC, mes_corte DESC;
+
+        SELECT DISTINCT
+            anio_corte AS AnioCorte,
+            mes_corte AS MesCorte,
+            anio_semana AS AnioSemana,
+            numero_semana AS NumeroSemana,
+            fecha_inicio_semana AS FechaInicioSemana,
+            fecha_fin_semana AS FechaFinSemana
+        FROM #Opciones
+        ORDER BY anio_corte DESC, mes_corte DESC, fecha_inicio_semana DESC;
+
+        DROP TABLE #Opciones;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+        using var resultados = await connection.QueryMultipleAsync(sql, new
+        {
+            EsSuperUsuario = esSuperUsuario,
+            IdUsuarioConsulta = idUsuarioConsulta
+        });
+
+        return new SemanalEnviosOpcionesResponse
+        {
+            Periodos = (await resultados.ReadAsync<SemanalEnvioPeriodoOpcionItem>()).ToList(),
+            Semanas = (await resultados.ReadAsync<SemanalEnvioSemanaOpcionItem>()).ToList()
+        };
+    }
+
+    public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte, int? anioSemana, int? numeroSemana, string? tipoCarga, string? estado)
     {
         const string sql = @"
     SET NOCOUNT ON;
@@ -133,6 +225,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
           AND (@EsSuperUsuario = 1 OR sc.id_usuario_carga = @IdUsuarioConsulta)
           AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
           AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
+            AND (@AnioCorte IS NULL OR bloque.anio_corte = @AnioCorte)
+            AND (@MesCorte IS NULL OR bloque.mes_corte = @MesCorte)
+            AND (@AnioSemana IS NULL OR bloque.anio_semana = @AnioSemana)
+            AND (@NumeroSemana IS NULL OR bloque.numero_semana = @NumeroSemana)
 
         UNION ALL
 
@@ -152,6 +248,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
           AND (@EsSuperUsuario = 1 OR sc.id_usuario_carga = @IdUsuarioConsulta)
           AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
           AND (@IdUsuarioCarga IS NULL OR sc.id_usuario_carga = @IdUsuarioCarga)
+            AND (@AnioCorte IS NULL OR sc.anio_corte = @AnioCorte)
+            AND (@MesCorte IS NULL OR sc.mes_corte = @MesCorte)
+            AND (@AnioSemana IS NULL OR sc.anio_semana = @AnioSemana)
+            AND (@NumeroSemana IS NULL OR sc.numero_semana = @NumeroSemana)
           AND NOT EXISTS
           (
               SELECT 1
@@ -303,6 +403,10 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
     FROM dbo.semanal_carga_bloque bloque
     INNER JOIN #CargasVisibles visible ON visible.id_semanal_carga = bloque.id_semanal_carga
     WHERE bloque.activo = 1
+  AND (@AnioCorte IS NULL OR bloque.anio_corte = @AnioCorte)
+  AND (@MesCorte IS NULL OR bloque.mes_corte = @MesCorte)
+  AND (@AnioSemana IS NULL OR bloque.anio_semana = @AnioSemana)
+  AND (@NumeroSemana IS NULL OR bloque.numero_semana = @NumeroSemana)
     ORDER BY bloque.id_semanal_carga, bloque.fecha_inicio_semana, bloque.anio_corte, bloque.mes_corte;
 
     SELECT DISTINCT
@@ -373,6 +477,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
             IdUsuarioCarga = esSuperUsuario ? idUsuarioCarga : null,
             AnioCorte = anioCorte,
             MesCorte = mesCorte,
+            AnioSemana = anioSemana,
+            NumeroSemana = numeroSemana,
             TipoCarga = tipoCarga,
             Estado = estado
         });
