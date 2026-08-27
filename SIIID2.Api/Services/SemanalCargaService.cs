@@ -169,6 +169,13 @@ public class SemanalCargaService : ISemanalCargaService
         "coord_y"
         };
 
+    private sealed class SemanalDatosSemana
+    {
+        public List<ArchivoFila> Carpetas { get; } = new();
+        public List<ArchivoFila> Delitos { get; } = new();
+        public List<ArchivoFila> Victimas { get; } = new();
+    }
+
     private sealed class SemanalDiferenciasCache
     {
         public int IdUsuarioCarga { get; init; }
