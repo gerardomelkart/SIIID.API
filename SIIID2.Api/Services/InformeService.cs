@@ -24,6 +24,15 @@ public class InformeService : IInformeService
         _cache = cache;
     }
 
+    public async Task<List<InformePeriodoItem>> ObtenerPeriodosEnviosAsync(int idUsuarioConsulta)
+    {
+        var usuario = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+
+        if (usuario == null || !usuario.EsSuperUsuario && !usuario.IdEntidadFederativa.HasValue) return [];
+
+        return await _informeRepository.ObtenerPeriodosEnviosAsync(usuario.EsSuperUsuario, usuario.IdEntidadFederativa);
+    }
+
     public async Task<List<InformeEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? mesCorte, int? anioCorte)
     {
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);

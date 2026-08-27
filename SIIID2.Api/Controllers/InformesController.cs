@@ -27,6 +27,23 @@ public class InformesController : ControllerBase
         _cache = cache;
     }
 
+    [Authorize]
+    [HttpGet("envios/periodos")]
+    public async Task<IActionResult> ObtenerPeriodosEnvios()
+    {
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta)) return Unauthorized(new
+        {
+            esValido = false,
+            codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
+            mensaje = "El token no contiene un id de usuario válido.",
+            traceId = HttpContext.TraceIdentifier
+        });
+
+        return Ok(await _informeService.ObtenerPeriodosEnviosAsync(idUsuarioConsulta));
+    }
+
     // Consulta el último envío confirmado por entidad y periodo.
     // Ejemplo: GET /api/informes/envios
     [Authorize]

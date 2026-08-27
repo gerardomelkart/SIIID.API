@@ -52,3 +52,10 @@ public class InformeEnvioItem
 
     public string EndpointExcel { get; set; } = string.Empty;
 }
+
+public class InformePeriodoItem
+{
+    public int MesCorte { get; set; }
+    public int AnioCorte { get; set; }
+    public string Corte { get; set; } = string.Empty;
+}

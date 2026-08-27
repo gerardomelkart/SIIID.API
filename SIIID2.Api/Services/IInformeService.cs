@@ -13,4 +13,6 @@ public interface IInformeService
     Task<InformeArchivoZipResponse> GenerarZipSabanasAsync(int idUsuarioConsulta, int anioCorte, string? tipoSabana, string? modoPlano);
 
     Task<InformeArchivoZipResponse> GenerarZipAcusesEnviosAsync(int idUsuarioConsulta, int mesCorte, int anioCorte);
+
+    Task<List<InformePeriodoItem>> ObtenerPeriodosEnviosAsync(int idUsuarioConsulta);
 }

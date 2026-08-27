@@ -13,6 +13,34 @@ public class InformeRepository : IInformeRepository
         _dbConnectionFactory = dbConnectionFactory;
     }
 
+    public async Task<List<InformePeriodoItem>> ObtenerPeriodosEnviosAsync(bool esSuperUsuario, int? idEntidadFederativaUsuario)
+    {
+        const string sql = @"
+        SELECT DISTINCT
+            c.mes_corte AS MesCorte,
+            c.anio_corte AS AnioCorte
+        FROM dbo.carga c
+        WHERE c.activo = 1
+          AND (c.estado NOT LIKE N'RECHAZADO%' OR c.estado = N'RECHAZADO_ADMIN')
+          AND (@EsSuperUsuario = 1 OR c.id_entidad_federativa = @IdEntidadFederativaUsuario)
+          AND c.mes_corte BETWEEN 1 AND 12
+          AND c.anio_corte BETWEEN 2000 AND 2100
+        ORDER BY c.anio_corte DESC, c.mes_corte DESC;
+    ";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var periodos = (await connection.QueryAsync<InformePeriodoItem>(sql, new
+        {
+            EsSuperUsuario = esSuperUsuario,
+            IdEntidadFederativaUsuario = idEntidadFederativaUsuario
+        })).ToList();
+
+        foreach (var periodo in periodos) periodo.Corte = $"{ObtenerNombreMes(periodo.MesCorte)} {periodo.AnioCorte}";
+
+        return periodos;
+    }
+
     public async Task<List<InformeEnvioItem>> ObtenerEnviosAsync(bool esSuperUsuario, int? idEntidadFederativaUsuario, int? idEntidadFederativa, int? mesCorte, int? anioCorte)
     {
         // Obtiene el último envío confirmado por entidad y periodo.
