@@ -755,7 +755,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
 
         using var connection = _dbConnectionFactory.CrearConexion();
         using var resultados = await connection.QueryMultipleAsync(sql, new
-        new
         {
             IdSemanalCarga = idSemanalCarga,
             IdEntidadFederativa = idEntidadFederativa
