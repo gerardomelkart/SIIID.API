@@ -381,7 +381,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return await ObtenerResumenCargaCeroAsync(connection, idSemanalCarga, anioCorte, mesCorte);
     }
 
-    public async Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, int idUsuarioCarga, int idDelito, DateTime fechaInicio, DateTime fechaFin)
+    public async Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, int idDelito, DateTime fechaInicio, DateTime fechaFin)
     {
         const string sql = @"
         SELECT DISTINCT
@@ -393,7 +393,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             ON bloque.id_semanal_carga = sc.id_semanal_carga
            AND bloque.activo = 1
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.id_usuario_carga = @IdUsuarioCarga
           AND sc.id_delito = @IdDelito
           AND bloque.fecha_inicio_tramo <= @FechaFin
           AND bloque.fecha_fin_tramo >= @FechaInicio
@@ -414,14 +413,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return (await connection.QueryAsync<SemanalCargaBloqueConfirmado>(sql, new
         {
             IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga,
             IdDelito = idDelito,
             FechaInicio = fechaInicio.Date,
             FechaFin = fechaFin.Date
         })).ToList();
     }
 
-    public async Task<List<SemanalCargaBloquePendiente>> ObtenerBloquesPendientesAsync(int idEntidadFederativa, int idUsuarioCarga, int idDelito, DateTime fechaInicio, DateTime fechaFin)
+    public async Task<List<SemanalCargaBloquePendiente>> ObtenerBloquesPendientesAsync(int idEntidadFederativa, int idDelito, DateTime fechaInicio, DateTime fechaFin)
     {
         const string sql = @"
         SELECT DISTINCT
@@ -437,7 +435,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             ON bloque.id_semanal_carga = sc.id_semanal_carga
            AND bloque.activo = 1
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.id_usuario_carga = @IdUsuarioCarga
           AND sc.id_delito = @IdDelito
           AND bloque.fecha_inicio_tramo <= @FechaFin
           AND bloque.fecha_fin_tramo >= @FechaInicio
@@ -460,7 +457,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return (await connection.QueryAsync<SemanalCargaBloquePendiente>(sql, new
         {
             IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga,
             IdDelito = idDelito,
             FechaInicio = fechaInicio.Date,
             FechaFin = fechaFin.Date
@@ -567,7 +563,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         });
     }
 
-    public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(long idSemanalCarga, int idEntidadFederativa, int idUsuarioCarga)
+    public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(long idSemanalCarga, int idEntidadFederativa)
     {
         const string sql = @"
         DECLARE @IdDelito INT =
@@ -596,7 +592,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         INTO #CargasConfirmadas
         FROM dbo.semanal_carga sc
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.id_usuario_carga = @IdUsuarioCarga
           AND sc.id_delito = @IdDelito
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
@@ -760,10 +755,10 @@ public class SemanalCargaRepository : ISemanalCargaRepository
 
         using var connection = _dbConnectionFactory.CrearConexion();
         using var resultados = await connection.QueryMultipleAsync(sql, new
+        new
         {
             IdSemanalCarga = idSemanalCarga,
-            IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga
+            IdEntidadFederativa = idEntidadFederativa
         });
 
         return new SemanalDatosComparacion
@@ -1537,25 +1532,56 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         BEGIN
             THROW 50041, 'No fue posible identificar el delito de la actualización semanal.', 1;
         END;
-        SELECT DISTINCT
+                SELECT DISTINCT
             ci.id_semanal_carpeta_investigacion
         INTO #CarpetasVersionAnterior
         FROM dbo.semanal_carpeta_investigacion ci WITH (UPDLOCK, HOLDLOCK)
         INNER JOIN dbo.semanal_carga sc
             ON sc.id_semanal_carga = ci.id_semanal_carga
-        INNER JOIN dbo.semanal_carga_bloque bloque
-            ON bloque.id_semanal_carga = @IdSemanalCargaNueva
-           AND bloque.id_entidad_federativa = @IdEntidadFederativa
-           AND bloque.reemplaza_informacion = 1
-           AND bloque.activo = 1
-           AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
-           AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
         WHERE sc.id_entidad_federativa = @IdEntidadFederativa
-          AND sc.id_usuario_carga = @IdUsuarioCarga
           AND sc.id_delito = @IdDelito
           AND ci.activo = 1
           AND sc.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION')
-          AND sc.activo = 1;
+          AND sc.activo = 1
+          AND
+          (
+              EXISTS
+              (
+                  SELECT 1
+                  FROM dbo.semanal_carga_bloque bloque
+                  WHERE bloque.id_semanal_carga = @IdSemanalCargaNueva
+                    AND bloque.id_entidad_federativa = @IdEntidadFederativa
+                    AND bloque.reemplaza_informacion = 1
+                    AND bloque.activo = 1
+                    AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
+                    AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
+              )
+              OR EXISTS
+              (
+                  SELECT 1
+                  FROM dbo.semanal_carga_tmp_carpeta nueva
+                  WHERE nueva.id_semanal_carga = @IdSemanalCargaNueva
+                    AND nueva.id_ci = ci.identificador_carpeta_fiscalia
+                    AND nueva.incluido = 1
+                    AND nueva.activo = 1
+                    AND YEAR(ci.fecha_inicio) = YEAR
+                    (
+                        COALESCE
+                        (
+                            TRY_CONVERT(date, nueva.fha_de_ini, 103),
+                            TRY_CONVERT(date, nueva.fha_de_ini)
+                        )
+                    )
+                    AND MONTH(ci.fecha_inicio) = MONTH
+                    (
+                        COALESCE
+                        (
+                            TRY_CONVERT(date, nueva.fha_de_ini, 103),
+                            TRY_CONVERT(date, nueva.fha_de_ini)
+                        )
+                    )
+              )
+          );
 
         IF EXISTS
         (
@@ -1571,9 +1597,8 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                   FROM dbo.semanal_carpeta_investigacion ci WITH (UPDLOCK, HOLDLOCK)
                   INNER JOIN dbo.semanal_carga sc
                       ON sc.id_semanal_carga = ci.id_semanal_carga
-                  WHERE sc.id_entidad_federativa = bloque.id_entidad_federativa
-                    AND sc.id_usuario_carga = @IdUsuarioCarga
-                    AND sc.id_delito = @IdDelito
+                    WHERE sc.id_entidad_federativa = bloque.id_entidad_federativa
+                      AND sc.id_delito = @IdDelito
                     AND ci.fecha_inicio >= bloque.fecha_inicio_tramo
                     AND ci.fecha_inicio < DATEADD(DAY, 1, bloque.fecha_fin_tramo)
                     AND ci.activo = 1
@@ -1587,9 +1612,8 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                   INNER JOIN dbo.semanal_carga_bloque bloque_cero
                       ON bloque_cero.id_semanal_carga = carga_cero.id_semanal_carga
                      AND bloque_cero.activo = 1
-                  WHERE carga_cero.id_entidad_federativa = bloque.id_entidad_federativa
-                    AND carga_cero.id_usuario_carga = @IdUsuarioCarga
-                    AND carga_cero.id_delito = @IdDelito
+                    WHERE carga_cero.id_entidad_federativa = bloque.id_entidad_federativa
+                      AND carga_cero.id_delito = @IdDelito
                     AND carga_cero.total_carpetas_incluidas = 0
                     AND carga_cero.total_delitos_incluidos = 0
                     AND carga_cero.total_victimas_incluidas = 0
@@ -1819,7 +1843,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         {
             IdSemanalCargaNueva = carga.IdSemanalCarga,
             IdEntidadFederativa = carga.IdEntidadFederativaCarga,
-            IdUsuarioCarga = carga.IdUsuarioCarga,
             IdUsuarioModificacion = idUsuarioModificacion
         }, transaction);
     }

@@ -487,7 +487,7 @@ public class SemanalCargaService : ISemanalCargaService
 
         response.Bloques = ObtenerBloquesCargaCero(fechaInicioSemana, fechaFinSemana);
 
-        var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, idUsuarioCarga, request.IdDelito, fechaInicioSemana, fechaFinSemana);
+        var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, request.IdDelito, fechaInicioSemana, fechaFinSemana);
 
         if (bloquesConfirmados.Count > 0)
         {
@@ -496,7 +496,7 @@ public class SemanalCargaService : ISemanalCargaService
             return response;
         }
 
-        var bloquesPendientes = await _semanalCargaRepository.ObtenerBloquesPendientesAsync(idEntidadFederativa.Value, idUsuarioCarga, request.IdDelito, fechaInicioSemana, fechaFinSemana);
+        var bloquesPendientes = await _semanalCargaRepository.ObtenerBloquesPendientesAsync(idEntidadFederativa.Value, request.IdDelito, fechaInicioSemana, fechaFinSemana);
 
         if (bloquesPendientes.Count > 0)
         {
@@ -735,7 +735,7 @@ public class SemanalCargaService : ISemanalCargaService
 
         response.Bloques = ObtenerBloquesCarga(carpetasPeriodo, delitosPeriodo, victimasPeriodo);
 
-        var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, idUsuarioCarga, idDelitoCarga, response.Bloques.Min(x => x.FechaInicioTramo), response.Bloques.Max(x => x.FechaFinTramo));
+        var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, idDelitoCarga, response.Bloques.Min(x => x.FechaInicioTramo), response.Bloques.Max(x => x.FechaFinTramo));
         MarcarBloquesParaReemplazo(response.Bloques, bloquesConfirmados);
 
         var tieneBloquesReemplazo = response.Bloques.Any(x => x.ReemplazaInformacion);
@@ -746,7 +746,7 @@ public class SemanalCargaService : ISemanalCargaService
 
         var fechaInicioOperacion = response.Bloques.Min(x => x.FechaInicioTramo);
         var fechaFinOperacion = response.Bloques.Max(x => x.FechaFinTramo);
-        var bloquesPendientes = await _semanalCargaRepository.ObtenerBloquesPendientesAsync(idEntidadFederativa.Value, idUsuarioCarga, idDelitoCarga, fechaInicioOperacion, fechaFinOperacion);
+        var bloquesPendientes = await _semanalCargaRepository.ObtenerBloquesPendientesAsync(idEntidadFederativa.Value, idDelitoCarga, fechaInicioOperacion, fechaFinOperacion);
         var clavesBloquesOperacion = response.Bloques.Select(x => (x.FechaInicioSemana.Date, x.AnioCorte, x.MesCorte)).ToHashSet();
 
         foreach (var pendiente in bloquesPendientes.Where(x => clavesBloquesOperacion.Contains((x.FechaInicioSemana.Date, x.AnioCorte, x.MesCorte))).OrderBy(x => x.FechaInicioSemana).ThenBy(x => x.AnioCorte).ThenBy(x => x.MesCorte))
@@ -979,7 +979,7 @@ public class SemanalCargaService : ISemanalCargaService
                 "El usuario no tiene permiso para consultar las diferencias de esta actualización semanal.");
         }
 
-        var datosComparacion = await _semanalCargaRepository.ObtenerDatosComparacionAsync(carga.IdSemanalCarga, carga.IdEntidadFederativa, carga.IdUsuarioCarga);
+        var datosComparacion = await _semanalCargaRepository.ObtenerDatosComparacionAsync(carga.IdSemanalCarga, carga.IdEntidadFederativa);
 
         var datosConfirmados = new SemanalDatosSemana();
         datosConfirmados.Carpetas.AddRange(datosComparacion.CarpetasConfirmadas.Select(ConvertirFilaComparacion));
