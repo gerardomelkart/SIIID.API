@@ -196,6 +196,240 @@ public class FederalCargaRepository : IFederalCargaRepository
         }
     }
 
+    public async Task<List<CargaPendienteAdministracionItem>> ObtenerPendientesAdministracionAsync()
+    {
+        const string sql = """
+        SELECT
+            c.id_federal_carga AS IdCarga,
+            c.codigo_referencia AS CodigoReferencia,
+            c.tipo_carga AS TipoCarga,
+            CAST(NULL AS int) AS IdEntidadFederativa,
+            N'Federal' AS EntidadFederativa,
+            c.mes_corte AS MesCorte,
+            c.anio_corte AS AnioCorte,
+            c.fecha_validacion AS FechaValidacion,
+            c.id_usuario_carga AS IdUsuarioCarga,
+            u.usuario AS UsuarioCarga,
+            LTRIM(RTRIM(CONCAT(
+                u.nombre,
+                N' ',
+                u.primer_apellido,
+                CASE
+                    WHEN NULLIF(u.segundo_apellido, N'') IS NULL THEN N''
+                    ELSE CONCAT(N' ', u.segundo_apellido)
+                END
+            ))) AS NombreUsuarioCarga,
+            c.total_carpetas_investigacion AS TotalCarpetas,
+            c.total_delitos AS TotalDelitos,
+            c.total_victimas AS TotalVictimas,
+            (
+                SELECT COUNT(1)
+                FROM dbo.federal_carga_advertencia ca
+                WHERE ca.id_federal_carga = c.id_federal_carga
+                  AND ca.activo = 1
+            ) AS TotalAdvertencias
+        FROM dbo.federal_carga c
+        INNER JOIN dbo.usuario u
+            ON u.id_usuario = c.id_usuario_carga
+        WHERE c.tipo_carga = N'CARGA_INICIAL'
+          AND c.estado = N'PENDIENTE_APROBACION'
+          AND c.activo = 1
+        ORDER BY
+            c.fecha_validacion ASC,
+            c.id_federal_carga ASC;
+        """;
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+        return (await connection.QueryAsync<CargaPendienteAdministracionItem>(sql)).ToList();
+    }
+
+    public async Task<CargaPendienteAdministracionDetalle?> ObtenerDetalleAdministracionAsync(string codigoReferencia)
+    {
+        const string sqlCarga = """
+        SELECT TOP (1)
+            c.id_federal_carga AS IdCarga,
+            c.codigo_referencia AS CodigoReferencia,
+            c.tipo_carga AS TipoCarga,
+            CAST(NULL AS int) AS IdEntidadFederativa,
+            N'Federal' AS EntidadFederativa,
+            c.mes_corte AS MesCorte,
+            c.anio_corte AS AnioCorte,
+            c.fecha_validacion AS FechaValidacion,
+            c.id_usuario_carga AS IdUsuarioCarga,
+            u.usuario AS UsuarioCarga,
+            LTRIM(RTRIM(CONCAT(
+                u.nombre,
+                N' ',
+                u.primer_apellido,
+                CASE
+                    WHEN NULLIF(u.segundo_apellido, N'') IS NULL THEN N''
+                    ELSE CONCAT(N' ', u.segundo_apellido)
+                END
+            ))) AS NombreUsuarioCarga,
+            c.total_carpetas_investigacion AS TotalCarpetas,
+            c.total_delitos AS TotalDelitos,
+            c.total_victimas AS TotalVictimas,
+            (
+                SELECT COUNT(1)
+                FROM dbo.federal_carga_advertencia ca
+                WHERE ca.id_federal_carga = c.id_federal_carga
+                  AND ca.activo = 1
+            ) AS TotalAdvertencias
+        FROM dbo.federal_carga c
+        INNER JOIN dbo.usuario u
+            ON u.id_usuario = c.id_usuario_carga
+        WHERE c.codigo_referencia = @CodigoReferencia
+          AND c.tipo_carga = N'CARGA_INICIAL'
+          AND c.estado = N'PENDIENTE_APROBACION'
+          AND c.activo = 1;
+        """;
+
+        const string sqlAdvertencias = """
+        SELECT
+            ca.id_federal_carga_advertencia AS IdCargaAdvertencia,
+            ca.codigo AS Codigo,
+            ca.archivo AS Archivo,
+            ca.numero_fila AS NumeroFila,
+            ca.columna AS Columna,
+            ca.campo AS Campo,
+            ca.valor AS Valor,
+            ca.descripcion_resumen AS DescripcionResumen,
+            ca.mensaje AS Mensaje,
+            ca.aceptada_usuario AS AceptadaUsuario,
+            ca.fecha_aceptacion AS FechaAceptacion
+        FROM dbo.federal_carga_advertencia ca
+        WHERE ca.id_federal_carga = @IdCarga
+          AND ca.activo = 1
+        ORDER BY
+            ca.archivo,
+            ca.numero_fila,
+            ca.id_federal_carga_advertencia;
+        """;
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var carga = await connection.QueryFirstOrDefaultAsync<CargaPendienteAdministracionDetalle>(sqlCarga, new { CodigoReferencia = codigoReferencia });
+
+        if (carga == null) return null;
+
+        carga.Advertencias = (await connection.QueryAsync<CargaAdvertenciaAdministracionItem>(sqlAdvertencias, new { IdCarga = carga.IdCarga })).ToList();
+
+        return carga;
+    }
+
+    public async Task<ConfirmarCargaResponse> AprobarCargaPendienteAsync(string codigoReferencia, int idUsuarioAprobacion)
+    {
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+        await connection.OpenAsync();
+
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioAprobacion);
+
+            if (carga == null)
+            {
+                await transaction.RollbackAsync();
+                return Respuesta(false, codigoReferencia, "NO_ENCONTRADA", "No se encontró la carga federal pendiente de aprobación.");
+            }
+
+            if (!carga.EsSuperUsuario)
+            {
+                await transaction.RollbackAsync();
+                return Respuesta(false, codigoReferencia, carga.Estado, "Solo un superusuario puede aprobar cargas federales.");
+            }
+
+            if (!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
+            {
+                await transaction.RollbackAsync();
+                return Respuesta(false, codigoReferencia, carga.Estado, "La carga federal ya no se encuentra pendiente de aprobación.");
+            }
+
+            await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdFederalCarga, carga.IdUsuarioCarga);
+            await InsertarDelitosFinalesAsync(connection, transaction, carga.IdFederalCarga, carga.IdUsuarioCarga);
+            await InsertarVictimasFinalesAsync(connection, transaction, carga.IdFederalCarga, carga.IdUsuarioCarga);
+            await ConfirmarCargaFinalAsync(connection, transaction, carga.IdFederalCarga, idUsuarioAprobacion);
+
+            await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                connection,
+                transaction,
+                carga.IdFederalCarga,
+                "PENDIENTE_APROBACION",
+                "CONFIRMADO",
+                idUsuarioAprobacion,
+                "La carga federal fue aprobada por el superusuario.");
+
+            await transaction.CommitAsync();
+
+            return Respuesta(true, codigoReferencia, "CONFIRMADO", "La carga federal fue aprobada y confirmada correctamente.");
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<ConfirmarCargaResponse> RechazarCargaPendienteAsync(string codigoReferencia, int idUsuarioRechazo, string motivo)
+    {
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+        await connection.OpenAsync();
+
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+        try
+        {
+            var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioRechazo);
+
+            if (carga == null)
+            {
+                await transaction.RollbackAsync();
+                return Respuesta(false, codigoReferencia, "NO_ENCONTRADA", "No se encontró la carga federal pendiente de aprobación.");
+            }
+
+            if (!carga.EsSuperUsuario)
+            {
+                await transaction.RollbackAsync();
+                return Respuesta(false, codigoReferencia, carga.Estado, "Solo un superusuario puede rechazar cargas federales.");
+            }
+
+            if (!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
+            {
+                await transaction.RollbackAsync();
+                return Respuesta(false, codigoReferencia, carga.Estado, "La carga federal ya no se encuentra pendiente de aprobación.");
+            }
+
+            var motivoLimpio = motivo?.Trim() ?? string.Empty;
+
+            if (motivoLimpio.Length < 5)
+            {
+                await transaction.RollbackAsync();
+                return Respuesta(false, codigoReferencia, "MOTIVO_INVALIDO", "Debe capturar un motivo de rechazo de al menos 5 caracteres.");
+            }
+
+            await RechazarCargaAdministracionAsync(connection, transaction, carga.IdFederalCarga, idUsuarioRechazo, motivoLimpio);
+
+            await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(
+                connection,
+                transaction,
+                carga.IdFederalCarga,
+                "PENDIENTE_APROBACION",
+                "RECHAZADO_ADMIN",
+                idUsuarioRechazo,
+                motivoLimpio);
+
+            await transaction.CommitAsync();
+
+            return Respuesta(true, codigoReferencia, "RECHAZADO_ADMIN", "La carga federal fue rechazada por el administrador.");
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
     private static ConfirmarCargaResponse Respuesta(bool esValido, string codigoReferencia, string estado, string mensaje)
     {
         return new ConfirmarCargaResponse
@@ -431,6 +665,42 @@ public class FederalCargaRepository : IFederalCargaRepository
             """;
 
         await connection.ExecuteAsync(sql, new { IdFederalCarga = idFederalCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
+    }
+
+    private static async Task RechazarCargaAdministracionAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, int idUsuarioRechazo, string motivo)
+    {
+        const string sql = """
+        UPDATE dbo.federal_carga
+        SET estado = N'RECHAZADO_ADMIN',
+            fecha_confirmacion = SYSDATETIME(),
+            id_usuario_confirmacion = @IdUsuarioRechazo,
+            mensaje_error = @Motivo,
+            rechazo_visto = 0,
+            fecha_rechazo_visto = NULL
+        WHERE id_federal_carga = @IdFederalCarga;
+
+        UPDATE dbo.federal_carga_tmp_carpeta
+        SET estado = N'RECHAZADO_ADMIN',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_federal_carga = @IdFederalCarga;
+
+        UPDATE dbo.federal_carga_tmp_delito
+        SET estado = N'RECHAZADO_ADMIN',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_federal_carga = @IdFederalCarga;
+
+        UPDATE dbo.federal_carga_tmp_victima
+        SET estado = N'RECHAZADO_ADMIN',
+            fecha_procesamiento = SYSDATETIME()
+        WHERE id_federal_carga = @IdFederalCarga;
+        """;
+
+        await connection.ExecuteAsync(sql, new
+        {
+            IdFederalCarga = idFederalCarga,
+            IdUsuarioRechazo = idUsuarioRechazo,
+            Motivo = motivo
+        }, transaction);
     }
 
     private static async Task EnviarCargaAprobacionAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga)

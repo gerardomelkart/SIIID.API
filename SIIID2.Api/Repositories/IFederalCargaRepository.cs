@@ -9,4 +9,9 @@ public interface IFederalCargaRepository
     Task<CargaPendienteInfo?> ObtenerCodigoCargaPendienteAsync(int mesCorte, int anioCorte);
     Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<CargaValidacionError> advertencias, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas);
     Task<ConfirmarCargaResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion);
+
+    Task<List<CargaPendienteAdministracionItem>> ObtenerPendientesAdministracionAsync();
+    Task<CargaPendienteAdministracionDetalle?> ObtenerDetalleAdministracionAsync(string codigoReferencia);
+    Task<ConfirmarCargaResponse> AprobarCargaPendienteAsync(string codigoReferencia, int idUsuarioAprobacion);
+    Task<ConfirmarCargaResponse> RechazarCargaPendienteAsync(string codigoReferencia, int idUsuarioRechazo, string motivo);
 }
