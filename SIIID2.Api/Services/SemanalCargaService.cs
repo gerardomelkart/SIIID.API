@@ -487,6 +487,8 @@ public class SemanalCargaService : ISemanalCargaService
 
         response.Bloques = ObtenerBloquesCargaCero(fechaInicioSemana, fechaFinSemana);
 
+        var bloqueEncabezado = response.Bloques[^1];
+
         var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, request.IdDelito, fechaInicioSemana, fechaFinSemana);
 
         if (bloquesConfirmados.Count > 0)
