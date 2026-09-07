@@ -39,6 +39,8 @@ public class FederalAcusesController : ControllerBase
             {
                 "PREVIO_CARGA" => await _acusePdfService.GenerarAcusePrevioAsync(codigoReferencia.Trim(), idUsuarioConsulta),
                 "CONFIRMADO_CARGA" => await _acusePdfService.GenerarAcuseConfirmadoAsync(codigoReferencia.Trim(), idUsuarioConsulta),
+                "PREVIO_ACTUALIZACION" => await _acusePdfService.GenerarAcusePrevioActualizacionAsync(codigoReferencia.Trim(), idUsuarioConsulta),
+                "CONFIRMADO_ACTUALIZACION" => await _acusePdfService.GenerarAcuseConfirmadoActualizacionAsync(codigoReferencia.Trim(), idUsuarioConsulta),
                 _ => throw new ArgumentException("El tipo de acuse federal solicitado no es válido.")
             };
 
@@ -91,7 +93,13 @@ public class FederalAcusesController : ControllerBase
 
     private static string ObtenerNombreArchivo(CargaAcuseInfo carga, string tipo)
     {
-        var prefijo = tipo == "CONFIRMADO_CARGA" ? "ACUSE_FEDERAL" : "INFORME_PREVIO_FEDERAL";
+        var prefijo = tipo switch
+        {
+            "CONFIRMADO_CARGA" => "ACUSE_FEDERAL",
+            "PREVIO_CARGA" => "INFORME_PREVIO_FEDERAL",
+            "CONFIRMADO_ACTUALIZACION" => "ACUSE_ACTUALIZACION_FEDERAL",
+            _ => "INFORME_PREVIO_ACTUALIZACION_FEDERAL"
+        };
         return $"{prefijo}_{ObtenerNombreMes(carga.MesCorte).ToUpperInvariant()}_{carga.AnioCorte}.pdf";
     }
 

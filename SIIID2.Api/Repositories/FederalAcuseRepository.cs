@@ -26,7 +26,11 @@ public class FederalAcuseRepository : IFederalAcuseRepository
                 c.total_carpetas_investigacion AS TotalCarpetasInvestigacion,
                 c.total_delitos AS TotalDelitos,
                 c.total_victimas AS TotalVictimas,
-                CASE WHEN c.estado = N'RECHAZADO_ADMIN' THEN N'VALIDADO_PENDIENTE' ELSE c.estado END AS Estado,
+                CASE
+                    WHEN c.estado = N'RECHAZADO_ADMIN' AND c.tipo_carga = N'ACTUALIZACION' THEN N'VALIDADO_PENDIENTE_ACTUALIZACION'
+                    WHEN c.estado = N'RECHAZADO_ADMIN' THEN N'VALIDADO_PENDIENTE'
+                    ELSE c.estado
+                END AS Estado,
                 c.fecha_validacion AS FechaValidacion,
                 CASE WHEN c.estado = N'RECHAZADO_ADMIN' THEN NULL ELSE c.fecha_confirmacion END AS FechaConfirmacion,
                 c.id_usuario_carga AS IdUsuarioCarga,

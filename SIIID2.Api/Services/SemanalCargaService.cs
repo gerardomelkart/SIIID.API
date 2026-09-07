@@ -488,6 +488,10 @@ public class SemanalCargaService : ISemanalCargaService
         response.Bloques = ObtenerBloquesCargaCero(fechaInicioSemana, fechaFinSemana);
 
         var bloqueEncabezado = response.Bloques[^1];
+        response.Periodo!.FechaInicioTramo = bloqueEncabezado.FechaInicioTramo;
+        response.Periodo.FechaFinTramo = bloqueEncabezado.FechaFinTramo;
+        response.Periodo.MesCorte = bloqueEncabezado.MesCorte;
+        response.Periodo.AnioCorte = bloqueEncabezado.AnioCorte;
 
         var bloquesConfirmados = await _semanalCargaRepository.ObtenerBloquesConfirmadosAsync(idEntidadFederativa.Value, request.IdDelito, fechaInicioSemana, fechaFinSemana);
 

@@ -81,12 +81,38 @@ public class FederalAcusePdfService : IFederalAcusePdfService
             throw new InvalidOperationException("El acuse federal confirmado solo puede generarse para cargas en estado CONFIRMADO.");
         }
 
-        var resumen = await _acuseRepository.ObtenerResumenAcuseConfirmadoAsync(carga.IdCarga);
+        var resumen = await _acuseRepository.ObtenerResumenAcuseAsync(carga.IdCarga);
 
         return GenerarPdf(
             carga,
             resumen,
             mostrarMarcaPrevio: false);
+    }
+
+    public async Task<byte[]> GenerarAcusePrevioActualizacionAsync(string codigoReferencia, int idUsuarioConsulta)
+    {
+        QuestPDF.Settings.License = LicenseType.Community;
+
+        var usuarioConsulta = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+        if (usuarioConsulta == null) throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal.");
+
+        var carga = await _acuseRepository.ObtenerCargaParaAcuseAsync(codigoReferencia) ?? throw new InvalidOperationException("No se encontró la actualización federal solicitada.");
+        if (carga.Estado is not "VALIDADO_PENDIENTE_ACTUALIZACION" and not "PENDIENTE_APROBACION") throw new InvalidOperationException("El informe previo solo puede generarse para actualizaciones federales validadas o pendientes de aprobación.");
+
+        return GenerarPdf(carga, await _acuseRepository.ObtenerResumenAcuseAsync(carga.IdCarga), mostrarMarcaPrevio: true);
+    }
+
+    public async Task<byte[]> GenerarAcuseConfirmadoActualizacionAsync(string codigoReferencia, int idUsuarioConsulta)
+    {
+        QuestPDF.Settings.License = LicenseType.Community;
+
+        var usuarioConsulta = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+        if (usuarioConsulta == null) throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal.");
+
+        var carga = await _acuseRepository.ObtenerCargaParaAcuseAsync(codigoReferencia) ?? throw new InvalidOperationException("No se encontró la actualización federal solicitada.");
+        if (carga.Estado != "CONFIRMADO_ACTUALIZACION") throw new InvalidOperationException("El acuse confirmado solo puede generarse para actualizaciones federales confirmadas.");
+
+        return GenerarPdf(carga, await _acuseRepository.ObtenerResumenAcuseAsync(carga.IdCarga), mostrarMarcaPrevio: false);
     }
 
     private byte[] GenerarPdf(CargaAcuseInfo carga, List<CargaAcuseResumenItem> resumen, bool mostrarMarcaPrevio)

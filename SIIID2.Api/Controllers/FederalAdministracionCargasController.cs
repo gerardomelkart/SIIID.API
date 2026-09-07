@@ -13,10 +13,12 @@ namespace SIIID2.Api.Controllers;
 public class FederalAdministracionCargasController : ControllerBase
 {
     private readonly IFederalCargaRepository _federalCargaRepository;
+    private readonly IFederalActualizacionRepository _federalActualizacionRepository;
 
-    public FederalAdministracionCargasController(IFederalCargaRepository federalCargaRepository)
+    public FederalAdministracionCargasController(IFederalCargaRepository federalCargaRepository, IFederalActualizacionRepository federalActualizacionRepository)
     {
         _federalCargaRepository = federalCargaRepository;
+        _federalActualizacionRepository = federalActualizacionRepository;
     }
 
     [HttpGet]
@@ -64,11 +66,16 @@ public class FederalAdministracionCargasController : ControllerBase
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
-        var resultado = await _federalCargaRepository.AprobarCargaPendienteAsync(codigoReferencia.Trim(), idUsuario);
+        var detalle = await _federalCargaRepository.ObtenerDetalleAdministracionAsync(codigoReferencia.Trim());
+        if (detalle == null) return NotFound(new { esValido = false, codigo = "FEDERAL_CARGA_NO_PENDIENTE", codigoReferencia, mensaje = "No se encontró una carga o actualización federal pendiente con ese código de referencia." });
+
+        var resultado = detalle.TipoCarga == "ACTUALIZACION"
+            ? await _federalActualizacionRepository.AprobarAsync(codigoReferencia.Trim(), idUsuario)
+            : await _federalCargaRepository.AprobarCargaPendienteAsync(codigoReferencia.Trim(), idUsuario);
 
         if (resultado.EsValido) return Ok(resultado);
         if (resultado.Estado == "NO_ENCONTRADA") return NotFound(resultado);
-        if (resultado.Estado is "CONFIRMADO" or "RECHAZADO_ADMIN") return Conflict(resultado);
+        if (resultado.Estado is "CONFIRMADO" or "CONFIRMADO_ACTUALIZACION" or "RECHAZADO_ADMIN") return Conflict(resultado);
 
         return BadRequest(resultado);
     }
@@ -78,11 +85,16 @@ public class FederalAdministracionCargasController : ControllerBase
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 
-        var resultado = await _federalCargaRepository.RechazarCargaPendienteAsync(codigoReferencia.Trim(), idUsuario, request.Motivo);
+        var detalle = await _federalCargaRepository.ObtenerDetalleAdministracionAsync(codigoReferencia.Trim());
+        if (detalle == null) return NotFound(new { esValido = false, codigo = "FEDERAL_CARGA_NO_PENDIENTE", codigoReferencia, mensaje = "No se encontró una carga o actualización federal pendiente con ese código de referencia." });
+
+        var resultado = detalle.TipoCarga == "ACTUALIZACION"
+            ? await _federalActualizacionRepository.RechazarAsync(codigoReferencia.Trim(), idUsuario, request.Motivo)
+            : await _federalCargaRepository.RechazarCargaPendienteAsync(codigoReferencia.Trim(), idUsuario, request.Motivo);
 
         if (resultado.EsValido) return Ok(resultado);
         if (resultado.Estado == "NO_ENCONTRADA") return NotFound(resultado);
-        if (resultado.Estado is "CONFIRMADO" or "RECHAZADO_ADMIN") return Conflict(resultado);
+        if (resultado.Estado is "CONFIRMADO" or "CONFIRMADO_ACTUALIZACION" or "RECHAZADO_ADMIN") return Conflict(resultado);
 
         return BadRequest(resultado);
     }

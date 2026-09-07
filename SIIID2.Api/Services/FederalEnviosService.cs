@@ -99,8 +99,10 @@ public class FederalEnviosService : IFederalEnviosService
 
         var enviosConAcuse = envios
             .Where(x =>
-                string.Equals(x.TipoCarga, "CARGA_INICIAL", StringComparison.OrdinalIgnoreCase) &&
-                x.Estado is "VALIDADO_PENDIENTE" or "PENDIENTE_APROBACION" or "CONFIRMADO")
+                (string.Equals(x.TipoCarga, "CARGA_INICIAL", StringComparison.OrdinalIgnoreCase) &&
+                 (x.Estado is "VALIDADO_PENDIENTE" or "PENDIENTE_APROBACION" or "CONFIRMADO")) ||
+                (string.Equals(x.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) &&
+                 (x.Estado is "VALIDADO_PENDIENTE_ACTUALIZACION" or "PENDIENTE_APROBACION" or "CONFIRMADO_ACTUALIZACION")))
             .ToList();
 
         if (enviosConAcuse.Count == 0)
@@ -112,14 +114,20 @@ public class FederalEnviosService : IFederalEnviosService
         {
             foreach (var envio in enviosConAcuse)
             {
-                var esConfirmado = string.Equals(envio.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase);
+                var esActualizacion = string.Equals(envio.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+                var esConfirmado = envio.Estado is "CONFIRMADO" or "CONFIRMADO_ACTUALIZACION";
 
-                var pdf = esConfirmado
-                    ? await _acusePdfService.GenerarAcuseConfirmadoAsync(envio.CodigoReferencia, idUsuarioConsulta)
-                    : await _acusePdfService.GenerarAcusePrevioAsync(envio.CodigoReferencia, idUsuarioConsulta);
+                var pdf = (esActualizacion, esConfirmado) switch
+                {
+                    (true, true) => await _acusePdfService.GenerarAcuseConfirmadoActualizacionAsync(envio.CodigoReferencia, idUsuarioConsulta),
+                    (true, false) => await _acusePdfService.GenerarAcusePrevioActualizacionAsync(envio.CodigoReferencia, idUsuarioConsulta),
+                    (false, true) => await _acusePdfService.GenerarAcuseConfirmadoAsync(envio.CodigoReferencia, idUsuarioConsulta),
+                    _ => await _acusePdfService.GenerarAcusePrevioAsync(envio.CodigoReferencia, idUsuarioConsulta)
+                };
 
                 var tipoDocumento = esConfirmado ? "ACUSE" : "INFORME_PREVIO";
-                var entry = archive.CreateEntry($"FGR_{tipoDocumento}_{envio.CodigoReferencia}.pdf", CompressionLevel.Fastest);
+                var sufijoActualizacion = esActualizacion ? "_ACTUALIZACION" : string.Empty;
+                var entry = archive.CreateEntry($"FGR_{tipoDocumento}{sufijoActualizacion}_{envio.CodigoReferencia}.pdf", CompressionLevel.Fastest);
 
                 await using var entryStream = entry.Open();
                 await entryStream.WriteAsync(pdf);

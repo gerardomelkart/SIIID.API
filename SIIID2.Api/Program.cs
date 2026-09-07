@@ -78,6 +78,7 @@ builder.Services.AddScoped<IFederalCatalogoRepository, FederalCatalogoRepository
 builder.Services.AddScoped<IFederalCargaRepository, FederalCargaRepository>();
 builder.Services.AddScoped<IFederalAcuseRepository, FederalAcuseRepository>();
 builder.Services.AddScoped<IFederalEnviosRepository, FederalEnviosRepository>();
+builder.Services.AddScoped<IFederalActualizacionRepository, FederalActualizacionRepository>();
 // Registro de validadores específicos por archivo, validación cruzada y catálogos.
 builder.Services.AddScoped<CarpetasValidator>();
 builder.Services.AddScoped<DelitosValidator>();
@@ -100,6 +101,7 @@ builder.Services.AddScoped<ISemanalEnviosRepository, SemanalEnviosRepository>();
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.
 builder.Services.AddScoped<ICargaArchivosService, CargaArchivosService>();
 builder.Services.AddScoped<IFederalCargaArchivosService, FederalCargaArchivosService>();
+builder.Services.AddScoped<IFederalActualizacionArchivosService, FederalActualizacionArchivosService>();
 builder.Services.AddScoped<IFederalEnviosService, FederalEnviosService>();
 // Registro del servicio de actualizaciones.
 builder.Services.AddScoped<IActualizacionArchivosService, ActualizacionArchivosService>();

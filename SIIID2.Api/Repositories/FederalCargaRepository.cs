@@ -231,7 +231,7 @@ public class FederalCargaRepository : IFederalCargaRepository
         FROM dbo.federal_carga c
         INNER JOIN dbo.usuario u
             ON u.id_usuario = c.id_usuario_carga
-        WHERE c.tipo_carga = N'CARGA_INICIAL'
+        WHERE c.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND c.estado = N'PENDIENTE_APROBACION'
           AND c.activo = 1
         ORDER BY
@@ -279,7 +279,7 @@ public class FederalCargaRepository : IFederalCargaRepository
         INNER JOIN dbo.usuario u
             ON u.id_usuario = c.id_usuario_carga
         WHERE c.codigo_referencia = @CodigoReferencia
-          AND c.tipo_carga = N'CARGA_INICIAL'
+          AND c.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND c.estado = N'PENDIENTE_APROBACION'
           AND c.activo = 1;
         """;

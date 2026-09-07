@@ -217,9 +217,11 @@ public class FederalEnviosRepository : IFederalEnviosRepository
 
             if (envio.EsRechazadoAdministrador)
             {
-                envio.EndpointAcuse = envio.TieneStagingDisponible && string.Equals(envio.TipoCarga, "CARGA_INICIAL", StringComparison.OrdinalIgnoreCase)
-                    ? $"/api/federal/cargas/{envio.CodigoReferencia}/acuse"
-                    : string.Empty;
+                envio.EndpointAcuse = !envio.TieneStagingDisponible
+                    ? string.Empty
+                    : string.Equals(envio.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase)
+                        ? $"/api/federal/actualizaciones/{envio.CodigoReferencia}/acuse"
+                        : $"/api/federal/cargas/{envio.CodigoReferencia}/acuse";
 
                 envio.EndpointExcel = envio.TieneStagingDisponible ? $"/api/federal/informes/envios/{envio.CodigoReferencia}/archivos" : string.Empty;
                 continue;
@@ -233,7 +235,9 @@ public class FederalEnviosRepository : IFederalEnviosRepository
             }
             else
             {
-                envio.EndpointAcuse = string.Empty;
+                envio.EndpointAcuse = envio.EsConfirmado
+                    ? $"/api/federal/actualizaciones/{envio.CodigoReferencia}/acuse-confirmado"
+                    : $"/api/federal/actualizaciones/{envio.CodigoReferencia}/acuse";
             }
 
             envio.EndpointExcel = $"/api/federal/informes/envios/{envio.CodigoReferencia}/archivos";
