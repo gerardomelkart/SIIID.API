@@ -26,7 +26,14 @@ public class ApiErrorResponseMiddleware
         await using var memoryBody = new MemoryStream();
         context.Response.Body = memoryBody;
 
-        await _next(context);
+        try
+        {
+            await _next(context);
+        }
+        finally
+        {
+            context.Response.Body = originalBody;
+        }
 
         var statusCodeOriginal = context.Response.StatusCode;
 

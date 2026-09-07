@@ -49,6 +49,28 @@ public class FederalAcuseRepository : IFederalAcuseRepository
     public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idFederalCarga)
     {
         const string sql = """
+            SET NOCOUNT ON;
+
+            -- Filtrar y convertir una sola vez, antes de cruzar las combinaciones de la sábana.
+            SELECT id_federal_carga_tmp_delito, id_ci, id_delito, clasf_de_dto,
+                TRY_CONVERT(INT, grdo_cons) AS id_grado_consumacion,
+                TRY_CONVERT(INT, emto_com_dto) AS id_instrumento_comision,
+                TRY_CONVERT(INT, forma_acc) AS id_forma_accion
+            INTO #delitos_acuse
+            FROM dbo.federal_carga_tmp_delito
+            WHERE id_federal_carga = @IdFederalCarga AND activo = 1
+            OPTION (RECOMPILE);
+
+            CREATE CLUSTERED INDEX IX_delitos_acuse ON #delitos_acuse(clasf_de_dto, id_grado_consumacion, id_instrumento_comision, id_forma_accion);
+
+            SELECT id_federal_carga_tmp_victima, id_ci, id_delito
+            INTO #victimas_acuse
+            FROM dbo.federal_carga_tmp_victima
+            WHERE id_federal_carga = @IdFederalCarga AND activo = 1
+            OPTION (RECOMPILE);
+
+            CREATE NONCLUSTERED INDEX IX_victimas_acuse ON #victimas_acuse(id_ci, id_delito) INCLUDE (id_federal_carga_tmp_victima);
+
             SELECT
                 s.clave2_sabana AS ClaveDelito,
                 s.delito_sabana AS TipoDelito,
@@ -81,18 +103,14 @@ public class FederalAcuseRepository : IFederalAcuseRepository
             INNER JOIN dbo.federal_catalogo_modalidad_delito m
                 ON m.id_modalidad_delito = s.id_modalidad_delito
                AND m.activo = 1
-            LEFT JOIN dbo.federal_carga_tmp_delito d
-                ON d.id_federal_carga = @IdFederalCarga
-               AND d.clasf_de_dto = m.clave4
-               AND TRY_CONVERT(INT, d.grdo_cons) = s.id_grado_consumacion
-               AND TRY_CONVERT(INT, d.emto_com_dto) = s.id_instrumento_comision
-               AND TRY_CONVERT(INT, d.forma_acc) = s.id_forma_accion
-               AND d.activo = 1
-            LEFT JOIN dbo.federal_carga_tmp_victima v
-                ON v.id_federal_carga = d.id_federal_carga
-               AND v.id_ci = d.id_ci
+            LEFT JOIN #delitos_acuse d
+                ON d.clasf_de_dto = m.clave4
+               AND d.id_grado_consumacion = s.id_grado_consumacion
+               AND d.id_instrumento_comision = s.id_instrumento_comision
+               AND d.id_forma_accion = s.id_forma_accion
+            LEFT JOIN #victimas_acuse v
+                ON v.id_ci = d.id_ci
                AND v.id_delito = d.id_delito
-               AND v.activo = 1
             WHERE s.activo = 1
             GROUP BY
                 s.clave2_sabana,
@@ -103,7 +121,8 @@ public class FederalAcuseRepository : IFederalAcuseRepository
                 OrdenClave1,
                 OrdenClave2,
                 OrdenClave3,
-                Orden;
+                Orden
+            OPTION (RECOMPILE);
             """;
 
         using var connection = _dbConnectionFactory.CrearConexion();
