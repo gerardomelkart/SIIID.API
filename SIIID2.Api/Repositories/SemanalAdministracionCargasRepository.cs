@@ -279,7 +279,9 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
                 d.emto_com_dto,
                 d.grdo_cons,
                 d.clasf_de_dto,
+                ISNULL(ef.nombre, '') AS nom_ent_hchos,
                 d.id_ent_hchos,
+                ISNULL(mun.nombre, '') AS nom_mun_hchos,
                 d.id_mun_hchos,
                 d.id_loc_hchos,
                 d.nom_loc_hchos,
@@ -290,6 +292,11 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
                 d.coord_y,
                 d.dom_hchos
             FROM dbo.semanal_carga_tmp_delito d
+            LEFT JOIN dbo.catalogo_entidad_federativa ef
+                ON ef.id_entidad_federativa = TRY_CONVERT(tinyint, d.id_ent_hchos)
+            LEFT JOIN dbo.catalogo_municipio mun
+                ON mun.id_entidad_federativa = ef.id_entidad_federativa
+               AND TRY_CONVERT(int, mun.clave) = TRY_CONVERT(int, d.id_mun_hchos)
             WHERE d.id_semanal_carga = @IdSemanalCarga
               AND d.activo = 1
             ORDER BY d.numero_fila;

@@ -144,7 +144,7 @@ public class SemanalEnviosService : ISemanalEnviosService
             throw new UnauthorizedAccessException("No tiene permiso para descargar archivos de una operación registrada por otro usuario.");
         }
 
-        var esConfirmada = string.Equals(referencia.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) 
+        var esConfirmada = string.Equals(referencia.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase)
                            || string.Equals(referencia.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
 
         List<IDictionary<string, object?>> carpetas;
@@ -334,7 +334,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         if (string.Equals(delito.ClaveDelito, "4.04", StringComparison.OrdinalIgnoreCase)) columnasCarpetas.AddRange(["denuncia_anonima", "denuncia_anonima_089", "denuncia_anonima_otro_medio"]);
 
         AgregarHojaReportePreliminar(workbook, "Carpetas", carpetas, columnasCarpetas);
-        AgregarHojaReportePreliminar(workbook, "Delitos", delitos, ["Nombre entidad", "id_ci", "id_delito", "dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "id_ent_hchos", "id_mun_hchos", "id_loc_hchos", "nom_loc_hchos", "id_col_hchos", "nom_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos"]);
+        AgregarHojaReportePreliminar(workbook, "Delitos", delitos, ["Nombre entidad", "id_ci", "id_delito", "dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "nom_ent_hchos", "id_ent_hchos", "nom_mun_hchos", "id_mun_hchos", "id_loc_hchos", "nom_loc_hchos", "id_col_hchos", "nom_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos"]);
         AgregarHojaReportePreliminar(workbook, "Víctimas", victimas, ["Nombre entidad", "id_ci", "id_delito", "id_vicf", "id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional"]);
 
         using var stream = new MemoryStream();

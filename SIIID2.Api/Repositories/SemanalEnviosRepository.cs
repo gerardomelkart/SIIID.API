@@ -1092,7 +1092,9 @@ OPTION (RECOMPILE);
                 CONVERT(varchar(10), ic.clave) AS emto_com_dto,
                 CONVERT(varchar(10), gc.clave) AS grdo_cons,
                 md.clave4 AS clasf_de_dto,
+                ISNULL(efh.nombre, '') AS nom_ent_hchos,
                 CONVERT(varchar(10), d.id_entidad_federativa) AS id_ent_hchos,
+                ISNULL(mun.nombre, '') AS nom_mun_hchos,
                 mun.clave AS id_mun_hchos,
                 d.id_localidad_fiscalia AS id_loc_hchos,
                 d.localidad_fiscalia_nombre AS nom_loc_hchos,
@@ -1119,6 +1121,8 @@ OPTION (RECOMPILE);
                 ON ic.id_instrumento_comision = d.id_instrumento_comision
             INNER JOIN dbo.catalogo_grado_consumacion gc
                 ON gc.id_grado_consumacion = d.id_grado_consumacion
+            LEFT JOIN dbo.catalogo_entidad_federativa efh
+                ON efh.id_entidad_federativa = d.id_entidad_federativa
             INNER JOIN dbo.catalogo_municipio mun
                 ON mun.id_municipio = d.id_municipio
                AND mun.id_entidad_federativa = d.id_entidad_federativa
@@ -1164,7 +1168,9 @@ OPTION (RECOMPILE);
                 d.emto_com_dto,
                 d.grdo_cons,
                 d.clasf_de_dto,
+                ISNULL(efh.nombre, '') AS nom_ent_hchos,
                 d.id_ent_hchos,
+                ISNULL(mun.nombre, '') AS nom_mun_hchos,
                 d.id_mun_hchos,
                 d.id_loc_hchos,
                 d.nom_loc_hchos,
@@ -1187,6 +1193,11 @@ OPTION (RECOMPILE);
                AND d.id_ci = carpeta.id_ci
                AND d.incluido = 1
                AND d.activo = 1
+            LEFT JOIN dbo.catalogo_entidad_federativa efh
+                ON efh.id_entidad_federativa = TRY_CONVERT(tinyint, d.id_ent_hchos)
+            LEFT JOIN dbo.catalogo_municipio mun
+                ON mun.id_entidad_federativa = efh.id_entidad_federativa
+               AND TRY_CONVERT(int, mun.clave) = TRY_CONVERT(int, d.id_mun_hchos)
             CROSS APPLY
             (
                 SELECT COALESCE
@@ -1474,7 +1485,9 @@ OPTION (RECOMPILE);
             CONVERT(varchar(10), ic.clave) AS emto_com_dto,
             CONVERT(varchar(10), gc.clave) AS grdo_cons,
             md.clave4 AS clasf_de_dto,
+            ISNULL(efh.nombre, '') AS nom_ent_hchos,
             CONVERT(varchar(10), d.id_entidad_federativa) AS id_ent_hchos,
+            ISNULL(mun.nombre, '') AS nom_mun_hchos,
             mun.clave AS id_mun_hchos,
             d.id_localidad_fiscalia AS id_loc_hchos,
             d.localidad_fiscalia_nombre AS nom_loc_hchos,
@@ -1498,6 +1511,8 @@ OPTION (RECOMPILE);
             ON ic.id_instrumento_comision = d.id_instrumento_comision
         INNER JOIN dbo.catalogo_grado_consumacion gc
             ON gc.id_grado_consumacion = d.id_grado_consumacion
+        LEFT JOIN dbo.catalogo_entidad_federativa efh
+            ON efh.id_entidad_federativa = d.id_entidad_federativa
         INNER JOIN dbo.catalogo_municipio mun
             ON mun.id_municipio = d.id_municipio
            AND mun.id_entidad_federativa = d.id_entidad_federativa

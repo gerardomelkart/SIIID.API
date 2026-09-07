@@ -366,7 +366,9 @@ public class FederalEnviosRepository : IFederalEnviosRepository
             CONVERT(varchar(10), ic.clave) AS emto_com_dto,
             CONVERT(varchar(10), gc.clave) AS grdo_cons,
             md.clave4 AS clasf_de_dto,
+            ISNULL(ef.nombre, '') AS nom_ent_hchos,
             CONVERT(varchar(10), d.id_entidad_federativa) AS id_ent_hchos,
+            ISNULL(mun.nombre, '') AS nom_mun_hchos,
             mun.clave AS id_mun_hchos,
             ISNULL(d.id_localidad_fiscalia, '') AS id_loc_hchos,
             ISNULL(d.localidad_fiscalia_nombre, '') AS nom_loc_hchos,
@@ -390,6 +392,8 @@ public class FederalEnviosRepository : IFederalEnviosRepository
             ON ic.id_instrumento_comision = d.id_instrumento_comision
         INNER JOIN dbo.catalogo_grado_consumacion gc
             ON gc.id_grado_consumacion = d.id_grado_consumacion
+        LEFT JOIN dbo.catalogo_entidad_federativa ef
+            ON ef.id_entidad_federativa = d.id_entidad_federativa
         INNER JOIN dbo.catalogo_municipio mun
             ON mun.id_municipio = d.id_municipio
         WHERE d.activo = 1
@@ -480,30 +484,37 @@ public class FederalEnviosRepository : IFederalEnviosRepository
     {
         const string sql = """
         SELECT
-            id_ci,
-            id_delito,
-            dto,
-            moda_dto,
-            forma_acc,
-            fha_de_hchos,
-            hra_de_hchos,
-            emto_com_dto,
-            grdo_cons,
-            clasf_de_dto,
-            id_ent_hchos,
-            id_mun_hchos,
-            id_loc_hchos,
-            nom_loc_hchos,
-            id_col_hchos,
-            nom_col_hchos,
-            cp,
-            coord_x,
-            coord_y,
-            dom_hchos
-        FROM dbo.federal_carga_tmp_delito
-        WHERE id_federal_carga = @IdFederalCarga
-          AND activo = 1
-        ORDER BY numero_fila;
+            d.id_ci,
+            d.id_delito,
+            d.dto,
+            d.moda_dto,
+            d.forma_acc,
+            d.fha_de_hchos,
+            d.hra_de_hchos,
+            d.emto_com_dto,
+            d.grdo_cons,
+            d.clasf_de_dto,
+            ISNULL(ef.nombre, '') AS nom_ent_hchos,
+            d.id_ent_hchos,
+            ISNULL(mun.nombre, '') AS nom_mun_hchos,
+            d.id_mun_hchos,
+            d.id_loc_hchos,
+            d.nom_loc_hchos,
+            d.id_col_hchos,
+            d.nom_col_hchos,
+            d.cp,
+            d.coord_x,
+            d.coord_y,
+            d.dom_hchos
+        FROM dbo.federal_carga_tmp_delito d
+        LEFT JOIN dbo.catalogo_entidad_federativa ef
+            ON ef.id_entidad_federativa = TRY_CONVERT(tinyint, d.id_ent_hchos)
+        LEFT JOIN dbo.catalogo_municipio mun
+            ON mun.id_entidad_federativa = ef.id_entidad_federativa
+           AND TRY_CONVERT(int, mun.clave) = TRY_CONVERT(int, d.id_mun_hchos)
+        WHERE d.id_federal_carga = @IdFederalCarga
+          AND d.activo = 1
+        ORDER BY d.numero_fila;
         """;
 
         return await QueryDictionaryAsync(sql, new { IdFederalCarga = idFederalCarga });
