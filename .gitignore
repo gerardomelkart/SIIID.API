@@ -365,6 +365,7 @@ FodyWeavers.xsd
 # Mantener las carpetas, ignorar su contenido
 **/UltimosArchivosEntidad/**
 **/UltimosArchivosEntidadSemanal/**
+**/UltimosArchivosFederal/**
 
 # Configuración local / sensible
 appsettings.Local.json
