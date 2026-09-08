@@ -39,6 +39,66 @@ public class FederalEnviosRepository : IFederalEnviosRepository
         return periodos;
     }
 
+    public async Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int? mesCorte, int? anioCorte)
+    {
+        const string sql = """
+            WITH cargas_periodo AS
+            (
+                SELECT
+                    c.codigo_referencia,
+                    c.tipo_carga,
+                    c.estado,
+                    c.mes_corte,
+                    c.anio_corte,
+                    c.fecha_validacion,
+                    c.fecha_confirmacion,
+                    COUNT(*) OVER (PARTITION BY c.mes_corte, c.anio_corte) AS intentos,
+                    MIN(CASE WHEN c.estado IN (N'VALIDADO_PENDIENTE', N'VALIDADO_PENDIENTE_ACTUALIZACION', N'PENDIENTE_APROBACION', N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION') THEN c.fecha_validacion END)
+                        OVER (PARTITION BY c.mes_corte, c.anio_corte) AS fecha_carga_exitosa,
+                    ROW_NUMBER() OVER
+                    (
+                        PARTITION BY c.mes_corte, c.anio_corte
+                        ORDER BY COALESCE(c.fecha_confirmacion, c.fecha_validacion) DESC, c.id_federal_carga DESC
+                    ) AS rn
+                FROM dbo.federal_carga c
+                WHERE c.activo = 1
+                  AND c.mes_corte IS NOT NULL
+                  AND c.anio_corte IS NOT NULL
+                  AND (@MesCorte IS NULL OR c.mes_corte = @MesCorte)
+                  AND (@AnioCorte IS NULL OR c.anio_corte = @AnioCorte)
+            )
+            SELECT
+                0 AS IdEntidadFederativa,
+                N'Federal' AS EntidadFederativa,
+                N'FGR' AS ClaveEntidad,
+                c.mes_corte AS MesCorte,
+                c.anio_corte AS AnioCorte,
+                c.intentos AS Intentos,
+                c.codigo_referencia AS UltimoIntento,
+                c.tipo_carga AS TipoCargaUltimoIntento,
+                c.estado AS EstatusUltimoIntento,
+                CASE WHEN c.estado IN (N'VALIDADO_PENDIENTE', N'VALIDADO_PENDIENTE_ACTUALIZACION', N'PENDIENTE_APROBACION', N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION', N'RECHAZADO_ADMIN') THEN c.fecha_validacion END AS FechaCargaActualizacion,
+                CASE WHEN c.estado IN (N'CONFIRMADO', N'CONFIRMADO_ACTUALIZACION') THEN c.fecha_confirmacion END AS FechaAprobacion,
+                c.fecha_carga_exitosa AS FechaCargaExitosa
+            FROM cargas_periodo c
+            WHERE c.rn = 1
+            ORDER BY c.anio_corte DESC, c.mes_corte DESC
+            OPTION (RECOMPILE);
+            """;
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+        var reporte = (await connection.QueryAsync<InformeReporteCargaItem>(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte })).ToList();
+
+        foreach (var carga in reporte)
+        {
+            carga.Corte = $"{ObtenerNombreMes(carga.MesCorte)} {carga.AnioCorte}";
+            carga.FechaCargaActualizacionTexto = carga.FechaCargaActualizacion?.ToString("yyyy-MM-dd HH:mm:ss") ?? string.Empty;
+            carga.FechaAprobacionTexto = carga.FechaAprobacion?.ToString("yyyy-MM-dd HH:mm:ss") ?? string.Empty;
+        }
+
+        return reporte;
+    }
+
     public async Task<List<InformeEnvioItem>> ObtenerEnviosAsync(int? mesCorte, int? anioCorte)
     {
         const string sql = """

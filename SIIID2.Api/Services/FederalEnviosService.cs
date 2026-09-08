@@ -34,6 +34,18 @@ public class FederalEnviosService : IFederalEnviosService
         return await _federalEnviosRepository.ObtenerEnviosAsync(mesCorte, anioCorte);
     }
 
+    public async Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? mesCorte, int? anioCorte)
+    {
+        var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
+        if (usuario == null) throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal.");
+        if (!usuario.EsSuperUsuario) throw new UnauthorizedAccessException("Solo un SUPER_USUARIO puede consultar el reporte de cargas.");
+
+        if (mesCorte.HasValue && (mesCorte.Value < 1 || mesCorte.Value > 12)) return [];
+        if (anioCorte.HasValue && (anioCorte.Value < 2000 || anioCorte.Value > 2100)) return [];
+
+        return await _federalEnviosRepository.ObtenerReporteCargasAsync(mesCorte, anioCorte);
+    }
+
     public async Task<InformeArchivoZipResponse> GenerarZipArchivosAsync(int idUsuarioConsulta, string codigoReferencia)
     {
         var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);

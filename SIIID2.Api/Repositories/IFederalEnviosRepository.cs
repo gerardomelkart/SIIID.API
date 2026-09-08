@@ -6,6 +6,7 @@ public interface IFederalEnviosRepository
 {
     Task<List<InformePeriodoItem>> ObtenerPeriodosAsync();
     Task<List<InformeEnvioItem>> ObtenerEnviosAsync(int? mesCorte, int? anioCorte);
+    Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int? mesCorte, int? anioCorte);
     Task<InformeArchivoCargaInfo?> ObtenerCargaParaArchivosAsync(string codigoReferencia);
     Task<List<IDictionary<string, object?>>> ObtenerCarpetasConfirmadasPeriodoAsync(int mesCorte, int anioCorte);
     Task<List<IDictionary<string, object?>>> ObtenerDelitosConfirmadosPeriodoAsync(int mesCorte, int anioCorte);

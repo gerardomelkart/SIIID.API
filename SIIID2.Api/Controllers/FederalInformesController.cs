@@ -36,6 +36,23 @@ public class FederalInformesController : ControllerBase
         return Ok(await _federalEnviosService.ObtenerEnviosAsync(idUsuario, mesCorte, anioCorte));
     }
 
+    [Authorize(Roles = "SUPER_USUARIO")]
+    [HttpGet("reporte-cargas")]
+    public async Task<IActionResult> ObtenerReporteCargas([FromQuery] int? mesCorte = null, [FromQuery] int? anioCorte = null)
+    {
+        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
+
+        try
+        {
+            var reporte = await _federalEnviosService.ObtenerReporteCargasAsync(idUsuario, mesCorte, anioCorte);
+            return Ok(new { esValido = true, mesCorte, anioCorte, total = reporte.Count, registros = reporte });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { esValido = false, codigo = "FEDERAL_REPORTE_CARGAS_SIN_PERMISO", mensaje = ex.Message });
+        }
+    }
+
     [HttpGet("envios/{codigoReferencia}/archivos")]
     public async Task<IActionResult> DescargarArchivos(string codigoReferencia)
     {
