@@ -342,20 +342,19 @@ public class FederalEnviosRepository : IFederalEnviosRepository
     public async Task<List<IDictionary<string, object?>>> ObtenerDelitosConfirmadosPeriodoAsync(int mesCorte, int anioCorte)
     {
         const string sql = """
-        SET NOCOUNT ON;
-
-        -- Materializar el periodo antes de cruzarlo con los catálogos.
-        SELECT d.*
-        INTO #delitos_envio
-        FROM dbo.federal_delito d
-        INNER JOIN dbo.federal_carga c ON c.id_federal_carga = d.id_federal_carga
-        WHERE c.mes_corte = @MesCorte AND c.anio_corte = @AnioCorte AND c.activo = 1 AND d.activo = 1
-          AND ((c.tipo_carga = N'CARGA_INICIAL' AND c.estado = N'CONFIRMADO')
-            OR (c.tipo_carga = N'ACTUALIZACION' AND c.estado = N'CONFIRMADO_ACTUALIZACION'))
-        OPTION (RECOMPILE);
-
-        CREATE UNIQUE CLUSTERED INDEX IX_delitos_envio ON #delitos_envio(id_federal_delito);
-
+        WITH cargas_periodo AS
+        (
+            SELECT id_federal_carga
+            FROM dbo.federal_carga
+            WHERE mes_corte = @MesCorte
+              AND anio_corte = @AnioCorte
+              AND activo = 1
+              AND
+              (
+                    (tipo_carga = N'CARGA_INICIAL' AND estado = N'CONFIRMADO')
+                 OR (tipo_carga = N'ACTUALIZACION' AND estado = N'CONFIRMADO_ACTUALIZACION')
+              )
+        )
         SELECT
             ci.identificador_carpeta_fiscalia AS id_ci,
             d.identificador_delito_fiscalia AS id_delito,
@@ -379,7 +378,9 @@ public class FederalEnviosRepository : IFederalEnviosRepository
             ISNULL(CONVERT(varchar(50), d.coordenada_x), '') AS coord_x,
             ISNULL(CONVERT(varchar(50), d.coordenada_y), '') AS coord_y,
             ISNULL(d.domicilio_hechos, '') AS dom_hchos
-        FROM #delitos_envio d
+        FROM dbo.federal_delito d
+        INNER JOIN cargas_periodo cp
+            ON cp.id_federal_carga = d.id_federal_carga
         INNER JOIN dbo.federal_carpeta_investigacion ci
             ON ci.id_federal_carpeta_investigacion = d.id_federal_carpeta_investigacion
            AND ci.activo = 1
@@ -391,13 +392,15 @@ public class FederalEnviosRepository : IFederalEnviosRepository
             ON ic.id_instrumento_comision = d.id_instrumento_comision
         INNER JOIN dbo.catalogo_grado_consumacion gc
             ON gc.id_grado_consumacion = d.id_grado_consumacion
-        LEFT JOIN dbo.catalogo_entidad_federativa ef
+        INNER JOIN dbo.catalogo_entidad_federativa ef
             ON ef.id_entidad_federativa = d.id_entidad_federativa
+           AND ef.activo = 1
         INNER JOIN dbo.catalogo_municipio mun
             ON mun.id_municipio = d.id_municipio
+           AND mun.id_entidad_federativa = ef.id_entidad_federativa
+           AND mun.activo = 1
         WHERE d.activo = 1
-        ORDER BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia
-        OPTION (RECOMPILE);
+        ORDER BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia;
         """;
 
         return await QueryDictionaryAsync(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte });

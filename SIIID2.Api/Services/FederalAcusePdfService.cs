@@ -81,7 +81,7 @@ public class FederalAcusePdfService : IFederalAcusePdfService
             throw new InvalidOperationException("El acuse federal confirmado solo puede generarse para cargas en estado CONFIRMADO.");
         }
 
-        var resumen = await _acuseRepository.ObtenerResumenAcuseAsync(carga.IdCarga);
+        var resumen = await _acuseRepository.ObtenerResumenAcuseConfirmadoAsync(carga.IdCarga);
 
         return GenerarPdf(
             carga,
