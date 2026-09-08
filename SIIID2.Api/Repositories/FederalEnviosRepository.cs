@@ -4,7 +4,7 @@ using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
 
-public class FederalEnviosRepository : IFederalEnviosRepository
+public partial class FederalEnviosRepository : IFederalEnviosRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
 

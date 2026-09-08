@@ -124,6 +124,140 @@ public class FederalInformesController : ControllerBase
         return File(zip.Archivo, "application/zip", zip.NombreArchivo);
     }
 
+    [HttpGet("sabanas")]
+    public async Task<IActionResult> DescargarSabanas(
+    [FromQuery] int anioCorte,
+    [FromQuery] string tipo = "COMPLETA",
+    [FromQuery] string modo = "CONFIRMADO")
+    {
+        if (!ObtenerIdUsuario(out var idUsuario))
+            return TokenSinUsuario();
+
+        try
+        {
+            var zip = await _federalEnviosService.GenerarZipSabanasAsync(
+                idUsuario,
+                anioCorte,
+                tipo,
+                modo);
+
+            return File(zip.Archivo, "application/zip", zip.NombreArchivo);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    esValido = false,
+                    codigo = "FEDERAL_SABANAS_SIN_PERMISO",
+                    mensaje = ex.Message
+                });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "FEDERAL_SABANAS_NO_DISPONIBLES",
+                mensaje = ex.Message
+            });
+        }
+    }
+
+    [HttpPost("sabanas/ticket")]
+    public async Task<IActionResult> CrearTicketDescargaSabanas(
+        [FromQuery] int anioCorte,
+        [FromQuery] string tipo = "COMPLETA",
+        [FromQuery] string modo = "CONFIRMADO")
+    {
+        if (!ObtenerIdUsuario(out var idUsuario))
+            return TokenSinUsuario();
+
+        try
+        {
+            var zip = await _federalEnviosService.GenerarZipSabanasAsync(
+                idUsuario,
+                anioCorte,
+                tipo,
+                modo);
+
+            var ticket = Convert
+                .ToHexString(RandomNumberGenerator.GetBytes(32))
+                .ToLowerInvariant();
+
+            var cacheKey = $"FEDERAL_SABANAS_DOWNLOAD_TICKET:{ticket}";
+
+            _cache.Set(
+                cacheKey,
+                zip,
+                new MemoryCacheEntryOptions
+                {
+                    SlidingExpiration = TimeSpan.FromMinutes(5),
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+                });
+
+            return Ok(new
+            {
+                esValido = true,
+                ticket
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    esValido = false,
+                    codigo = "FEDERAL_SABANAS_SIN_PERMISO",
+                    mensaje = ex.Message
+                });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                esValido = false,
+                codigo = "FEDERAL_SABANAS_NO_DISPONIBLES",
+                mensaje = ex.Message
+            });
+        }
+    }
+
+    [AllowAnonymous]
+    [HttpGet("sabanas/descargar")]
+    public IActionResult DescargarSabanasPorTicket([FromQuery] string ticket)
+    {
+        if (string.IsNullOrWhiteSpace(ticket))
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "FEDERAL_SABANAS_TICKET_REQUERIDO",
+                mensaje = "Debe proporcionar un ticket de descarga válido."
+            });
+        }
+
+        var cacheKey = $"FEDERAL_SABANAS_DOWNLOAD_TICKET:{ticket}";
+
+        if (!_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var zip) || zip == null)
+        {
+            return Unauthorized(new
+            {
+                esValido = false,
+                codigo = "FEDERAL_SABANAS_TICKET_INVALIDO",
+                mensaje = "El ticket de descarga no existe o ya expiró."
+            });
+        }
+
+        _cache.Remove(cacheKey);
+
+        Response.Headers.CacheControl = "no-store";
+
+        return File(zip.Archivo, "application/zip", zip.NombreArchivo);
+    }
+
     private bool ObtenerIdUsuario(out int idUsuario) => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out idUsuario);
 
     private IActionResult TokenSinUsuario()

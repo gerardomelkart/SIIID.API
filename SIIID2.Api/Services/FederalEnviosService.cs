@@ -1,21 +1,31 @@
 ﻿using System.IO.Compression;
 using ClosedXML.Excel;
+using Microsoft.Extensions.Caching.Memory;
 using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Services;
 
-public class FederalEnviosService : IFederalEnviosService
+public partial class FederalEnviosService : IFederalEnviosService
 {
     private readonly IFederalEnviosRepository _federalEnviosRepository;
     private readonly IFederalCargaRepository _federalCargaRepository;
     private readonly IFederalAcusePdfService _acusePdfService;
+    private readonly IMemoryCache _cache;
+    private readonly ILogger<FederalEnviosService> _logger;
 
-    public FederalEnviosService(IFederalEnviosRepository federalEnviosRepository, IFederalCargaRepository federalCargaRepository, IFederalAcusePdfService acusePdfService)
+    public FederalEnviosService(
+        IFederalEnviosRepository federalEnviosRepository,
+        IFederalCargaRepository federalCargaRepository,
+        IFederalAcusePdfService acusePdfService,
+        IMemoryCache cache,
+        ILogger<FederalEnviosService> logger)
     {
         _federalEnviosRepository = federalEnviosRepository;
         _federalCargaRepository = federalCargaRepository;
         _acusePdfService = acusePdfService;
+        _cache = cache;
+        _logger = logger;
     }
 
     public async Task<List<InformePeriodoItem>> ObtenerPeriodosAsync(int idUsuarioConsulta)

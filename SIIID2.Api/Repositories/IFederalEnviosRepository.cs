@@ -14,4 +14,10 @@ public interface IFederalEnviosRepository
     Task<List<IDictionary<string, object?>>> ObtenerCarpetasStagingAsync(long idFederalCarga);
     Task<List<IDictionary<string, object?>>> ObtenerDelitosStagingAsync(long idFederalCarga);
     Task<List<IDictionary<string, object?>>> ObtenerVictimasStagingAsync(long idFederalCarga);
+
+    Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte, string modoPlano, int mesUltimoCorte);
+    Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte, string modoPlano, int mesUltimoCorte);
+    Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalVictimasAsync(int anioCorte, string modoPlano, int mesUltimoCorte);
+    Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(int anioCorte, string modoPlano, int mesUltimoCorte);
+    Task<InformeSabanaFirma> ObtenerFirmaSabanaAsync(int anioCorte);
 }

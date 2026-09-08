@@ -23,6 +23,7 @@
 		<Folder Include="logs\" />
 		<Folder Include="UltimosArchivosEntidad\" />
 		<Folder Include="UltimosArchivosEntidadSemanal\" />
+		<Folder Include="UltimosArchivosFederal\" />
 		<Folder Include="wwwroot\images\" />
 	</ItemGroup>
 
