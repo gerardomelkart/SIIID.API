@@ -17,11 +17,12 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
     private readonly CatalogosValidator _catalogosValidator;
     private readonly IFederalCargaRepository _federalCargaRepository;
     private readonly IFederalActualizacionRepository _federalActualizacionRepository;
+    private readonly IFederalArchivosOriginalesService _archivosOriginalesService;
 
     private readonly string[] _extensionesPermitidas = [".csv", ".xlsx"];
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public FederalActualizacionArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalActualizacionRepository federalActualizacionRepository)
+    public FederalActualizacionArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalActualizacionRepository federalActualizacionRepository, IFederalArchivosOriginalesService archivosOriginalesService)
     {
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
@@ -31,6 +32,7 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
         _catalogosValidator = catalogosValidator;
         _federalCargaRepository = federalCargaRepository;
         _federalActualizacionRepository = federalActualizacionRepository;
+        _archivosOriginalesService = archivosOriginalesService;
     }
 
     public async Task<CargaValidacionResponse> ValidarActualizacionAsync(IFormCollection form, int idUsuarioCarga)
@@ -167,6 +169,7 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
         var mensajeError = response.EsValido ? null : $"La actualización federal contiene errores de validación. Total de errores: {response.Errores.Count}.";
 
         var idFederalCarga = await _federalActualizacionRepository.GuardarIntentoAsync(idUsuarioCarga, response.CodigoReferencia, mesCorte.Value, anioCorte.Value, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count, estadoCarga, mensajeError, response.Advertencias, filasCarpetas, filasDelitos, filasVictimas);
+        await _archivosOriginalesService.GuardarAsync(idUsuarioCarga, response.CodigoReferencia, "ACTUALIZACION", mesCorte.Value, anioCorte.Value, archivoCarpetas!, archivoDelitos!, archivoVictimas!);
 
         if (response.EsValido)
         {

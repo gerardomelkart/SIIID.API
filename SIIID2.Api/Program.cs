@@ -103,6 +103,7 @@ builder.Services.AddScoped<ICargaArchivosService, CargaArchivosService>();
 builder.Services.AddScoped<IFederalCargaArchivosService, FederalCargaArchivosService>();
 builder.Services.AddScoped<IFederalActualizacionArchivosService, FederalActualizacionArchivosService>();
 builder.Services.AddScoped<IFederalEnviosService, FederalEnviosService>();
+builder.Services.AddScoped<IFederalArchivosOriginalesService, FederalArchivosOriginalesService>();
 // Registro del servicio de actualizaciones.
 builder.Services.AddScoped<IActualizacionArchivosService, ActualizacionArchivosService>();
 

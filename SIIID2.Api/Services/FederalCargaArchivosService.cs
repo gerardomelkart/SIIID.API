@@ -16,11 +16,12 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
     private readonly CargaIntegridadValidator _cargaIntegridadValidator;
     private readonly CatalogosValidator _catalogosValidator;
     private readonly IFederalCargaRepository _federalCargaRepository;
+    private readonly IFederalArchivosOriginalesService _archivosOriginalesService;
 
     private readonly string[] _extensionesPermitidas = [".csv", ".xlsx"];
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public FederalCargaArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository)
+    public FederalCargaArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalArchivosOriginalesService archivosOriginalesService)
     {
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
@@ -29,6 +30,7 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         _cargaIntegridadValidator = cargaIntegridadValidator;
         _catalogosValidator = catalogosValidator;
         _federalCargaRepository = federalCargaRepository;
+        _archivosOriginalesService = archivosOriginalesService;
     }
 
     public async Task<CargaValidacionResponse> ValidarArchivosAsync(IFormCollection form, int idUsuarioCarga)
@@ -169,6 +171,7 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         var mensajeError = response.EsValido ? null : $"La información federal contiene errores de validación. Total de errores: {response.Errores.Count}.";
 
         await _federalCargaRepository.GuardarIntentoCargaAsync(idUsuarioCarga, response.CodigoReferencia, mesCorte, anioCorte, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count, estadoCarga, mensajeError, response.Advertencias, filasCarpetas, filasDelitos, filasVictimas);
+        await _archivosOriginalesService.GuardarAsync(idUsuarioCarga, response.CodigoReferencia, "CARGA_INICIAL", mesCorte, anioCorte, archivoCarpetas!, archivoDelitos!, archivoVictimas!);
 
         return response;
     }
