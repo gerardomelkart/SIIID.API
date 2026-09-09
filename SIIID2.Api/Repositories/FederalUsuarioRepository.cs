@@ -69,13 +69,13 @@ public class FederalUsuarioRepository : IFederalUsuarioRepository
                 FROM dbo.usuario_modulo um
                 INNER JOIN dbo.usuario u ON u.id_usuario = um.id_usuario
                 INNER JOIN dbo.roles r ON r.id_rol = u.id_rol
-                WHERE um.id_modulo = @IdModulo AND um.activo = 1 AND u.activo = 1 AND r.activo = 1;
+                WHERE um.id_modulo = @IdModulo AND um.activo = 1 AND u.activo = 1 AND r.activo = 1 AND u.id_entidad_federativa IS NULL;
 
                 SELECT COUNT(*) FROM dbo.usuario_modulo um
                 INNER JOIN dbo.usuario u ON u.id_usuario = um.id_usuario
                 INNER JOIN dbo.roles r ON r.id_rol = u.id_rol
                 WHERE um.id_modulo = @IdModulo AND um.activo = 1 AND um.habilitado = 1
-                  AND u.activo = 1 AND r.activo = 1 AND r.rol <> N'CONSULTA';
+                  AND u.activo = 1 AND r.activo = 1 AND r.rol <> N'CONSULTA' AND u.id_entidad_federativa IS NULL;
                 RETURN;
             END;
 

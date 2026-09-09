@@ -61,6 +61,28 @@ public class NotificacionesRechazosController : ControllerBase
         return Ok(await ConsumirAsync(sql, idUsuario));
     }
 
+    [Authorize(Policy = "MODULO_FEDERAL")]
+    [HttpPost("federal/consumir")]
+    public async Task<IActionResult> ConsumirFederal()
+    {
+        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
+
+        const string sql = @"
+        DECLARE @Rechazos TABLE (id_federal_carga BIGINT NOT NULL);
+
+        UPDATE dbo.federal_carga
+        SET rechazo_visto = 1,
+            fecha_rechazo_visto = SYSDATETIME()
+        OUTPUT INSERTED.id_federal_carga INTO @Rechazos(id_federal_carga)
+        WHERE id_usuario_carga = @IdUsuario
+          AND estado = N'RECHAZADO_ADMIN'
+          AND rechazo_visto = 0;
+
+        SELECT id_federal_carga FROM @Rechazos;";
+
+        return Ok(await ConsumirAsync(sql, idUsuario));
+    }
+
     private async Task<NotificacionRechazoResponse> ConsumirAsync(string sql, int idUsuario)
     {
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();

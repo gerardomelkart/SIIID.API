@@ -268,6 +268,66 @@ public class RecordatoriosCargaController : ControllerBase
         });
     }
 
+    [Authorize(Policy = "MODULO_FEDERAL")]
+    [HttpGet("federal")]
+    public async Task<IActionResult> ObtenerFederal()
+    {
+        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
+
+        var usuario = await ObtenerUsuarioAsync(idUsuario, "FEDERAL");
+
+        if (usuario == null || !usuario.HabilitaCarga || !string.Equals(usuario.Rol, RolEnlaceEstatal, StringComparison.OrdinalIgnoreCase)) return Ok(SinPendiente());
+
+        var fechaActual = ObtenerFechaActual();
+        var corte = new DateTime(fechaActual.Year, fechaActual.Month, 1).AddMonths(-1);
+
+        const string sql = @"
+        SELECT CONVERT
+        (
+            bit,
+            CASE
+                WHEN EXISTS
+                (
+                    SELECT 1
+                    FROM dbo.federal_carga carga
+                    WHERE carga.id_entidad_federativa IS NULL
+                      AND carga.anio_corte = @AnioCorte
+                      AND carga.mes_corte = @MesCorte
+                      AND carga.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
+                      AND carga.estado IN
+                      (
+                          N'PENDIENTE_APROBACION',
+                          N'CONFIRMADO',
+                          N'CONFIRMADO_ACTUALIZACION'
+                      )
+                      AND carga.activo = 1
+                )
+                THEN 1
+                ELSE 0
+            END
+        );";
+
+        using var connection = _dbConnectionFactory.CrearConexion();
+
+        var cargaEnviada = await connection.QuerySingleAsync<bool>(sql, new
+        {
+            AnioCorte = corte.Year,
+            MesCorte = corte.Month
+        });
+
+        if (cargaEnviada) return Ok(SinPendiente());
+
+        var periodo = $"{ObtenerNombreMes(corte.Month)} de {corte.Year}";
+
+        return Ok(new RecordatorioCargaResponse
+        {
+            HayPendiente = true,
+            Titulo = "Carga federal pendiente",
+            Mensaje = $"Falta cargar la información correspondiente al corte de {periodo}. Favor de realizar la carga que corresponda.",
+            Periodo = periodo
+        });
+    }
+
     private async Task<RecordatorioCargaUsuarioInfo?> ObtenerUsuarioAsync(int idUsuario, string claveModulo)
     {
         const string sql = @"
