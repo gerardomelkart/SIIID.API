@@ -46,7 +46,7 @@ public class FederalUsuarioRepository : IFederalUsuarioRepository
 
     public async Task<int> GuardarAsync(string operacion, int idUsuario, FederalUsuarioDatos datos, int? idRol, string? passwordHash, int idAdministrador)
     {
-        if (operacion is not ("CREAR" or "EDITAR" or "DESACTIVAR" or "REACTIVAR")) throw new InvalidOperationException("La operación de usuario no es válida.");
+        if (operacion is not ("CREAR" or "EDITAR" or "DESACTIVAR" or "REACTIVAR" or "PERMISOS" or "GLOBALES")) throw new InvalidOperationException("La operación de usuario no es válida.");
         const string sql = """
             DECLARE @IdModulo tinyint;
             SELECT @IdModulo = id_modulo FROM dbo.catalogo_modulo WITH (UPDLOCK, HOLDLOCK) WHERE clave = N'FEDERAL' AND activo = 1;
@@ -59,6 +59,24 @@ public class FederalUsuarioRepository : IFederalUsuarioRepository
                 WHERE u.id_usuario = @IdAdministrador AND u.activo = 1
             ) THROW 51001, 'Se requiere un superusuario con acceso activo al módulo Federal.', 1;
 
+            IF @Operacion = N'GLOBALES'
+            BEGIN
+                UPDATE um SET habilita_carga = CASE WHEN um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN @HabilitaCarga ELSE 0 END,
+                    habilita_modificacion = CASE WHEN um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN @HabilitaModificacion ELSE 0 END,
+                    fecha_modificacion = SYSDATETIME(), id_usuario_modificacion = @IdAdministrador
+                FROM dbo.usuario_modulo um
+                INNER JOIN dbo.usuario u ON u.id_usuario = um.id_usuario
+                INNER JOIN dbo.roles r ON r.id_rol = u.id_rol
+                WHERE um.id_modulo = @IdModulo AND um.activo = 1 AND u.activo = 1 AND r.activo = 1;
+
+                SELECT COUNT(*) FROM dbo.usuario_modulo um
+                INNER JOIN dbo.usuario u ON u.id_usuario = um.id_usuario
+                INNER JOIN dbo.roles r ON r.id_rol = u.id_rol
+                WHERE um.id_modulo = @IdModulo AND um.activo = 1 AND um.habilitado = 1
+                  AND u.activo = 1 AND r.activo = 1 AND r.rol <> N'CONSULTA';
+                RETURN;
+            END;
+
             DECLARE @RolActual nvarchar(50), @ActivoCuenta bit, @ActivoFederal bit, @AccesoFederal bit;
             IF @Operacion <> N'CREAR'
             BEGIN
@@ -70,7 +88,7 @@ public class FederalUsuarioRepository : IFederalUsuarioRepository
                 IF @RolActual IS NULL THROW 51002, 'El usuario no existe.', 1;
                 IF @Operacion IN (N'DESACTIVAR', N'REACTIVAR') AND @ActivoFederal IS NULL
                     THROW 51003, 'El usuario aún no pertenece a Federal. Habilite su acceso desde Editar usuario.', 1;
-                IF @Operacion IN (N'EDITAR', N'DESACTIVAR') AND (@ActivoCuenta = 0 OR @ActivoFederal = 0)
+                IF @Operacion IN (N'EDITAR', N'DESACTIVAR', N'PERMISOS') AND (@ActivoCuenta = 0 OR @ActivoFederal = 0)
                     THROW 51003, 'El usuario no está activo en Federal.', 1;
                 IF @Operacion = N'REACTIVAR' AND @ActivoCuenta = 1 AND @ActivoFederal = 1
                     THROW 51003, 'El usuario ya está activo en Federal; utilice la edición para cambiar sus permisos.', 1;
@@ -91,6 +109,12 @@ public class FederalUsuarioRepository : IFederalUsuarioRepository
                    AND ((@Operacion = N'EDITAR' AND @Rol <> @RolActual) OR (@Operacion = N'REACTIVAR' AND @ActivoCuenta = 0))
                     THROW 51003, 'La cuenta pertenece a otros módulos. Su rol y su estado general deben administrarse desde la gestión de esa cuenta.', 1;
             END;
+
+            IF @Operacion = N'PERMISOS' AND NOT EXISTS (
+                SELECT 1 FROM dbo.usuario u INNER JOIN dbo.roles r ON r.id_rol = u.id_rol
+                WHERE u.id_usuario = @IdUsuario AND r.activo = 1
+                  AND r.rol IN (N'SUPER_USUARIO', N'ENLACE_ESTATAL', N'CONSULTA')
+            ) THROW 51003, 'El rol del usuario no permite configurar permisos Federal.', 1;
 
             IF @Operacion IN (N'CREAR', N'EDITAR')
             BEGIN

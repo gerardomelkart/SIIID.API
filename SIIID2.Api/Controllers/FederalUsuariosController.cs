@@ -36,6 +36,12 @@ public class FederalUsuariosController : ControllerBase
     [HttpPut("{idUsuario:int}/reactivar")]
     public Task<IActionResult> Reactivar(int idUsuario, [FromBody] ReactivarUsuarioFederalRequest request) => EjecutarAsync(async id => Responder(await _service.ReactivarAsync(id, idUsuario, request)));
 
+    [HttpPut("{idUsuario:int}/permisos")]
+    public Task<IActionResult> ActualizarPermisos(int idUsuario, [FromBody] ActualizarPermisosFederalRequest request) => EjecutarAsync(async id => Responder(await _service.ActualizarPermisosAsync(id, idUsuario, request)));
+
+    [HttpPut("permisos-globales")]
+    public Task<IActionResult> ActualizarPermisosGlobales([FromBody] PermisosGlobalesFederalRequest request) => EjecutarAsync(async id => Responder(await _service.ActualizarPermisosGlobalesAsync(id, request)));
+
     private IActionResult Responder(UsuarioOperacionResponse response) => response.EsValido ? Ok(response) : BadRequest(response);
 
     private async Task<IActionResult> EjecutarAsync(Func<int, Task<IActionResult>> accion)

@@ -92,6 +92,24 @@ public class FederalUsuarioService : IFederalUsuarioService
         return Exito("REACTIVADO", idUsuario, idAdministrador);
     }
 
+    public async Task<UsuarioOperacionResponse> ActualizarPermisosAsync(int idAdministrador, int idUsuario, ActualizarPermisosFederalRequest request)
+    {
+        await ValidarAdministradorAsync(idAdministrador);
+        var datos = new FederalUsuarioDatos { HabilitaFederal = request.HabilitaFederal, HabilitaCarga = request.HabilitaCarga, HabilitaModificacion = request.HabilitaModificacion };
+        await _repository.GuardarAsync("PERMISOS", idUsuario, datos, null, null, idAdministrador);
+        _logger.LogInformation("Permisos Federal actualizados. IdUsuario={IdUsuario}, IdAdministrador={IdAdministrador}", idUsuario, idAdministrador);
+        return new UsuarioOperacionResponse { EsValido = true, Codigo = "FEDERAL_USUARIO_PERMISOS_ACTUALIZADOS", Mensaje = "Permisos Federal actualizados correctamente.", IdUsuario = idUsuario };
+    }
+
+    public async Task<UsuarioOperacionResponse> ActualizarPermisosGlobalesAsync(int idAdministrador, PermisosGlobalesFederalRequest request)
+    {
+        await ValidarAdministradorAsync(idAdministrador);
+        var datos = new FederalUsuarioDatos { HabilitaCarga = request.HabilitaCarga, HabilitaModificacion = request.HabilitaModificacion };
+        var total = await _repository.GuardarAsync("GLOBALES", 0, datos, null, null, idAdministrador);
+        _logger.LogInformation("Permisos globales Federal actualizados. Total={Total}, IdAdministrador={IdAdministrador}", total, idAdministrador);
+        return new UsuarioOperacionResponse { EsValido = true, Codigo = "FEDERAL_PERMISOS_GLOBALES_ACTUALIZADOS", Mensaje = $"Configuración global actualizada. Usuarios operativos con acceso Federal: {total}." };
+    }
+
     private UsuarioOperacionResponse Exito(string operacion, int idUsuario, int idAdministrador)
     {
         _logger.LogInformation("Usuario Federal {Operacion}. IdUsuario={IdUsuario}, IdAdministrador={IdAdministrador}", operacion, idUsuario, idAdministrador);

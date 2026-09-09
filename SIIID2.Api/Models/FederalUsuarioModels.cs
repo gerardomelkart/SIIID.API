@@ -55,3 +55,15 @@ public class FederalUsuarioDetalleResponse
     public string Mensaje { get; set; } = string.Empty;
     public FederalUsuarioDetalle? Usuario { get; set; }
 }
+
+
+public class PermisosGlobalesFederalRequest
+{
+    public bool HabilitaCarga { get; set; }
+    public bool HabilitaModificacion { get; set; }
+}
+
+public class ActualizarPermisosFederalRequest : PermisosGlobalesFederalRequest
+{
+    public bool HabilitaFederal { get; set; }
+}

@@ -10,4 +10,6 @@ public interface IFederalUsuarioService
     Task<UsuarioOperacionResponse> EditarAsync(int idAdministrador, int idUsuario, EditarUsuarioFederalRequest request);
     Task<UsuarioOperacionResponse> DesactivarAsync(int idAdministrador, int idUsuario);
     Task<UsuarioOperacionResponse> ReactivarAsync(int idAdministrador, int idUsuario, ReactivarUsuarioFederalRequest request);
+    Task<UsuarioOperacionResponse> ActualizarPermisosAsync(int idAdministrador, int idUsuario, ActualizarPermisosFederalRequest request);
+    Task<UsuarioOperacionResponse> ActualizarPermisosGlobalesAsync(int idAdministrador, PermisosGlobalesFederalRequest request);
 }
