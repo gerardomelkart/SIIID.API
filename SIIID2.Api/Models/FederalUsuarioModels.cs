@@ -42,6 +42,7 @@ public class FederalUsuarioDetalle : FederalUsuarioDatos
     public string NombreCompleto => string.Join(" ", new[] { Nombre, PrimerApellido, SegundoApellido }.Where(x => !string.IsNullOrWhiteSpace(x)));
     public bool Activo { get; set; }
     public bool ActivoCuenta { get; set; }
+    public bool TieneFederal { get; set; }
     public bool TieneOtrosModulos { get; set; }
     public DateTime FechaAlta { get; set; }
     public DateTime FechaModificacion { get; set; }

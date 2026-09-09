@@ -19,15 +19,16 @@ public class FederalUsuarioRepository : IFederalUsuarioRepository
             CONVERT(bit, CASE WHEN um.activo = 1 THEN um.habilitado ELSE 0 END) AS HabilitaFederal,
             CONVERT(bit, CASE WHEN um.activo = 1 AND um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN um.habilita_carga ELSE 0 END) AS HabilitaCarga,
             CONVERT(bit, CASE WHEN um.activo = 1 AND um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN um.habilita_modificacion ELSE 0 END) AS HabilitaModificacion,
-            CONVERT(bit, CASE WHEN u.activo = 1 AND um.activo = 1 THEN 1 ELSE 0 END) AS Activo,
+            CONVERT(bit, CASE WHEN u.activo = 1 AND COALESCE(um.activo, 1) = 1 THEN 1 ELSE 0 END) AS Activo,
+            CONVERT(bit, CASE WHEN um.id_usuario IS NULL THEN 0 ELSE 1 END) AS TieneFederal,
             u.activo AS ActivoCuenta, u.fecha_alta AS FechaAlta, u.fecha_modificacion AS FechaModificacion,
             CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.usuario_modulo otro WHERE otro.id_usuario = u.id_usuario AND otro.id_modulo <> m.id_modulo) THEN 1 ELSE 0 END) AS TieneOtrosModulos
         FROM dbo.usuario u
         INNER JOIN dbo.roles r ON r.id_rol = u.id_rol
-        INNER JOIN dbo.usuario_modulo um ON um.id_usuario = u.id_usuario
-        INNER JOIN dbo.catalogo_modulo m ON m.id_modulo = um.id_modulo AND m.clave = N'FEDERAL'
+        INNER JOIN dbo.catalogo_modulo m ON m.clave = N'FEDERAL'
+        LEFT JOIN dbo.usuario_modulo um ON um.id_usuario = u.id_usuario AND um.id_modulo = m.id_modulo
         WHERE (@IdUsuario IS NULL OR u.id_usuario = @IdUsuario)
-          AND (@IncluirInactivos = 1 OR (u.activo = 1 AND um.activo = 1))
+          AND (@IncluirInactivos = 1 OR (u.activo = 1 AND COALESCE(um.activo, 1) = 1))
         ORDER BY u.nombre, u.primer_apellido, u.segundo_apellido, u.id_usuario;
         """;
 
@@ -64,9 +65,11 @@ public class FederalUsuarioRepository : IFederalUsuarioRepository
                 SELECT @RolActual = r.rol, @ActivoCuenta = u.activo, @ActivoFederal = um.activo, @AccesoFederal = um.habilitado
                 FROM dbo.usuario u WITH (UPDLOCK, HOLDLOCK)
                 INNER JOIN dbo.roles r ON r.id_rol = u.id_rol
-                INNER JOIN dbo.usuario_modulo um WITH (UPDLOCK, HOLDLOCK) ON um.id_usuario = u.id_usuario AND um.id_modulo = @IdModulo
+                LEFT JOIN dbo.usuario_modulo um WITH (UPDLOCK, HOLDLOCK) ON um.id_usuario = u.id_usuario AND um.id_modulo = @IdModulo
                 WHERE u.id_usuario = @IdUsuario;
-                IF @RolActual IS NULL THROW 51002, 'El usuario no pertenece al módulo Federal.', 1;
+                IF @RolActual IS NULL THROW 51002, 'El usuario no existe.', 1;
+                IF @Operacion IN (N'DESACTIVAR', N'REACTIVAR') AND @ActivoFederal IS NULL
+                    THROW 51003, 'El usuario aún no pertenece a Federal. Habilite su acceso desde Editar usuario.', 1;
                 IF @Operacion IN (N'EDITAR', N'DESACTIVAR') AND (@ActivoCuenta = 0 OR @ActivoFederal = 0)
                     THROW 51003, 'El usuario no está activo en Federal.', 1;
                 IF @Operacion = N'REACTIVAR' AND @ActivoCuenta = 1 AND @ActivoFederal = 1
@@ -125,7 +128,8 @@ public class FederalUsuarioRepository : IFederalUsuarioRepository
             DECLARE @RolPermisos nvarchar(50) = CASE WHEN @Operacion IN (N'CREAR', N'EDITAR') THEN @Rol ELSE @RolActual END;
             DECLARE @Carga bit = CASE WHEN @Acceso = 1 AND @RolPermisos <> N'CONSULTA' THEN @HabilitaCarga ELSE 0 END;
             DECLARE @Modificacion bit = CASE WHEN @Acceso = 1 AND @RolPermisos <> N'CONSULTA' THEN @HabilitaModificacion ELSE 0 END;
-            IF @Operacion = N'CREAR'
+            -- La edición también puede asociar una cuenta existente, sin duplicarla.
+            IF NOT EXISTS (SELECT 1 FROM dbo.usuario_modulo WITH (UPDLOCK, HOLDLOCK) WHERE id_usuario = @IdUsuario AND id_modulo = @IdModulo)
                 INSERT INTO dbo.usuario_modulo (id_usuario, id_modulo, habilitado, habilita_carga, habilita_modificacion, administra_delitos, id_usuario_modificacion, activo)
                 VALUES (@IdUsuario, @IdModulo, @Acceso, @Carga, @Modificacion, 0, @IdAdministrador, 1);
             ELSE

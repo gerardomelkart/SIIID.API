@@ -38,7 +38,7 @@ public class FederalUsuarioService : IFederalUsuarioService
     {
         await ValidarAdministradorAsync(idAdministrador);
         var usuario = await _repository.ObtenerDetalleAsync(idUsuario);
-        if (usuario == null) throw new KeyNotFoundException("El usuario no pertenece al módulo Federal.");
+        if (usuario == null) throw new KeyNotFoundException("El usuario no existe.");
         return new FederalUsuarioDetalleResponse { EsValido = true, Codigo = "FEDERAL_USUARIO_ENCONTRADO", Mensaje = "Usuario encontrado.", Usuario = usuario };
     }
 
@@ -52,7 +52,7 @@ public class FederalUsuarioService : IFederalUsuarioService
     {
         await ValidarAdministradorAsync(idAdministrador);
         var usuario = await _repository.ObtenerDetalleAsync(idUsuario);
-        if (usuario == null) throw new KeyNotFoundException("El usuario no pertenece al módulo Federal.");
+        if (usuario == null) throw new KeyNotFoundException("El usuario no existe.");
         if (!usuario.Activo) throw new InvalidOperationException("El usuario no está activo en Federal.");
         return await GuardarDatosAsync(idAdministrador, idUsuario, request, request.NuevaPassword, false);
     }
