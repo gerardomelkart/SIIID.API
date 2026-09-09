@@ -35,6 +35,22 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
 
     public async Task<CargaValidacionResponse> ValidarArchivosAsync(IFormCollection form, int idUsuarioCarga)
     {
+        var response = new CargaValidacionResponse { CodigoReferencia = GenerarCodigoReferencia() };
+        try
+        {
+            return await ValidarOperacionAsync(form, idUsuarioCarga, response);
+        }
+        catch (FederalOperacionPeriodoSql.ConflictoException ex)
+        {
+            response.Errores.Add(new CargaValidacionError { Archivo = "general", Codigo = "FEDERAL_CONFLICTO_PERIODO", DescripcionResumen = "Operación federal en conflicto", Mensaje = ex.Message });
+            response.ResumenValidacion.Add(new CargaValidacionResumenItem { Archivo = "general", Codigo = "FEDERAL_CONFLICTO_PERIODO", Descripcion = "Operación federal en conflicto", TotalRegistros = 1, EsError = true });
+            response.Mensaje = ex.Message;
+            return response;
+        }
+    }
+
+    private async Task<CargaValidacionResponse> ValidarOperacionAsync(IFormCollection form, int idUsuarioCarga, CargaValidacionResponse response)
+    {
         var usuarioCarga = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioCarga);
 
         if (usuarioCarga == null)
@@ -47,7 +63,6 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
             return RespuestaUsuarioSinPermiso(usuarioCarga);
         }
 
-        var response = new CargaValidacionResponse { CodigoReferencia = GenerarCodigoReferencia() };
         var archivos = form.Files;
 
         if (archivos == null || archivos.Count == 0)

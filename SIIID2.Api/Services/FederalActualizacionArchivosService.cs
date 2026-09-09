@@ -37,12 +37,27 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
 
     public async Task<CargaValidacionResponse> ValidarActualizacionAsync(IFormCollection form, int idUsuarioCarga)
     {
+        var response = new CargaValidacionResponse { CodigoReferencia = GenerarCodigoReferencia() };
+        try
+        {
+            return await ValidarOperacionAsync(form, idUsuarioCarga, response);
+        }
+        catch (FederalOperacionPeriodoSql.ConflictoException ex)
+        {
+            response.Errores.Add(new CargaValidacionError { Archivo = "general", Codigo = "FEDERAL_CONFLICTO_PERIODO", DescripcionResumen = "Operación federal en conflicto", Mensaje = ex.Message });
+            response.ResumenValidacion.Add(new CargaValidacionResumenItem { Archivo = "general", Codigo = "FEDERAL_CONFLICTO_PERIODO", Descripcion = "Operación federal en conflicto", TotalRegistros = 1, EsError = true });
+            response.Mensaje = ex.Message;
+            return response;
+        }
+    }
+
+    private async Task<CargaValidacionResponse> ValidarOperacionAsync(IFormCollection form, int idUsuarioCarga, CargaValidacionResponse response)
+    {
         var usuarioCarga = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioCarga);
 
         if (usuarioCarga == null) return RespuestaUsuarioInvalido(idUsuarioCarga);
         if (!usuarioCarga.HabilitaModificacion) return RespuestaUsuarioSinPermiso(usuarioCarga);
 
-        var response = new CargaValidacionResponse { CodigoReferencia = GenerarCodigoReferencia() };
         var archivos = form.Files;
         var periodo = ObtenerPeriodoCorte(form, response.Errores);
         var mesCorte = periodo.Mes;
@@ -430,7 +445,15 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
         var existeConfirmada = await _federalCargaRepository.ExisteCargaConfirmadaAsync(mesCorte, anioCorte);
         if (!existeConfirmada) return RespuestaPeriodo(true, false, mesCorte, anioCorte, $"No existe una carga federal confirmada para el periodo {mesCorte:00}/{anioCorte}.");
 
-        var pendiente = await _federalActualizacionRepository.ObtenerPendienteAsync(mesCorte, anioCorte);
+        CargaPendienteInfo? pendiente;
+        try
+        {
+            pendiente = await _federalActualizacionRepository.ObtenerPendienteAsync(mesCorte, anioCorte);
+        }
+        catch (FederalOperacionPeriodoSql.ConflictoException ex)
+        {
+            return RespuestaPeriodo(false, false, mesCorte, anioCorte, ex.Message, tieneCargaConfirmada: true);
+        }
         if (pendiente == null) return RespuestaPeriodo(true, true, mesCorte, anioCorte, $"Existe información federal confirmada para el periodo {mesCorte:00}/{anioCorte}. Puede continuar con la actualización.", tieneCargaConfirmada: true);
 
         var revision = string.Equals(pendiente.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);

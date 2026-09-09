@@ -13,7 +13,9 @@ public class FederalCargaRepository : IFederalCargaRepository
         public long IdFederalCarga { get; set; }
         public string CodigoReferencia { get; set; } = string.Empty;
         public string Estado { get; set; } = string.Empty;
-        public DateTime? FechaExpiracion { get; set; }
+        public bool EstaVencida { get; set; }
+        public int MesCorte { get; set; }
+        public int AnioCorte { get; set; }
         public bool EsSuperUsuario { get; set; }
         public bool HabilitaCarga { get; set; }
         public int IdUsuarioCarga { get; set; }
@@ -74,22 +76,12 @@ public class FederalCargaRepository : IFederalCargaRepository
 
     public async Task<CargaPendienteInfo?> ObtenerCodigoCargaPendienteAsync(int mesCorte, int anioCorte)
     {
-        const string sql = """
-            SELECT TOP 1
-                codigo_referencia AS CodigoReferencia,
-                estado AS Estado
-            FROM dbo.federal_carga
-            WHERE id_entidad_federativa IS NULL
-              AND mes_corte = @MesCorte
-              AND anio_corte = @AnioCorte
-              AND tipo_carga = N'CARGA_INICIAL'
-              AND estado IN (N'VALIDADO_PENDIENTE', N'PENDIENTE_APROBACION')
-              AND activo = 1
-            ORDER BY fecha_validacion DESC;
-            """;
-
-        using var connection = _dbConnectionFactory.CrearConexion();
-        return await connection.QueryFirstOrDefaultAsync<CargaPendienteInfo>(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte });
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+        await connection.OpenAsync();
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        var pendiente = await FederalOperacionPeriodoSql.ObtenerPendienteAsync(connection, transaction, mesCorte, anioCorte, "CARGA_INICIAL");
+        await transaction.CommitAsync();
+        return pendiente;
     }
 
     public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<CargaValidacionError> advertencias, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
@@ -101,6 +93,11 @@ public class FederalCargaRepository : IFederalCargaRepository
 
         try
         {
+            await FederalOperacionPeriodoSql.BloquearAsync(connection, transaction, mesCorte, anioCorte);
+            await FederalOperacionPeriodoSql.ExpirarPendientesAsync(connection, transaction, mesCorte, anioCorte);
+            if (estado == "VALIDADO_PENDIENTE")
+                await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, mesCorte, anioCorte, actualizacion: false);
+
             var idFederalCarga = await CrearCargaAsync(connection, transaction, idUsuarioCarga, codigoReferencia, mesCorte, anioCorte, totalCarpetas, totalDelitos, totalVictimas, estado, mensajeError);
 
             await GuardarTmpCarpetasAsync(connection, transaction, idFederalCarga, filasCarpetas);
@@ -114,7 +111,7 @@ public class FederalCargaRepository : IFederalCargaRepository
         }
         catch
         {
-            await transaction.RollbackAsync();
+            if (transaction.Connection != null) await transaction.RollbackAsync();
             throw;
         }
     }
@@ -128,6 +125,7 @@ public class FederalCargaRepository : IFederalCargaRepository
 
         try
         {
+            await FederalOperacionPeriodoSql.BloquearPorCodigoAsync(connection, transaction, codigoReferencia);
             var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioConfirmacion);
 
             if (carga == null)
@@ -148,7 +146,7 @@ public class FederalCargaRepository : IFederalCargaRepository
                 return Respuesta(false, codigoReferencia, carga.Estado, "Solo el usuario que realizó la carga federal puede aceptar o rechazar esta validación.");
             }
 
-            if (carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
+            if (carga.EstaVencida)
             {
                 await ActualizarCargaExpiradaAsync(connection, transaction, carga.IdFederalCarga);
                 await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdFederalCarga, carga.Estado, "EXPIRADO", null, "La carga federal expiró antes de que el usuario tomara una decisión.");
@@ -170,6 +168,8 @@ public class FederalCargaRepository : IFederalCargaRepository
                 return Respuesta(true, codigoReferencia, "RECHAZADO_VALIDACION", "La carga federal fue rechazada correctamente.");
             }
 
+            await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, carga.MesCorte, carga.AnioCorte, actualizacion: false, idFederalCarga: carga.IdFederalCarga);
+
             await FederalCargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(connection, transaction, carga.IdFederalCarga, idUsuarioConfirmacion);
 
             if (!carga.EsSuperUsuario)
@@ -189,9 +189,14 @@ public class FederalCargaRepository : IFederalCargaRepository
             await transaction.CommitAsync();
             return Respuesta(true, codigoReferencia, "CONFIRMADO", "La carga federal fue confirmada correctamente.");
         }
+        catch (FederalOperacionPeriodoSql.ConflictoException ex)
+        {
+            if (transaction.Connection != null) await transaction.RollbackAsync();
+            return Respuesta(false, codigoReferencia, "CONFLICTO_PERIODO", ex.Message);
+        }
         catch
         {
-            await transaction.RollbackAsync();
+            if (transaction.Connection != null) await transaction.RollbackAsync();
             throw;
         }
     }
@@ -326,6 +331,7 @@ public class FederalCargaRepository : IFederalCargaRepository
 
         try
         {
+            await FederalOperacionPeriodoSql.BloquearPorCodigoAsync(connection, transaction, codigoReferencia);
             var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioAprobacion);
 
             if (carga == null)
@@ -346,6 +352,8 @@ public class FederalCargaRepository : IFederalCargaRepository
                 return Respuesta(false, codigoReferencia, carga.Estado, "La carga federal ya no se encuentra pendiente de aprobación.");
             }
 
+            await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, carga.MesCorte, carga.AnioCorte, actualizacion: false, idFederalCarga: carga.IdFederalCarga);
+
             await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdFederalCarga, carga.IdUsuarioCarga);
             await InsertarDelitosFinalesAsync(connection, transaction, carga.IdFederalCarga, carga.IdUsuarioCarga);
             await InsertarVictimasFinalesAsync(connection, transaction, carga.IdFederalCarga, carga.IdUsuarioCarga);
@@ -364,9 +372,14 @@ public class FederalCargaRepository : IFederalCargaRepository
 
             return Respuesta(true, codigoReferencia, "CONFIRMADO", "La carga federal fue aprobada y confirmada correctamente.");
         }
+        catch (FederalOperacionPeriodoSql.ConflictoException ex)
+        {
+            if (transaction.Connection != null) await transaction.RollbackAsync();
+            return Respuesta(false, codigoReferencia, "CONFLICTO_PERIODO", ex.Message);
+        }
         catch
         {
-            await transaction.RollbackAsync();
+            if (transaction.Connection != null) await transaction.RollbackAsync();
             throw;
         }
     }
@@ -380,6 +393,7 @@ public class FederalCargaRepository : IFederalCargaRepository
 
         try
         {
+            await FederalOperacionPeriodoSql.BloquearPorCodigoAsync(connection, transaction, codigoReferencia);
             var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioRechazo);
 
             if (carga == null)
@@ -423,9 +437,14 @@ public class FederalCargaRepository : IFederalCargaRepository
 
             return Respuesta(true, codigoReferencia, "RECHAZADO_ADMIN", "La carga federal fue rechazada por el administrador.");
         }
+        catch (FederalOperacionPeriodoSql.ConflictoException ex)
+        {
+            if (transaction.Connection != null) await transaction.RollbackAsync();
+            return Respuesta(false, codigoReferencia, "CONFLICTO_PERIODO", ex.Message);
+        }
         catch
         {
-            await transaction.RollbackAsync();
+            if (transaction.Connection != null) await transaction.RollbackAsync();
             throw;
         }
     }
@@ -603,7 +622,8 @@ public class FederalCargaRepository : IFederalCargaRepository
                 c.id_usuario_carga AS IdUsuarioCarga,
                 c.codigo_referencia AS CodigoReferencia,
                 c.estado AS Estado,
-                c.fecha_expiracion AS FechaExpiracion,
+                CONVERT(bit, CASE WHEN c.fecha_expiracion <= SYSDATETIME() THEN 1 ELSE 0 END) AS EstaVencida,
+                c.mes_corte AS MesCorte, c.anio_corte AS AnioCorte,
                 CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 ELSE 0 END) AS EsSuperUsuario,
                 CONVERT(bit, ISNULL(um.habilita_carga, 0)) AS HabilitaCarga
             FROM dbo.federal_carga c WITH (UPDLOCK, HOLDLOCK)

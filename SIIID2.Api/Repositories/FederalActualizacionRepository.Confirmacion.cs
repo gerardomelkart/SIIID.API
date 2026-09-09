@@ -10,7 +10,9 @@ public partial class FederalActualizacionRepository
     {
         public long IdFederalCarga { get; set; }
         public string Estado { get; set; } = string.Empty;
-        public DateTime? FechaExpiracion { get; set; }
+        public bool EstaVencida { get; set; }
+        public int MesCorte { get; set; }
+        public int AnioCorte { get; set; }
         public int IdUsuarioCarga { get; set; }
         public bool EsSuperUsuario { get; set; }
         public bool HabilitaModificacion { get; set; }
@@ -24,12 +26,13 @@ public partial class FederalActualizacionRepository
 
         try
         {
+            await FederalOperacionPeriodoSql.BloquearPorCodigoAsync(connection, transaction, codigoReferencia);
             var carga = await ObtenerActualizacionConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioConfirmacion);
             if (carga == null) return await CancelarAsync(transaction, Respuesta(false, codigoReferencia, "NO_ENCONTRADA", "No se encontró una actualización federal válida para continuar."));
             if (carga.Estado != "VALIDADO_PENDIENTE_ACTUALIZACION") return await CancelarAsync(transaction, Respuesta(false, codigoReferencia, carga.Estado, "La actualización federal no se encuentra pendiente de decisión del usuario."));
             if (carga.IdUsuarioCarga != idUsuarioConfirmacion) return await CancelarAsync(transaction, Respuesta(false, codigoReferencia, carga.Estado, "Solo el usuario que realizó la actualización federal puede aceptar o rechazarla."));
 
-            if (carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
+            if (carga.EstaVencida)
             {
                 await CambiarEstadoAsync(connection, transaction, carga.IdFederalCarga, "EXPIRADO", idUsuarioConfirmacion, "La actualización federal expiró antes de ser confirmada.");
                 await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdFederalCarga, carga.Estado, "EXPIRADO", idUsuarioConfirmacion, "La actualización federal expiró antes de que el usuario tomara una decisión.");
@@ -47,6 +50,8 @@ public partial class FederalActualizacionRepository
                 return Respuesta(true, codigoReferencia, "RECHAZADO_VALIDACION_ACTUALIZACION", "La actualización federal fue rechazada correctamente.");
             }
 
+            await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, carga.MesCorte, carga.AnioCorte, actualizacion: true, idFederalCarga: carga.IdFederalCarga);
+
             await FederalCargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(connection, transaction, carga.IdFederalCarga, idUsuarioConfirmacion);
 
             if (!carga.EsSuperUsuario)
@@ -62,9 +67,14 @@ public partial class FederalActualizacionRepository
             await transaction.CommitAsync();
             return Respuesta(true, codigoReferencia, "CONFIRMADO_ACTUALIZACION", "La actualización federal fue confirmada correctamente.");
         }
+        catch (FederalOperacionPeriodoSql.ConflictoException ex)
+        {
+            if (transaction.Connection != null) await transaction.RollbackAsync();
+            return Respuesta(false, codigoReferencia, "CONFLICTO_PERIODO", ex.Message);
+        }
         catch
         {
-            await transaction.RollbackAsync();
+            if (transaction.Connection != null) await transaction.RollbackAsync();
             throw;
         }
     }
@@ -77,19 +87,27 @@ public partial class FederalActualizacionRepository
 
         try
         {
+            await FederalOperacionPeriodoSql.BloquearPorCodigoAsync(connection, transaction, codigoReferencia);
             var carga = await ObtenerActualizacionConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioAprobacion);
             if (carga == null) return await CancelarAsync(transaction, Respuesta(false, codigoReferencia, "NO_ENCONTRADA", "No se encontró la actualización federal pendiente de aprobación."));
             if (!carga.EsSuperUsuario) return await CancelarAsync(transaction, Respuesta(false, codigoReferencia, carga.Estado, "Solo un superusuario puede aprobar actualizaciones federales."));
             if (carga.Estado != "PENDIENTE_APROBACION") return await CancelarAsync(transaction, Respuesta(false, codigoReferencia, carga.Estado, "La actualización federal ya no se encuentra pendiente de aprobación."));
+
+            await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, carga.MesCorte, carga.AnioCorte, actualizacion: true, idFederalCarga: carga.IdFederalCarga);
 
             await AplicarActualizacionAsync(connection, transaction, carga.IdFederalCarga, carga.IdUsuarioCarga, idUsuarioAprobacion);
             await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdFederalCarga, carga.Estado, "CONFIRMADO_ACTUALIZACION", idUsuarioAprobacion, "La actualización federal fue aprobada por el superusuario.");
             await transaction.CommitAsync();
             return Respuesta(true, codigoReferencia, "CONFIRMADO_ACTUALIZACION", "La actualización federal fue aprobada y aplicada correctamente.");
         }
+        catch (FederalOperacionPeriodoSql.ConflictoException ex)
+        {
+            if (transaction.Connection != null) await transaction.RollbackAsync();
+            return Respuesta(false, codigoReferencia, "CONFLICTO_PERIODO", ex.Message);
+        }
         catch
         {
-            await transaction.RollbackAsync();
+            if (transaction.Connection != null) await transaction.RollbackAsync();
             throw;
         }
     }
@@ -102,6 +120,7 @@ public partial class FederalActualizacionRepository
 
         try
         {
+            await FederalOperacionPeriodoSql.BloquearPorCodigoAsync(connection, transaction, codigoReferencia);
             var carga = await ObtenerActualizacionConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioRechazo);
             if (carga == null) return await CancelarAsync(transaction, Respuesta(false, codigoReferencia, "NO_ENCONTRADA", "No se encontró la actualización federal pendiente de aprobación."));
             if (!carga.EsSuperUsuario) return await CancelarAsync(transaction, Respuesta(false, codigoReferencia, carga.Estado, "Solo un superusuario puede rechazar actualizaciones federales."));
@@ -115,9 +134,14 @@ public partial class FederalActualizacionRepository
             await transaction.CommitAsync();
             return Respuesta(true, codigoReferencia, "RECHAZADO_ADMIN", "La actualización federal fue rechazada por el administrador.");
         }
+        catch (FederalOperacionPeriodoSql.ConflictoException ex)
+        {
+            if (transaction.Connection != null) await transaction.RollbackAsync();
+            return Respuesta(false, codigoReferencia, "CONFLICTO_PERIODO", ex.Message);
+        }
         catch
         {
-            await transaction.RollbackAsync();
+            if (transaction.Connection != null) await transaction.RollbackAsync();
             throw;
         }
     }
@@ -125,7 +149,8 @@ public partial class FederalActualizacionRepository
     private static async Task<FederalActualizacionConfirmacionInfo?> ObtenerActualizacionConfirmacionAsync(SqlConnection connection, SqlTransaction transaction, string codigoReferencia, int idUsuario)
     {
         const string sql = """
-            SELECT c.id_federal_carga AS IdFederalCarga, c.estado AS Estado, c.fecha_expiracion AS FechaExpiracion, c.id_usuario_carga AS IdUsuarioCarga,
+            SELECT c.id_federal_carga AS IdFederalCarga, c.estado AS Estado, CONVERT(bit, CASE WHEN c.fecha_expiracion <= SYSDATETIME() THEN 1 ELSE 0 END) AS EstaVencida,
+                   c.mes_corte AS MesCorte, c.anio_corte AS AnioCorte, c.id_usuario_carga AS IdUsuarioCarga,
                    CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 ELSE 0 END) AS EsSuperUsuario,
                    CONVERT(bit, ISNULL(um.habilita_modificacion, 0)) AS HabilitaModificacion
             FROM dbo.federal_carga c WITH (UPDLOCK, HOLDLOCK)

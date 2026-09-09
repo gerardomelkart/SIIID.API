@@ -17,20 +17,12 @@ public partial class FederalActualizacionRepository : IFederalActualizacionRepos
 
     public async Task<CargaPendienteInfo?> ObtenerPendienteAsync(int mesCorte, int anioCorte)
     {
-        const string sql = """
-            SELECT TOP (1) codigo_referencia AS CodigoReferencia, estado AS Estado
-            FROM dbo.federal_carga
-            WHERE id_entidad_federativa IS NULL
-              AND mes_corte = @MesCorte
-              AND anio_corte = @AnioCorte
-              AND tipo_carga = N'ACTUALIZACION'
-              AND estado IN (N'VALIDADO_PENDIENTE_ACTUALIZACION', N'PENDIENTE_APROBACION')
-              AND activo = 1
-            ORDER BY fecha_validacion DESC, id_federal_carga DESC;
-            """;
-
-        using var connection = _dbConnectionFactory.CrearConexion();
-        return await connection.QueryFirstOrDefaultAsync<CargaPendienteInfo>(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte });
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
+        await connection.OpenAsync();
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        var pendiente = await FederalOperacionPeriodoSql.ObtenerPendienteAsync(connection, transaction, mesCorte, anioCorte, "ACTUALIZACION");
+        await transaction.CommitAsync();
+        return pendiente;
     }
 
     public async Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesAsync()
@@ -63,6 +55,11 @@ public partial class FederalActualizacionRepository : IFederalActualizacionRepos
 
         try
         {
+            await FederalOperacionPeriodoSql.BloquearAsync(connection, transaction, mesCorte, anioCorte);
+            await FederalOperacionPeriodoSql.ExpirarPendientesAsync(connection, transaction, mesCorte, anioCorte);
+            if (estado == "VALIDADO_PENDIENTE_ACTUALIZACION")
+                await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, mesCorte, anioCorte, actualizacion: true);
+
             var idFederalCarga = await CrearCargaAsync(connection, transaction, idUsuarioCarga, codigoReferencia, mesCorte, anioCorte, totalCarpetas, totalDelitos, totalVictimas, estado, mensajeError);
             await GuardarTmpCarpetasAsync(connection, transaction, idFederalCarga, filasCarpetas);
             await GuardarTmpDelitosAsync(connection, transaction, idFederalCarga, filasDelitos);
@@ -74,7 +71,7 @@ public partial class FederalActualizacionRepository : IFederalActualizacionRepos
         }
         catch
         {
-            await transaction.RollbackAsync();
+            if (transaction.Connection != null) await transaction.RollbackAsync();
             throw;
         }
     }
