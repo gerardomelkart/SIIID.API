@@ -38,6 +38,8 @@ public class ReactivarUsuarioFederalRequest
 public class FederalUsuarioDetalle : FederalUsuarioDatos
 {
     public int IdUsuario { get; set; }
+    public int? IdEntidadFederativa { get; set; }
+    public string? EntidadFederativa { get; set; }
     public int IdRol { get; set; }
     public string NombreCompleto => string.Join(" ", new[] { Nombre, PrimerApellido, SegundoApellido }.Where(x => !string.IsNullOrWhiteSpace(x)));
     public bool Activo { get; set; }

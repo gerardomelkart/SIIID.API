@@ -16,6 +16,7 @@ public class FederalUsuarioRepository : IFederalUsuarioRepository
             u.primer_apellido AS PrimerApellido, u.segundo_apellido AS SegundoApellido,
             u.correo_electronico AS CorreoElectronico, u.rfc AS Rfc, u.curp AS Curp,
             u.telefono_contacto AS TelefonoContacto, u.id_rol AS IdRol, r.rol AS Rol,
+            u.id_entidad_federativa AS IdEntidadFederativa, ef.nombre AS EntidadFederativa,
             CONVERT(bit, CASE WHEN um.activo = 1 THEN um.habilitado ELSE 0 END) AS HabilitaFederal,
             CONVERT(bit, CASE WHEN um.activo = 1 AND um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN um.habilita_carga ELSE 0 END) AS HabilitaCarga,
             CONVERT(bit, CASE WHEN um.activo = 1 AND um.habilitado = 1 AND r.rol <> N'CONSULTA' THEN um.habilita_modificacion ELSE 0 END) AS HabilitaModificacion,
@@ -25,6 +26,7 @@ public class FederalUsuarioRepository : IFederalUsuarioRepository
             CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.usuario_modulo otro WHERE otro.id_usuario = u.id_usuario AND otro.id_modulo <> m.id_modulo) THEN 1 ELSE 0 END) AS TieneOtrosModulos
         FROM dbo.usuario u
         INNER JOIN dbo.roles r ON r.id_rol = u.id_rol
+        LEFT JOIN dbo.catalogo_entidad_federativa ef ON ef.id_entidad_federativa = u.id_entidad_federativa
         INNER JOIN dbo.catalogo_modulo m ON m.clave = N'FEDERAL'
         LEFT JOIN dbo.usuario_modulo um ON um.id_usuario = u.id_usuario AND um.id_modulo = m.id_modulo
         WHERE (@IdUsuario IS NULL OR u.id_usuario = @IdUsuario)
