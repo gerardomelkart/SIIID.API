@@ -20,6 +20,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     private readonly CarpetasValidator _carpetasValidator;
     private readonly DelitosValidator _delitosValidator;
     private readonly VictimasValidator _victimasValidator;
+    private readonly FeminicidioVictimaValidator _feminicidioVictimaValidator;
     private readonly CargaIntegridadValidator _cargaIntegridadValidator;
     private readonly CatalogosValidator _catalogosValidator;
     private readonly ICargaRepository _cargaRepository;
@@ -39,12 +40,13 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     // Tamaño máximo permitido por archivo: 50 MB.
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public ActualizacionArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IActualizacionCargaRepository actualizacionCargaRepository, IActualizacionDiferenciasRepository actualizacionDiferenciasRepository, IActualizacionRepository actualizacionRepository, IUsuarioRepository usuarioRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService)
+    public ActualizacionArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IActualizacionCargaRepository actualizacionCargaRepository, IActualizacionDiferenciasRepository actualizacionDiferenciasRepository, IActualizacionRepository actualizacionRepository, IUsuarioRepository usuarioRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService)
     {
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
         _victimasValidator = victimasValidator;
+        _feminicidioVictimaValidator = feminicidioVictimaValidator;
         _cargaIntegridadValidator = cargaIntegridadValidator;
         _catalogosValidator = catalogosValidator;
         _cargaRepository = cargaRepository;
@@ -263,6 +265,16 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             filasCarpetas,
             filasDelitos,
             filasVictimas));
+
+        if (response.Errores.Count == 0)
+        {
+            var validacionFeminicidio = _feminicidioVictimaValidator.Validar(
+                filasDelitos,
+                filasVictimas);
+
+            response.Errores.AddRange(validacionFeminicidio.Errores);
+            advertenciasPendientes.AddRange(validacionFeminicidio.Advertencias);
+        }
 
         // Obtenemos la entidad real de la actualización.
         // Para usuario normal viene de su usuario.

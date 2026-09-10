@@ -1,26 +1,25 @@
 ﻿using System.Globalization;
 using SIIID2.Api.Models;
-using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Validators;
 
 public class FeminicidioVictimaValidator
 {
-    private readonly ICatalogoRepository _catalogoRepository;
+    private const string ClaveFeminicidio = "1.03";
+    private const string ClaveNacionalidadMexicana = "73";
 
-    public FeminicidioVictimaValidator(ICatalogoRepository catalogoRepository)
+    private static readonly string[] ColumnasFeminicidio =
     {
-        _catalogoRepository = catalogoRepository;
-    }
+        "nombre_vicfem",
+        "1apellido_vicfem",
+        "2apellido_vicfem",
+        "curp_vicfem"
+    };
 
-    public async Task<(List<CargaValidacionError> Errores, List<CargaValidacionError> Advertencias)> ValidarAsync(List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    public (List<CargaValidacionError> Errores, List<CargaValidacionError> Advertencias) Validar(List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
     {
         var errores = new List<CargaValidacionError>();
         var advertencias = new List<CargaValidacionError>();
-
-        var claveMexicana = await _catalogoRepository.ObtenerClaveNacionalidadMexicanaAsync();
-
-        if (string.IsNullOrWhiteSpace(claveMexicana)) return (errores, advertencias);
 
         var feminicidios = filasDelitos
             .Where(EsFeminicidio)
@@ -30,10 +29,37 @@ public class FeminicidioVictimaValidator
             .Where(llave => !string.IsNullOrWhiteSpace(llave))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // Si la carga no contiene feminicidios, las cuatro columnas
+        // pueden incluso no existir en el archivo de víctimas.
         if (feminicidios.Count == 0) return (errores, advertencias);
 
+        // Si existe al menos un feminicidio, el archivo de víctimas
+        // sí debe contener las cuatro columnas del nuevo formato.
+        var columnasArchivo = filasVictimas
+            .SelectMany(fila => fila.Columnas.Keys)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var columna in ColumnasFeminicidio)
+        {
+            if (columnasArchivo.Contains(columna)) continue;
+
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = "victimas",
+                Fila = 1,
+                Columna = columna,
+                Campo = columna,
+                Valor = null,
+                Codigo = "FEMINICIDIO_COLUMNA_OBLIGATORIA_NO_ENCONTRADA",
+                DescripcionResumen = "Columna de feminicidio obligatoria no encontrada",
+                Mensaje = $"El archivo de víctimas contiene registros asociados a feminicidio y debe incluir la columna \"{columna}\"."
+            });
+        }
+
+        if (errores.Count > 0) return (errores, advertencias);
+
         var mexicanasSinCurp = 0;
-        var mexicanasSinNombreOApellido = 0;
+        var mexicanasSinNombreOApellidos = 0;
         var extranjerasSinNombre = 0;
         var extranjerasSinPrimerApellido = 0;
 
@@ -43,33 +69,43 @@ public class FeminicidioVictimaValidator
                 ObtenerValor(fila, "id_ci"),
                 ObtenerValor(fila, "id_delito"));
 
+            // Las nuevas reglas solamente aplican a víctimas
+            // relacionadas con un delito de feminicidio.
             if (!feminicidios.Contains(llave)) continue;
 
             var nacionalidad = ObtenerValor(fila, "nacional")?.Trim();
 
+            // NACIONAL ya fue validado previamente por VictimasValidator
+            // y CatalogosValidator. Si viene incorrecto, ellos generan el error.
             if (string.IsNullOrWhiteSpace(nacionalidad)) continue;
-
-            var esMexicana = ClavesIguales(nacionalidad, claveMexicana);
 
             var nombre = ObtenerValor(fila, "nombre_vicfem");
             var primerApellido = ObtenerValor(fila, "1apellido_vicfem");
             var segundoApellido = ObtenerValor(fila, "2apellido_vicfem");
             var curp = ObtenerValor(fila, "curp_vicfem");
 
-            if (esMexicana)
+            if (EsNacionalidadMexicana(nacionalidad))
             {
+                // Mexicana:
+                // CURP obligatorio.
+                // Nombre y ambos apellidos opcionales, pero generan
+                // una sola advertencia agregada si falta alguno.
                 if (string.IsNullOrWhiteSpace(curp)) mexicanasSinCurp++;
 
                 if (string.IsNullOrWhiteSpace(nombre) ||
                     string.IsNullOrWhiteSpace(primerApellido) ||
                     string.IsNullOrWhiteSpace(segundoApellido))
                 {
-                    mexicanasSinNombreOApellido++;
+                    mexicanasSinNombreOApellidos++;
                 }
 
                 continue;
             }
 
+            // Nacionalidad distinta a mexicana:
+            // CURP no se valida y se conserva tal como venga.
+            // Nombre y primer apellido son obligatorios.
+            // Segundo apellido es opcional.
             if (string.IsNullOrWhiteSpace(nombre)) extranjerasSinNombre++;
             if (string.IsNullOrWhiteSpace(primerApellido)) extranjerasSinPrimerApellido++;
         }
@@ -85,7 +121,7 @@ public class FeminicidioVictimaValidator
                 Valor = mexicanasSinCurp.ToString(CultureInfo.InvariantCulture),
                 Codigo = "FEMINICIDIO_MEXICANA_CURP_OBLIGATORIO",
                 DescripcionResumen = "Víctimas de feminicidio mexicanas sin CURP",
-                Mensaje = $"Se están reportando {mexicanasSinCurp} víctimas de feminicidio de nacionalidad mexicana sin CURP. Se requiere la información para finalizar la carga.",
+                Mensaje = $"Se están reportando {mexicanasSinCurp} víctimas de feminicidio sin CURP, se requiere la información para finalizar la carga.",
                 TotalRegistrosAfectados = mexicanasSinCurp
             });
         }
@@ -101,7 +137,7 @@ public class FeminicidioVictimaValidator
                 Valor = extranjerasSinNombre.ToString(CultureInfo.InvariantCulture),
                 Codigo = "FEMINICIDIO_EXTRANJERA_NOMBRE_OBLIGATORIO",
                 DescripcionResumen = "Víctimas de feminicidio extranjeras sin nombre",
-                Mensaje = $"Se detectaron {extranjerasSinNombre} víctimas de feminicidio de nacionalidad distinta a mexicana sin nombre. El nombre es obligatorio.",
+                Mensaje = $"Se están reportando {extranjerasSinNombre} víctimas de feminicidio de nacionalidad extranjera sin nombre(s), se requiere la información para finalizar la carga.",
                 TotalRegistrosAfectados = extranjerasSinNombre
             });
         }
@@ -117,12 +153,12 @@ public class FeminicidioVictimaValidator
                 Valor = extranjerasSinPrimerApellido.ToString(CultureInfo.InvariantCulture),
                 Codigo = "FEMINICIDIO_EXTRANJERA_PRIMER_APELLIDO_OBLIGATORIO",
                 DescripcionResumen = "Víctimas de feminicidio extranjeras sin primer apellido",
-                Mensaje = $"Se detectaron {extranjerasSinPrimerApellido} víctimas de feminicidio de nacionalidad distinta a mexicana sin primer apellido. El primer apellido es obligatorio.",
+                Mensaje = $"Se están reportando {extranjerasSinPrimerApellido} víctimas de feminicidio de nacionalidad extranjera sin primer apellido, se requiere la información para finalizar la carga.",
                 TotalRegistrosAfectados = extranjerasSinPrimerApellido
             });
         }
 
-        if (mexicanasSinNombreOApellido > 0)
+        if (mexicanasSinNombreOApellidos > 0)
         {
             advertencias.Add(new CargaValidacionError
             {
@@ -130,11 +166,11 @@ public class FeminicidioVictimaValidator
                 Fila = null,
                 Columna = "nombre_vicfem+1apellido_vicfem+2apellido_vicfem",
                 Campo = "nombre_vicfem+1apellido_vicfem+2apellido_vicfem",
-                Valor = mexicanasSinNombreOApellido.ToString(CultureInfo.InvariantCulture),
+                Valor = mexicanasSinNombreOApellidos.ToString(CultureInfo.InvariantCulture),
                 Codigo = "FEMINICIDIO_MEXICANA_NOMBRE_APELLIDOS_ADVERTENCIA",
                 DescripcionResumen = "Víctimas de feminicidio mexicanas sin nombre y/o apellidos",
-                Mensaje = $"Se detectaron {mexicanasSinNombreOApellido} víctimas de feminicidio de nacionalidad mexicana sin nombre y/o apellidos completos. Esta información es opcional. ¿Desea continuar con la carga?",
-                TotalRegistrosAfectados = mexicanasSinNombreOApellido
+                Mensaje = $"Se detectaron {mexicanasSinNombreOApellidos} víctimas de feminicidio de nacionalidad mexicana sin nombre y/o apellidos completos. ¿Desea continuar con la carga?",
+                TotalRegistrosAfectados = mexicanasSinNombreOApellidos
             });
         }
 
@@ -145,7 +181,17 @@ public class FeminicidioVictimaValidator
     {
         return string.Equals(
             ObtenerValor(fila, "clasf_de_dto")?.Trim(),
-            "1.03",
+            ClaveFeminicidio,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool EsNacionalidadMexicana(string nacionalidad)
+    {
+        if (int.TryParse(nacionalidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var clave)) return clave == 73;
+
+        return string.Equals(
+            nacionalidad.Trim(),
+            ClaveNacionalidadMexicana,
             StringComparison.OrdinalIgnoreCase);
     }
 
@@ -157,17 +203,6 @@ public class FeminicidioVictimaValidator
         if (string.IsNullOrWhiteSpace(idCi) || string.IsNullOrWhiteSpace(idDelito)) return string.Empty;
 
         return $"{idCi}|{idDelito}";
-    }
-
-    private static bool ClavesIguales(string valor, string claveCatalogo)
-    {
-        if (int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var valorNumero) &&
-            int.TryParse(claveCatalogo, NumberStyles.Integer, CultureInfo.InvariantCulture, out var claveNumero))
-        {
-            return valorNumero == claveNumero;
-        }
-
-        return string.Equals(valor.Trim(), claveCatalogo.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? ObtenerValor(ArchivoFila fila, string columna)

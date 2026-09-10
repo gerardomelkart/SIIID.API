@@ -147,25 +147,6 @@ public class CatalogoRepository : ICatalogoRepository
         return roles.ToList();
     }
 
-    public async Task<string?> ObtenerClaveNacionalidadMexicanaAsync()
-    {
-        const string sql = @"
-        SELECT TOP 1
-            clave
-        FROM catalogo_nacionalidad
-        WHERE activo = 1
-          AND (
-                UPPER(LTRIM(RTRIM(descripcion))) IN (N'MEXICANA', N'MEXICO', N'MÉXICO')
-                OR UPPER(descripcion) LIKE N'%MEXIC%'
-              )
-        ORDER BY id_nacionalidad;
-    ";
-
-        using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<string>(sql);
-    }
-
     private static string NormalizarClaveMunicipio(string clave)
     {
         clave = clave.Trim();

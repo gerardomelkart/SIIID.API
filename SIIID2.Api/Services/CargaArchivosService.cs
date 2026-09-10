@@ -225,6 +225,16 @@ public class CargaArchivosService : ICargaArchivosService
             filasVictimas));
 
 
+        if (response.Errores.Count == 0)
+        {
+            var validacionFeminicidio = _feminicidioVictimaValidator.Validar(
+                filasDelitos,
+                filasVictimas);
+
+            response.Errores.AddRange(validacionFeminicidio.Errores);
+            advertenciasPendientes.AddRange(validacionFeminicidio.Advertencias);
+        }
+
         // El mes/año de corte corresponde al periodo de información reportado.
         // Ejemplo:
         // Si la información cargada es de abril 2026, entonces:
