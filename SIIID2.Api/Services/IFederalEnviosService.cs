@@ -8,7 +8,7 @@ public interface IFederalEnviosService
     Task<List<InformeEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? mesCorte, int? anioCorte);
     Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? mesCorte, int? anioCorte);
     Task<InformeArchivoZipResponse> GenerarZipArchivosAsync(int idUsuarioConsulta, string codigoReferencia);
-    Task<InformeArchivoZipResponse> GenerarZipAcusesAsync(int idUsuarioConsulta, int mesCorte, int anioCorte);
+    Task<InformeArchivoZipResponse> GenerarZipAcusesAsync(int idUsuarioConsulta, int? mesCorte, int anioCorte);
 
     Task<InformeArchivoZipResponse> GenerarZipSabanasAsync(int idUsuarioConsulta, int anioCorte, string? tipoSabana, string? modoPlano);
 }

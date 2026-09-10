@@ -78,7 +78,7 @@ public class FederalInformesController : ControllerBase
     }
 
     [HttpPost("envios/acuses/ticket")]
-    public async Task<IActionResult> CrearTicketDescargaAcuses([FromQuery] int mesCorte, [FromQuery] int anioCorte)
+    public async Task<IActionResult> CrearTicketDescargaAcuses([FromQuery] int anioCorte, [FromQuery] int? mesCorte = null)
     {
         if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
 

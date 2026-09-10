@@ -109,9 +109,9 @@ public partial class FederalEnviosService : IFederalEnviosService
         };
     }
 
-    public async Task<InformeArchivoZipResponse> GenerarZipAcusesAsync(int idUsuarioConsulta, int mesCorte, int anioCorte)
+    public async Task<InformeArchivoZipResponse> GenerarZipAcusesAsync(int idUsuarioConsulta, int? mesCorte, int anioCorte)
     {
-        if (mesCorte < 1 || mesCorte > 12) throw new InvalidOperationException("El mes de corte no es válido.");
+        if (mesCorte.HasValue && (mesCorte.Value < 1 || mesCorte.Value > 12)) throw new InvalidOperationException("El mes de corte no es válido.");
         if (anioCorte < 2000 || anioCorte > 2100) throw new InvalidOperationException("El año de corte no es válido.");
 
         var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
@@ -127,8 +127,10 @@ public partial class FederalEnviosService : IFederalEnviosService
                  (x.Estado is "VALIDADO_PENDIENTE_ACTUALIZACION" or "PENDIENTE_APROBACION" or "CONFIRMADO_ACTUALIZACION")))
             .ToList();
 
+        var periodo = mesCorte.HasValue ? $"{ObtenerNombreMes(mesCorte.Value)} de {anioCorte}" : $"el año {anioCorte}";
+
         if (enviosConAcuse.Count == 0)
-            throw new InvalidOperationException($"No existen acuses federales disponibles para {ObtenerNombreMes(mesCorte)} de {anioCorte}.");
+            throw new InvalidOperationException($"No existen acuses federales disponibles para {periodo}.");
 
         using var zipStream = new MemoryStream();
 
@@ -159,7 +161,9 @@ public partial class FederalEnviosService : IFederalEnviosService
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = $"ACUSES_FEDERAL_{NormalizarNombreArchivo(ObtenerNombreMes(mesCorte))}_{anioCorte}.zip"
+            NombreArchivo = mesCorte.HasValue
+                ? $"ACUSES_FEDERAL_{NormalizarNombreArchivo(ObtenerNombreMes(mesCorte.Value))}_{anioCorte}.zip"
+                : $"ACUSES_FEDERAL_{anioCorte}.zip"
         };
     }
 
