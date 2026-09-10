@@ -354,6 +354,10 @@ public class CargaRepository : ICargaRepository
         tabla.Columns.Add("fha_nac", typeof(string));
         tabla.Columns.Add("edad", typeof(string));
         tabla.Columns.Add("nacional", typeof(string));
+        tabla.Columns.Add("nombre_vicfem", typeof(string));
+        tabla.Columns.Add("primer_apellido_vicfem", typeof(string));
+        tabla.Columns.Add("segundo_apellido_vicfem", typeof(string));
+        tabla.Columns.Add("curp_vicfem", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
 
@@ -374,6 +378,10 @@ public class CargaRepository : ICargaRepository
                 ValorTextoStaging(ObtenerValor(fila, "fha_nac")),
                 ValorTextoStaging(ObtenerValor(fila, "edad")),
                 ValorTextoStaging(ObtenerValor(fila, "nacional")),
+                ValorTextoStaging(ObtenerValor(fila, "nombre_vicfem")),
+                ValorTextoStaging(ObtenerValor(fila, "1apellido_vicfem")),
+                ValorTextoStaging(ObtenerValor(fila, "2apellido_vicfem")),
+                ValorTextoStaging(ObtenerValor(fila, "curp_vicfem")),
                 "PENDIENTE",
                 true);
         }
@@ -383,8 +391,6 @@ public class CargaRepository : ICargaRepository
             DestinationTableName = "carga_tmp_victima"
         };
 
-        // El primer valor es el índice de la columna en el DataTable.
-        // El segundo valor es el nombre de la columna destino en SQL Server.
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(0, "id_carga"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(1, "numero_fila"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(2, "id_ci"));
@@ -399,8 +405,12 @@ public class CargaRepository : ICargaRepository
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(11, "fha_nac"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(12, "edad"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(13, "nacional"));
-        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(14, "estado"));
-        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(15, "activo"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(14, "nombre_vicfem"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(15, "primer_apellido_vicfem"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(16, "segundo_apellido_vicfem"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(17, "curp_vicfem"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(18, "estado"));
+        bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(19, "activo"));
 
         await bulkCopy.WriteToServerAsync(tabla);
     }
