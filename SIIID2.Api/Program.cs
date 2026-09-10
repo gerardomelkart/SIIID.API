@@ -86,6 +86,7 @@ builder.Services.AddScoped<DelitosValidator>();
 builder.Services.AddScoped<VictimasValidator>();
 builder.Services.AddScoped<CargaIntegridadValidator>();
 builder.Services.AddScoped<CatalogosValidator>();
+builder.Services.AddScoped<FeminicidioVictimaValidator>();
 builder.Services.AddScoped<ICargaRepository, CargaRepository>();
 builder.Services.AddScoped<IActualizacionCargaRepository, ActualizacionCargaRepository>();
 builder.Services.AddScoped<IAcuseRepository, AcuseRepository>();

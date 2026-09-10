@@ -21,4 +21,6 @@ public interface ICatalogoRepository
 
     // Obtiene los roles activos para formularios del front.
     Task<List<RolCatalogoItem>> ObtenerRolesActivosAsync();
+
+    Task<string?> ObtenerClaveNacionalidadMexicanaAsync();
 }
