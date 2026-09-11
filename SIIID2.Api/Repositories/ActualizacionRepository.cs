@@ -1775,7 +1775,11 @@ public class ActualizacionRepository : IActualizacionRepository
                     TRY_CONVERT(date, NULLIF(v.fha_nac, ''), 103),
                     TRY_CONVERT(date, NULLIF(v.fha_nac, ''))
                 ) AS fecha_nacimiento,
-                TRY_CONVERT(smallint, NULLIF(v.edad, '')) AS edad
+                TRY_CONVERT(smallint, NULLIF(v.edad, '')) AS edad,
+                NULLIF(v.nombre_vicfem, '') AS nombre_vicfem,
+                NULLIF(v.primer_apellido_vicfem, '') AS primer_apellido_vicfem,
+                NULLIF(v.segundo_apellido_vicfem, '') AS segundo_apellido_vicfem,
+                NULLIF(v.curp_vicfem, '') AS curp_vicfem
             FROM carga_tmp_victima v
             INNER JOIN catalogo_tipo_victima tv
                 ON tv.clave = TRY_CONVERT(tinyint, v.id_tv)
@@ -1819,6 +1823,10 @@ public class ActualizacionRepository : IActualizacionRepository
                     OR ISNULL(va.id_presenta_discapacidad, 0) <> ISNULL(vt.id_presenta_discapacidad, 0)
                     OR ISNULL(CONVERT(varchar(10), va.fecha_nacimiento, 120), '') <> ISNULL(CONVERT(varchar(10), vt.fecha_nacimiento, 120), '')
                     OR ISNULL(va.edad, 0) <> ISNULL(vt.edad, 0)
+                    OR ISNULL(va.nombre_vicfem, '') <> ISNULL(vt.nombre_vicfem, '')
+                    OR ISNULL(va.primer_apellido_vicfem, '') <> ISNULL(vt.primer_apellido_vicfem, '')
+                    OR ISNULL(va.segundo_apellido_vicfem, '') <> ISNULL(vt.segundo_apellido_vicfem, '')
+                    OR ISNULL(va.curp_vicfem, '') <> ISNULL(vt.curp_vicfem, '')
                   )
         )
         INSERT INTO victima_historico (
@@ -1834,6 +1842,10 @@ public class ActualizacionRepository : IActualizacionRepository
             id_presenta_discapacidad,
             fecha_nacimiento,
             edad,
+            nombre_vicfem,
+            primer_apellido_vicfem,
+            segundo_apellido_vicfem,
+            curp_vicfem,
             id_usuario_registro,
             fecha_registro,
             id_carga,
@@ -1856,6 +1868,10 @@ public class ActualizacionRepository : IActualizacionRepository
             id_presenta_discapacidad,
             fecha_nacimiento,
             edad,
+            nombre_vicfem,
+            primer_apellido_vicfem,
+            segundo_apellido_vicfem,
+            curp_vicfem,
             id_usuario_registro,
             fecha_registro,
             id_carga,
@@ -1928,7 +1944,11 @@ public class ActualizacionRepository : IActualizacionRepository
                     TRY_CONVERT(date, NULLIF(v.fha_nac, ''), 103),
                     TRY_CONVERT(date, NULLIF(v.fha_nac, ''))
                 ) AS fecha_nacimiento,
-                TRY_CONVERT(smallint, NULLIF(v.edad, '')) AS edad
+                TRY_CONVERT(smallint, NULLIF(v.edad, '')) AS edad,
+                NULLIF(v.nombre_vicfem, '') AS nombre_vicfem,
+                NULLIF(v.primer_apellido_vicfem, '') AS primer_apellido_vicfem,
+                NULLIF(v.segundo_apellido_vicfem, '') AS segundo_apellido_vicfem,
+                NULLIF(v.curp_vicfem, '') AS curp_vicfem
             FROM carga_tmp_victima v
             INNER JOIN catalogo_tipo_victima tv
                 ON tv.clave = TRY_CONVERT(tinyint, v.id_tv)
@@ -1964,6 +1984,10 @@ public class ActualizacionRepository : IActualizacionRepository
             vi.id_presenta_discapacidad = vt.id_presenta_discapacidad,
             vi.fecha_nacimiento = vt.fecha_nacimiento,
             vi.edad = vt.edad,
+            vi.nombre_vicfem = vt.nombre_vicfem,
+            vi.primer_apellido_vicfem = vt.primer_apellido_vicfem,
+            vi.segundo_apellido_vicfem = vt.segundo_apellido_vicfem,
+            vi.curp_vicfem = vt.curp_vicfem,
             vi.id_carga = @IdCargaActualizacion
         FROM victima vi
         INNER JOIN victimas_actuales va
@@ -1984,6 +2008,10 @@ public class ActualizacionRepository : IActualizacionRepository
                 OR ISNULL(vi.id_presenta_discapacidad, 0) <> ISNULL(vt.id_presenta_discapacidad, 0)
                 OR ISNULL(CONVERT(varchar(10), vi.fecha_nacimiento, 120), '') <> ISNULL(CONVERT(varchar(10), vt.fecha_nacimiento, 120), '')
                 OR ISNULL(vi.edad, 0) <> ISNULL(vt.edad, 0)
+                OR ISNULL(vi.nombre_vicfem, '') <> ISNULL(vt.nombre_vicfem, '')
+                OR ISNULL(vi.primer_apellido_vicfem, '') <> ISNULL(vt.primer_apellido_vicfem, '')
+                OR ISNULL(vi.segundo_apellido_vicfem, '') <> ISNULL(vt.segundo_apellido_vicfem, '')
+                OR ISNULL(vi.curp_vicfem, '') <> ISNULL(vt.curp_vicfem, '')
               );
     ";
 
@@ -2044,6 +2072,10 @@ public class ActualizacionRepository : IActualizacionRepository
             id_presenta_discapacidad,
             fecha_nacimiento,
             edad,
+            nombre_vicfem,
+            primer_apellido_vicfem,
+            segundo_apellido_vicfem,
+            curp_vicfem,
             id_usuario_registro,
             fecha_registro,
             id_carga,
@@ -2064,6 +2096,10 @@ public class ActualizacionRepository : IActualizacionRepository
                 TRY_CONVERT(date, NULLIF(v.fha_nac, ''))
             ),
             TRY_CONVERT(smallint, NULLIF(v.edad, '')),
+            NULLIF(v.nombre_vicfem, ''),
+            NULLIF(v.primer_apellido_vicfem, ''),
+            NULLIF(v.segundo_apellido_vicfem, ''),
+            NULLIF(v.curp_vicfem, ''),
             @IdUsuarioConfirmacion,
             SYSDATETIME(),
             @IdCargaActualizacion,
@@ -2175,6 +2211,10 @@ public class ActualizacionRepository : IActualizacionRepository
             id_presenta_discapacidad,
             fecha_nacimiento,
             edad,
+            nombre_vicfem,
+            primer_apellido_vicfem,
+            segundo_apellido_vicfem,
+            curp_vicfem,
             id_usuario_registro,
             fecha_registro,
             id_carga,
@@ -2197,6 +2237,10 @@ public class ActualizacionRepository : IActualizacionRepository
             id_presenta_discapacidad,
             fecha_nacimiento,
             edad,
+            nombre_vicfem,
+            primer_apellido_vicfem,
+            segundo_apellido_vicfem,
+            curp_vicfem,
             id_usuario_registro,
             fecha_registro,
             id_carga,
