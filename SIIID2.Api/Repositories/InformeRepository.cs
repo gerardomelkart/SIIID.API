@@ -392,7 +392,11 @@ public class InformeRepository : IInformeRepository
             CONVERT(varchar(10), disc.clave) AS disc,
             CONVERT(varchar(10), v.fecha_nacimiento, 103) AS fha_nac,
             v.edad AS edad,
-            nac.clave AS nacional
+            nac.clave AS nacional,
+            v.nombre_vicfem AS nombre_vicfem,
+            v.primer_apellido_vicfem AS [1apellido_vicfem],
+            v.segundo_apellido_vicfem AS [2apellido_vicfem],
+            v.curp_vicfem AS curp_vicfem
         FROM victima v
         INNER JOIN cargas_periodo cper
             ON cper.id_carga = v.id_carga
@@ -2070,7 +2074,11 @@ public class InformeRepository : IInformeRepository
             v.disc,
             v.fha_nac,
             v.edad,
-            v.nacional
+            v.nacional,
+            v.nombre_vicfem AS nombre_vicfem,
+            v.primer_apellido_vicfem AS [1apellido_vicfem],
+            v.segundo_apellido_vicfem AS [2apellido_vicfem],
+            v.curp_vicfem AS curp_vicfem
         FROM dbo.carga_tmp_victima v
         WHERE v.id_carga = @IdCarga
           AND v.activo = 1
