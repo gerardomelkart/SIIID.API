@@ -235,7 +235,11 @@ public class AdministracionCargasRepository : IAdministracionCargasRepository
             v.disc,
             v.fha_nac,
             v.edad,
-            v.nacional
+            v.nacional,
+            v.nombre_vicfem,
+            v.primer_apellido_vicfem AS [1apellido_vicfem],
+            v.segundo_apellido_vicfem AS [2apellido_vicfem],
+            v.curp_vicfem
         FROM dbo.carga_tmp_victima v
         WHERE v.id_carga = @IdCarga
           AND v.activo = 1
