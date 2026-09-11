@@ -336,7 +336,11 @@ victimas_actuales AS (
         v.id_pertenece_poblacion_indigena,
         v.id_presenta_discapacidad,
         v.fecha_nacimiento,
-        v.edad
+        v.edad,
+        v.nombre_vicfem,
+        v.primer_apellido_vicfem,
+        v.segundo_apellido_vicfem,
+        v.curp_vicfem
     FROM victima v
     INNER JOIN delito d
         ON d.id_delito = v.id_delito
@@ -369,7 +373,11 @@ victimas_tmp AS (
                     TRY_CONVERT(date, NULLIF(v.fha_nac, ''), 103),
                     TRY_CONVERT(date, NULLIF(v.fha_nac, ''))
                 ) AS fecha_nacimiento,
-                TRY_CONVERT(smallint, NULLIF(v.edad, '')) AS edad
+                TRY_CONVERT(smallint, NULLIF(v.edad, '')) AS edad,
+                NULLIF(v.nombre_vicfem, '') AS nombre_vicfem,
+                NULLIF(v.primer_apellido_vicfem, '') AS primer_apellido_vicfem,
+                NULLIF(v.segundo_apellido_vicfem, '') AS segundo_apellido_vicfem,
+                NULLIF(v.curp_vicfem, '') AS curp_vicfem
             FROM carga_tmp_victima v
             INNER JOIN catalogo_tipo_victima tv
                 ON tv.clave = TRY_CONVERT(tinyint, v.id_tv)
@@ -409,6 +417,10 @@ victimas_tmp AS (
                         OR ISNULL(va.id_presenta_discapacidad, 0) <> ISNULL(vt.id_presenta_discapacidad, 0)
                         OR ISNULL(CONVERT(varchar(10), va.fecha_nacimiento, 120), '') <> ISNULL(CONVERT(varchar(10), vt.fecha_nacimiento, 120), '')
                         OR ISNULL(va.edad, 0) <> ISNULL(vt.edad, 0)
+                        OR ISNULL(va.nombre_vicfem, '') <> ISNULL(vt.nombre_vicfem, '')
+                        OR ISNULL(va.primer_apellido_vicfem, '') <> ISNULL(vt.primer_apellido_vicfem, '')
+                        OR ISNULL(va.segundo_apellido_vicfem, '') <> ISNULL(vt.segundo_apellido_vicfem, '')
+                        OR ISNULL(va.curp_vicfem, '') <> ISNULL(vt.curp_vicfem, '')
                         THEN 'MODIFICADO'
                     ELSE 'SIN_CAMBIOS'
                 END AS tipo
