@@ -107,7 +107,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
 
     public SemanalEnviosRepository(IDbConnectionFactory dbConnectionFactory) => _dbConnectionFactory = dbConnectionFactory;
 
-    public async Task<SemanalEnviosOpcionesResponse> ObtenerOpcionesEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta)
+    public async Task<SemanalEnviosOpcionesResponse> ObtenerOpcionesEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta, int? idEntidadFederativa = null)
     {
         const string sql = @"
         SET NOCOUNT ON;
@@ -137,6 +137,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
               AND (sc.estado NOT LIKE N'RECHAZADO%' OR sc.estado = N'RECHAZADO_ADMIN')
               AND sc.activo = 1
               AND (@EsSuperUsuario = 1 OR sc.id_usuario_carga = @IdUsuarioConsulta)
+              AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
 
             UNION ALL
 
@@ -152,6 +153,7 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
               AND (sc.estado NOT LIKE N'RECHAZADO%' OR sc.estado = N'RECHAZADO_ADMIN')
               AND sc.activo = 1
               AND (@EsSuperUsuario = 1 OR sc.id_usuario_carga = @IdUsuarioConsulta)
+              AND (@IdEntidadFederativa IS NULL OR sc.id_entidad_federativa = @IdEntidadFederativa)
               AND NOT EXISTS
               (
                   SELECT 1
@@ -189,7 +191,8 @@ public class SemanalEnviosRepository : ISemanalEnviosRepository
         using var resultados = await connection.QueryMultipleAsync(sql, new
         {
             EsSuperUsuario = esSuperUsuario,
-            IdUsuarioConsulta = idUsuarioConsulta
+            IdUsuarioConsulta = idUsuarioConsulta,
+            IdEntidadFederativa = idEntidadFederativa
         });
 
         return new SemanalEnviosOpcionesResponse

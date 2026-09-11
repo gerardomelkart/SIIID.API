@@ -28,9 +28,9 @@ public class InformeService : IInformeService
     {
         var usuario = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
 
-        if (usuario == null || !usuario.EsSuperUsuario && !usuario.IdEntidadFederativa.HasValue) return [];
+        if (usuario == null || !usuario.TieneAlcanceNacionalConsulta && !usuario.IdEntidadFederativa.HasValue) return [];
 
-        return await _informeRepository.ObtenerPeriodosEnviosAsync(usuario.EsSuperUsuario, usuario.IdEntidadFederativa);
+        return await _informeRepository.ObtenerPeriodosEnviosAsync(usuario.TieneAlcanceNacionalConsulta, usuario.IdEntidadFederativa);
     }
 
     public async Task<List<InformeEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? mesCorte, int? anioCorte)
@@ -42,13 +42,13 @@ public class InformeService : IInformeService
             return new List<InformeEnvioItem>();
         }
 
-        if (!usuarioConsulta.EsSuperUsuario && !usuarioConsulta.IdEntidadFederativa.HasValue)
+        if (!usuarioConsulta.TieneAlcanceNacionalConsulta && !usuarioConsulta.IdEntidadFederativa.HasValue)
         {
             return new List<InformeEnvioItem>();
         }
 
         return await _informeRepository.ObtenerEnviosAsync(
-            usuarioConsulta.EsSuperUsuario,
+            usuarioConsulta.TieneAlcanceNacionalConsulta,
             usuarioConsulta.IdEntidadFederativa,
             idEntidadFederativa,
             mesCorte,
@@ -71,7 +71,7 @@ public class InformeService : IInformeService
             throw new InvalidOperationException("No se encontró una carga o actualización activa para el código de referencia indicado.");
         }
 
-        if (!usuarioConsulta.EsSuperUsuario)
+        if (!usuarioConsulta.TieneAlcanceNacionalConsulta)
         {
             if (!usuarioConsulta.IdEntidadFederativa.HasValue || usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa)
             {
@@ -223,12 +223,12 @@ public class InformeService : IInformeService
             throw new UnauthorizedAccessException("No tiene permiso para descargar los planos estadísticos.");
         }
 
-        if (!usuarioConsulta.EsSuperUsuario && !usuarioConsulta.IdEntidadFederativa.HasValue)
+        if (!usuarioConsulta.TieneAlcanceNacionalConsulta && !usuarioConsulta.IdEntidadFederativa.HasValue)
         {
             throw new UnauthorizedAccessException("El usuario no tiene una entidad federativa asignada.");
         }
 
-        var idEntidadFederativaFiltro = usuarioConsulta.EsSuperUsuario
+        var idEntidadFederativaFiltro = usuarioConsulta.TieneAlcanceNacionalConsulta
             ? null
             : usuarioConsulta.IdEntidadFederativa;
 

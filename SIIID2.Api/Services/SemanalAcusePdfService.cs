@@ -82,7 +82,7 @@ public class SemanalAcusePdfService : ISemanalAcusePdfService
             throw new InvalidOperationException("No se encontró la carga preliminar solicitada.");
         }
 
-        if (!usuarioConsulta.EsSuperUsuario && carga.IdUsuarioCarga != idUsuarioConsulta)
+        if (!usuarioConsulta.PuedeConsultarOperacionSemanal(carga.IdUsuarioCarga, carga.IdEntidadFederativa))
         {
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de una operación registrada por otro usuario.");
         }

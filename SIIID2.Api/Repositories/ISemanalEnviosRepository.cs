@@ -5,7 +5,7 @@ namespace SIIID2.Api.Repositories;
 public interface ISemanalEnviosRepository
 {
     Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte, int? anioSemana, int? numeroSemana, string? tipoCarga, string? estado);
-    Task<SemanalEnviosOpcionesResponse> ObtenerOpcionesEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta);
+    Task<SemanalEnviosOpcionesResponse> ObtenerOpcionesEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta, int? idEntidadFederativa = null);
     Task<SemanalEnvioReferenciaInfo?> ObtenerReferenciaAsync(string codigoReferencia);
     Task<List<IDictionary<string, object?>>> ObtenerCarpetasConfirmadasSemanaAsync(SemanalEnvioReferenciaInfo referencia);
     Task<List<IDictionary<string, object?>>> ObtenerDelitosConfirmadosSemanaAsync(SemanalEnvioReferenciaInfo referencia);

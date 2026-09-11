@@ -26,7 +26,10 @@ public class SemanalEnviosService : ISemanalEnviosService
     public async Task<SemanalEnviosOpcionesResponse> ObtenerOpcionesEnviosAsync(int idUsuarioConsulta)
     {
         var usuario = await ObtenerUsuarioAutorizadoAsync(idUsuarioConsulta);
-        return await _semanalEnviosRepository.ObtenerOpcionesEnviosAsync(usuario.EsSuperUsuario, idUsuarioConsulta);
+        return await _semanalEnviosRepository.ObtenerOpcionesEnviosAsync(
+            usuario.EsSuperUsuario || usuario.EsConsulta,
+            idUsuarioConsulta,
+            usuario.TieneAlcanceNacionalConsulta ? null : usuario.IdEntidadFederativa);
     }
 
     public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte, int? anioSemana, int? numeroSemana, string? tipoCarga, string? estado)
@@ -36,10 +39,10 @@ public class SemanalEnviosService : ISemanalEnviosService
         var estadoNormalizado = NormalizarFiltro(estado);
 
         var registros = await _semanalEnviosRepository.ObtenerEnviosAsync(
-            usuario.EsSuperUsuario,
+            usuario.EsSuperUsuario || usuario.EsConsulta,
             idUsuarioConsulta,
-            idEntidadFederativa,
-            idUsuarioCarga,
+            usuario.TieneAlcanceNacionalConsulta ? idEntidadFederativa : usuario.IdEntidadFederativa,
+            usuario.EsSuperUsuario || usuario.EsConsulta ? idUsuarioCarga : null,
             anioCorte,
             mesCorte,
             anioSemana,
@@ -139,7 +142,7 @@ public class SemanalEnviosService : ISemanalEnviosService
 
         if (referencia == null) throw new KeyNotFoundException("No se encontró la operación preliminar solicitada.");
 
-        if (!usuario.EsSuperUsuario && referencia.IdUsuarioCarga != idUsuarioConsulta)
+        if (!usuario.PuedeConsultarOperacionSemanal(referencia.IdUsuarioCarga, referencia.IdEntidadFederativa))
         {
             throw new UnauthorizedAccessException("No tiene permiso para descargar archivos de una operación registrada por otro usuario.");
         }
@@ -200,8 +203,8 @@ public class SemanalEnviosService : ISemanalEnviosService
 
         var envios = await ObtenerEnviosAsync(
             idUsuarioConsulta,
-            usuarioConsulta.EsSuperUsuario ? idEntidadFederativa : null,
-            usuarioConsulta.EsSuperUsuario ? idUsuarioCarga : null,
+            usuarioConsulta.TieneAlcanceNacionalConsulta ? idEntidadFederativa : null,
+            usuarioConsulta.EsSuperUsuario || usuarioConsulta.EsConsulta ? idUsuarioCarga : null,
             anioCorte,
             mesCorte,
             null,
@@ -365,7 +368,7 @@ public class SemanalEnviosService : ISemanalEnviosService
             throw new UnauthorizedAccessException("Sólo el SUPER_USUARIO puede generar planos previos o mixtos.");
         }
 
-        var idEntidadFederativa = usuario.EsSuperUsuario ? null : usuario.IdEntidadFederativa;
+        var idEntidadFederativa = usuario.TieneAlcanceNacionalConsulta ? null : usuario.IdEntidadFederativa;
         int? idUsuarioCarga = null;
         var firma = await _semanalEnviosRepository.ObtenerFirmaSabanaAsync(anioCorte, idEntidadFederativa, idUsuarioCarga);
 
@@ -385,7 +388,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         }
 
         var mesUltimoCorte = firma.MesUltimoCorte.Value;
-        var alcance = usuario.EsSuperUsuario ? "NACIONAL" : $"ENTIDAD:{usuario.IdEntidadFederativa}";
+        var alcance = usuario.TieneAlcanceNacionalConsulta ? "NACIONAL" : $"ENTIDAD:{usuario.IdEntidadFederativa}";
         var cacheKey = $"SABANAS_PRELIMINARES:{alcance}:{tipo}:{modo}:{anioCorte}:{mesUltimoCorte}:{firma.UltimoIdCarga}:{firma.TotalCargasConfirmadas}:{firma.TotalCargasPendientes}:{firma.UltimaFechaMovimiento:O}";
 
         if (_cache.TryGetValue<InformeArchivoZipResponse>(cacheKey, out var archivoCacheado))
@@ -448,10 +451,10 @@ public class SemanalEnviosService : ISemanalEnviosService
             throw new UnauthorizedAccessException("Sólo el SUPER_USUARIO puede generar reportes preliminares previos o mixtos.");
         }
 
-        var idEntidadEfectiva = usuarioConsulta.EsSuperUsuario ? idEntidadFederativa : usuarioConsulta.IdEntidadFederativa;
-        int? idUsuarioCargaEfectivo = usuarioConsulta.EsSuperUsuario ? null : idUsuarioConsulta;
-        int? idEntidadListado = usuarioConsulta.EsSuperUsuario ? null : idEntidadEfectiva;
-        int? idUsuarioListado = usuarioConsulta.EsSuperUsuario ? null : idUsuarioCargaEfectivo;
+        var idEntidadEfectiva = usuarioConsulta.TieneAlcanceNacionalConsulta ? idEntidadFederativa : usuarioConsulta.IdEntidadFederativa;
+        int? idUsuarioCargaEfectivo = usuarioConsulta.EsSuperUsuario || usuarioConsulta.EsConsulta ? null : idUsuarioConsulta;
+        int? idEntidadListado = usuarioConsulta.TieneAlcanceNacionalConsulta ? null : idEntidadEfectiva;
+        int? idUsuarioListado = usuarioConsulta.EsSuperUsuario || usuarioConsulta.EsConsulta ? null : idUsuarioCargaEfectivo;
 
         var entidadesTask = _semanalEnviosRepository.ObtenerEntidadesReportePreliminarAsync(
             anioCorte,
@@ -472,7 +475,7 @@ public class SemanalEnviosService : ISemanalEnviosService
         var entidades = entidadesTask.Result;
         var delitos = delitosTask.Result;
 
-        if (usuarioConsulta.EsSuperUsuario &&
+        if (usuarioConsulta.TieneAlcanceNacionalConsulta &&
             idEntidadEfectiva.HasValue &&
             !entidades.Any(x => x.IdEntidadFederativa == idEntidadEfectiva.Value))
         {
@@ -495,7 +498,7 @@ public class SemanalEnviosService : ISemanalEnviosService
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar envíos semanales.");
         }
 
-        if (!usuario.EsSuperUsuario && !usuario.IdEntidadFederativa.HasValue)
+        if (!usuario.TieneAlcanceNacionalConsulta && !usuario.IdEntidadFederativa.HasValue)
         {
             throw new UnauthorizedAccessException("El usuario no tiene una entidad federativa asignada.");
         }

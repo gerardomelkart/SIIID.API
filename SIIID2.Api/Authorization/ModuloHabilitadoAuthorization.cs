@@ -44,6 +44,7 @@ public sealed class ModuloHabilitadoHandler : AuthorizationHandler<ModuloHabilit
                    AND m.activo = 1
                 WHERE u.id_usuario = @IdUsuario
                   AND u.activo = 1
+                  AND (@ClaveModulo <> N'FEDERAL' OR r.rol <> N'CONSULTA' OR u.id_entidad_federativa IS NULL)
             ) THEN 1 ELSE 0 END AS bit);";
 
         using var connection = _dbConnectionFactory.CrearConexion();

@@ -55,7 +55,7 @@ public class InformesRechazosController : ControllerBase
             });
         }
 
-        if (!usuarioConsulta.EsSuperUsuario && !usuarioConsulta.IdEntidadFederativa.HasValue)
+        if (!usuarioConsulta.TieneAlcanceNacionalConsulta && !usuarioConsulta.IdEntidadFederativa.HasValue)
         {
             return Ok(Array.Empty<InformeEnvioItem>());
         }
@@ -125,9 +125,9 @@ public class InformesRechazosController : ControllerBase
 
         var rechazados = (await connection.QueryAsync<InformeEnvioItem>(sql, new
         {
-            EsSuperUsuario = usuarioConsulta.EsSuperUsuario,
+            EsSuperUsuario = usuarioConsulta.TieneAlcanceNacionalConsulta,
             IdEntidadFederativaUsuario = usuarioConsulta.IdEntidadFederativa,
-            IdEntidadFederativa = usuarioConsulta.EsSuperUsuario ? idEntidadFederativa : null,
+            IdEntidadFederativa = usuarioConsulta.TieneAlcanceNacionalConsulta ? idEntidadFederativa : null,
             MesCorte = mesCorte,
             AnioCorte = anioCorte
         })).ToList();
@@ -233,7 +233,7 @@ public class InformesRechazosController : ControllerBase
             });
         }
 
-        if (!usuarioConsulta.EsSuperUsuario && (!usuarioConsulta.IdEntidadFederativa.HasValue || usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa))
+        if (!usuarioConsulta.TieneAlcanceNacionalConsulta && (!usuarioConsulta.IdEntidadFederativa.HasValue || usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa))
         {
             return StatusCode(StatusCodes.Status403Forbidden, new
             {

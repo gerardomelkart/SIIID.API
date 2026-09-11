@@ -42,18 +42,15 @@ public class AcusePdfService : IAcusePdfService
             throw new InvalidOperationException("No se encontró la carga solicitada.");
         }
 
-        var estadoAcusePrevioPermitido =  string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(carga.Estado,"PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
+        var estadoAcusePrevioPermitido = string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
 
         if (!estadoAcusePrevioPermitido)
         {
             throw new InvalidOperationException("El informe previo solo puede generarse para cargas validadas o pendientes de aprobación.");
         }
 
-        if (!usuarioConsulta.EsSuperUsuario &&
-            usuarioConsulta.IdEntidadFederativa.HasValue &&
-            carga.IdEntidadFederativa.HasValue &&
-            usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa.Value)
+        if (!usuarioConsulta.PuedeConsultarEntidad(carga.IdEntidadFederativa))
         {
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
         }
@@ -89,10 +86,7 @@ public class AcusePdfService : IAcusePdfService
             throw new InvalidOperationException("El acuse confirmado solo puede generarse para cargas en estado CONFIRMADO.");
         }
 
-        if (!usuarioConsulta.EsSuperUsuario &&
-            usuarioConsulta.IdEntidadFederativa.HasValue &&
-            carga.IdEntidadFederativa.HasValue &&
-            usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa.Value)
+        if (!usuarioConsulta.PuedeConsultarEntidad(carga.IdEntidadFederativa))
         {
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
         }
@@ -123,7 +117,7 @@ public class AcusePdfService : IAcusePdfService
             throw new InvalidOperationException("No se encontró la actualización solicitada.");
         }
 
-        var estadoAcusePrevioActualizacionPermitido = string.Equals(carga.Estado, "VALIDADO_PENDIENTE_ACTUALIZACION", StringComparison.OrdinalIgnoreCase)||
+        var estadoAcusePrevioActualizacionPermitido = string.Equals(carga.Estado, "VALIDADO_PENDIENTE_ACTUALIZACION", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
 
         if (!estadoAcusePrevioActualizacionPermitido)
@@ -131,10 +125,7 @@ public class AcusePdfService : IAcusePdfService
             throw new InvalidOperationException("El informe previo de actualización solo puede generarse para actualizaciones validadas o pendientes de aprobación.");
         }
 
-        if (!usuarioConsulta.EsSuperUsuario &&
-            usuarioConsulta.IdEntidadFederativa.HasValue &&
-            carga.IdEntidadFederativa.HasValue &&
-            usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa.Value)
+        if (!usuarioConsulta.PuedeConsultarEntidad(carga.IdEntidadFederativa))
         {
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
         }
@@ -158,7 +149,7 @@ public class AcusePdfService : IAcusePdfService
             throw new UnauthorizedAccessException("El usuario autenticado no existe o no está activo.");
         }
 
-        var carga = await  _acuseRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
+        var carga = await _acuseRepository.ObtenerCargaParaAcuseAsync(codigoReferencia);
 
         if (carga == null)
         {
@@ -170,10 +161,7 @@ public class AcusePdfService : IAcusePdfService
             throw new InvalidOperationException("El acuse confirmado de actualización solo puede generarse para actualizaciones en estado CONFIRMADO_ACTUALIZACION.");
         }
 
-        if (!usuarioConsulta.EsSuperUsuario &&
-            usuarioConsulta.IdEntidadFederativa.HasValue &&
-            carga.IdEntidadFederativa.HasValue &&
-            usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa.Value)
+        if (!usuarioConsulta.PuedeConsultarEntidad(carga.IdEntidadFederativa))
         {
             throw new UnauthorizedAccessException("El usuario no tiene permiso para consultar el acuse de esta entidad.");
         }

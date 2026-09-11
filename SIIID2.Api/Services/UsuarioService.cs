@@ -110,17 +110,17 @@ public class UsuarioService : IUsuarioService
             }
         }
 
-        // Todos los roles excepto SUPER_USUARIO deben estar ligados a una entidad federativa.
+        // CONSULTA permite Nacional (NULL); ENLACE_ESTATAL requiere entidad.
         if (rol != "SUPER_USUARIO")
         {
-            if (!request.IdEntidadFederativa.HasValue)
+            if (!request.IdEntidadFederativa.HasValue && rol != "CONSULTA")
             {
                 errores.Add(ErrorUsuario(
                     "idEntidadFederativa",
                     "USUARIO_ENTIDAD_OBLIGATORIA",
                     "El usuario debe tener entidad federativa para el rol seleccionado."));
             }
-            else
+            else if (request.IdEntidadFederativa.HasValue)
             {
                 // Si se envió entidad, se valida que exista y esté activa.
                 var existeEntidad = await _usuarioRepository.ExisteEntidadActivaAsync(request.IdEntidadFederativa.Value);
@@ -305,10 +305,10 @@ public class UsuarioService : IUsuarioService
         // Se validan campos obligatorios y formatos.
         var errores = ValidarCamposObligatoriosEdicion(request, rol);
 
-        // Todos los roles excepto SUPER_USUARIO requieren entidad.
+        // CONSULTA permite Nacional (NULL); ENLACE_ESTATAL requiere entidad.
         if (rol != "SUPER_USUARIO")
         {
-            if (!request.IdEntidadFederativa.HasValue)
+            if (!request.IdEntidadFederativa.HasValue && rol != "CONSULTA")
             {
                 errores.Add(new UsuarioValidacionError
                 {
@@ -317,7 +317,7 @@ public class UsuarioService : IUsuarioService
                     Mensaje = "El usuario debe tener entidad federativa para el rol seleccionado."
                 });
             }
-            else
+            else if (request.IdEntidadFederativa.HasValue)
             {
                 var existeEntidad = await _usuarioRepository.ExisteEntidadActivaAsync(request.IdEntidadFederativa.Value);
 
@@ -537,11 +537,11 @@ public class UsuarioService : IUsuarioService
 
         if (rol != "SUPER_USUARIO")
         {
-            if (!request.IdEntidadFederativa.HasValue)
+            if (!request.IdEntidadFederativa.HasValue && rol != "CONSULTA")
             {
                 errores.Add(ErrorUsuario("idEntidadFederativa", "USUARIO_ENTIDAD_OBLIGATORIA", "El usuario debe tener entidad federativa para el rol seleccionado."));
             }
-            else
+            else if (request.IdEntidadFederativa.HasValue)
             {
                 var existeEntidad = await _usuarioRepository.ExisteEntidadActivaAsync(request.IdEntidadFederativa.Value);
 
