@@ -10,6 +10,7 @@ public class BanciCargaService : IBanciCargaService
     private readonly IBanciArchivoReader _archivoReader;
     private readonly IBanciCargaRepository _banciCargaRepository;
     private readonly BanciMetodologiaValidator _banciMetodologiaValidator;
+    private readonly BanciCatalogosValidator _banciCatalogosValidator;
 
     private static readonly HashSet<string> ClasificacionesPermitidas =
         new(StringComparer.OrdinalIgnoreCase)
@@ -24,11 +25,12 @@ public class BanciCargaService : IBanciCargaService
             "2.08.04"
         };
 
-    public BanciCargaService(IBanciArchivoReader archivoReader, IBanciCargaRepository banciCargaRepository, BanciMetodologiaValidator banciMetodologiaValidator)
+    public BanciCargaService(IBanciArchivoReader archivoReader, IBanciCargaRepository banciCargaRepository, BanciMetodologiaValidator banciMetodologiaValidator, BanciCatalogosValidator banciCatalogosValidator)
     {
         _archivoReader = archivoReader;
         _banciCargaRepository = banciCargaRepository;
         _banciMetodologiaValidator = banciMetodologiaValidator;
+        _banciCatalogosValidator = banciCatalogosValidator;
     }
 
     public async Task<BanciCargaValidacionResponse> ValidarArchivosAsync(
@@ -118,14 +120,16 @@ public class BanciCargaService : IBanciCargaService
         response.Errores.AddRange(validacionMetodologica.Errores);
         response.Advertencias.AddRange(validacionMetodologica.Advertencias);
 
+        var erroresCatalogos = await _banciCatalogosValidator.ValidarAsync(lectura);
+        response.Errores.AddRange(erroresCatalogos);
+
         var idEntidadFederativa =
-                    await ResolverEntidadCargaAsync(
+                            await ResolverEntidadCargaAsync(
                 usuario,
                 lectura,
                 response.Errores);
 
-        if (response.Errores.Count > 0 ||
-            !idEntidadFederativa.HasValue)
+        if (response.Errores.Count > 0 || !idEntidadFederativa.HasValue)
         {
             response.Mensaje =
                 $"Se encontraron {response.Errores.Count} errores en la información BANCI.";

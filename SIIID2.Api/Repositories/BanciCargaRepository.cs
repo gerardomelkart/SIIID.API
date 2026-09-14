@@ -59,50 +59,34 @@ public class BanciCargaRepository : IBanciCargaRepository
                 });
     }
 
-    public async Task<int?> ResolverEntidadFederativaAsync(
-        string valor)
+    public async Task<int?> ResolverEntidadFederativaAsync(string valor)
     {
         const string sql = """
-            DECLARE @Valor nvarchar(250) =
-                UPPER(LTRIM(RTRIM(@ValorOriginal)));
+        DECLARE @Valor nvarchar(250) = UPPER(LTRIM(RTRIM(@ValorOriginal)));
+        DECLARE @ValorSinPunto nvarchar(250) = LTRIM(RTRIM(REPLACE(@Valor, N'.', N' ')));
+        DECLARE @PrimerToken nvarchar(20) = LEFT(@ValorSinPunto, CHARINDEX(N' ', @ValorSinPunto + N' ') - 1);
 
-            DECLARE @ValorSinPunto nvarchar(250) =
-                REPLACE(@Valor, N'.', N' ');
+        SELECT TOP (1) CONVERT(int, ef.id_entidad_federativa)
+        FROM dbo.catalogo_entidad_federativa ef
+        WHERE ef.activo = 1
+          AND
+          (
+                UPPER(LTRIM(RTRIM(ef.nombre))) = @Valor
+             OR UPPER(LTRIM(RTRIM(ef.clave))) = @Valor
+             OR ef.id_entidad_federativa = TRY_CONVERT(tinyint, @Valor)
+             OR ef.id_entidad_federativa = TRY_CONVERT(tinyint, @PrimerToken)
+          )
+        ORDER BY
+            CASE
+                WHEN UPPER(LTRIM(RTRIM(ef.nombre))) = @Valor THEN 1
+                WHEN UPPER(LTRIM(RTRIM(ef.clave))) = @Valor THEN 2
+                WHEN ef.id_entidad_federativa = TRY_CONVERT(tinyint, @Valor) THEN 3
+                ELSE 4
+            END;
+        """;
 
-            SELECT TOP (1)
-                CONVERT(int, ef.id_entidad_federativa)
-            FROM dbo.catalogo_entidad_federativa ef
-            WHERE ef.activo = 1
-              AND
-              (
-                    UPPER(LTRIM(RTRIM(ef.nombre))) = @Valor
-                 OR UPPER(LTRIM(RTRIM(ef.siglas))) = @Valor
-                 OR UPPER(LTRIM(RTRIM(ef.siglas_renapo))) = @Valor
-                 OR UPPER(LTRIM(RTRIM(ef.clave))) = @Valor
-                 OR ef.id_entidad_federativa = TRY_CONVERT(tinyint, @Valor)
-                 OR @ValorSinPunto LIKE UPPER(LTRIM(RTRIM(ef.clave))) + N' %'
-              )
-            ORDER BY
-                CASE
-                    WHEN UPPER(LTRIM(RTRIM(ef.nombre))) = @Valor THEN 1
-                    WHEN UPPER(LTRIM(RTRIM(ef.siglas))) = @Valor THEN 2
-                    WHEN UPPER(LTRIM(RTRIM(ef.siglas_renapo))) = @Valor THEN 3
-                    WHEN UPPER(LTRIM(RTRIM(ef.clave))) = @Valor THEN 4
-                    WHEN ef.id_entidad_federativa = TRY_CONVERT(tinyint, @Valor) THEN 5
-                    ELSE 6
-                END;
-            """;
-
-        using var connection =
-            _dbConnectionFactory.CrearConexion();
-
-        return await connection
-            .ExecuteScalarAsync<int?>(
-                sql,
-                new
-                {
-                    ValorOriginal = valor
-                });
+        using var connection = _dbConnectionFactory.CrearConexion();
+        return await connection.ExecuteScalarAsync<int?>(sql, new { ValorOriginal = valor });
     }
 
     public async Task<long> GuardarCargaValidadaAsync(
