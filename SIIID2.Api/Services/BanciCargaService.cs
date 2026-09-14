@@ -1,11 +1,13 @@
 ﻿using SIIID2.Api.Models;
 using SIIID2.Api.Readers;
+using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Services;
 
 public class BanciCargaService : IBanciCargaService
 {
     private readonly IBanciArchivoReader _archivoReader;
+    private readonly IBanciCargaRepository _banciCargaRepository;
 
     private static readonly HashSet<string> ClasificacionesPermitidas =
         new(StringComparer.OrdinalIgnoreCase)
@@ -20,36 +22,69 @@ public class BanciCargaService : IBanciCargaService
             "2.08.04"
         };
 
-    public BanciCargaService(
-        IBanciArchivoReader archivoReader)
+    public BanciCargaService(IBanciArchivoReader archivoReader, IBanciCargaRepository banciCargaRepository)
     {
         _archivoReader = archivoReader;
+        _banciCargaRepository = banciCargaRepository;
     }
 
     public async Task<BanciCargaValidacionResponse> ValidarArchivosAsync(
         BanciCargaArchivosRequest request,
         int idUsuarioCarga)
     {
-        _ = idUsuarioCarga;
-
-        var lectura =
-            await _archivoReader.LeerAsync(request);
-
         var response =
             new BanciCargaValidacionResponse
             {
-                ModalidadIngreso =
-                    lectura.ModalidadIngreso,
-
-                TotalCarpetas =
-                    lectura.Carpetas.Count,
-
-                TotalDelitos =
-                    lectura.Delitos.Count,
-
-                TotalVictimas =
-                    lectura.Victimas.Count
+                CodigoReferencia =
+                    GenerarCodigoReferencia()
             };
+
+        var usuario =
+            await _banciCargaRepository
+                .ObtenerUsuarioCargaAsync(
+                    idUsuarioCarga);
+
+        if (usuario == null)
+        {
+            response.Errores.Add(
+                ErrorGeneral(
+                    "BANCI_USUARIO_NO_HABILITADO",
+                    "El usuario autenticado no existe, está inactivo o no tiene habilitado el módulo BANCI."));
+
+            response.Mensaje =
+                "El usuario no tiene acceso al módulo BANCI.";
+
+            return response;
+        }
+
+        if (!usuario.HabilitaCarga)
+        {
+            response.Errores.Add(
+                ErrorGeneral(
+                    "BANCI_USUARIO_SIN_PERMISO_CARGA",
+                    "El usuario autenticado no tiene habilitada la carga de información BANCI."));
+
+            response.Mensaje =
+                "El usuario no tiene permiso para cargar información BANCI.";
+
+            return response;
+        }
+
+        var lectura =
+            await _archivoReader.LeerAsync(
+                request);
+
+        response.ModalidadIngreso =
+            lectura.ModalidadIngreso;
+
+        response.TotalCarpetas =
+            lectura.Carpetas.Count;
+
+        response.TotalDelitos =
+            lectura.Delitos.Count;
+
+        response.TotalVictimas =
+            lectura.Victimas.Count;
 
         response.Errores.AddRange(
             lectura.Errores);
@@ -78,17 +113,37 @@ public class BanciCargaService : IBanciCargaService
             lectura.Delitos,
             response.Errores);
 
+        var idEntidadFederativa =
+            await ResolverEntidadCargaAsync(
+                usuario,
+                lectura,
+                response.Errores);
+
+        if (response.Errores.Count > 0 ||
+            !idEntidadFederativa.HasValue)
+        {
+            response.Mensaje =
+                $"Se encontraron {response.Errores.Count} errores en la información BANCI.";
+
+            return response;
+        }
+
+        await _banciCargaRepository
+            .GuardarCargaValidadaAsync(
+                idUsuarioCarga,
+                idEntidadFederativa.Value,
+                response.CodigoReferencia,
+                lectura.ModalidadIngreso,
+                lectura,
+                response);
+
         response.Mensaje =
-            response.EsValido
-                ? "Los archivos BANCI tienen una estructura válida."
-                : $"Se encontraron {response.Errores.Count} errores en la información BANCI.";
+            "Los archivos BANCI tienen una estructura válida y quedaron almacenados temporalmente para continuar con su validación.";
 
         return response;
     }
 
-    private static void ValidarRegistrosMinimos(
-        BanciLecturaArchivosResultado lectura,
-        List<BanciCargaValidacionError> errores)
+    private static void ValidarRegistrosMinimos(BanciLecturaArchivosResultado lectura, List<BanciCargaValidacionError> errores)
     {
         if (lectura.Carpetas.Count == 0)
         {

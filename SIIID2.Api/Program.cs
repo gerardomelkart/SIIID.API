@@ -82,6 +82,7 @@ builder.Services.AddScoped<IFederalAcuseRepository, FederalAcuseRepository>();
 builder.Services.AddScoped<IFederalEnviosRepository, FederalEnviosRepository>();
 builder.Services.AddScoped<IFederalUsuarioRepository, FederalUsuarioRepository>();
 builder.Services.AddScoped<IFederalActualizacionRepository, FederalActualizacionRepository>();
+builder.Services.AddScoped<IBanciCargaRepository, BanciCargaRepository>();
 // Registro de validadores específicos por archivo, validación cruzada y catálogos.
 builder.Services.AddScoped<CarpetasValidator>();
 builder.Services.AddScoped<DelitosValidator>();

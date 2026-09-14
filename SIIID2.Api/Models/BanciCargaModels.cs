@@ -12,6 +12,8 @@ public class BanciCargaValidacionResponse
 {
     public bool EsValido => Errores.Count == 0;
 
+    public string CodigoReferencia { get; set; } = string.Empty;
+
     public string ModalidadIngreso { get; set; } = string.Empty;
 
     public int TotalCarpetas { get; set; }
@@ -45,4 +47,19 @@ public class BanciLecturaArchivosResultado
     public List<ArchivoFila> Victimas { get; set; } = [];
 
     public List<BanciCargaValidacionError> Errores { get; set; } = [];
+}
+
+public class BanciUsuarioCargaInfo
+{
+    public int IdUsuario { get; set; }
+    public int? IdEntidadFederativa { get; set; }
+    public string Rol { get; set; } = string.Empty;
+    public bool HabilitaCarga { get; set; }
+    public bool HabilitaModificacion { get; set; }
+
+    public bool EsSuperUsuario =>
+        string.Equals(
+            Rol,
+            "SUPER_USUARIO",
+            StringComparison.OrdinalIgnoreCase);
 }
