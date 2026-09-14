@@ -149,6 +149,48 @@ public class VictimasValidator
         return errores;
     }
 
+    public List<CargaValidacionError> ValidarBanci(List<ArchivoFila> filas)
+    {
+        var errores = new List<CargaValidacionError>();
+
+        if (filas.Count == 0)
+        {
+            errores.Add(new CargaValidacionError
+            {
+                Archivo = NombreArchivo,
+                Fila = null,
+                Columna = "",
+                Campo = "",
+                Valor = null,
+                Codigo = "VICTIMAS_SIN_REGISTROS",
+                DescripcionResumen = "Total de registros en el archivo de víctimas",
+                Mensaje = "El archivo de víctimas no contiene registros para validar."
+            });
+
+            return errores;
+        }
+
+        ValidarDuplicidadVictima(filas, errores);
+
+        foreach (var fila in filas)
+        {
+            ValidarTextoObligatorio(fila, "id_ci", errores, 250, "VICTIMAS_ID_CI_SIN_INFORMACION", "\"ID_CI\" sin información");
+            ValidarTextoObligatorio(fila, "id_delito", errores, 250, "VICTIMAS_ID_DELITO_SIN_INFORMACION", "\"ID_DELITO\" sin información");
+            ValidarTextoObligatorio(fila, "id_vicf", errores, 250, "VICTIMAS_ID_VICF_SIN_INFORMACION", "\"ID_VICF\" sin información");
+
+            ValidarEnteroObligatorio(fila, "sexo", errores, "VICTIMAS_SEXO_SIN_INFORMACION", "Sexo sin información", out _);
+            ValidarEnteroObligatorio(fila, "genero", errores, "VICTIMAS_GENERO_SIN_INFORMACION", "Género sin información", out _);
+            ValidarEnteroObligatorio(fila, "pob", errores, "VICTIMAS_POB_SIN_INFORMACION", "Población indígena sin información", out _);
+            ValidarEnteroObligatorio(fila, "disc", errores, "VICTIMAS_DISC_SIN_INFORMACION", "Discapacidad sin información", out _);
+            ValidarEnteroObligatorio(fila, "nacional", errores, "VICTIMAS_NACIONAL_SIN_INFORMACION", "Nacionalidad sin información", out _);
+
+            ValidarFechaOpcional(fila, "fha_nac", errores);
+            ValidarEdadOpcional(fila, errores);
+        }
+
+        return errores;
+    }
+
     private bool TieneVariablesPersonaFisicaInformadas(ArchivoFila fila)
     {
         return TieneValorPersonaFisica(fila, "sexo") ||

@@ -23,6 +23,16 @@ public class CatalogosValidator
         return await ValidarAsync(filasCarpetas, filasDelitos, filasVictimas, "federal_catalogo_modalidad_delito");
     }
 
+    public async Task<List<CargaValidacionError>> ValidarBanciAsync(List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    {
+        var errores = new List<CargaValidacionError>();
+
+        await ValidarCatalogosVictimasAsync(filasVictimas, errores);
+        await ValidarCatalogosDelitosAsync(filasDelitos, errores, "banci_catalogo_clasificacion_delito", "clave");
+
+        return errores;
+    }
+
     private async Task<List<CargaValidacionError>> ValidarAsync(List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas, string tablaModalidadesDelito)
     {
         var errores = new List<CargaValidacionError>();
@@ -200,7 +210,7 @@ public class CatalogosValidator
         }
     }
 
-    private async Task ValidarCatalogosDelitosAsync(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores, string tablaModalidadesDelito)
+    private async Task ValidarCatalogosDelitosAsync(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores, string tablaModalidadesDelito, string columnaModalidadDelito = "clave4")
     {
         // Cargamos cada catálogo una sola vez.
         var formasAccion = await _catalogoRepository.ObtenerClavesNumericasActivasAsync("catalogo_forma_accion", "clave");
@@ -209,7 +219,7 @@ public class CatalogosValidator
 
         var gradosConsumacion = await _catalogoRepository.ObtenerClavesNumericasActivasAsync("catalogo_grado_consumacion", "clave");
 
-        var modalidadesDelito = await _catalogoRepository.ObtenerClavesTextoActivasAsync(tablaModalidadesDelito, "clave4");
+        var modalidadesDelito = await _catalogoRepository.ObtenerClavesTextoActivasAsync(tablaModalidadesDelito, columnaModalidadDelito);
 
         var idsEntidadesFederativas = await _catalogoRepository.ObtenerClavesNumericasActivasAsync("catalogo_entidad_federativa", "id_entidad_federativa");
 

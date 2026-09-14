@@ -9,8 +9,12 @@ public class BanciCargaService : IBanciCargaService
 {
     private readonly IBanciArchivoReader _archivoReader;
     private readonly IBanciCargaRepository _banciCargaRepository;
+    private readonly CarpetasValidator _carpetasValidator;
+    private readonly DelitosValidator _delitosValidator;
+    private readonly VictimasValidator _victimasValidator;
+    private readonly CargaIntegridadValidator _cargaIntegridadValidator;
+    private readonly CatalogosValidator _catalogosValidator;
     private readonly BanciMetodologiaValidator _banciMetodologiaValidator;
-    private readonly BanciCatalogosValidator _banciCatalogosValidator;
 
     private static readonly HashSet<string> ClasificacionesPermitidas =
         new(StringComparer.OrdinalIgnoreCase)
@@ -25,12 +29,16 @@ public class BanciCargaService : IBanciCargaService
             "2.08.04"
         };
 
-    public BanciCargaService(IBanciArchivoReader archivoReader, IBanciCargaRepository banciCargaRepository, BanciMetodologiaValidator banciMetodologiaValidator, BanciCatalogosValidator banciCatalogosValidator)
+    public BanciCargaService(IBanciArchivoReader archivoReader, IBanciCargaRepository banciCargaRepository, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, BanciMetodologiaValidator banciMetodologiaValidator)
     {
         _archivoReader = archivoReader;
         _banciCargaRepository = banciCargaRepository;
+        _carpetasValidator = carpetasValidator;
+        _delitosValidator = delitosValidator;
+        _victimasValidator = victimasValidator;
+        _cargaIntegridadValidator = cargaIntegridadValidator;
+        _catalogosValidator = catalogosValidator;
         _banciMetodologiaValidator = banciMetodologiaValidator;
-        _banciCatalogosValidator = banciCatalogosValidator;
     }
 
     public async Task<BanciCargaValidacionResponse> ValidarArchivosAsync(
@@ -102,26 +110,19 @@ public class BanciCargaService : IBanciCargaService
             return response;
         }
 
-        ValidarRegistrosMinimos(
-            lectura,
-            response.Errores);
+        ValidarRegistrosMinimos(lectura, response.Errores);
 
-        ValidarDuplicados(
-            lectura,
-            response.Errores);
+        AgregarErroresHeredados(response.Errores, _carpetasValidator.Validar(lectura.Carpetas, validarMesInmediatoAnterior: false));
+        AgregarErroresHeredados(response.Errores, _delitosValidator.Validar(lectura.Delitos));
+        AgregarErroresHeredados(response.Errores, _victimasValidator.ValidarBanci(lectura.Victimas));
+        AgregarErroresHeredados(response.Errores, _cargaIntegridadValidator.Validar(lectura.Carpetas, lectura.Delitos, lectura.Victimas));
 
-        ValidarIntegridad(
-            lectura,
-            response.Errores);
-
-        ValidarClasificaciones(lectura.Delitos, response.Errores);
+        var erroresCatalogos = await _catalogosValidator.ValidarBanciAsync(lectura.Carpetas, lectura.Delitos, lectura.Victimas);
+        AgregarErroresHeredados(response.Errores, erroresCatalogos);
 
         var validacionMetodologica = _banciMetodologiaValidator.Validar(lectura);
         response.Errores.AddRange(validacionMetodologica.Errores);
         response.Advertencias.AddRange(validacionMetodologica.Advertencias);
-
-        var erroresCatalogos = await _banciCatalogosValidator.ValidarAsync(lectura);
-        response.Errores.AddRange(erroresCatalogos);
 
         var idEntidadFederativa =
                             await ResolverEntidadCargaAsync(
@@ -158,27 +159,9 @@ public class BanciCargaService : IBanciCargaService
         if (lectura.Delitos.Count == 0) errores.Add(ErrorGeneral("BANCI_SIN_DELITOS", "No se encontraron registros de delitos."));
         if (lectura.Victimas.Count == 0) errores.Add(ErrorGeneral("BANCI_SIN_VICTIMAS", "No se encontraron registros de víctimas."));
 
-        foreach (var fila in lectura.Carpetas)
-        {
-            ValidarCampoLlave(fila, "entidad", "CARPETA", errores);
-            ValidarCampoLlave(fila, "id_ci", "CARPETA", errores);
-        }
-
-        foreach (var fila in lectura.Delitos)
-        {
-            ValidarCampoLlave(fila, "entidad", "DELITO", errores);
-            ValidarCampoLlave(fila, "id_ci", "DELITO", errores);
-            ValidarCampoLlave(fila, "id_delito", "DELITO", errores);
-            ValidarCampoLlave(fila, "clasf_de_dto", "DELITO", errores);
-        }
-
-        foreach (var fila in lectura.Victimas)
-        {
-            ValidarCampoLlave(fila, "entidad", "VICTIMA", errores);
-            ValidarCampoLlave(fila, "id_ci", "VICTIMA", errores);
-            ValidarCampoLlave(fila, "id_delito", "VICTIMA", errores);
-            ValidarCampoLlave(fila, "id_vicf", "VICTIMA", errores);
-        }
+        foreach (var fila in lectura.Carpetas) ValidarCampoLlave(fila, "entidad", "CARPETA", errores);
+        foreach (var fila in lectura.Delitos) ValidarCampoLlave(fila, "entidad", "DELITO", errores);
+        foreach (var fila in lectura.Victimas) ValidarCampoLlave(fila, "entidad", "VICTIMA", errores);
     }
 
     private static void ValidarDuplicados(
@@ -450,6 +433,19 @@ public class BanciCargaService : IBanciCargaService
             "\u001F",
             valores.Select(x =>
                 x.Trim().ToUpperInvariant()));
+    }
+
+    private static void AgregarErroresHeredados(List<BanciCargaValidacionError> destino, IEnumerable<CargaValidacionError> origen)
+    {
+        destino.AddRange(origen.Select(x => new BanciCargaValidacionError
+        {
+            Archivo = x.Archivo,
+            NumeroFila = x.Fila,
+            Campo = string.IsNullOrWhiteSpace(x.Campo) ? x.Columna : x.Campo,
+            Valor = x.Valor,
+            Codigo = x.Codigo,
+            Mensaje = x.Mensaje
+        }));
     }
 
     private async Task<int?> ResolverEntidadCargaAsync(BanciUsuarioCargaInfo usuario, BanciLecturaArchivosResultado lectura, List<BanciCargaValidacionError> errores)
