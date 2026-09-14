@@ -145,76 +145,30 @@ public class BanciCargaService : IBanciCargaService
 
     private static void ValidarRegistrosMinimos(BanciLecturaArchivosResultado lectura, List<BanciCargaValidacionError> errores)
     {
-        if (lectura.Carpetas.Count == 0)
-        {
-            errores.Add(ErrorGeneral(
-                "BANCI_SIN_CARPETAS",
-                "No se encontraron registros de carpetas."));
-        }
-
-        if (lectura.Delitos.Count == 0)
-        {
-            errores.Add(ErrorGeneral(
-                "BANCI_SIN_DELITOS",
-                "No se encontraron registros de delitos."));
-        }
-
-        if (lectura.Victimas.Count == 0)
-        {
-            errores.Add(ErrorGeneral(
-                "BANCI_SIN_VICTIMAS",
-                "No se encontraron registros de víctimas."));
-        }
+        if (lectura.Carpetas.Count == 0) errores.Add(ErrorGeneral("BANCI_SIN_CARPETAS", "No se encontraron registros de carpetas."));
+        if (lectura.Delitos.Count == 0) errores.Add(ErrorGeneral("BANCI_SIN_DELITOS", "No se encontraron registros de delitos."));
+        if (lectura.Victimas.Count == 0) errores.Add(ErrorGeneral("BANCI_SIN_VICTIMAS", "No se encontraron registros de víctimas."));
 
         foreach (var fila in lectura.Carpetas)
         {
-            ValidarCampoLlave(
-                fila,
-                "id_ci",
-                "CARPETA",
-                errores);
+            ValidarCampoLlave(fila, "entidad", "CARPETA", errores);
+            ValidarCampoLlave(fila, "id_ci", "CARPETA", errores);
         }
 
         foreach (var fila in lectura.Delitos)
         {
-            ValidarCampoLlave(
-                fila,
-                "id_ci",
-                "DELITO",
-                errores);
-
-            ValidarCampoLlave(
-                fila,
-                "id_delito",
-                "DELITO",
-                errores);
-
-            ValidarCampoLlave(
-                fila,
-                "clasf_de_dto",
-                "DELITO",
-                errores);
+            ValidarCampoLlave(fila, "entidad", "DELITO", errores);
+            ValidarCampoLlave(fila, "id_ci", "DELITO", errores);
+            ValidarCampoLlave(fila, "id_delito", "DELITO", errores);
+            ValidarCampoLlave(fila, "clasf_de_dto", "DELITO", errores);
         }
 
         foreach (var fila in lectura.Victimas)
         {
-            ValidarCampoLlave(
-                fila,
-                "id_ci",
-                "VICTIMA",
-                errores);
-
-            ValidarCampoLlave(
-                fila,
-                "id_delito",
-                "VICTIMA",
-                errores);
-
-            ValidarCampoLlave(
-                fila,
-                "id_vicf",
-                "VICTIMA",
-                errores);
+            ValidarCampoLlave(fila, "entidad", "VICTIMA", errores);
+            ValidarCampoLlave(fila, "id_ci", "VICTIMA", errores);
+            ValidarCampoLlave(fila, "id_delito", "VICTIMA", errores);
+            ValidarCampoLlave(fila, "id_vicf", "VICTIMA", errores);
         }
     }
 
@@ -489,9 +443,61 @@ public class BanciCargaService : IBanciCargaService
                 x.Trim().ToUpperInvariant()));
     }
 
-    private static BanciCargaValidacionError ErrorGeneral(
-        string codigo,
-        string mensaje)
+    private async Task<int?> ResolverEntidadCargaAsync(BanciUsuarioCargaInfo usuario, BanciLecturaArchivosResultado lectura, List<BanciCargaValidacionError> errores)
+    {
+        var valoresEntidad = lectura.Carpetas.Concat(lectura.Delitos).Concat(lectura.Victimas).Select(x => Valor(x, "entidad")).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        if (valoresEntidad.Count == 0)
+        {
+            errores.Add(ErrorGeneral("BANCI_ENTIDAD_NO_INFORMADA", "No fue posible determinar la entidad federativa que reporta la información."));
+            return null;
+        }
+
+        var entidadesResueltas = new HashSet<int>();
+
+        foreach (var valor in valoresEntidad)
+        {
+            var idEntidad = await _banciCargaRepository.ResolverEntidadFederativaAsync(valor);
+
+            if (!idEntidad.HasValue)
+            {
+                errores.Add(new BanciCargaValidacionError
+                {
+                    Archivo = "general",
+                    Campo = "entidad",
+                    Valor = valor,
+                    Codigo = "BANCI_ENTIDAD_NO_RECONOCIDA",
+                    Mensaje = $"No fue posible reconocer la entidad federativa \"{valor}\"."
+                });
+
+                continue;
+            }
+
+            entidadesResueltas.Add(idEntidad.Value);
+        }
+
+        if (errores.Count > 0) return null;
+
+        if (entidadesResueltas.Count != 1)
+        {
+            errores.Add(ErrorGeneral("BANCI_MULTIPLES_ENTIDADES", "Una carga BANCI sólo puede contener información reportada por una entidad federativa."));
+            return null;
+        }
+
+        var idEntidadCarga = entidadesResueltas.Single();
+
+        if (usuario.IdEntidadFederativa.HasValue && usuario.IdEntidadFederativa.Value != idEntidadCarga)
+        {
+            errores.Add(ErrorGeneral("BANCI_ENTIDAD_NO_CORRESPONDE_USUARIO", "La entidad informada en los archivos no corresponde a la entidad del usuario autenticado."));
+            return null;
+        }
+
+        return idEntidadCarga;
+    }
+
+    private static string GenerarCodigoReferencia() => $"BANCI-{Guid.NewGuid():N}";
+
+    private static BanciCargaValidacionError ErrorGeneral(string codigo, string mensaje)
     {
         return new BanciCargaValidacionError
         {
