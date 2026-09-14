@@ -147,8 +147,7 @@ public class BanciCargaService : IBanciCargaService
                 lectura,
                 response);
 
-        response.Mensaje =
-            "Los archivos BANCI tienen una estructura válida y quedaron almacenados temporalmente para continuar con su validación.";
+        response.Mensaje = "La carga BANCI fue validada y procesada correctamente.";
 
         return response;
     }

@@ -138,16 +138,8 @@ public class BanciCargaRepository : IBanciCargaRepository
                 idBanciCarga,
                 lectura.Victimas);
 
-            await GuardarObservacionesAsync(
-                connection,
-                transaction,
-                idBanciCarga,
-                validacion.Advertencias);
-
-            await FinalizarCargaAsync(
-                connection,
-                transaction,
-                idBanciCarga);
+            await GuardarObservacionesAsync(connection, transaction, idBanciCarga, validacion.Advertencias);
+            await ProcesarCargaAsync(connection, transaction, idBanciCarga, idUsuarioCarga);
 
             await transaction.CommitAsync();
 
@@ -318,6 +310,8 @@ public class BanciCargaRepository : IBanciCargaRepository
                 DBNull.Value,
                 true);
         }
+
+
 
         await BulkCopyAsync(
             connection,
@@ -619,25 +613,14 @@ public class BanciCargaRepository : IBanciCargaRepository
         }
     }
 
-    private static async Task FinalizarCargaAsync(
-        SqlConnection connection,
-        SqlTransaction transaction,
-        long idBanciCarga)
+    private static async Task ProcesarCargaAsync(SqlConnection connection, SqlTransaction transaction, long idBanciCarga, int idUsuario)
     {
-        const string sql = """
-            UPDATE dbo.banci_carga
-            SET estado = N'VALIDADO',
-                fecha_fin_procesamiento = SYSDATETIME()
-            WHERE id_banci_carga = @IdBanciCarga;
-            """;
-
         await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdBanciCarga = idBanciCarga
-            },
-            transaction);
+            "dbo.sp_banci_procesar_carga",
+            new { IdBanciCarga = idBanciCarga, IdUsuario = idUsuario },
+            transaction,
+            commandTimeout: 300,
+            commandType: CommandType.StoredProcedure);
     }
 
     private static async Task BulkCopyAsync(
