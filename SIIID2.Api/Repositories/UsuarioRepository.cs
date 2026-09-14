@@ -88,9 +88,35 @@ public class UsuarioRepository : IUsuarioRepository
         INNER JOIN catalogo_modulo m
             ON m.id_modulo = um.id_modulo
            AND m.activo = 1
+           AND m.clave <> N'BANCI'
         WHERE u.usuario = @Usuario
           AND u.activo = 1
-        ORDER BY m.id_modulo;
+
+        UNION ALL
+
+        SELECT
+            banci.id_modulo AS IdModulo,
+            banci.clave AS Clave,
+            banci.nombre AS Nombre,
+            CONVERT(bit, 1) AS HabilitaCarga,
+            CONVERT(bit, 1) AS HabilitaModificacion,
+            CONVERT(bit, 0) AS AdministraDelitos
+        FROM usuario u
+        INNER JOIN catalogo_modulo mensual
+            ON mensual.clave = N'MENSUAL'
+           AND mensual.activo = 1
+        INNER JOIN usuario_modulo um
+            ON um.id_usuario = u.id_usuario
+           AND um.id_modulo = mensual.id_modulo
+           AND um.habilitado = 1
+           AND um.activo = 1
+        INNER JOIN catalogo_modulo banci
+            ON banci.clave = N'BANCI'
+           AND banci.activo = 1
+        WHERE u.usuario = @Usuario
+          AND u.activo = 1
+
+        ORDER BY IdModulo;
     ";
 
         using var connection = _dbConnectionFactory.CrearConexion();
