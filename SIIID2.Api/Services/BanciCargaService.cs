@@ -41,9 +41,7 @@ public class BanciCargaService : IBanciCargaService
         _banciMetodologiaValidator = banciMetodologiaValidator;
     }
 
-    public async Task<BanciCargaValidacionResponse> ValidarArchivosAsync(
-        BanciCargaArchivosRequest request,
-        int idUsuarioCarga)
+    public async Task<BanciCargaValidacionResponse> ValidarArchivosAsync(BanciCargaArchivosRequest request, int idUsuarioCarga)
     {
         var response =
             new BanciCargaValidacionResponse
@@ -70,37 +68,17 @@ public class BanciCargaService : IBanciCargaService
             return response;
         }
 
-        if (!usuario.HabilitaCarga)
-        {
-            response.Errores.Add(
-                ErrorGeneral(
-                    "BANCI_USUARIO_SIN_PERMISO_CARGA",
-                    "El usuario autenticado no tiene habilitada la carga de información BANCI."));
+        var lectura = await _archivoReader.LeerAsync(request);
 
-            response.Mensaje =
-                "El usuario no tiene permiso para cargar información BANCI.";
+        response.ModalidadIngreso =  lectura.ModalidadIngreso;
 
-            return response;
-        }
+        response.TotalCarpetas = lectura.Carpetas.Count;
 
-        var lectura =
-            await _archivoReader.LeerAsync(
-                request);
+        response.TotalDelitos = lectura.Delitos.Count;
 
-        response.ModalidadIngreso =
-            lectura.ModalidadIngreso;
+        response.TotalVictimas = lectura.Victimas.Count;
 
-        response.TotalCarpetas =
-            lectura.Carpetas.Count;
-
-        response.TotalDelitos =
-            lectura.Delitos.Count;
-
-        response.TotalVictimas =
-            lectura.Victimas.Count;
-
-        response.Errores.AddRange(
-            lectura.Errores);
+        response.Errores.AddRange(lectura.Errores);
 
         if (response.Errores.Count > 0)
         {

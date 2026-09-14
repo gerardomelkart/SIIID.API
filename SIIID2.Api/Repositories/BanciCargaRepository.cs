@@ -17,46 +17,36 @@ public class BanciCargaRepository : IBanciCargaRepository
             dbConnectionFactory;
     }
 
-    public async Task<BanciUsuarioCargaInfo?> ObtenerUsuarioCargaAsync(
-        int idUsuario)
+    public async Task<BanciUsuarioCargaInfo?> ObtenerUsuarioCargaAsync(int idUsuario)
     {
         const string sql = """
-            SELECT
-                u.id_usuario AS IdUsuario,
-                u.id_entidad_federativa AS IdEntidadFederativa,
-                r.rol AS Rol,
-                CONVERT(bit, ISNULL(um.habilita_carga, 0)) AS HabilitaCarga,
-                CONVERT(bit, ISNULL(um.habilita_modificacion, 0)) AS HabilitaModificacion
-            FROM dbo.usuario u
+        SELECT
+            u.id_usuario AS IdUsuario,
+            u.id_entidad_federativa AS IdEntidadFederativa,
+            r.rol AS Rol,
+            CONVERT(bit, 1) AS HabilitaCarga,
+            CONVERT(bit, 1) AS HabilitaModificacion
+        FROM dbo.usuario u
+        INNER JOIN dbo.roles r
+            ON r.id_rol = u.id_rol
+           AND r.activo = 1
+        INNER JOIN dbo.catalogo_modulo banci
+            ON banci.clave = N'BANCI'
+           AND banci.activo = 1
+        INNER JOIN dbo.catalogo_modulo mensual
+            ON mensual.clave = N'MENSUAL'
+           AND mensual.activo = 1
+        INNER JOIN dbo.usuario_modulo um
+            ON um.id_usuario = u.id_usuario
+           AND um.id_modulo = mensual.id_modulo
+           AND um.habilitado = 1
+           AND um.activo = 1
+        WHERE u.id_usuario = @IdUsuario
+          AND u.activo = 1;
+        """;
 
-            INNER JOIN dbo.roles r
-                ON r.id_rol = u.id_rol
-               AND r.activo = 1
-
-            INNER JOIN dbo.catalogo_modulo m
-                ON m.clave = N'BANCI'
-               AND m.activo = 1
-
-            INNER JOIN dbo.usuario_modulo um
-                ON um.id_usuario = u.id_usuario
-               AND um.id_modulo = m.id_modulo
-               AND um.habilitado = 1
-               AND um.activo = 1
-
-            WHERE u.id_usuario = @IdUsuario
-              AND u.activo = 1;
-            """;
-
-        using var connection =
-            _dbConnectionFactory.CrearConexion();
-
-        return await connection
-            .QueryFirstOrDefaultAsync<BanciUsuarioCargaInfo>(
-                sql,
-                new
-                {
-                    IdUsuario = idUsuario
-                });
+        using var connection = _dbConnectionFactory.CrearConexion();
+        return await connection.QueryFirstOrDefaultAsync<BanciUsuarioCargaInfo>(sql, new { IdUsuario = idUsuario });
     }
 
     public async Task<int?> ResolverEntidadFederativaAsync(string valor)

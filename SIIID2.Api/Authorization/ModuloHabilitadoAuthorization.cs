@@ -34,14 +34,17 @@ public sealed class ModuloHabilitadoHandler : AuthorizationHandler<ModuloHabilit
                 INNER JOIN dbo.roles r
                     ON r.id_rol = u.id_rol
                    AND r.activo = 1
+                INNER JOIN dbo.catalogo_modulo moduloSolicitado
+                    ON moduloSolicitado.clave = @ClaveModulo
+                   AND moduloSolicitado.activo = 1
+                INNER JOIN dbo.catalogo_modulo moduloAcceso
+                    ON moduloAcceso.clave = CASE WHEN @ClaveModulo = N'BANCI' THEN N'MENSUAL' ELSE @ClaveModulo END
+                   AND moduloAcceso.activo = 1
                 INNER JOIN dbo.usuario_modulo um
                     ON um.id_usuario = u.id_usuario
+                   AND um.id_modulo = moduloAcceso.id_modulo
                    AND um.habilitado = 1
                    AND um.activo = 1
-                INNER JOIN dbo.catalogo_modulo m
-                    ON m.id_modulo = um.id_modulo
-                   AND m.clave = @ClaveModulo
-                   AND m.activo = 1
                 WHERE u.id_usuario = @IdUsuario
                   AND u.activo = 1
                   AND (@ClaveModulo <> N'FEDERAL' OR r.rol <> N'CONSULTA' OR u.id_entidad_federativa IS NULL)
