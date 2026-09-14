@@ -1,6 +1,7 @@
 ﻿using SIIID2.Api.Models;
 using SIIID2.Api.Readers;
 using SIIID2.Api.Repositories;
+using SIIID2.Api.Validators;
 
 namespace SIIID2.Api.Services;
 
@@ -8,6 +9,7 @@ public class BanciCargaService : IBanciCargaService
 {
     private readonly IBanciArchivoReader _archivoReader;
     private readonly IBanciCargaRepository _banciCargaRepository;
+    private readonly BanciMetodologiaValidator _banciMetodologiaValidator;
 
     private static readonly HashSet<string> ClasificacionesPermitidas =
         new(StringComparer.OrdinalIgnoreCase)
@@ -22,10 +24,11 @@ public class BanciCargaService : IBanciCargaService
             "2.08.04"
         };
 
-    public BanciCargaService(IBanciArchivoReader archivoReader, IBanciCargaRepository banciCargaRepository)
+    public BanciCargaService(IBanciArchivoReader archivoReader, IBanciCargaRepository banciCargaRepository, BanciMetodologiaValidator banciMetodologiaValidator)
     {
         _archivoReader = archivoReader;
         _banciCargaRepository = banciCargaRepository;
+        _banciMetodologiaValidator = banciMetodologiaValidator;
     }
 
     public async Task<BanciCargaValidacionResponse> ValidarArchivosAsync(
@@ -109,12 +112,14 @@ public class BanciCargaService : IBanciCargaService
             lectura,
             response.Errores);
 
-        ValidarClasificaciones(
-            lectura.Delitos,
-            response.Errores);
+        ValidarClasificaciones(lectura.Delitos, response.Errores);
+
+        var validacionMetodologica = _banciMetodologiaValidator.Validar(lectura);
+        response.Errores.AddRange(validacionMetodologica.Errores);
+        response.Advertencias.AddRange(validacionMetodologica.Advertencias);
 
         var idEntidadFederativa =
-            await ResolverEntidadCargaAsync(
+                    await ResolverEntidadCargaAsync(
                 usuario,
                 lectura,
                 response.Errores);
