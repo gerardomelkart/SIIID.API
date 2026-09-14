@@ -44,11 +44,6 @@ public class BanciMetodologiaValidator
 
     private static void ValidarVictima(ArchivoFila fila, List<BanciCargaValidacionError> errores, List<BanciCargaValidacionError> advertencias)
     {
-        var noBanci = Valor(fila, "no_banci");
-
-        if (!EsSinInformacion(noBanci) && (!long.TryParse(noBanci, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numeroBanci) || numeroBanci <= 0))
-            AgregarError(errores, "victimas", fila, "no_banci", "BANCI_NO_BANCI_INVALIDO", "No_BANCI debe ser un número positivo cuando venga informado.");
-
         ValidarTextoPendiente(fila, "victimas", "folio_fotovolante", advertencias);
         ValidarTextoPendiente(fila, "victimas", "folio_rnpdno", advertencias);
         ValidarTextoPendiente(fila, "victimas", "pro_apellido", advertencias);
