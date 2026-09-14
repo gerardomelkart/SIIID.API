@@ -69,6 +69,8 @@ builder.Services.AddSwaggerGen();
 // Cuando alguien pida IArchivoReader, ASP.NET entregará ArchivoReader.
 builder.Services.AddScoped<IArchivoReader, ArchivoReader>();
 
+builder.Services.AddScoped<IBanciArchivoReader, BanciArchivoReader>();
+
 // Registro de conexión a base de datos.
 builder.Services.AddScoped<IDbConnectionFactory, SqlServerConnectionFactory>();
 
@@ -102,6 +104,8 @@ builder.Services.AddScoped<ISemanalEnviosRepository, SemanalEnviosRepository>();
 // Registro del servicio principal de carga.
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.
 builder.Services.AddScoped<ICargaArchivosService, CargaArchivosService>();
+
+builder.Services.AddScoped<IBanciCargaService, BanciCargaService>();
 builder.Services.AddScoped<IFederalCargaArchivosService, FederalCargaArchivosService>();
 builder.Services.AddScoped<IFederalActualizacionArchivosService, FederalActualizacionArchivosService>();
 builder.Services.AddScoped<IFederalEnviosService, FederalEnviosService>();
@@ -225,6 +229,12 @@ builder.Services.AddAuthorization(options =>
     {
         policy.RequireAuthenticatedUser();
         policy.AddRequirements(new ModuloHabilitadoRequirement("FEDERAL"));
+    });
+
+    options.AddPolicy("MODULO_BANCI", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new ModuloHabilitadoRequirement("BANCI"));
     });
 });
 
