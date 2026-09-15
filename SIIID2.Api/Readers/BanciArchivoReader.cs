@@ -65,6 +65,8 @@ public class BanciArchivoReader : IBanciArchivoReader
         "id_ci",
         "id_delito",
         "id_vicf",
+        "id_tv",
+        "id_tpm",
         "sexo",
         "genero",
         "pob",
@@ -120,8 +122,19 @@ public class BanciArchivoReader : IBanciArchivoReader
             ("fecha_inicio", "fha_de_ini"),
             ("hra_ini", "hra_de_ini"),
             ("hora_inicio", "hra_de_ini"),
+            ("orden_de_aprehension", "ord_apreh"),
+            ("flagracia", "fgran"),
+            ("flagrancia", "fgran"),
+            ("citacion", "ctaon"),
+            ("total_de_vinculaciones_a_proceso", "td_v_ap"),
+            ("procedimiento_abreviado", "proc_abrev"),
             ("pro_abrev", "proc_abrev"),
-            ("td_sec_con", "td_sen_con")
+            ("juicio_oral", "juc_oral"),
+            ("total_de_sentencias_condenatorias", "td_sen_con"),
+            ("td_sec_con", "td_sen_con"),
+            ("total", "no_ejer_acc_pnal"),
+            ("tota", "otra"),
+            ("derivacion_por_incompetencia", "dic")
         );
 
     private static readonly Dictionary<string, string> AliasDelitos =
@@ -136,15 +149,19 @@ public class BanciArchivoReader : IBanciArchivoReader
     private static readonly Dictionary<string, string> AliasVictimas =
         CrearMapaAlias(
             ColumnasVictimas,
+            ("id_ci2", "id_ci"),
             ("nacionalidad", "nacional"),
             ("nombre", "nomb"),
             ("nombres", "nomb"),
             ("primer_apellido", "pro_apellido"),
             ("segundo_apellido", "sdo_apellido"),
+            ("estado_migratorio2", "estado_migratorio"),
             ("lugar_ultimo_contaco", "lugar_ultimo_contacto"),
             ("fecha_localizacion_victima", "fecha_localizacion"),
             ("senas_tatuaje_datos_identificaci_n", "senas_tatuaje_datos_identificacion"),
-            ("senas_tatuajes_datos_identificacion", "senas_tatuaje_datos_identificacion")
+            ("senas_tatuajes_datos_identificacion", "senas_tatuaje_datos_identificacion"),
+            ("senas_tatujes_datos_identificacion", "senas_tatuaje_datos_identificacion"),
+            ("observaciones", "obs")
         );
 
     public BanciArchivoReader(IArchivoReader archivoReader)
@@ -648,7 +665,7 @@ public class BanciArchivoReader : IBanciArchivoReader
 
         foreach (var columna in columnasEsperadas)
         {
-            if (canonicosEncontrados.ContainsKey(columna))
+            if (canonicosEncontrados.ContainsKey(columna) || string.Equals(columna, "entidad", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -724,7 +741,7 @@ public class BanciArchivoReader : IBanciArchivoReader
 
         foreach (var columna in columnasEsperadas)
         {
-            if (canonicos.Contains(columna))
+            if (canonicos.Contains(columna) || string.Equals(columna, "entidad", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }

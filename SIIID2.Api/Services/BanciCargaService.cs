@@ -70,7 +70,9 @@ public class BanciCargaService : IBanciCargaService
 
         var lectura = await _archivoReader.LeerAsync(request);
 
-        response.ModalidadIngreso =  lectura.ModalidadIngreso;
+        CompletarEntidad(lectura, usuario);
+
+        response.ModalidadIngreso = lectura.ModalidadIngreso;
 
         response.TotalCarpetas = lectura.Carpetas.Count;
 
@@ -93,7 +95,22 @@ public class BanciCargaService : IBanciCargaService
         AgregarErroresHeredados(response.Errores, _carpetasValidator.Validar(lectura.Carpetas, validarMesInmediatoAnterior: false));
         AgregarErroresHeredados(response.Errores, _delitosValidator.Validar(lectura.Delitos));
         AgregarErroresHeredados(response.Errores, _victimasValidator.ValidarBanci(lectura.Victimas));
-        AgregarErroresHeredados(response.Errores, _cargaIntegridadValidator.Validar(lectura.Carpetas, lectura.Delitos, lectura.Victimas));
+        var erroresIntegridad = _cargaIntegridadValidator.Validar(lectura.Carpetas, lectura.Delitos, lectura.Victimas);
+
+        if (usuario.EsSuperUsuario)
+        {
+            var advertenciasIntegridad = erroresIntegridad
+                .Where(x => x.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
+                .ToList();
+
+            AgregarErroresHeredados(response.Advertencias, advertenciasIntegridad);
+
+            erroresIntegridad = erroresIntegridad
+                .Where(x => x.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
+                .ToList();
+        }
+
+        AgregarErroresHeredados(response.Errores, erroresIntegridad);
 
         var erroresCatalogos = await _catalogosValidator.ValidarBanciAsync(lectura.Carpetas, lectura.Delitos, lectura.Victimas);
         AgregarErroresHeredados(response.Errores, erroresCatalogos);
@@ -101,6 +118,12 @@ public class BanciCargaService : IBanciCargaService
         var validacionMetodologica = _banciMetodologiaValidator.Validar(lectura);
         response.Errores.AddRange(validacionMetodologica.Errores);
         response.Advertencias.AddRange(validacionMetodologica.Advertencias);
+
+        if (response.Errores.Count == 0)
+        {
+            AgregarErroresHeredados(response.Advertencias, _delitosValidator.ValidarAdvertencias(lectura.Delitos));
+            AgregarErroresHeredados(response.Advertencias, _cargaIntegridadValidator.ValidarAdvertencias(lectura.Delitos, lectura.Victimas));
+        }
 
         var idEntidadFederativa =
                             await ResolverEntidadCargaAsync(
@@ -128,6 +151,31 @@ public class BanciCargaService : IBanciCargaService
         response.Mensaje = "La carga BANCI fue validada y procesada correctamente.";
 
         return response;
+    }
+
+    private static void CompletarEntidad(BanciLecturaArchivosResultado lectura, BanciUsuarioCargaInfo usuario)
+    {
+        string? entidad = usuario.IdEntidadFederativa?.ToString();
+
+        if (string.IsNullOrWhiteSpace(entidad))
+        {
+            var entidades = lectura.Carpetas
+                .Concat(lectura.Delitos)
+                .Concat(lectura.Victimas)
+                .Select(x => Valor(x, "entidad"))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (entidades.Count == 1) entidad = entidades[0];
+        }
+
+        if (string.IsNullOrWhiteSpace(entidad)) return;
+
+        foreach (var fila in lectura.Carpetas.Concat(lectura.Delitos).Concat(lectura.Victimas))
+        {
+            if (string.IsNullOrWhiteSpace(Valor(fila, "entidad"))) fila.Columnas["entidad"] = entidad;
+        }
     }
 
     private static void ValidarRegistrosMinimos(BanciLecturaArchivosResultado lectura, List<BanciCargaValidacionError> errores)

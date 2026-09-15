@@ -450,6 +450,8 @@ public class BanciCargaRepository : IBanciCargaRepository
         tabla.Columns.Add("id_ci", typeof(string));
         tabla.Columns.Add("id_delito", typeof(string));
         tabla.Columns.Add("id_vicf", typeof(string));
+        tabla.Columns.Add("id_tv", typeof(string));
+        tabla.Columns.Add("id_tpm", typeof(string));
         tabla.Columns.Add("sexo", typeof(string));
         tabla.Columns.Add("genero", typeof(string));
         tabla.Columns.Add("pob", typeof(string));
@@ -504,6 +506,8 @@ public class BanciCargaRepository : IBanciCargaRepository
                 Db(Valor(fila, "id_ci")),
                 Db(Valor(fila, "id_delito")),
                 Db(Valor(fila, "id_vicf")),
+                Db(Valor(fila, "id_tv")),
+                Db(Valor(fila, "id_tpm")),
                 Db(Valor(fila, "sexo")),
                 Db(Valor(fila, "genero")),
                 Db(Valor(fila, "pob")),
