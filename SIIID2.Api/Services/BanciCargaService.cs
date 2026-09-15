@@ -157,24 +157,25 @@ public class BanciCargaService : IBanciCargaService
     {
         string? entidad = usuario.IdEntidadFederativa?.ToString();
 
-        if (string.IsNullOrWhiteSpace(entidad))
+        if (string.IsNullOrWhiteSpace(entidad) && usuario.EsSuperUsuario)
         {
-            var entidades = lectura.Carpetas
-                .Concat(lectura.Delitos)
-                .Concat(lectura.Victimas)
-                .Select(x => Valor(x, "entidad"))
+            var entidades = lectura.Delitos
+                .Select(x => Valor(x, "id_ent_hchos"))
                 .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(x => int.TryParse(x, out var idEntidad) ? idEntidad : (int?)null)
+                .Where(x => x.HasValue)
+                .Select(x => x!.Value)
+                .Distinct()
                 .ToList();
 
-            if (entidades.Count == 1) entidad = entidades[0];
+            if (entidades.Count == 1) entidad = entidades[0].ToString();
         }
 
         if (string.IsNullOrWhiteSpace(entidad)) return;
 
         foreach (var fila in lectura.Carpetas.Concat(lectura.Delitos).Concat(lectura.Victimas))
         {
-            if (string.IsNullOrWhiteSpace(Valor(fila, "entidad"))) fila.Columnas["entidad"] = entidad;
+            fila.Columnas["entidad"] = entidad;
         }
     }
 
@@ -183,15 +184,9 @@ public class BanciCargaService : IBanciCargaService
         if (lectura.Carpetas.Count == 0) errores.Add(ErrorGeneral("BANCI_SIN_CARPETAS", "No se encontraron registros de carpetas."));
         if (lectura.Delitos.Count == 0) errores.Add(ErrorGeneral("BANCI_SIN_DELITOS", "No se encontraron registros de delitos."));
         if (lectura.Victimas.Count == 0) errores.Add(ErrorGeneral("BANCI_SIN_VICTIMAS", "No se encontraron registros de víctimas."));
-
-        foreach (var fila in lectura.Carpetas) ValidarCampoLlave(fila, "entidad", "CARPETA", errores);
-        foreach (var fila in lectura.Delitos) ValidarCampoLlave(fila, "entidad", "DELITO", errores);
-        foreach (var fila in lectura.Victimas) ValidarCampoLlave(fila, "entidad", "VICTIMA", errores);
     }
 
-    private static void ValidarDuplicados(
-        BanciLecturaArchivosResultado lectura,
-        List<BanciCargaValidacionError> errores)
+    private static void ValidarDuplicados(BanciLecturaArchivosResultado lectura, List<BanciCargaValidacionError> errores)
     {
         var carpetas =
             new HashSet<string>(
@@ -299,9 +294,7 @@ public class BanciCargaService : IBanciCargaService
         }
     }
 
-    private static void ValidarIntegridad(
-        BanciLecturaArchivosResultado lectura,
-        List<BanciCargaValidacionError> errores)
+    private static void ValidarIntegridad(BanciLecturaArchivosResultado lectura, List<BanciCargaValidacionError> errores)
     {
         var carpetas =
             lectura.Carpetas
@@ -382,9 +375,7 @@ public class BanciCargaService : IBanciCargaService
         }
     }
 
-    private static void ValidarClasificaciones(
-        IEnumerable<ArchivoFila> delitos,
-        List<BanciCargaValidacionError> errores)
+    private static void ValidarClasificaciones(IEnumerable<ArchivoFila> delitos, List<BanciCargaValidacionError> errores)
     {
         foreach (var fila in delitos)
         {
@@ -416,11 +407,7 @@ public class BanciCargaService : IBanciCargaService
         }
     }
 
-    private static void ValidarCampoLlave(
-        ArchivoFila fila,
-        string campo,
-        string tipo,
-        List<BanciCargaValidacionError> errores)
+    private static void ValidarCampoLlave(ArchivoFila fila, string campo, string tipo,List<BanciCargaValidacionError> errores)
     {
         var valor =
             Valor(fila, campo);
@@ -440,9 +427,7 @@ public class BanciCargaService : IBanciCargaService
         });
     }
 
-    private static string Valor(
-        ArchivoFila fila,
-        string columna)
+    private static string Valor(ArchivoFila fila, string columna)
     {
         return fila.Columnas.TryGetValue(
                 columna,
@@ -451,8 +436,7 @@ public class BanciCargaService : IBanciCargaService
             : string.Empty;
     }
 
-    private static string Llave(
-        params string[] valores)
+    private static string Llave(params string[] valores)
     {
         return string.Join(
             "\u001F",
