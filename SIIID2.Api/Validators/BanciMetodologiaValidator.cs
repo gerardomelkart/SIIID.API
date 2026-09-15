@@ -42,8 +42,20 @@ public class BanciMetodologiaValidator
             AgregarError(errores, "carpetas", fila, "td_sen_con", "BANCI_TD_SEN_CON_INCONSISTENTE", $"TD_SEN_CON debe ser igual a PROC_ABREV + JUC_ORAL ({procAbrev.Value + jucOral.Value}).");
     }
 
+    private static void ValidarCatalogoBinario(ArchivoFila fila, string campo, List<BanciCargaValidacionError> errores)
+    {
+        var valor = Valor(fila, campo);
+
+        if (EsSinInformacion(valor)) return;
+
+        if (valor != "0" && valor != "1")
+            AgregarError(errores, "victimas", fila, campo, $"BANCI_{campo.ToUpperInvariant()}_CATALOGO_INVALIDO", $"El campo {campo} sólo permite 0 o 1 conforme al catálogo BANCI.");
+    }
+
     private static void ValidarVictima(ArchivoFila fila, List<BanciCargaValidacionError> errores, List<BanciCargaValidacionError> advertencias)
     {
+        ValidarCatalogoBinario(fila, "pob", errores);
+        ValidarCatalogoBinario(fila, "disc", errores);
         ValidarTextoPendiente(fila, "victimas", "folio_fotovolante", advertencias);
         ValidarTextoPendiente(fila, "victimas", "folio_rnpdno", advertencias);
         ValidarTextoPendiente(fila, "victimas", "pro_apellido", advertencias);
