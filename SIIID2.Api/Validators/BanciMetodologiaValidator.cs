@@ -51,7 +51,7 @@ public class BanciMetodologiaValidator
         ValidarTextoPendiente(fila, "victimas", "nomb", advertencias);
         ValidarTextoPendiente(fila, "victimas", "entidad_nacimiento", advertencias);
         ValidarTextoPendiente(fila, "victimas", "estado_migratorio", advertencias);
-        ValidarTextoPendiente(fila, "victimas", "curp", advertencias);
+        ValidarCurp(fila, errores, advertencias);
         ValidarTextoPendiente(fila, "victimas", "rfc", advertencias);
 
         ValidarFechaOpcional(fila, "victimas", "fecha_ultimo_contacto", errores);
@@ -88,6 +88,32 @@ public class BanciMetodologiaValidator
 
         if (fueDelito == 1 && EsSinInformacion(Valor(fila, "delito")))
             AgregarAdvertencia(advertencias, "victimas", fila, "delito", "BANCI_DELITO_VICTIMA_PENDIENTE", "Se indicó que la persona fue víctima de un delito y falta especificar DELITO.");
+    }
+
+    private static void ValidarCurp(ArchivoFila fila, List<BanciCargaValidacionError> errores, List<BanciCargaValidacionError> advertencias)
+    {
+        const string LeyendaExtranjero = "PERSONA DE NACIONALIDAD EXTRANJERA";
+
+        var curp = Valor(fila, "curp");
+
+        if (EsSinInformacion(curp))
+        {
+            AgregarAdvertencia(advertencias, "victimas", fila, "curp", "BANCI_CURP_PENDIENTE", "El campo curp está pendiente de información.");
+            return;
+        }
+
+        var nacional = Valor(fila, "nacional");
+
+        if (curp.Equals(LeyendaExtranjero, StringComparison.OrdinalIgnoreCase))
+        {
+            if (nacional == "73")
+                AgregarError(errores, "victimas", fila, "curp", "BANCI_CURP_EXTRANJERO_NACIONALIDAD_INCONSISTENTE", "La leyenda PERSONA DE NACIONALIDAD EXTRANJERA sólo puede utilizarse cuando la nacionalidad no sea México.");
+
+            return;
+        }
+
+        if (curp.Length > 18)
+            AgregarError(errores, "victimas", fila, "curp", "BANCI_CURP_LONGITUD_INVALIDA", "La CURP no puede exceder 18 caracteres. Para personas extranjeras sin CURP puede utilizarse la leyenda PERSONA DE NACIONALIDAD EXTRANJERA.");
     }
 
     private static int? ValidarEnteroPendiente(ArchivoFila fila, string archivo, string campo, List<BanciCargaValidacionError> errores, List<BanciCargaValidacionError> advertencias)
