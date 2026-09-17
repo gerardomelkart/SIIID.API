@@ -83,6 +83,7 @@ builder.Services.AddScoped<IFederalEnviosRepository, FederalEnviosRepository>();
 builder.Services.AddScoped<IFederalUsuarioRepository, FederalUsuarioRepository>();
 builder.Services.AddScoped<IFederalActualizacionRepository, FederalActualizacionRepository>();
 builder.Services.AddScoped<IBanciCargaRepository, BanciCargaRepository>();
+builder.Services.AddScoped<IBanciConsultaRepository, BanciConsultaRepository>();
 // Registro de validadores específicos por archivo, validación cruzada y catálogos.
 builder.Services.AddScoped<CarpetasValidator>();
 builder.Services.AddScoped<DelitosValidator>();
@@ -108,6 +109,7 @@ builder.Services.AddScoped<ISemanalEnviosRepository, SemanalEnviosRepository>();
 builder.Services.AddScoped<ICargaArchivosService, CargaArchivosService>();
 
 builder.Services.AddScoped<IBanciCargaService, BanciCargaService>();
+builder.Services.AddScoped<IBanciConsultaService, BanciConsultaService>();
 builder.Services.AddScoped<IFederalCargaArchivosService, FederalCargaArchivosService>();
 builder.Services.AddScoped<IFederalActualizacionArchivosService, FederalActualizacionArchivosService>();
 builder.Services.AddScoped<IFederalEnviosService, FederalEnviosService>();
