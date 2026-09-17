@@ -129,7 +129,12 @@ public class BanciCargaRepository : IBanciCargaRepository
                 lectura.Victimas);
 
             await GuardarObservacionesAsync(connection, transaction, idBanciCarga, validacion.Advertencias);
-            await ProcesarCargaAsync(connection, transaction, idBanciCarga, idUsuarioCarga);
+            await connection.ExecuteAsync("""
+                INSERT INTO dbo.banci_carga_bitacora_estado
+                    (id_banci_carga, estado_anterior, estado_nuevo, id_usuario, comentario)
+                VALUES (@IdBanciCarga, NULL, N'VALIDADO_PENDIENTE', @IdUsuario,
+                    N'Validación terminada. Pendiente de decisión del usuario que cargó los archivos.');
+                """, new { IdBanciCarga = idBanciCarga, IdUsuario = idUsuarioCarga }, transaction);
 
             await transaction.CommitAsync();
 
@@ -183,7 +188,7 @@ public class BanciCargaRepository : IBanciCargaRepository
                 @IdEntidadFederativa,
                 @CodigoReferencia,
                 @ModalidadIngreso,
-                SYSDATETIME(),
+                NULL,
                 @TotalCarpetas,
                 @TotalDelitos,
                 @TotalVictimas,
@@ -192,7 +197,7 @@ public class BanciCargaRepository : IBanciCargaRepository
                 0,
                 0,
                 @TotalAdvertencias,
-                N'PROCESANDO',
+                N'VALIDADO_PENDIENTE',
                 NULL,
                 1
             );
@@ -515,7 +520,7 @@ public class BanciCargaRepository : IBanciCargaRepository
                 Db(Valor(fila, "fha_nac")),
                 Db(Valor(fila, "edad")),
                 Db(Valor(fila, "nacional")),
-                Db(Valor(fila, "no_banci")),
+                DBNull.Value, // El No_BANCI enviado nunca se almacena ni sustituye el existente.
                 Db(Valor(fila, "folio_fotovolante")),
                 Db(Valor(fila, "folio_rnpdno")),
                 Db(Valor(fila, "pro_apellido")),
@@ -607,14 +612,97 @@ public class BanciCargaRepository : IBanciCargaRepository
         }
     }
 
-    private static async Task ProcesarCargaAsync(SqlConnection connection, SqlTransaction transaction, long idBanciCarga, int idUsuario)
+    // La autorización se comprueba también al recuperar: sólo el autor, con acceso vigente.
+    // SUPER_USUARIO no permite consultar ni decidir cargas ajenas en este flujo.
+    private const string ConsultaCarga = """
+        SELECT c.id_banci_carga AS IdBanciCarga, c.codigo_referencia AS CodigoReferencia,
+               c.modalidad_ingesta AS ModalidadIngreso, c.estado AS Estado,
+               c.fecha_carga AS FechaCarga, c.aceptada_usuario AS AceptadaUsuario,
+               c.id_usuario_confirmacion AS IdUsuarioConfirmacion,
+               c.fecha_confirmacion AS FechaConfirmacion,
+               c.total_carpetas AS TotalCarpetas, c.total_delitos AS TotalDelitos,
+               c.total_victimas AS TotalVictimas, c.total_altas AS TotalAltas,
+               c.total_actualizaciones AS TotalActualizaciones, c.total_sin_cambio AS TotalSinCambio,
+               c.total_advertencias AS TotalAdvertencias
+        FROM dbo.banci_carga c
+        INNER JOIN dbo.usuario u ON u.id_usuario = c.id_usuario_carga AND u.activo = 1
+        INNER JOIN dbo.roles r ON r.id_rol = u.id_rol AND r.activo = 1
+        WHERE c.activo = 1 AND c.id_usuario_carga = @IdUsuario
+          AND (r.rol = N'SUPER_USUARIO' OR u.id_entidad_federativa = c.id_entidad_federativa)
+          AND EXISTS (SELECT 1 FROM dbo.catalogo_modulo WHERE clave = N'BANCI' AND activo = 1)
+          AND EXISTS (
+              SELECT 1 FROM dbo.usuario_modulo um
+              INNER JOIN dbo.catalogo_modulo m ON m.id_modulo = um.id_modulo
+              WHERE um.id_usuario = u.id_usuario AND um.activo = 1 AND um.habilitado = 1
+                AND m.clave = N'MENSUAL' AND m.activo = 1)
+        """;
+
+    public async Task<IReadOnlyList<BanciCargaValidacionResponse>> ObtenerPendientesAsync(int idUsuario)
     {
-        await connection.ExecuteAsync(
-            "dbo.sp_banci_procesar_carga",
-            new { IdBanciCarga = idBanciCarga, IdUsuario = idUsuario },
-            transaction,
-            commandTimeout: 300,
-            commandType: CommandType.StoredProcedure);
+        using var connection = _dbConnectionFactory.CrearConexion();
+        var cargas = await connection.QueryAsync<BanciCargaValidacionResponse>(
+            ConsultaCarga + " AND c.estado = N'VALIDADO_PENDIENTE' ORDER BY c.id_banci_carga DESC;",
+            new { IdUsuario = idUsuario });
+        return cargas.ToList();
+    }
+
+    public async Task<BanciCargaValidacionResponse?> ObtenerCargaAsync(string codigoReferencia, int idUsuario)
+    {
+        using var connection = _dbConnectionFactory.CrearConexion();
+        var carga = await connection.QuerySingleOrDefaultAsync<BanciCargaValidacionResponse>(
+            ConsultaCarga + " AND c.codigo_referencia = @CodigoReferencia;",
+            new { IdUsuario = idUsuario, CodigoReferencia = codigoReferencia });
+        if (carga == null) return null;
+
+        carga.Advertencias = (await connection.QueryAsync<BanciCargaValidacionError>("""
+            SELECT CASE tipo_registro WHEN N'CARPETA' THEN N'carpetas'
+                       WHEN N'DELITO' THEN N'delitos' WHEN N'VICTIMA' THEN N'victimas'
+                       ELSE N'general' END AS Archivo,
+                   numero_fila AS NumeroFila, campo AS Campo, valor AS Valor,
+                   codigo AS Codigo, mensaje AS Mensaje
+            FROM dbo.banci_carga_observacion
+            WHERE id_banci_carga = @IdBanciCarga AND activo = 1 AND severidad = N'ADVERTENCIA'
+            ORDER BY tipo_registro, numero_fila, campo, codigo;
+            """, new { carga.IdBanciCarga })).ToList();
+        carga.Mensaje = carga.Estado switch
+        {
+            "VALIDADO_PENDIENTE" => "Carga pendiente de su decisión. Todavía no se han integrado datos definitivos.",
+            "RECHAZADO_VALIDACION" => "Carga rechazada. No se integraron datos definitivos.",
+            "PROCESADO" or "PROCESADO_CON_ADVERTENCIAS" => "Carga integrada. Los totales corresponden al resultado guardado.",
+            _ => "Estado de la carga recuperado."
+        };
+        return carga;
+    }
+
+    public async Task<BanciCargaValidacionResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuario)
+    {
+        using var connection = _dbConnectionFactory.CrearConexion();
+        // El procedimiento controla la transacción, bloqueo, autorización e idempotencia.
+        // No envolver esta llamada en otra transacción ni invocar directamente procesar_carga.
+        var fila = await connection.QuerySingleAsync(
+            "dbo.sp_banci_confirmar_carga",
+            new { CodigoReferencia = codigoReferencia, Aceptar = aceptar, IdUsuario = idUsuario },
+            commandTimeout: 300, commandType: CommandType.StoredProcedure);
+
+        // Mapeo explícito: no alterar la configuración global de Dapper de los otros módulos.
+        return new BanciCargaValidacionResponse
+        {
+            IdBanciCarga = (long)fila.id_banci_carga,
+            CodigoReferencia = (string)fila.codigo_referencia,
+            Estado = (string)fila.estado,
+            AceptadaUsuario = (bool?)fila.aceptada_usuario,
+            YaResuelta = (bool)fila.ya_resuelta,
+            IdUsuarioConfirmacion = (int?)fila.id_usuario_confirmacion,
+            FechaConfirmacion = (DateTime?)fila.fecha_confirmacion,
+            TotalCarpetas = (int)fila.total_carpetas,
+            TotalDelitos = (int)fila.total_delitos,
+            TotalVictimas = (int)fila.total_victimas,
+            TotalAltas = (int)fila.total_altas,
+            TotalActualizaciones = (int)fila.total_actualizaciones,
+            TotalSinCambio = (int)fila.total_sin_cambio,
+            TotalAdvertencias = (int)fila.total_advertencias,
+            Mensaje = (string)fila.mensaje
+        };
     }
 
     private static async Task BulkCopyAsync(

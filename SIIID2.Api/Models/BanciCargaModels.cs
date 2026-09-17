@@ -12,6 +12,18 @@ public class BanciCargaValidacionResponse
 {
     public bool EsValido => Errores.Count == 0;
 
+    public long IdBanciCarga { get; set; }
+    public string Estado { get; set; } = string.Empty;
+    public DateTime? FechaCarga { get; set; }
+    public bool? AceptadaUsuario { get; set; }
+    public int? IdUsuarioConfirmacion { get; set; }
+    public DateTime? FechaConfirmacion { get; set; }
+    public bool YaResuelta { get; set; }
+    public int TotalAltas { get; set; }
+    public int TotalActualizaciones { get; set; }
+    public int TotalSinCambio { get; set; }
+    public int TotalAdvertencias { get; set; }
+
     public string CodigoReferencia { get; set; } = string.Empty;
 
     public string ModalidadIngreso { get; set; } = string.Empty;
@@ -24,6 +36,16 @@ public class BanciCargaValidacionResponse
 
     public List<BanciCargaValidacionError> Errores { get; set; } = [];
     public List<BanciCargaValidacionError> Advertencias { get; set; } = [];
+}
+
+public class BanciCargaConfirmacionRequest
+{
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.StringLength(50)]
+    public string CodigoReferencia { get; set; } = string.Empty;
+
+    [System.ComponentModel.DataAnnotations.Required]
+    public bool? Aceptar { get; set; }
 }
 
 public class BanciCargaValidacionError
