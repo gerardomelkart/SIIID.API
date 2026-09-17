@@ -32,15 +32,35 @@ public class BanciCargasController : ControllerBase
             return TokenInvalido();
         }
 
-        var resultado =
-            await _banciCargaService
-                .ValidarArchivosAsync(
-                    request,
-                    idUsuarioCarga);
+        try
+        {
+            var resultado = await _banciCargaService.ValidarArchivosAsync(request, idUsuarioCarga);
+            return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
+    }
 
-        return resultado.EsValido
-            ? Ok(resultado)
-            : BadRequest(resultado);
+    [HttpGet("formulario/opciones")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> ObtenerFormularioOpciones()
+    {
+        if (!TryObtenerIdUsuario(out var idUsuario)) return TokenInvalido();
+        try { return Ok(await _banciCargaService.ObtenerFormularioOpcionesAsync(idUsuario)); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
+    }
+
+    [HttpPost("formulario/validar")]
+    [RequestSizeLimit(5 * 1024 * 1024)]
+    public async Task<IActionResult> ValidarFormulario([FromBody] BanciFormularioRequest request)
+    {
+        if (!TryObtenerIdUsuario(out var idUsuario)) return TokenInvalido();
+        try
+        {
+            var resultado = await _banciCargaService.ValidarFormularioAsync(request, idUsuario);
+            return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
+        catch (ArgumentException ex) { return BadRequest(new { mensaje = ex.Message }); }
     }
 
     [HttpGet("pendientes")]
@@ -75,10 +95,11 @@ public class BanciCargasController : ControllerBase
             return Ok(await _banciCargaService.ConfirmarCargaAsync(
                 request.CodigoReferencia, request.Aceptar.Value, idUsuario));
         }
-        catch (SqlException ex) when (ex.Number is >= 52400 and <= 52423)
+        catch (SqlException ex) when (ex.Number is >= 52400 and <= 52424)
         {
             var mensaje = ex.Number switch
             {
+                52424 => "La carpeta ya fue registrada por otra carga. Rechace esta captura pendiente; no se duplicó ni se sobrescribió la carpeta existente.",
                 52402 or 52404 => "La carga no está disponible para este usuario.",
                 52405 => "El usuario ya no tiene acceso a esta carga.",
                 52403 => "Hay otra operación BANCI en curso. Actualice el estado antes de intentar nuevamente.",

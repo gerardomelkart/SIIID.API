@@ -43,33 +43,119 @@ public class BanciCargaService : IBanciCargaService
 
     public async Task<BanciCargaValidacionResponse> ValidarArchivosAsync(BanciCargaArchivosRequest request, int idUsuarioCarga)
     {
-        var response =
-            new BanciCargaValidacionResponse
-            {
-                CodigoReferencia =
-                    GenerarCodigoReferencia()
-            };
-
-        var usuario =
-            await _banciCargaRepository
-                .ObtenerUsuarioCargaAsync(
-                    idUsuarioCarga);
-
-        if (usuario == null)
-        {
-            response.Errores.Add(
-                ErrorGeneral(
-                    "BANCI_USUARIO_NO_HABILITADO",
-                    "El usuario autenticado no existe, está inactivo o no tiene habilitado el módulo BANCI."));
-
-            response.Mensaje =
-                "El usuario no tiene acceso al módulo BANCI.";
-
-            return response;
-        }
-
+        var usuario = await ObtenerUsuarioCapturaAsync(idUsuarioCarga);
         var lectura = await _archivoReader.LeerAsync(request);
+        return await ValidarLecturaAsync(lectura, usuario);
+    }
 
+    public async Task<BanciFormularioOpciones> ObtenerFormularioOpcionesAsync(int idUsuario)
+    {
+        var usuario = await ObtenerUsuarioCapturaAsync(idUsuario);
+        return new BanciFormularioOpciones { EsSuperUsuario = usuario.EsSuperUsuario, IdEntidadFederativa = usuario.IdEntidadFederativa, Catalogos = await _banciCargaRepository.ObtenerFormularioCatalogosAsync() };
+    }
+
+    private async Task<BanciUsuarioCargaInfo> ObtenerUsuarioCapturaAsync(int idUsuario)
+    {
+        var usuario = await _banciCargaRepository.ObtenerUsuarioCargaAsync(idUsuario);
+        if (usuario == null || (!usuario.EsSuperUsuario && (!string.Equals(usuario.Rol, "ENLACE_ESTATAL", StringComparison.OrdinalIgnoreCase) || usuario.IdEntidadFederativa is not (>= 1 and <= 32))))
+            throw new UnauthorizedAccessException("El usuario no tiene permiso para capturar información BANCI.");
+        return usuario;
+    }
+
+    public async Task<BanciCargaValidacionResponse> ValidarFormularioAsync(BanciFormularioRequest request, int idUsuario)
+    {
+        var usuario = await ObtenerUsuarioCapturaAsync(idUsuario);
+        var lectura = new BanciLecturaArchivosResultado { ModalidadIngreso = "FORMULARIO" };
+        var entidad = usuario.EsSuperUsuario ? request.IdEntidadFederativa : usuario.IdEntidadFederativa;
+        if (!usuario.EsSuperUsuario && request.IdEntidadFederativa.HasValue && request.IdEntidadFederativa != entidad)
+            throw new UnauthorizedAccessException("Sólo puede capturar información de su entidad federativa.");
+        if (entidad is not (>= 1 and <= 32) || await _banciCargaRepository.ResolverEntidadFederativaAsync(entidad.Value.ToString()) != entidad)
+            throw new ArgumentException("Seleccione una entidad federativa válida.");
+        if (request.Carpeta == null || request.Delitos == null || request.Delitos.Count is < 1 or > 100 || request.Delitos.Any(d => d == null || d.Datos == null || d.Victimas == null || d.Victimas.Count is < 1 or > 500 || d.Victimas.Any(v => v == null)) || request.Delitos.Sum(d => d.Victimas.Count) > 1000)
+            throw new ArgumentException("Capture una carpeta, de 1 a 100 delitos y al menos una víctima por delito (máximo 1000 víctimas por formulario).");
+
+        var carpeta = CrearFilaFormulario(request.Carpeta, BanciArchivoReader.ColumnasCarpetas, 1, "entidad");
+        lectura.Carpetas.Add(carpeta);
+        var numeroVictima = 0;
+        for (var i = 0; i < request.Delitos.Count; i++)
+        {
+            var captura = request.Delitos[i];
+            var delito = CrearFilaFormulario(captura.Datos, BanciArchivoReader.ColumnasDelitos, i + 1, "entidad", "id_ci");
+            delito.Columnas["id_ci"] = Valor(carpeta, "id_ci");
+            lectura.Delitos.Add(delito);
+            foreach (var datosVictima in captura.Victimas)
+            {
+                var victima = CrearFilaFormulario(datosVictima, BanciArchivoReader.ColumnasVictimas, ++numeroVictima, "entidad", "id_ci", "id_delito", "no_banci");
+                victima.Columnas["id_ci"] = Valor(carpeta, "id_ci");
+                victima.Columnas["id_delito"] = Valor(delito, "id_delito");
+                lectura.Victimas.Add(victima);
+            }
+        }
+        if (lectura.Delitos.Select(d => Valor(d, "id_delito")).Distinct(StringComparer.OrdinalIgnoreCase).Count() != lectura.Delitos.Count)
+            lectura.Errores.Add(ErrorGeneral("BANCI_DELITO_DUPLICADO", "No repita el ID_DELITO dentro de la carpeta."));
+        if (lectura.Victimas.Select(v => Llave(Valor(v, "id_delito"), Valor(v, "id_vicf"))).Distinct().Count() != lectura.Victimas.Count)
+            lectura.Errores.Add(ErrorGeneral("BANCI_VICTIMA_DUPLICADA", "No repita el ID_VICF dentro de un mismo delito."));
+        if (await _banciCargaRepository.ExisteCarpetaAsync(entidad.Value, Valor(carpeta, "id_ci")))
+            lectura.Errores.Add(ErrorGeneral("BANCI_CARPETA_EXISTENTE", "Ya existe ese ID_CI en su entidad. El formulario registra carpetas nuevas; no cambie la fecha para intentar registrarla otra vez."));
+
+        // La entidad de reporte no procede de campos editables de cada fila.
+        var contexto = new BanciUsuarioCargaInfo { IdUsuario = usuario.IdUsuario, Rol = usuario.Rol, IdEntidadFederativa = entidad };
+        return await ValidarLecturaAsync(lectura, contexto);
+    }
+
+    private static readonly Dictionary<string, int> LongitudesFormulario = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["id_ci"] = 250,
+        ["ntra_ci"] = 250,
+        ["id_delito"] = 250,
+        ["dto"] = 500,
+        ["moda_dto"] = 2000,
+        ["clasf_de_dto"] = 10,
+        ["nom_ent_hchos"] = 100,
+        ["nom_mun_hchos"] = 250,
+        ["id_mun_hchos"] = 5,
+        ["nom_loc_hchos"] = 500,
+        ["id_loc_hchos"] = 250,
+        ["nom_col_hchos"] = 500,
+        ["id_col_hchos"] = 250,
+        ["cp"] = 10,
+        ["id_vicf"] = 250,
+        ["nacional"] = 5,
+        ["folio_fotovolante"] = 250,
+        ["folio_rnpdno"] = 250,
+        ["pro_apellido"] = 250,
+        ["sdo_apellido"] = 250,
+        ["nomb"] = 500,
+        ["entidad_nacimiento"] = 250,
+        ["estado_migratorio"] = 500,
+        ["curp"] = 50,
+        ["rfc"] = 13,
+        ["entidad_visto"] = 250,
+        ["municipio_visto"] = 250,
+        ["delito"] = 1000,
+    };
+
+    private static ArchivoFila CrearFilaFormulario(Dictionary<string, string?> datos, string[] columnas, int numeroFila, params string[] administradas)
+    {
+        var permitidas = columnas.Except(administradas).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var fila = new ArchivoFila { NumeroFila = numeroFila };
+        foreach (var columna in columnas) fila.Columnas[columna] = null;
+        var recibidas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dato in datos)
+        {
+            if (!permitidas.Contains(dato.Key) || !recibidas.Add(dato.Key)) throw new ArgumentException($"El campo {dato.Key} no se admite o está repetido en el formulario.");
+            if (LongitudesFormulario.TryGetValue(dato.Key, out var maximo) && dato.Value?.Length > maximo) throw new ArgumentException($"El campo {dato.Key} excede {maximo} caracteres.");
+            if (dato.Value?.Length > 20000) throw new ArgumentException($"El campo {dato.Key} excede 20000 caracteres.");
+            fila.Columnas[dato.Key] = dato.Value?.Trim();
+        }
+        if (int.TryParse(Valor(fila, "dic"), out var dic) && dic > 255) throw new ArgumentException("El campo dic no puede ser mayor a 255.");
+        return fila;
+    }
+
+    private async Task<BanciCargaValidacionResponse> ValidarLecturaAsync(BanciLecturaArchivosResultado lectura, BanciUsuarioCargaInfo usuario)
+    {
+        var idUsuarioCarga = usuario.IdUsuario;
+        var response = new BanciCargaValidacionResponse { CodigoReferencia = GenerarCodigoReferencia() };
         CompletarEntidad(lectura, usuario);
         NormalizarHoras(lectura);
 
@@ -86,7 +172,7 @@ public class BanciCargaService : IBanciCargaService
         if (response.Errores.Count > 0)
         {
             response.Mensaje =
-                "No fue posible leer correctamente la estructura de los archivos BANCI.";
+                "Revise los errores de la información BANCI antes de continuar.";
 
             return response;
         }

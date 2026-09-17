@@ -12,7 +12,7 @@ public class BanciArchivoReader : IBanciArchivoReader
 
     private const long TamanioMaximoBytes = 50L * 1024L * 1024L;
 
-    private static readonly string[] ColumnasCarpetas =
+    internal static readonly string[] ColumnasCarpetas =
     [
         "entidad",
         "id_ci",
@@ -32,7 +32,7 @@ public class BanciArchivoReader : IBanciArchivoReader
         "dic"
     ];
 
-    private static readonly string[] ColumnasDelitos =
+    internal static readonly string[] ColumnasDelitos =
     [
         "entidad",
         "id_ci",
@@ -59,7 +59,7 @@ public class BanciArchivoReader : IBanciArchivoReader
         "dom_hchos"
     ];
 
-    private static readonly string[] ColumnasVictimas =
+    internal static readonly string[] ColumnasVictimas =
     [
         "entidad",
         "id_ci",

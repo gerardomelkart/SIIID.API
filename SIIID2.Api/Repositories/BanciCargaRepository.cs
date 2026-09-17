@@ -17,6 +17,53 @@ public class BanciCargaRepository : IBanciCargaRepository
             dbConnectionFactory;
     }
 
+    public async Task<bool> ExisteCarpetaAsync(int idEntidad, string idCi)
+    {
+        using var connection = _dbConnectionFactory.CrearConexion();
+        return await connection.ExecuteScalarAsync<bool>("SELECT CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.banci_carpeta_investigacion WHERE id_entidad_federativa = @IdEntidad AND id_ci = @IdCi) THEN 1 ELSE 0 END);", new { IdEntidad = idEntidad, IdCi = idCi });
+    }
+
+    public async Task<IReadOnlyList<BanciFormularioOpcion>> ObtenerFormularioCatalogosAsync()
+    {
+        const string sql = """
+        SELECT N'forma_acc' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_forma_accion WHERE activo = 1
+        UNION ALL
+        SELECT N'emto_com_dto' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_instrumento_comision WHERE activo = 1
+        UNION ALL
+        SELECT N'grdo_cons' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_grado_consumacion WHERE activo = 1
+        UNION ALL
+        SELECT N'id_tv' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_tipo_victima WHERE activo = 1
+        UNION ALL
+        SELECT N'id_tpm' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_tipo_victima_moral WHERE activo = 1
+        UNION ALL
+        SELECT N'sexo' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_sexo WHERE activo = 1
+        UNION ALL
+        SELECT N'genero' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_genero WHERE activo = 1
+        UNION ALL
+        SELECT N'nacional' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_nacionalidad WHERE activo = 1
+        UNION ALL
+        SELECT N'clasf_de_dto' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_clasificacion_delito WHERE activo = 1
+        UNION ALL
+        SELECT N'localizado_o_no_localizado' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_localizacion WHERE activo = 1
+        UNION ALL
+        SELECT N'con_o_sin_vida' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_condicion_vida WHERE activo = 1
+        UNION ALL
+        SELECT N'voluntaria' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_voluntaria WHERE activo = 1
+        UNION ALL
+        SELECT N'fue_delito' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_fue_delito WHERE activo = 1
+        UNION ALL
+        SELECT N'pob', v.clave, v.descripcion, CAST(NULL AS int) FROM (VALUES (N'0', N'No'), (N'1', N'Sí')) v(clave, descripcion)
+        UNION ALL
+        SELECT N'disc', v.clave, v.descripcion, CAST(NULL AS int) FROM (VALUES (N'0', N'No'), (N'1', N'Sí')) v(clave, descripcion)
+        UNION ALL
+        SELECT N'id_ent_hchos', CONVERT(nvarchar(20), id_entidad_federativa), nombre, CONVERT(int, id_entidad_federativa) FROM dbo.catalogo_entidad_federativa WHERE activo = 1
+        UNION ALL
+        SELECT N'id_mun_hchos', clave, nombre, CONVERT(int, id_entidad_federativa) FROM dbo.catalogo_municipio WHERE activo = 1;
+        """;
+        using var connection = _dbConnectionFactory.CrearConexion();
+        return (await connection.QueryAsync<BanciFormularioOpcion>(sql)).AsList();
+    }
+
     public async Task<BanciUsuarioCargaInfo?> ObtenerUsuarioCargaAsync(int idUsuario)
     {
         const string sql = """
