@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using Dapper;
+using System.Data;
 using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
@@ -98,6 +99,92 @@ public class BanciConsultaRepository : IBanciConsultaRepository
         respuesta.TamanoPagina = filtro.TamanoPagina;
         respuesta.Carpetas = (await resultados.ReadAsync<BanciConsultaCarpeta>()).ToList();
         return respuesta;
+    }
+
+    public async Task<DataSet> ObtenerExcelAsync(BanciConsultaFiltro filtro, int? idEntidadAlcance)
+    {
+        var desde = new DateTime(filtro.Anio, filtro.Mes ?? 1, 1);
+        var hasta = filtro.Mes.HasValue ? desde.AddMonths(1) : desde.AddYears(1);
+        var busqueda = filtro.Busqueda?.Trim();
+        var patron = string.IsNullOrEmpty(busqueda) ? null : "%" + busqueda
+            .Replace("~", "~~").Replace("%", "~%").Replace("_", "~_").Replace("[", "~[") + "%";
+        using var connection = _factory.CrearConexion();
+        // Exportación completa del filtro: sin OFFSET y sin consultas por cada carpeta.
+        using var reader = await connection.ExecuteReaderAsync("""
+            SET NOCOUNT ON;
+            SELECT c.id_banci_carpeta_investigacion INTO #BanciExcel
+            FROM dbo.banci_carpeta_investigacion c
+            WHERE c.activo = 1
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+              AND (@Entidad IS NULL OR c.id_entidad_federativa = @Entidad)
+              AND c.fha_de_ini >= @Desde AND c.fha_de_ini < @Hasta
+              AND (@Busqueda IS NULL OR c.id_ci LIKE @Busqueda ESCAPE N'~' OR c.ntra_ci LIKE @Busqueda ESCAPE N'~')
+            OPTION (RECOMPILE);
+            CREATE UNIQUE CLUSTERED INDEX IX_BanciExcel ON #BanciExcel(id_banci_carpeta_investigacion);
+
+            SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci,
+                   CONVERT(nvarchar(10), c.fha_de_ini, 23) AS fha_de_ini,
+                   CONVERT(nvarchar(8), c.hra_de_ini, 108) AS hra_de_ini,
+                   c.rmen_de_hchos, c.ord_apreh, c.fgran, c.ctaon, c.td_v_ap,
+                   c.proc_abrev, c.juc_oral, c.td_sen_con, c.no_ejer_acc_pnal, c.otra, c.dic
+            FROM #BanciExcel f
+            JOIN dbo.banci_carpeta_investigacion c ON c.id_banci_carpeta_investigacion = f.id_banci_carpeta_investigacion
+            JOIN dbo.catalogo_entidad_federativa e ON e.id_entidad_federativa = c.id_entidad_federativa
+            WHERE c.activo = 1
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+            ORDER BY c.id_entidad_federativa, c.fha_de_ini, c.id_ci;
+
+            SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci,
+                   d.id_delito, d.dto, d.moda_dto, d.forma_acc,
+                   CONVERT(nvarchar(10), d.fha_de_hchos, 23) AS fha_de_hchos,
+                   CONVERT(nvarchar(8), d.hra_de_hchos, 108) AS hra_de_hchos,
+                   d.emto_com_dto, d.grdo_cons, d.clasf_de_dto, d.nom_ent_hchos, d.id_ent_hchos,
+                   d.nom_mun_hchos, d.id_mun_hchos, d.nom_loc_hchos, d.id_loc_hchos,
+                   d.nom_col_hchos, d.id_col_hchos, d.cp, d.coord_x, d.coord_y, d.dom_hchos
+            FROM #BanciExcel f
+            JOIN dbo.banci_carpeta_investigacion c ON c.id_banci_carpeta_investigacion = f.id_banci_carpeta_investigacion
+            JOIN dbo.catalogo_entidad_federativa e ON e.id_entidad_federativa = c.id_entidad_federativa
+            JOIN dbo.banci_delito d ON d.id_banci_carpeta_investigacion = c.id_banci_carpeta_investigacion
+            WHERE c.activo = 1 AND d.activo = 1
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+            ORDER BY c.id_entidad_federativa, c.id_ci, d.id_delito;
+
+            SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci, d.id_delito,
+                   v.id_vicf, v.id_tv, v.id_tpm, v.sexo, v.genero, v.pob, v.disc,
+                   CONVERT(nvarchar(10), v.fha_nac, 23) AS fha_nac, v.edad, v.nacional, v.no_banci,
+                   v.folio_fotovolante, v.folio_rnpdno, v.pro_apellido, v.sdo_apellido, v.nomb,
+                   v.entidad_nacimiento, v.estado_migratorio, v.curp, v.rfc,
+                   CONVERT(nvarchar(10), v.fecha_ultimo_contacto, 23) AS fecha_ultimo_contacto,
+                   CONVERT(nvarchar(8), v.hora_ultimo_contacto, 108) AS hora_ultimo_contacto,
+                   v.entidad_visto, v.municipio_visto, v.lugar_ultimo_contacto,
+                   v.senas_tatuaje_datos_identificacion, v.localizado_o_no_localizado, v.con_o_sin_vida,
+                   CONVERT(nvarchar(10), v.fecha_localizacion, 23) AS fecha_localizacion,
+                   v.voluntaria, v.fue_delito, v.delito, v.obs
+            FROM #BanciExcel f
+            JOIN dbo.banci_carpeta_investigacion c ON c.id_banci_carpeta_investigacion = f.id_banci_carpeta_investigacion
+            JOIN dbo.catalogo_entidad_federativa e ON e.id_entidad_federativa = c.id_entidad_federativa
+            JOIN dbo.banci_delito d ON d.id_banci_carpeta_investigacion = c.id_banci_carpeta_investigacion
+            JOIN dbo.banci_victima v ON v.id_banci_delito = d.id_banci_delito
+            WHERE c.activo = 1 AND d.activo = 1 AND v.activo = 1
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+            ORDER BY c.id_entidad_federativa, c.id_ci, d.id_delito, v.id_vicf;
+
+            DROP TABLE #BanciExcel;
+            """, new
+        {
+            Alcance = idEntidadAlcance,
+            Entidad = filtro.IdEntidadFederativa,
+            Desde = desde,
+            Hasta = hasta,
+            Busqueda = patron
+        }, commandTimeout: 300);
+        var datos = new DataSet();
+        try
+        {
+            datos.Load(reader, LoadOption.OverwriteChanges, "Carpetas", "Delitos", "Victimas");
+            return datos;
+        }
+        catch { datos.Dispose(); throw; }
     }
 
     public async Task<BanciConsultaDetalle?> ObtenerDetalleAsync(long idCarpeta, int? idEntidadAlcance)

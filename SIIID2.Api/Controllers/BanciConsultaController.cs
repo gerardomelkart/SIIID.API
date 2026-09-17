@@ -33,6 +33,20 @@ public class BanciConsultaController : ControllerBase
         return Ok(detalle);
     });
 
+    [HttpGet("excel")]
+    public Task<IActionResult> DescargarExcel([FromQuery] BanciConsultaFiltro filtro) => EjecutarAsync(async idUsuario =>
+    {
+        try
+        {
+            var resultado = await _service.DescargarExcelAsync(idUsuario, filtro);
+            return File(resultado.Archivo, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", resultado.NombreArchivo);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { mensaje = ex.Message });
+        }
+    });
+
     private async Task<IActionResult> EjecutarAsync(Func<int, Task<IActionResult>> accion)
     {
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var idUsuario) || idUsuario <= 0)
