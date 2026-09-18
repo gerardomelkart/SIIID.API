@@ -238,6 +238,7 @@ public class BanciCargaService : IBanciCargaService
         response.Estado = "VALIDADO_PENDIENTE";
         response.TotalAdvertencias = response.Advertencias.Count;
         response.Mensaje = "Validación terminada. Revise las advertencias y acepte o rechace la carga. Todavía no se han integrado datos definitivos.";
+        await _banciCargaRepository.CompletarVistaPreviaAsync(response, idUsuarioCarga);
 
         return response;
     }
@@ -248,8 +249,8 @@ public class BanciCargaService : IBanciCargaService
     public Task<BanciCargaValidacionResponse?> ObtenerCargaAsync(string codigoReferencia, int idUsuario) =>
         _banciCargaRepository.ObtenerCargaAsync(codigoReferencia, idUsuario);
 
-    public Task<BanciCargaValidacionResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuario) =>
-        _banciCargaRepository.ConfirmarCargaAsync(codigoReferencia, aceptar, idUsuario);
+    public Task<BanciCargaValidacionResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuario, string? huellaVistaPrevia = null) =>
+        _banciCargaRepository.ConfirmarCargaAsync(codigoReferencia, aceptar, idUsuario, huellaVistaPrevia);
 
     private static void CompletarEntidad(BanciLecturaArchivosResultado lectura, BanciUsuarioCargaInfo usuario)
     {

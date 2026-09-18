@@ -8,6 +8,6 @@ public interface IBanciCargaService
     Task<BanciCargaValidacionResponse> ValidarFormularioAsync(BanciFormularioRequest request, int idUsuario);
     Task<IReadOnlyList<BanciCargaValidacionResponse>> ObtenerPendientesAsync(int idUsuario);
     Task<BanciCargaValidacionResponse?> ObtenerCargaAsync(string codigoReferencia, int idUsuario);
-    Task<BanciCargaValidacionResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuario);
+    Task<BanciCargaValidacionResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuario, string? huellaVistaPrevia = null);
     Task<BanciCargaValidacionResponse> ValidarArchivosAsync(BanciCargaArchivosRequest request, int idUsuarioCarga);
 }

@@ -10,6 +10,7 @@ public class BanciCargaArchivosRequest
 
 public class BanciCargaValidacionResponse
 {
+    public BanciVistaPrevia? VistaPrevia { get; set; }
     public bool EsValido => Errores.Count == 0;
 
     public long IdBanciCarga { get; set; }
@@ -40,12 +41,41 @@ public class BanciCargaValidacionResponse
 
 public class BanciCargaConfirmacionRequest
 {
+    [System.ComponentModel.DataAnnotations.StringLength(64)]
+    public string? HuellaVistaPrevia { get; set; }
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(50)]
     public string CodigoReferencia { get; set; } = string.Empty;
 
     [System.ComponentModel.DataAnnotations.Required]
     public bool? Aceptar { get; set; }
+}
+
+public class BanciVistaPrevia
+{
+    public string Huella { get; set; } = string.Empty;
+    public int TotalCambios { get; set; }
+    public List<BanciVistaPreviaResumen> Resumen { get; set; } = [];
+    public List<BanciVistaPreviaCambio> Cambios { get; set; } = [];
+}
+
+public class BanciVistaPreviaResumen
+{
+    public string Tipo { get; set; } = string.Empty;
+    public int Altas { get; set; }
+    public int Actualizaciones { get; set; }
+    public int SinCambio { get; set; }
+}
+
+public class BanciVistaPreviaCambio
+{
+    public string Tipo { get; set; } = string.Empty;
+    public string IdCi { get; set; } = string.Empty;
+    public string? IdDelito { get; set; }
+    public string? IdVictima { get; set; }
+    public string Campo { get; set; } = string.Empty;
+    public string? Anterior { get; set; }
+    public string? Nuevo { get; set; }
 }
 
 public class BanciCargaValidacionError

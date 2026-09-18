@@ -675,7 +675,7 @@ public class BanciCargaRepository : IBanciCargaRepository
         INNER JOIN dbo.usuario u ON u.id_usuario = c.id_usuario_carga AND u.activo = 1
         INNER JOIN dbo.roles r ON r.id_rol = u.id_rol AND r.activo = 1
         WHERE c.activo = 1 AND c.id_usuario_carga = @IdUsuario
-          AND (r.rol = N'SUPER_USUARIO' OR u.id_entidad_federativa = c.id_entidad_federativa)
+          AND (r.rol = N'SUPER_USUARIO' OR (r.rol = N'ENLACE_ESTATAL' AND u.id_entidad_federativa = c.id_entidad_federativa))
           AND EXISTS (SELECT 1 FROM dbo.catalogo_modulo WHERE clave = N'BANCI' AND activo = 1)
           AND EXISTS (
               SELECT 1 FROM dbo.usuario_modulo um
@@ -718,17 +718,40 @@ public class BanciCargaRepository : IBanciCargaRepository
             "PROCESADO" or "PROCESADO_CON_ADVERTENCIAS" => "Carga integrada. Los totales corresponden al resultado guardado.",
             _ => "Estado de la carga recuperado."
         };
+        await CompletarVistaPreviaAsync(carga, idUsuario);
         return carga;
     }
 
-    public async Task<BanciCargaValidacionResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuario)
+    public async Task CompletarVistaPreviaAsync(BanciCargaValidacionResponse carga, int idUsuario)
+    {
+        if (carga.Estado != "VALIDADO_PENDIENTE") return;
+        try
+        {
+            using var connection = _dbConnectionFactory.CrearConexion();
+            using var resultados = await connection.QueryMultipleAsync("dbo.sp_banci_vista_previa", new { carga.CodigoReferencia, IdUsuario = idUsuario }, commandTimeout: 300, commandType: CommandType.StoredProcedure);
+            var previa = await resultados.ReadSingleAsync<BanciVistaPrevia>();
+            previa.Resumen = (await resultados.ReadAsync<BanciVistaPreviaResumen>()).ToList();
+            previa.Cambios = (await resultados.ReadAsync<BanciVistaPreviaCambio>()).ToList();
+            carga.VistaPrevia = previa;
+        }
+        catch (SqlException ex)
+        {
+            // Conservar la referencia validada aunque falle la consulta; jamás aceptar sin huella.
+            carga.VistaPrevia = null;
+            carga.Mensaje = ex.Number == 52424
+                ? "La carpeta ya existe. El formulario sólo registra carpetas nuevas; rechace esta captura pendiente. No se sobrescribió información."
+                : "La carga sigue registrada. No fue posible obtener la vista previa; actualice el estado antes de aceptar. Si persiste, solicite revisar la instalación BANCI (script 14).";
+        }
+    }
+
+    public async Task<BanciCargaValidacionResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuario, string? huellaVistaPrevia = null)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
         // El procedimiento controla la transacción, bloqueo, autorización e idempotencia.
         // No envolver esta llamada en otra transacción ni invocar directamente procesar_carga.
         var fila = await connection.QuerySingleAsync(
             "dbo.sp_banci_confirmar_carga",
-            new { CodigoReferencia = codigoReferencia, Aceptar = aceptar, IdUsuario = idUsuario },
+            new { CodigoReferencia = codigoReferencia, Aceptar = aceptar, IdUsuario = idUsuario, HuellaVistaPrevia = huellaVistaPrevia },
             commandTimeout: 300, commandType: CommandType.StoredProcedure);
 
         // Mapeo explícito: no alterar la configuración global de Dapper de los otros módulos.

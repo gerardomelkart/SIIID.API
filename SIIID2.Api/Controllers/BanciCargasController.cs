@@ -10,6 +10,7 @@ namespace SIIID2.Api.Controllers;
 [ApiController]
 [Authorize(Policy = "MODULO_BANCI")]
 [Route("api/banci/cargas")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class BanciCargasController : ControllerBase
 {
     private readonly IBanciCargaService _banciCargaService;
@@ -93,12 +94,13 @@ public class BanciCargasController : ControllerBase
         try
         {
             return Ok(await _banciCargaService.ConfirmarCargaAsync(
-                request.CodigoReferencia, request.Aceptar.Value, idUsuario));
+                request.CodigoReferencia, request.Aceptar.Value, idUsuario, request.HuellaVistaPrevia));
         }
-        catch (SqlException ex) when (ex.Number is >= 52400 and <= 52424)
+        catch (SqlException ex) when (ex.Number is >= 52400 and <= 52425)
         {
             var mensaje = ex.Number switch
             {
+                52425 => "La información cambió desde la vista previa o ésta no fue consultada. Actualice el estado, revise los cambios y vuelva a decidir. No se integró esta carga.",
                 52424 => "La carpeta ya fue registrada por otra carga. Rechace esta captura pendiente; no se duplicó ni se sobrescribió la carpeta existente.",
                 52402 or 52404 => "La carga no está disponible para este usuario.",
                 52405 => "El usuario ya no tiene acceso a esta carga.",
