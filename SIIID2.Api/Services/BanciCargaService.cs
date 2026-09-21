@@ -57,7 +57,7 @@ public class BanciCargaService : IBanciCargaService
     private async Task<BanciUsuarioCargaInfo> ObtenerUsuarioCapturaAsync(int idUsuario)
     {
         var usuario = await _banciCargaRepository.ObtenerUsuarioCargaAsync(idUsuario);
-        if (usuario == null || (!usuario.EsSuperUsuario && (!string.Equals(usuario.Rol, "ENLACE_ESTATAL", StringComparison.OrdinalIgnoreCase) || usuario.IdEntidadFederativa is not (>= 1 and <= 32))))
+        if (usuario == null || (!usuario.EsSuperUsuario && (!usuario.HabilitaCarga || !string.Equals(usuario.Rol, "ENLACE_ESTATAL", StringComparison.OrdinalIgnoreCase) || usuario.IdEntidadFederativa is not (>= 1 and <= 32))))
             throw new UnauthorizedAccessException("El usuario no tiene permiso para capturar información BANCI.");
         return usuario;
     }

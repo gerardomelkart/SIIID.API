@@ -96,10 +96,11 @@ public class BanciCargasController : ControllerBase
             return Ok(await _banciCargaService.ConfirmarCargaAsync(
                 request.CodigoReferencia, request.Aceptar.Value, idUsuario, request.HuellaVistaPrevia));
         }
-        catch (SqlException ex) when (ex.Number is >= 52400 and <= 52425)
+        catch (SqlException ex) when (ex.Number is >= 52400 and <= 52426)
         {
             var mensaje = ex.Number switch
             {
+                52426 => "Sus permisos BANCI actuales no permiten integrar esta carga. Actualice el estado para revisar qué permiso falta; no se integró información.",
                 52425 => "La información cambió desde la vista previa o ésta no fue consultada. Actualice el estado, revise los cambios y vuelva a decidir. No se integró esta carga.",
                 52424 => "La carpeta ya fue registrada por otra carga. Rechace esta captura pendiente; no se duplicó ni se sobrescribió la carpeta existente.",
                 52402 or 52404 => "La carga no está disponible para este usuario.",
@@ -110,7 +111,7 @@ public class BanciCargasController : ControllerBase
             var status = ex.Number switch
             {
                 52402 or 52404 => StatusCodes.Status404NotFound,
-                52405 => StatusCodes.Status403Forbidden,
+                52405 or 52426 => StatusCodes.Status403Forbidden,
                 _ => StatusCodes.Status409Conflict
             };
             return StatusCode(status, new

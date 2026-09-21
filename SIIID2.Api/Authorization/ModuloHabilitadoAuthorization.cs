@@ -38,15 +38,16 @@ public sealed class ModuloHabilitadoHandler : AuthorizationHandler<ModuloHabilit
                     ON moduloSolicitado.clave = @ClaveModulo
                    AND moduloSolicitado.activo = 1
                 INNER JOIN dbo.catalogo_modulo moduloAcceso
-                    ON moduloAcceso.clave = CASE WHEN @ClaveModulo = N'BANCI' THEN N'MENSUAL' ELSE @ClaveModulo END
+                    ON moduloAcceso.clave = @ClaveModulo
                    AND moduloAcceso.activo = 1
-                INNER JOIN dbo.usuario_modulo um
+                LEFT JOIN dbo.usuario_modulo um
                     ON um.id_usuario = u.id_usuario
                    AND um.id_modulo = moduloAcceso.id_modulo
                    AND um.habilitado = 1
                    AND um.activo = 1
                 WHERE u.id_usuario = @IdUsuario
                   AND u.activo = 1
+                  AND (r.rol = N'SUPER_USUARIO' OR um.id_usuario IS NOT NULL)
                   AND (@ClaveModulo <> N'FEDERAL' OR r.rol <> N'CONSULTA' OR u.id_entidad_federativa IS NULL)
             ) THEN 1 ELSE 0 END AS bit);";
 

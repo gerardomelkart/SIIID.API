@@ -77,44 +77,21 @@ public class UsuarioRepository : IUsuarioRepository
             m.id_modulo AS IdModulo,
             m.clave AS Clave,
             m.nombre AS Nombre,
-            COALESCE(um.habilita_carga, 0) AS HabilitaCarga,
-            CONVERT(bit, CASE WHEN m.clave IN (N'MENSUAL', N'FEDERAL') THEN ISNULL(um.habilita_modificacion, 0) ELSE 0 END) AS HabilitaModificacion,
-            COALESCE(um.administra_delitos, 0) AS AdministraDelitos
+            CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 WHEN r.rol = N'CONSULTA' THEN 0 ELSE ISNULL(um.habilita_carga, 0) END) AS HabilitaCarga,
+            CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 WHEN r.rol = N'CONSULTA' THEN 0 WHEN m.clave IN (N'MENSUAL', N'FEDERAL', N'BANCI') THEN ISNULL(um.habilita_modificacion, 0) ELSE 0 END) AS HabilitaModificacion,
+            CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 ELSE ISNULL(um.administra_delitos, 0) END) AS AdministraDelitos
         FROM usuario u
-        INNER JOIN usuario_modulo um
+        INNER JOIN roles r ON r.id_rol = u.id_rol AND r.activo = 1
+        INNER JOIN catalogo_modulo m ON m.activo = 1
+        LEFT JOIN usuario_modulo um
             ON um.id_usuario = u.id_usuario
+           AND um.id_modulo = m.id_modulo
            AND um.habilitado = 1
            AND um.activo = 1
-        INNER JOIN catalogo_modulo m
-            ON m.id_modulo = um.id_modulo
-           AND m.activo = 1
-           AND m.clave <> N'BANCI'
         WHERE u.usuario = @Usuario
           AND u.activo = 1
-
-        UNION ALL
-
-        SELECT
-            banci.id_modulo AS IdModulo,
-            banci.clave AS Clave,
-            banci.nombre AS Nombre,
-            CONVERT(bit, 1) AS HabilitaCarga,
-            CONVERT(bit, 1) AS HabilitaModificacion,
-            CONVERT(bit, 0) AS AdministraDelitos
-        FROM usuario u
-        INNER JOIN catalogo_modulo mensual
-            ON mensual.clave = N'MENSUAL'
-           AND mensual.activo = 1
-        INNER JOIN usuario_modulo um
-            ON um.id_usuario = u.id_usuario
-           AND um.id_modulo = mensual.id_modulo
-           AND um.habilitado = 1
-           AND um.activo = 1
-        INNER JOIN catalogo_modulo banci
-            ON banci.clave = N'BANCI'
-           AND banci.activo = 1
-        WHERE u.usuario = @Usuario
-          AND u.activo = 1
+          AND (r.rol = N'SUPER_USUARIO' OR um.id_usuario IS NOT NULL)
+          AND (m.clave <> N'FEDERAL' OR r.rol <> N'CONSULTA' OR u.id_entidad_federativa IS NULL)
 
         ORDER BY IdModulo;
     ";
@@ -453,6 +430,7 @@ public class UsuarioRepository : IUsuarioRepository
 
             await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.AdministraDelitosSemanal, idUsuarioAlta);
 
+            await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
 
             return idUsuario;
@@ -672,6 +650,7 @@ public class UsuarioRepository : IUsuarioRepository
 
             await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.AdministraDelitosSemanal, idUsuarioModificacion);
 
+            await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
         }
         catch
@@ -795,6 +774,7 @@ public class UsuarioRepository : IUsuarioRepository
                 IdUsuarioModificacion = idUsuarioModificacion
             }, transaction);
 
+            await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
         }
         catch
@@ -919,6 +899,7 @@ public class UsuarioRepository : IUsuarioRepository
                 },
                 transaction);
 
+            await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
         }
         catch
@@ -1083,6 +1064,7 @@ public class UsuarioRepository : IUsuarioRepository
 
             await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, null, null, null, idUsuarioModificacion);
 
+            await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
         }
         catch
@@ -1232,6 +1214,7 @@ public class UsuarioRepository : IUsuarioRepository
                 IdUsuarioModificacion = idUsuarioModificacion
             }, transaction);
 
+            await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
         }
         catch

@@ -71,8 +71,8 @@ public class BanciCargaRepository : IBanciCargaRepository
             u.id_usuario AS IdUsuario,
             u.id_entidad_federativa AS IdEntidadFederativa,
             r.rol AS Rol,
-            CONVERT(bit, 1) AS HabilitaCarga,
-            CONVERT(bit, 1) AS HabilitaModificacion
+            CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 WHEN r.rol = N'CONSULTA' THEN 0 ELSE ISNULL(um.habilita_carga, 0) END) AS HabilitaCarga,
+            CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 WHEN r.rol = N'CONSULTA' THEN 0 ELSE ISNULL(um.habilita_modificacion, 0) END) AS HabilitaModificacion
         FROM dbo.usuario u
         INNER JOIN dbo.roles r
             ON r.id_rol = u.id_rol
@@ -80,16 +80,14 @@ public class BanciCargaRepository : IBanciCargaRepository
         INNER JOIN dbo.catalogo_modulo banci
             ON banci.clave = N'BANCI'
            AND banci.activo = 1
-        INNER JOIN dbo.catalogo_modulo mensual
-            ON mensual.clave = N'MENSUAL'
-           AND mensual.activo = 1
-        INNER JOIN dbo.usuario_modulo um
+        LEFT JOIN dbo.usuario_modulo um
             ON um.id_usuario = u.id_usuario
-           AND um.id_modulo = mensual.id_modulo
+           AND um.id_modulo = banci.id_modulo
            AND um.habilitado = 1
            AND um.activo = 1
         WHERE u.id_usuario = @IdUsuario
-          AND u.activo = 1;
+          AND u.activo = 1
+          AND (r.rol = N'SUPER_USUARIO' OR um.id_usuario IS NOT NULL);
         """;
 
         using var connection = _dbConnectionFactory.CrearConexion();
@@ -677,11 +675,11 @@ public class BanciCargaRepository : IBanciCargaRepository
         WHERE c.activo = 1 AND c.id_usuario_carga = @IdUsuario
           AND (r.rol = N'SUPER_USUARIO' OR (r.rol = N'ENLACE_ESTATAL' AND u.id_entidad_federativa = c.id_entidad_federativa))
           AND EXISTS (SELECT 1 FROM dbo.catalogo_modulo WHERE clave = N'BANCI' AND activo = 1)
-          AND EXISTS (
+          AND (r.rol = N'SUPER_USUARIO' OR EXISTS (
               SELECT 1 FROM dbo.usuario_modulo um
               INNER JOIN dbo.catalogo_modulo m ON m.id_modulo = um.id_modulo
               WHERE um.id_usuario = u.id_usuario AND um.activo = 1 AND um.habilitado = 1
-                AND m.clave = N'MENSUAL' AND m.activo = 1)
+                AND m.clave = N'BANCI' AND m.activo = 1))
         """;
 
     public async Task<IReadOnlyList<BanciCargaValidacionResponse>> ObtenerPendientesAsync(int idUsuario)
@@ -740,7 +738,7 @@ public class BanciCargaRepository : IBanciCargaRepository
             carga.VistaPrevia = null;
             carga.Mensaje = ex.Number == 52424
                 ? "La carpeta ya existe. El formulario sólo registra carpetas nuevas; rechace esta captura pendiente. No se sobrescribió información."
-                : "La carga sigue registrada. No fue posible obtener la vista previa; actualice el estado antes de aceptar. Si persiste, solicite revisar la instalación BANCI (script 14).";
+                : "La carga sigue registrada. No fue posible obtener la vista previa; actualice el estado antes de aceptar. Si persiste, solicite revisar la instalación BANCI (scripts 14 y 15).";
         }
     }
 

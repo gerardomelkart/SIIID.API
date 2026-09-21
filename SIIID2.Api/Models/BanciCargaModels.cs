@@ -53,6 +53,8 @@ public class BanciCargaConfirmacionRequest
 
 public class BanciVistaPrevia
 {
+    public bool PuedeAceptar { get; set; }
+    public string? MotivoBloqueo { get; set; }
     public string Huella { get; set; } = string.Empty;
     public int TotalCambios { get; set; }
     public List<BanciVistaPreviaResumen> Resumen { get; set; } = [];

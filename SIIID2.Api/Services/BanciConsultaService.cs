@@ -64,7 +64,7 @@ public class BanciConsultaService : IBanciConsultaService
 
     private async Task<int?> ObtenerAlcanceAsync(int idUsuario)
     {
-        // ObtenerUsuarioCargaAsync verifica usuario/rol activos y acceso vigente MENSUAL/BANCI.
+        // Verifica usuario/rol activos y acceso propio a BANCI; consulta no requiere permiso de carga.
         var usuario = await _cargaRepository.ObtenerUsuarioCargaAsync(idUsuario);
         if (usuario == null) throw new UnauthorizedAccessException();
 

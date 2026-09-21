@@ -81,6 +81,7 @@ builder.Services.AddScoped<IFederalCargaRepository, FederalCargaRepository>();
 builder.Services.AddScoped<IFederalAcuseRepository, FederalAcuseRepository>();
 builder.Services.AddScoped<IFederalEnviosRepository, FederalEnviosRepository>();
 builder.Services.AddScoped<IFederalUsuarioRepository, FederalUsuarioRepository>();
+builder.Services.AddScoped<IBanciUsuarioRepository, BanciUsuarioRepository>();
 builder.Services.AddScoped<IFederalActualizacionRepository, FederalActualizacionRepository>();
 builder.Services.AddScoped<IBanciCargaRepository, BanciCargaRepository>();
 builder.Services.AddScoped<IBanciConsultaRepository, BanciConsultaRepository>();
@@ -114,6 +115,7 @@ builder.Services.AddScoped<IFederalCargaArchivosService, FederalCargaArchivosSer
 builder.Services.AddScoped<IFederalActualizacionArchivosService, FederalActualizacionArchivosService>();
 builder.Services.AddScoped<IFederalEnviosService, FederalEnviosService>();
 builder.Services.AddScoped<IFederalUsuarioService, FederalUsuarioService>();
+builder.Services.AddScoped<IBanciUsuarioService, BanciUsuarioService>();
 builder.Services.AddScoped<IFederalArchivosOriginalesService, FederalArchivosOriginalesService>();
 // Registro del servicio de actualizaciones.
 builder.Services.AddScoped<IActualizacionArchivosService, ActualizacionArchivosService>();
