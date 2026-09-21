@@ -15,20 +15,23 @@ public sealed class RenapoCurpService : IRenapoCurpService
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
     private readonly ILogger<RenapoCurpService> _logger;
+    private readonly IHostEnvironment _environment;
 
-    public RenapoCurpService(HttpClient httpClient, IConfiguration configuration, ILogger<RenapoCurpService> logger)
+    public RenapoCurpService(HttpClient httpClient, IConfiguration configuration, IHostEnvironment environment, ILogger<RenapoCurpService> logger)
     {
         _httpClient = httpClient;
         _configuration = configuration;
+        _environment = environment;
         _logger = logger;
     }
 
     public async Task<RenapoConsultaResultado> ConsultarAsync(string curp, CancellationToken cancellationToken = default)
     {
-        var endpoint = _configuration["Renapo:Endpoint"];
+        var ambiente = _environment.IsDevelopment() ? "Development" : "Production";
+        var endpoint = _configuration[$"Renapo:Ambientes:{ambiente}:Endpoint"];
         var usuario = _configuration["Renapo:Usuario"];
         var password = _configuration["Renapo:Password"];
-        var direccionIp = _configuration["Renapo:DireccionIp"];
+        var direccionIp = _configuration[$"Renapo:Ambientes:{ambiente}:DireccionIp"];
 
         if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(usuario) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(direccionIp) ||
             !Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
