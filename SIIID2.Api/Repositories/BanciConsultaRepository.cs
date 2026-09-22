@@ -44,7 +44,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             .Replace("~", "~~").Replace("%", "~%").Replace("_", "~_").Replace("[", "~[") + "%";
         using var connection = _factory.CrearConexion();
         using var resultados = await connection.QueryMultipleAsync("""
-            SELECT c.id_banci_carpeta_investigacion, c.id_entidad_federativa, c.id_ci, c.ntra_ci, c.fha_de_ini
+            SELECT c.id_banci_carpeta_investigacion, c.id_entidad_federativa, c.id_ci, c.ntra_ci, c.no_banci, c.fha_de_ini
             INTO #BanciConsultaFiltrada
             FROM dbo.banci_carpeta_investigacion c
             WHERE c.activo = 1
@@ -72,7 +72,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
 
             SELECT p.id_banci_carpeta_investigacion AS IdBanciCarpetaInvestigacion,
                    CONVERT(int, p.id_entidad_federativa) AS IdEntidadFederativa,
-                   e.nombre AS Entidad, p.id_ci AS IdCi, p.ntra_ci AS NtraCi, p.fha_de_ini AS FechaInicio,
+                   e.nombre AS Entidad, p.id_ci AS IdCi, p.ntra_ci AS NtraCi, p.no_banci AS NoBanci, p.fha_de_ini AS FechaInicio,
                    (SELECT COUNT_BIG(*) FROM dbo.banci_delito d
                     WHERE d.id_banci_carpeta_investigacion = p.id_banci_carpeta_investigacion AND d.activo = 1) AS TotalDelitos,
                    (SELECT COUNT_BIG(*) FROM dbo.banci_victima v
@@ -122,11 +122,10 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             OPTION (RECOMPILE);
             CREATE UNIQUE CLUSTERED INDEX IX_BanciExcel ON #BanciExcel(id_banci_carpeta_investigacion);
 
-            SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci,
+            SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci, c.no_banci,
                    CONVERT(nvarchar(10), c.fha_de_ini, 23) AS fha_de_ini,
                    CONVERT(nvarchar(8), c.hra_de_ini, 108) AS hra_de_ini,
-                   c.rmen_de_hchos, c.ord_apreh, c.fgran, c.ctaon, c.td_v_ap,
-                   c.proc_abrev, c.juc_oral, c.td_sen_con, c.no_ejer_acc_pnal, c.otra, c.dic
+                   c.rmen_de_hchos
             FROM #BanciExcel f
             JOIN dbo.banci_carpeta_investigacion c ON c.id_banci_carpeta_investigacion = f.id_banci_carpeta_investigacion
             JOIN dbo.catalogo_entidad_federativa e ON e.id_entidad_federativa = c.id_entidad_federativa
@@ -134,7 +133,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
               AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
             ORDER BY c.id_entidad_federativa, c.fha_de_ini, c.id_ci;
 
-            SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci,
+            SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci, c.no_banci,
                    d.id_delito, d.dto, d.moda_dto, d.forma_acc,
                    CONVERT(nvarchar(10), d.fha_de_hchos, 23) AS fha_de_hchos,
                    CONVERT(nvarchar(8), d.hra_de_hchos, 108) AS hra_de_hchos,
@@ -151,15 +150,11 @@ public class BanciConsultaRepository : IBanciConsultaRepository
 
             SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci, d.id_delito,
                    v.id_vicf, v.id_tv, v.id_tpm, v.sexo, v.genero, v.pob, v.disc,
-                   CONVERT(nvarchar(10), v.fha_nac, 23) AS fha_nac, v.edad, v.nacional, v.no_banci,
-                   v.folio_fotovolante, v.folio_rnpdno, v.pro_apellido, v.sdo_apellido, v.nomb,
+                   CONVERT(nvarchar(10), v.fha_nac, 23) AS fha_nac, v.edad, v.nacional, c.no_banci, v.folio_rnpdno, v.pro_apellido, v.sdo_apellido, v.nomb,
                    v.entidad_nacimiento, v.estado_migratorio, v.curp, v.rfc,
-                   CONVERT(nvarchar(10), v.fecha_ultimo_contacto, 23) AS fecha_ultimo_contacto,
-                   CONVERT(nvarchar(8), v.hora_ultimo_contacto, 108) AS hora_ultimo_contacto,
-                   v.entidad_visto, v.municipio_visto, v.lugar_ultimo_contacto,
-                   v.senas_tatuaje_datos_identificacion, v.localizado_o_no_localizado, v.con_o_sin_vida,
+                   v.localizado_o_no_localizado, v.con_o_sin_vida,
                    CONVERT(nvarchar(10), v.fecha_localizacion, 23) AS fecha_localizacion,
-                   v.voluntaria, v.fue_delito, v.delito, v.obs
+                   v.voluntaria_o_fue_delito, v.delito, v.acciones_busqueda, v.obs
             FROM #BanciExcel f
             JOIN dbo.banci_carpeta_investigacion c ON c.id_banci_carpeta_investigacion = f.id_banci_carpeta_investigacion
             JOIN dbo.catalogo_entidad_federativa e ON e.id_entidad_federativa = c.id_entidad_federativa
@@ -193,14 +188,10 @@ public class BanciConsultaRepository : IBanciConsultaRepository
         // Los tres resultados aplican el alcance a la entidad propietaria de la carpeta,
         // no a la entidad de hechos ni al usuario que realizó la última modificación.
         using var resultados = await connection.QueryMultipleAsync("""
-            SELECT e.nombre AS [Entidad], c.id_ci AS [ID_CI], c.ntra_ci AS [NTRA_CI],
+            SELECT e.nombre AS [Entidad], c.id_ci AS [ID_CI], c.ntra_ci AS [NTRA_CI], c.no_banci AS [NO_BANCI],
                    CONVERT(nvarchar(10), c.fha_de_ini, 23) AS [Fecha de inicio],
                    CONVERT(nvarchar(8), c.hra_de_ini, 108) AS [Hora de inicio],
-                   c.rmen_de_hchos AS [Resumen de hechos], c.ord_apreh AS [Órdenes de aprehensión],
-                   c.fgran AS [FGRAN], c.ctaon AS [CTAON], c.td_v_ap AS [TD_V_AP],
-                   c.proc_abrev AS [Procedimiento abreviado], c.juc_oral AS [Juicio oral],
-                   c.td_sen_con AS [TD_SEN_CON], c.no_ejer_acc_pnal AS [No ejercicio de acción penal],
-                   c.otra AS [Otra], c.dic AS [DIC]
+                   c.rmen_de_hchos AS [Resumen de hechos]
             FROM dbo.banci_carpeta_investigacion c
             JOIN dbo.catalogo_entidad_federativa e ON e.id_entidad_federativa = c.id_entidad_federativa
             WHERE c.id_banci_carpeta_investigacion = @IdCarpeta AND c.activo = 1
@@ -227,19 +218,13 @@ public class BanciConsultaRepository : IBanciConsultaRepository
                    v.id_tv AS [Tipo de víctima (clave)], v.id_tpm AS [Tipo de persona moral (clave)],
                    v.sexo AS [Sexo (clave)], v.genero AS [Género (clave)], v.pob AS [POB], v.disc AS [DISC],
                    CONVERT(nvarchar(10), v.fha_nac, 23) AS [Fecha de nacimiento], v.edad AS [Edad],
-                   v.nacional AS [Nacionalidad (clave)], v.no_banci AS [No_BANCI],
-                   v.folio_fotovolante AS [Folio fotovolante], v.folio_rnpdno AS [Folio RNPDNO],
+                   v.nacional AS [Nacionalidad (clave)], c.no_banci AS [NO_BANCI], v.folio_rnpdno AS [Folio RNPDNO],
                    v.pro_apellido AS [Primer apellido], v.sdo_apellido AS [Segundo apellido], v.nomb AS [Nombre],
                    v.entidad_nacimiento AS [Entidad de nacimiento], v.estado_migratorio AS [Estado migratorio],
                    v.curp AS [CURP], v.rfc AS [RFC],
-                   CONVERT(nvarchar(10), v.fecha_ultimo_contacto, 23) AS [Fecha de último contacto],
-                   CONVERT(nvarchar(8), v.hora_ultimo_contacto, 108) AS [Hora de último contacto],
-                   v.entidad_visto AS [Entidad del último contacto], v.municipio_visto AS [Municipio del último contacto],
-                   v.lugar_ultimo_contacto AS [Lugar del último contacto],
-                   v.senas_tatuaje_datos_identificacion AS [Señas, tatuajes y datos de identificación],
                    v.localizado_o_no_localizado AS [Localización (clave)], v.con_o_sin_vida AS [Condición de vida (clave)],
                    CONVERT(nvarchar(10), v.fecha_localizacion, 23) AS [Fecha de localización],
-                   v.voluntaria AS [Voluntaria (clave)], v.fue_delito AS [Fue delito (clave)],
+                   v.voluntaria_o_fue_delito AS [Motivo de localización (clave)], v.acciones_busqueda AS [Acciones de búsqueda],
                    v.delito AS [Delito relacionado], v.obs AS [Observaciones]
             FROM dbo.banci_victima v
             JOIN dbo.banci_delito d ON d.id_banci_delito = v.id_banci_delito

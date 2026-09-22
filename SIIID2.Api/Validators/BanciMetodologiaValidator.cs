@@ -1,262 +1,36 @@
-﻿using System.Globalization;
-using SIIID2.Api.Models;
+﻿using SIIID2.Api.Models;
+using SIIID2.Api.Readers;
 
 namespace SIIID2.Api.Validators;
 
 public class BanciMetodologiaValidator
 {
-    private static readonly HashSet<int> Localizado = [1, 2];
-    private static readonly HashSet<int> CondicionVida = [1, 2];
-    private static readonly HashSet<int> Voluntaria = [1, 2];
-    private static readonly HashSet<int> FueDelito = [1, 2];
-
     public (List<BanciCargaValidacionError> Errores, List<BanciCargaValidacionError> Advertencias) Validar(BanciLecturaArchivosResultado lectura)
     {
         var errores = new List<BanciCargaValidacionError>();
         var advertencias = new List<BanciCargaValidacionError>();
-
-        foreach (var fila in lectura.Carpetas) ValidarCarpeta(fila, errores, advertencias);
-        foreach (var fila in lectura.Victimas) ValidarVictima(fila, errores, advertencias);
-
+        foreach (var fila in lectura.Carpetas)
+        {
+            if (SinDato(Valor(fila, "ntra_ci"))) errores.Add(Error(fila, "carpetas", "ntra_ci", "BANCI_NTRA_CI_OBLIGATORIO", "NTRA_CI es obligatorio."));
+            if (Valor(fila, "no_banci").Length > 40) errores.Add(Error(fila, "carpetas", "no_banci", "BANCI_FOLIO_INVALIDO", "NO_BANCI supera 40 caracteres; se genera al integrar una carpeta nueva."));
+        }
+        foreach (var fila in lectura.Victimas)
+        {
+            if (SinDato(Valor(fila, "folio_rnpdno"))) errores.Add(Error(fila, "victimas", "folio_rnpdno", "BANCI_RNPDNO_OBLIGATORIO", "Folio RNPDNO es obligatorio."));
+            foreach (var campo in new[] { "pob", "disc" })
+                if (!SinDato(Valor(fila, campo)) && Valor(fila, campo) is not ("0" or "1")) errores.Add(Error(fila, "victimas", campo, "BANCI_CATALOGO_INVALIDO", $"{campo} sólo permite 0 o 1."));
+            foreach (var campo in BanciArchivoReader.ColumnasActualizacion)
+            {
+                if (!string.IsNullOrWhiteSpace(Valor(fila, campo))) advertencias.Add(Error(fila, "victimas", campo, "BANCI_CAMPO_SOLO_ACTUALIZACION", $"{campo} no se integrará en la carga inicial; captúrelo en Actualización de víctimas."));
+                fila.Columnas[campo] = null;
+            }
+            foreach (var (campo, longitud) in new[] { ("folio_rnpdno", 250), ("pro_apellido", 250), ("sdo_apellido", 250), ("nomb", 500), ("entidad_nacimiento", 250), ("estado_migratorio", 500), ("rfc", 13) })
+                if (Valor(fila, campo).Length > longitud) errores.Add(Error(fila, "victimas", campo, "BANCI_LONGITUD_INVALIDA", $"{campo} permite hasta {longitud} caracteres."));
+        }
         return (errores, advertencias);
     }
 
-    private static void ValidarCarpeta(ArchivoFila fila, List<BanciCargaValidacionError> errores, List<BanciCargaValidacionError> advertencias)
-    {
-        var ordApreh = ValidarEnteroPendiente(fila, "carpetas", "ord_apreh", errores, advertencias);
-        var fgran = ValidarEnteroPendiente(fila, "carpetas", "fgran", errores, advertencias);
-        var ctaon = ValidarEnteroPendiente(fila, "carpetas", "ctaon", errores, advertencias);
-        var tdVAp = ValidarEnteroPendiente(fila, "carpetas", "td_v_ap", errores, advertencias);
-        var procAbrev = ValidarEnteroPendiente(fila, "carpetas", "proc_abrev", errores, advertencias);
-        var jucOral = ValidarEnteroPendiente(fila, "carpetas", "juc_oral", errores, advertencias);
-        var tdSenCon = ValidarEnteroPendiente(fila, "carpetas", "td_sen_con", errores, advertencias);
-
-        ValidarEnteroPendiente(fila, "carpetas", "no_ejer_acc_pnal", errores, advertencias);
-        ValidarEnteroPendiente(fila, "carpetas", "otra", errores, advertencias);
-        ValidarEnteroOpcional(fila, "carpetas", "dic", errores);
-
-        if (ordApreh.HasValue && fgran.HasValue && ctaon.HasValue && tdVAp.HasValue && tdVAp.Value != ordApreh.Value + fgran.Value + ctaon.Value)
-            AgregarError(errores, "carpetas", fila, "td_v_ap", "BANCI_TD_V_AP_INCONSISTENTE", $"TD_V_AP debe ser igual a ORD_APREH + FGRAN + CTAON ({ordApreh.Value + fgran.Value + ctaon.Value}).");
-
-        if (procAbrev.HasValue && jucOral.HasValue && tdSenCon.HasValue && tdSenCon.Value != procAbrev.Value + jucOral.Value)
-            AgregarError(errores, "carpetas", fila, "td_sen_con", "BANCI_TD_SEN_CON_INCONSISTENTE", $"TD_SEN_CON debe ser igual a PROC_ABREV + JUC_ORAL ({procAbrev.Value + jucOral.Value}).");
-    }
-
-    private static void ValidarCatalogoBinario(ArchivoFila fila, string campo, List<BanciCargaValidacionError> errores)
-    {
-        var valor = Valor(fila, campo);
-
-        if (EsSinInformacion(valor)) return;
-
-        if (valor != "0" && valor != "1")
-            AgregarError(errores, "victimas", fila, campo, $"BANCI_{campo.ToUpperInvariant()}_CATALOGO_INVALIDO", $"El campo {campo} sólo permite 0 o 1 conforme al catálogo BANCI.");
-    }
-
-    private static void ValidarVictima(ArchivoFila fila, List<BanciCargaValidacionError> errores, List<BanciCargaValidacionError> advertencias)
-    {
-        ValidarCatalogoBinario(fila, "pob", errores);
-        ValidarCatalogoBinario(fila, "disc", errores);
-        ValidarTextoPendiente(fila, "victimas", "folio_fotovolante", advertencias);
-        ValidarTextoPendiente(fila, "victimas", "folio_rnpdno", advertencias);
-        ValidarTextoPendiente(fila, "victimas", "pro_apellido", advertencias);
-        ValidarTextoPendiente(fila, "victimas", "sdo_apellido", advertencias);
-        ValidarTextoPendiente(fila, "victimas", "nomb", advertencias);
-        ValidarTextoPendiente(fila, "victimas", "entidad_nacimiento", advertencias);
-        ValidarTextoPendiente(fila, "victimas", "estado_migratorio", advertencias);
-        ValidarCurp(fila, errores, advertencias);
-        ValidarTextoPendiente(fila, "victimas", "rfc", advertencias);
-
-        ValidarFechaOpcional(fila, "victimas", "fecha_ultimo_contacto", errores);
-        ValidarHoraOpcional(fila, "victimas", "hora_ultimo_contacto", errores);
-
-        ValidarTextoPendiente(fila, "victimas", "entidad_visto", advertencias);
-        ValidarTextoPendiente(fila, "victimas", "municipio_visto", advertencias);
-        ValidarTextoPendiente(fila, "victimas", "lugar_ultimo_contacto", advertencias);
-        ValidarTextoPendiente(fila, "victimas", "senas_tatuaje_datos_identificacion", advertencias);
-
-        var localizado = ValidarCatalogoPendiente(fila, "victimas", "localizado_o_no_localizado", Localizado, errores, advertencias);
-        var condicionVida = ValidarCatalogoOpcional(fila, "victimas", "con_o_sin_vida", CondicionVida, errores);
-        var fechaLocalizacion = Valor(fila, "fecha_localizacion");
-
-        if (localizado == 2)
-        {
-            if (!condicionVida.HasValue) AgregarAdvertencia(advertencias, "victimas", fila, "con_o_sin_vida", "BANCI_CONDICION_VIDA_PENDIENTE", "La persona está localizada y falta indicar si fue localizada con vida o sin vida.");
-
-            if (EsSinInformacion(fechaLocalizacion)) AgregarAdvertencia(advertencias, "victimas", fila, "fecha_localizacion", "BANCI_FECHA_LOCALIZACION_PENDIENTE", "La persona está localizada y falta FECHA_LOCALIZACION.");
-            else ValidarFechaOpcional(fila, "victimas", "fecha_localizacion", errores);
-        }
-
-        if (localizado == 1)
-        {
-            if (condicionVida.HasValue) AgregarAdvertencia(advertencias, "victimas", fila, "con_o_sin_vida", "BANCI_CONDICION_VIDA_NO_APLICA", "La persona está no localizada pero CON_O_SIN_VIDA contiene información.");
-            if (!EsSinInformacion(fechaLocalizacion)) AgregarAdvertencia(advertencias, "victimas", fila, "fecha_localizacion", "BANCI_FECHA_LOCALIZACION_NO_APLICA", "La persona está no localizada pero FECHA_LOCALIZACION contiene información.");
-        }
-
-        var voluntaria = ValidarCatalogoPendiente(fila, "victimas", "voluntaria", Voluntaria, errores, advertencias);
-        var fueDelito = ValidarCatalogoOpcional(fila, "victimas", "fue_delito", FueDelito, errores);
-
-        if (voluntaria == 2 && !fueDelito.HasValue)
-            AgregarAdvertencia(advertencias, "victimas", fila, "fue_delito", "BANCI_FUE_DELITO_PENDIENTE", "La ausencia está marcada como no voluntaria y falta indicar si la persona fue víctima de un delito.");
-
-        if (fueDelito == 1 && EsSinInformacion(Valor(fila, "delito")))
-            AgregarAdvertencia(advertencias, "victimas", fila, "delito", "BANCI_DELITO_VICTIMA_PENDIENTE", "Se indicó que la persona fue víctima de un delito y falta especificar DELITO.");
-    }
-
-    private static void ValidarCurp(ArchivoFila fila, List<BanciCargaValidacionError> errores, List<BanciCargaValidacionError> advertencias)
-    {
-        const string LeyendaExtranjero = "PERSONA DE NACIONALIDAD EXTRANJERA";
-
-        var curp = Valor(fila, "curp");
-
-        if (EsSinInformacion(curp))
-        {
-            AgregarAdvertencia(advertencias, "victimas", fila, "curp", "BANCI_CURP_PENDIENTE", "El campo curp está pendiente de información.");
-            return;
-        }
-
-        var nacional = Valor(fila, "nacional");
-
-        if (curp.Equals(LeyendaExtranjero, StringComparison.OrdinalIgnoreCase))
-        {
-            if (nacional == "73")
-                AgregarError(errores, "victimas", fila, "curp", "BANCI_CURP_EXTRANJERO_NACIONALIDAD_INCONSISTENTE", "La leyenda PERSONA DE NACIONALIDAD EXTRANJERA sólo puede utilizarse cuando la nacionalidad no sea México.");
-
-            return;
-        }
-
-        if (curp.Length > 18)
-            AgregarError(errores, "victimas", fila, "curp", "BANCI_CURP_LONGITUD_INVALIDA", "La CURP no puede exceder 18 caracteres. Para personas extranjeras sin CURP puede utilizarse la leyenda PERSONA DE NACIONALIDAD EXTRANJERA.");
-    }
-
-    private static int? ValidarEnteroPendiente(ArchivoFila fila, string archivo, string campo, List<BanciCargaValidacionError> errores, List<BanciCargaValidacionError> advertencias)
-    {
-        var valor = Valor(fila, campo);
-
-        if (EsSinInformacion(valor))
-        {
-            AgregarAdvertencia(advertencias, archivo, fila, campo, $"BANCI_{campo.ToUpperInvariant()}_PENDIENTE", $"El campo {campo} está pendiente de información.");
-            return null;
-        }
-
-        if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numero) || numero < 0)
-        {
-            AgregarError(errores, archivo, fila, campo, $"BANCI_{campo.ToUpperInvariant()}_INVALIDO", $"El campo {campo} debe contener un número entero mayor o igual a cero.");
-            return null;
-        }
-
-        return numero;
-    }
-
-    private static int? ValidarEnteroOpcional(ArchivoFila fila, string archivo, string campo, List<BanciCargaValidacionError> errores)
-    {
-        var valor = Valor(fila, campo);
-        if (EsSinInformacion(valor)) return null;
-
-        if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numero) || numero < 0)
-        {
-            AgregarError(errores, archivo, fila, campo, $"BANCI_{campo.ToUpperInvariant()}_INVALIDO", $"El campo {campo} debe contener un número entero mayor o igual a cero.");
-            return null;
-        }
-
-        return numero;
-    }
-
-    private static int? ValidarCatalogoPendiente(ArchivoFila fila, string archivo, string campo, HashSet<int> catalogo, List<BanciCargaValidacionError> errores, List<BanciCargaValidacionError> advertencias)
-    {
-        var valor = Valor(fila, campo);
-
-        if (EsSinInformacion(valor))
-        {
-            AgregarAdvertencia(advertencias, archivo, fila, campo, $"BANCI_{campo.ToUpperInvariant()}_PENDIENTE", $"El campo {campo} está pendiente de información.");
-            return null;
-        }
-
-        if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var clave) || !catalogo.Contains(clave))
-        {
-            AgregarError(errores, archivo, fila, campo, $"BANCI_{campo.ToUpperInvariant()}_CATALOGO_INVALIDO", $"El valor \"{valor}\" no pertenece al catálogo permitido para {campo}.");
-            return null;
-        }
-
-        return clave;
-    }
-
-    private static int? ValidarCatalogoOpcional(ArchivoFila fila, string archivo, string campo, HashSet<int> catalogo, List<BanciCargaValidacionError> errores)
-    {
-        var valor = Valor(fila, campo);
-        if (EsSinInformacion(valor)) return null;
-
-        if (!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var clave) || !catalogo.Contains(clave))
-        {
-            AgregarError(errores, archivo, fila, campo, $"BANCI_{campo.ToUpperInvariant()}_CATALOGO_INVALIDO", $"El valor \"{valor}\" no pertenece al catálogo permitido para {campo}.");
-            return null;
-        }
-
-        return clave;
-    }
-
-    private static void ValidarTextoPendiente(ArchivoFila fila, string archivo, string campo, List<BanciCargaValidacionError> advertencias)
-    {
-        if (EsSinInformacion(Valor(fila, campo))) AgregarAdvertencia(advertencias, archivo, fila, campo, $"BANCI_{campo.ToUpperInvariant()}_PENDIENTE", $"El campo {campo} está pendiente de información.");
-    }
-
-    private static void ValidarFechaOpcional(ArchivoFila fila, string archivo, string campo, List<BanciCargaValidacionError> errores)
-    {
-        var valor = Valor(fila, campo);
-        if (EsSinInformacion(valor)) return;
-        if (!IntentarFecha(valor, out _)) AgregarError(errores, archivo, fila, campo, $"BANCI_{campo.ToUpperInvariant()}_FECHA_INVALIDA", $"El campo {campo} no contiene una fecha válida.");
-    }
-
-    private static void ValidarHoraOpcional(ArchivoFila fila, string archivo, string campo, List<BanciCargaValidacionError> errores)
-    {
-        var valor = Valor(fila, campo);
-        if (EsSinInformacion(valor)) return;
-        if (!IntentarHora(valor, out _)) AgregarError(errores, archivo, fila, campo, $"BANCI_{campo.ToUpperInvariant()}_HORA_INVALIDA", $"El campo {campo} no contiene una hora válida.");
-    }
-
-    private static bool IntentarFecha(string valor, out DateTime fecha)
-    {
-        fecha = default;
-        var formatos = new[] { "dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy", "yyyy-MM-dd", "yyyy/MM/dd", "yyyyMMdd" };
-
-        foreach (var formato in formatos)
-        {
-            if (DateTime.TryParseExact(valor.Trim(), formato, CultureInfo.InvariantCulture, DateTimeStyles.None, out fecha)) return true;
-        }
-
-        return DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out fecha);
-    }
-
-    private static bool IntentarHora(string valor, out TimeSpan hora)
-    {
-        hora = default;
-        valor = valor.Trim();
-
-        if (TimeSpan.TryParse(valor, CultureInfo.InvariantCulture, out hora) && hora >= TimeSpan.Zero && hora < TimeSpan.FromDays(1)) return true;
-
-        if (double.TryParse(valor, NumberStyles.Any, CultureInfo.InvariantCulture, out var numero) && numero >= 0 && numero < 1)
-        {
-            hora = TimeSpan.FromDays(numero);
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool EsSinInformacion(string? valor)
-    {
-        if (string.IsNullOrWhiteSpace(valor)) return true;
-        return valor.Trim().ToUpperInvariant() is "NO DISPONIBLE" or "N/D" or "ND";
-    }
-
-    private static string Valor(ArchivoFila fila, string campo) => fila.Columnas.TryGetValue(campo, out var valor) ? valor?.Trim() ?? string.Empty : string.Empty;
-
-    private static void AgregarError(List<BanciCargaValidacionError> errores, string archivo, ArchivoFila fila, string campo, string codigo, string mensaje)
-    {
-        errores.Add(new BanciCargaValidacionError { Archivo = archivo, NumeroFila = fila.NumeroFila, Campo = campo, Valor = Valor(fila, campo), Codigo = codigo, Mensaje = mensaje });
-    }
-
-    private static void AgregarAdvertencia(List<BanciCargaValidacionError> advertencias, string archivo, ArchivoFila fila, string campo, string codigo, string mensaje)
-    {
-        advertencias.Add(new BanciCargaValidacionError { Archivo = archivo, NumeroFila = fila.NumeroFila, Campo = campo, Valor = Valor(fila, campo), Codigo = codigo, Mensaje = mensaje });
-    }
+    private static bool SinDato(string valor) => string.IsNullOrWhiteSpace(valor) || valor.ToUpperInvariant() is "ND" or "N/D" or "NO DISPONIBLE";
+    private static string Valor(ArchivoFila fila, string campo) => fila.Columnas.GetValueOrDefault(campo)?.Trim() ?? "";
+    private static BanciCargaValidacionError Error(ArchivoFila fila, string archivo, string campo, string codigo, string mensaje) => new() { Archivo = archivo, NumeroFila = fila.NumeroFila, Campo = campo, Codigo = codigo, Mensaje = mensaje };
 }

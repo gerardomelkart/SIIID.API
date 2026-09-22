@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using SIIID2.Api.Models;
 using SIIID2.Api.Services;
+using SIIID2.Api.Readers;
+using ClosedXML.Excel;
 
 namespace SIIID2.Api.Controllers;
 
@@ -39,6 +41,7 @@ public class BanciCargasController : ControllerBase
             return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
+        catch (ArgumentException ex) { return BadRequest(new { mensaje = ex.Message }); }
     }
 
     [HttpGet("formulario/opciones")]
@@ -47,6 +50,31 @@ public class BanciCargasController : ControllerBase
     {
         if (!TryObtenerIdUsuario(out var idUsuario)) return TokenInvalido();
         try { return Ok(await _banciCargaService.ObtenerFormularioOpcionesAsync(idUsuario)); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
+    }
+
+    [HttpGet("plantilla")]
+    public async Task<IActionResult> DescargarPlantilla()
+    {
+        if (!TryObtenerIdUsuario(out var idUsuario)) return TokenInvalido();
+        try
+        {
+            await _banciCargaService.ObtenerFormularioOpcionesAsync(idUsuario);
+            using var libro = new XLWorkbook();
+            foreach (var (nombre, columnas) in new[] { ("CI", BanciArchivoReader.ColumnasCarpetas), ("Delitos", BanciArchivoReader.ColumnasDelitos), ("Victimas", BanciArchivoReader.ColumnasVictimas.Except(BanciArchivoReader.ColumnasActualizacion).ToArray()) })
+            {
+                var hoja = libro.Worksheets.Add(nombre);
+                var campos = columnas.Where(c => c != "entidad").ToArray();
+                for (var i = 0; i < campos.Length; i++) hoja.Cell(1, i + 1).Value = campos[i];
+                hoja.Row(1).Style.Font.Bold = true;
+                hoja.Columns(1, campos.Length).Width = 24;
+                hoja.Columns(1, campos.Length).Style.NumberFormat.Format = "@";
+                hoja.SheetView.FreezeRows(1);
+            }
+            using var archivo = new MemoryStream();
+            libro.SaveAs(archivo);
+            return File(archivo.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "BANCI_carga_inicial_v2.xlsx");
+        }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
     }
 
@@ -93,10 +121,15 @@ public class BanciCargasController : ControllerBase
 
         try
         {
+            var carga = await _banciCargaService.ObtenerCargaAsync(request.CodigoReferencia, idUsuario);
+            if (carga == null) return NotFound(new { mensaje = "La carga no está disponible para este usuario." });
+            if (request.Aceptar.Value && carga.VersionFormato == 2 && carga.TotalAdvertencias > 0 && !request.AceptarAdvertencias)
+                return Conflict(new { codigo = "BANCI_ADVERTENCIAS", mensaje = "Debe aceptar explícitamente las advertencias antes de integrar." });
             return Ok(await _banciCargaService.ConfirmarCargaAsync(
                 request.CodigoReferencia, request.Aceptar.Value, idUsuario, request.HuellaVistaPrevia));
         }
-        catch (SqlException ex) when (ex.Number is >= 52400 and <= 52426)
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
+        catch (SqlException ex) when (ex.Number is >= 52400 and <= 52513)
         {
             var mensaje = ex.Number switch
             {

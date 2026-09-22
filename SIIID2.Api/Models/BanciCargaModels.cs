@@ -2,6 +2,7 @@
 
 public class BanciCargaArchivosRequest
 {
+    [System.ComponentModel.DataAnnotations.Range(1, 32)] public int? IdEntidadFederativa { get; set; }
     public IFormFile? ArchivoLibro { get; set; }
     public IFormFile? ArchivoCarpetas { get; set; }
     public IFormFile? ArchivoDelitos { get; set; }
@@ -10,6 +11,7 @@ public class BanciCargaArchivosRequest
 
 public class BanciCargaValidacionResponse
 {
+    public int VersionFormato { get; set; } = 2;
     public BanciVistaPrevia? VistaPrevia { get; set; }
     public bool EsValido => Errores.Count == 0;
 
@@ -41,6 +43,7 @@ public class BanciCargaValidacionResponse
 
 public class BanciCargaConfirmacionRequest
 {
+    public bool AceptarAdvertencias { get; set; }
     [System.ComponentModel.DataAnnotations.StringLength(64)]
     public string? HuellaVistaPrevia { get; set; }
     [System.ComponentModel.DataAnnotations.Required]

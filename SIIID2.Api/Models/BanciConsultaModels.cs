@@ -38,6 +38,7 @@ public class BanciConsultaResultado
 
 public class BanciConsultaCarpeta
 {
+    public string NoBanci { get; set; } = string.Empty;
     public long IdBanciCarpetaInvestigacion { get; set; }
     public int IdEntidadFederativa { get; set; }
     public string Entidad { get; set; } = string.Empty;

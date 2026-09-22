@@ -12,25 +12,7 @@ public class BanciArchivoReader : IBanciArchivoReader
 
     private const long TamanioMaximoBytes = 50L * 1024L * 1024L;
 
-    internal static readonly string[] ColumnasCarpetas =
-    [
-        "entidad",
-        "id_ci",
-        "ntra_ci",
-        "fha_de_ini",
-        "hra_de_ini",
-        "rmen_de_hchos",
-        "ord_apreh",
-        "fgran",
-        "ctaon",
-        "td_v_ap",
-        "proc_abrev",
-        "juc_oral",
-        "td_sen_con",
-        "no_ejer_acc_pnal",
-        "otra",
-        "dic"
-    ];
+    internal static readonly string[] ColumnasCarpetas = ["entidad", "id_ci", "ntra_ci", "fha_de_ini", "hra_de_ini", "rmen_de_hchos", "no_banci"];
 
     internal static readonly string[] ColumnasDelitos =
     [
@@ -59,45 +41,7 @@ public class BanciArchivoReader : IBanciArchivoReader
         "dom_hchos"
     ];
 
-    internal static readonly string[] ColumnasVictimas =
-    [
-        "entidad",
-        "id_ci",
-        "id_delito",
-        "id_vicf",
-        "id_tv",
-        "id_tpm",
-        "sexo",
-        "genero",
-        "pob",
-        "disc",
-        "fha_nac",
-        "edad",
-        "nacional",
-        "no_banci",
-        "folio_fotovolante",
-        "folio_rnpdno",
-        "pro_apellido",
-        "sdo_apellido",
-        "nomb",
-        "entidad_nacimiento",
-        "estado_migratorio",
-        "curp",
-        "rfc",
-        "fecha_ultimo_contacto",
-        "hora_ultimo_contacto",
-        "entidad_visto",
-        "municipio_visto",
-        "lugar_ultimo_contacto",
-        "senas_tatuaje_datos_identificacion",
-        "localizado_o_no_localizado",
-        "con_o_sin_vida",
-        "fecha_localizacion",
-        "voluntaria",
-        "fue_delito",
-        "delito",
-        "obs"
-    ];
+    internal static readonly string[] ColumnasVictimas = ["entidad", "id_ci", "id_delito", "id_vicf", "id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional", "folio_rnpdno", "pro_apellido", "sdo_apellido", "nomb", "entidad_nacimiento", "estado_migratorio", "curp", "rfc", "localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "voluntaria_o_fue_delito", "delito", "acciones_busqueda", "obs"];
 
     private static readonly HashSet<string> ColumnasFecha =
     [
@@ -146,7 +90,7 @@ public class BanciArchivoReader : IBanciArchivoReader
             ("clasificacion_delito", "clasf_de_dto")
         );
 
-    private static readonly Dictionary<string, string> AliasVictimas =
+    internal static readonly Dictionary<string, string> AliasVictimas =
         CrearMapaAlias(
             ColumnasVictimas,
             ("id_ci2", "id_ci"),
@@ -161,8 +105,13 @@ public class BanciArchivoReader : IBanciArchivoReader
             ("senas_tatuaje_datos_identificaci_n", "senas_tatuaje_datos_identificacion"),
             ("senas_tatuajes_datos_identificacion", "senas_tatuaje_datos_identificacion"),
             ("senas_tatujes_datos_identificacion", "senas_tatuaje_datos_identificacion"),
+            ("acciones_empendidas_para_su_busqueda", "acciones_busqueda"),
+            ("acciones_emprendidas_para_su_busqueda", "acciones_busqueda"),
             ("observaciones", "obs")
         );
+
+    internal static readonly string[] ColumnasActualizacion = ["localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "voluntaria_o_fue_delito", "delito", "acciones_busqueda", "obs"];
+    private static bool EsColumnaOpcional(string columna) => columna is "entidad" or "no_banci" || ColumnasActualizacion.Contains(columna);
 
     public BanciArchivoReader(IArchivoReader archivoReader)
     {
@@ -558,7 +507,7 @@ public class BanciArchivoReader : IBanciArchivoReader
     {
         var hastaFila = Math.Min(
             ultimaFila,
-            primeraFila + 25);
+            primeraFila + 199);
 
         int? mejorFila = null;
         var mejorPuntaje = -1;
@@ -665,7 +614,7 @@ public class BanciArchivoReader : IBanciArchivoReader
 
         foreach (var columna in columnasEsperadas)
         {
-            if (canonicosEncontrados.ContainsKey(columna) || string.Equals(columna, "entidad", StringComparison.OrdinalIgnoreCase))
+            if (canonicosEncontrados.ContainsKey(columna) || EsColumnaOpcional(columna))
             {
                 continue;
             }
@@ -741,7 +690,7 @@ public class BanciArchivoReader : IBanciArchivoReader
 
         foreach (var columna in columnasEsperadas)
         {
-            if (canonicos.Contains(columna) || string.Equals(columna, "entidad", StringComparison.OrdinalIgnoreCase))
+            if (canonicos.Contains(columna) || EsColumnaOpcional(columna))
             {
                 continue;
             }

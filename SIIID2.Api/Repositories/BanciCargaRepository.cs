@@ -1,5 +1,6 @@
 ﻿using System.Data;
 using Dapper;
+using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using SIIID2.Api.Data;
 using SIIID2.Api.Models;
@@ -10,11 +11,9 @@ public class BanciCargaRepository : IBanciCargaRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
 
-    public BanciCargaRepository(
-        IDbConnectionFactory dbConnectionFactory)
+    public BanciCargaRepository(IDbConnectionFactory dbConnectionFactory)
     {
-        _dbConnectionFactory =
-            dbConnectionFactory;
+        _dbConnectionFactory = dbConnectionFactory;
     }
 
     public async Task<bool> ExisteCarpetaAsync(int idEntidad, string idCi)
@@ -48,9 +47,9 @@ public class BanciCargaRepository : IBanciCargaRepository
         UNION ALL
         SELECT N'con_o_sin_vida' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_condicion_vida WHERE activo = 1
         UNION ALL
-        SELECT N'voluntaria' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_voluntaria WHERE activo = 1
+        SELECT N'voluntaria_o_fue_delito' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_motivo_localizacion WHERE activo = 1
         UNION ALL
-        SELECT N'fue_delito' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_fue_delito WHERE activo = 1
+        SELECT N'delito' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_vw_delito_localizacion_catalogo
         UNION ALL
         SELECT N'pob', v.clave, v.descripcion, CAST(NULL AS int) FROM (VALUES (N'0', N'No'), (N'1', N'Sí')) v(clave, descripcion)
         UNION ALL
@@ -144,6 +143,15 @@ public class BanciCargaRepository : IBanciCargaRepository
 
         try
         {
+            var folios = lectura.Carpetas.Where(f => !string.IsNullOrWhiteSpace(Valor(f, "no_banci"))).Select(f => new { id_ci = Valor(f, "id_ci"), no_banci = Valor(f, "no_banci") });
+            var folioInvalido = await connection.ExecuteScalarAsync<bool>("""
+                SELECT CONVERT(bit, CASE WHEN EXISTS (
+                    SELECT 1 FROM OPENJSON(@Folios) WITH (id_ci nvarchar(250), no_banci nvarchar(100)) f
+                    WHERE NOT EXISTS (SELECT 1 FROM dbo.banci_carpeta_investigacion c
+                        WHERE c.id_entidad_federativa = @Entidad AND c.id_ci = f.id_ci AND c.no_banci = f.no_banci)
+                ) THEN 1 ELSE 0 END);
+                """, new { Folios = JsonSerializer.Serialize(folios), Entidad = idEntidadFederativa }, transaction);
+            if (folioInvalido) throw new ArgumentException("NO_BANCI se genera para carpetas nuevas. Si se informa para una carpeta existente, debe coincidir con su folio registrado.");
             var idBanciCarga =
                 await CrearCargaAsync(
                     connection,
@@ -209,6 +217,7 @@ public class BanciCargaRepository : IBanciCargaRepository
         const string sql = """
             INSERT INTO dbo.banci_carga
             (
+                version_formato,
                 id_usuario_carga,
                 id_entidad_federativa,
                 codigo_referencia,
@@ -229,6 +238,7 @@ public class BanciCargaRepository : IBanciCargaRepository
             OUTPUT INSERTED.id_banci_carga
             VALUES
             (
+                2,
                 @IdUsuarioCarga,
                 @IdEntidadFederativa,
                 @CodigoReferencia,
@@ -297,6 +307,7 @@ public class BanciCargaRepository : IBanciCargaRepository
         tabla.Columns.Add("entidad", typeof(string));
         tabla.Columns.Add("id_ci", typeof(string));
         tabla.Columns.Add("ntra_ci", typeof(string));
+        tabla.Columns.Add("no_banci", typeof(string));
         tabla.Columns.Add("fha_de_ini", typeof(string));
         tabla.Columns.Add("hra_de_ini", typeof(string));
         tabla.Columns.Add("rmen_de_hchos", typeof(string));
@@ -333,6 +344,7 @@ public class BanciCargaRepository : IBanciCargaRepository
                 Db(Valor(fila, "entidad")),
                 Db(Valor(fila, "id_ci")),
                 Db(Valor(fila, "ntra_ci")),
+                Db(Valor(fila, "no_banci")),
                 Db(Valor(fila, "fha_de_ini")),
                 Db(Valor(fila, "hra_de_ini")),
                 Db(Valor(fila, "rmen_de_hchos")),
@@ -661,7 +673,7 @@ public class BanciCargaRepository : IBanciCargaRepository
     // SUPER_USUARIO no permite consultar ni decidir cargas ajenas en este flujo.
     private const string ConsultaCarga = """
         SELECT c.id_banci_carga AS IdBanciCarga, c.codigo_referencia AS CodigoReferencia,
-               c.modalidad_ingesta AS ModalidadIngreso, c.estado AS Estado,
+               c.modalidad_ingesta AS ModalidadIngreso, c.estado AS Estado, c.version_formato AS VersionFormato,
                c.fecha_carga AS FechaCarga, c.aceptada_usuario AS AceptadaUsuario,
                c.id_usuario_confirmacion AS IdUsuarioConfirmacion,
                c.fecha_confirmacion AS FechaConfirmacion,
@@ -726,7 +738,7 @@ public class BanciCargaRepository : IBanciCargaRepository
         try
         {
             using var connection = _dbConnectionFactory.CrearConexion();
-            using var resultados = await connection.QueryMultipleAsync("dbo.sp_banci_vista_previa", new { carga.CodigoReferencia, IdUsuario = idUsuario }, commandTimeout: 300, commandType: CommandType.StoredProcedure);
+            using var resultados = await connection.QueryMultipleAsync(carga.VersionFormato == 2 ? "dbo.sp_banci_vista_previa_v2" : "dbo.sp_banci_vista_previa", new { carga.CodigoReferencia, IdUsuario = idUsuario }, commandTimeout: 300, commandType: CommandType.StoredProcedure);
             var previa = await resultados.ReadSingleAsync<BanciVistaPrevia>();
             previa.Resumen = (await resultados.ReadAsync<BanciVistaPreviaResumen>()).ToList();
             previa.Cambios = (await resultados.ReadAsync<BanciVistaPreviaCambio>()).ToList();
@@ -738,17 +750,18 @@ public class BanciCargaRepository : IBanciCargaRepository
             carga.VistaPrevia = null;
             carga.Mensaje = ex.Number == 52424
                 ? "La carpeta ya existe. El formulario sólo registra carpetas nuevas; rechace esta captura pendiente. No se sobrescribió información."
-                : "La carga sigue registrada. No fue posible obtener la vista previa; actualice el estado antes de aceptar. Si persiste, solicite revisar la instalación BANCI (scripts 14 y 15).";
+                : "La carga sigue registrada. No fue posible obtener la vista previa; actualice el estado antes de aceptar. Si persiste, solicite revisar la instalación BANCI (scripts 16 a 18).";
         }
     }
 
     public async Task<BanciCargaValidacionResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuario, string? huellaVistaPrevia = null)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
+        var carga = await ObtenerCargaAsync(codigoReferencia, idUsuario) ?? throw new UnauthorizedAccessException("La carga no está disponible para este usuario.");
         // El procedimiento controla la transacción, bloqueo, autorización e idempotencia.
         // No envolver esta llamada en otra transacción ni invocar directamente procesar_carga.
         var fila = await connection.QuerySingleAsync(
-            "dbo.sp_banci_confirmar_carga",
+            carga.VersionFormato == 2 ? "dbo.sp_banci_confirmar_carga_v2" : "dbo.sp_banci_confirmar_carga",
             new { CodigoReferencia = codigoReferencia, Aceptar = aceptar, IdUsuario = idUsuario, HuellaVistaPrevia = huellaVistaPrevia },
             commandTimeout: 300, commandType: CommandType.StoredProcedure);
 
@@ -802,27 +815,21 @@ public class BanciCargaRepository : IBanciCargaRepository
         await bulk.WriteToServerAsync(tabla);
     }
 
-    private static string Valor(
-        ArchivoFila fila,
-        string columna)
+    private static string Valor(ArchivoFila fila, string columna)
     {
-        return fila.Columnas.TryGetValue(
-                columna,
-                out var valor)
+        return fila.Columnas.TryGetValue(columna,out var valor)
             ? valor?.Trim() ?? string.Empty
             : string.Empty;
     }
 
-    private static object Db(
-        string valor)
+    private static object Db(string valor)
     {
         return string.IsNullOrWhiteSpace(valor)
             ? DBNull.Value
             : valor;
     }
 
-    private static string ObtenerTipoRegistro(
-        string archivo)
+    private static string ObtenerTipoRegistro(string archivo)
     {
         return archivo.Trim().ToLowerInvariant() switch
         {

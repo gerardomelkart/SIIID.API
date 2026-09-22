@@ -14,6 +14,7 @@ public class BanciCargaService : IBanciCargaService
     private readonly VictimasValidator _victimasValidator;
     private readonly CargaIntegridadValidator _cargaIntegridadValidator;
     private readonly CatalogosValidator _catalogosValidator;
+    private readonly BanciRenapoValidator _banciRenapoValidator;
     private readonly BanciMetodologiaValidator _banciMetodologiaValidator;
 
     private static readonly HashSet<string> ClasificacionesPermitidas =
@@ -29,7 +30,7 @@ public class BanciCargaService : IBanciCargaService
             "2.08.04"
         };
 
-    public BanciCargaService(IBanciArchivoReader archivoReader, IBanciCargaRepository banciCargaRepository, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, BanciMetodologiaValidator banciMetodologiaValidator)
+    public BanciCargaService(IBanciArchivoReader archivoReader, IBanciCargaRepository banciCargaRepository, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, BanciMetodologiaValidator banciMetodologiaValidator, BanciRenapoValidator banciRenapoValidator)
     {
         _archivoReader = archivoReader;
         _banciCargaRepository = banciCargaRepository;
@@ -39,11 +40,18 @@ public class BanciCargaService : IBanciCargaService
         _cargaIntegridadValidator = cargaIntegridadValidator;
         _catalogosValidator = catalogosValidator;
         _banciMetodologiaValidator = banciMetodologiaValidator;
+        _banciRenapoValidator = banciRenapoValidator;
     }
 
     public async Task<BanciCargaValidacionResponse> ValidarArchivosAsync(BanciCargaArchivosRequest request, int idUsuarioCarga)
     {
         var usuario = await ObtenerUsuarioCapturaAsync(idUsuarioCarga);
+        if (request.IdEntidadFederativa.HasValue)
+        {
+            if (!usuario.EsSuperUsuario && request.IdEntidadFederativa != usuario.IdEntidadFederativa) throw new UnauthorizedAccessException("Sólo puede cargar información de su entidad.");
+            if (await _banciCargaRepository.ResolverEntidadFederativaAsync(request.IdEntidadFederativa.Value.ToString()) != request.IdEntidadFederativa) throw new ArgumentException("Seleccione una entidad federativa válida.");
+            usuario.IdEntidadFederativa = request.IdEntidadFederativa;
+        }
         var lectura = await _archivoReader.LeerAsync(request);
         return await ValidarLecturaAsync(lectura, usuario);
     }
@@ -74,7 +82,7 @@ public class BanciCargaService : IBanciCargaService
         if (request.Carpeta == null || request.Delitos == null || request.Delitos.Count is < 1 or > 100 || request.Delitos.Any(d => d == null || d.Datos == null || d.Victimas == null || d.Victimas.Count is < 1 or > 500 || d.Victimas.Any(v => v == null)) || request.Delitos.Sum(d => d.Victimas.Count) > 1000)
             throw new ArgumentException("Capture una carpeta, de 1 a 100 delitos y al menos una víctima por delito (máximo 1000 víctimas por formulario).");
 
-        var carpeta = CrearFilaFormulario(request.Carpeta, BanciArchivoReader.ColumnasCarpetas, 1, "entidad");
+        var carpeta = CrearFilaFormulario(request.Carpeta, BanciArchivoReader.ColumnasCarpetas, 1, "entidad", "no_banci");
         lectura.Carpetas.Add(carpeta);
         var numeroVictima = 0;
         for (var i = 0; i < request.Delitos.Count; i++)
@@ -85,7 +93,7 @@ public class BanciCargaService : IBanciCargaService
             lectura.Delitos.Add(delito);
             foreach (var datosVictima in captura.Victimas)
             {
-                var victima = CrearFilaFormulario(datosVictima, BanciArchivoReader.ColumnasVictimas, ++numeroVictima, "entidad", "id_ci", "id_delito", "no_banci");
+                var victima = CrearFilaFormulario(datosVictima, BanciArchivoReader.ColumnasVictimas.Except(BanciArchivoReader.ColumnasActualizacion).ToArray(), ++numeroVictima, "entidad", "id_ci", "id_delito", "no_banci");
                 victima.Columnas["id_ci"] = Valor(carpeta, "id_ci");
                 victima.Columnas["id_delito"] = Valor(delito, "id_delito");
                 lectura.Victimas.Add(victima);
@@ -205,6 +213,12 @@ public class BanciCargaService : IBanciCargaService
         var validacionMetodologica = _banciMetodologiaValidator.Validar(lectura);
         response.Errores.AddRange(validacionMetodologica.Errores);
         response.Advertencias.AddRange(validacionMetodologica.Advertencias);
+        if (response.Errores.Count == 0)
+        {
+            var renapo = await _banciRenapoValidator.ValidarAsync(lectura.Victimas);
+            response.Errores.AddRange(renapo.Errores);
+            response.Advertencias.AddRange(renapo.Advertencias);
+        }
 
         if (response.Errores.Count == 0)
         {
