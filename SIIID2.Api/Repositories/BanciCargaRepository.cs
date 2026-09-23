@@ -16,6 +16,13 @@ public class BanciCargaRepository : IBanciCargaRepository
         _dbConnectionFactory = dbConnectionFactory;
     }
 
+    public async Task<IReadOnlyCollection<string>> ObtenerCarpetasExistentesAsync(int idEntidad, IEnumerable<string> ids)
+    {
+        using var connection = _dbConnectionFactory.CrearConexion();
+        const string sql = "SELECT DISTINCT j.value FROM OPENJSON(@Ids) j WHERE EXISTS (SELECT 1 FROM dbo.banci_carpeta_investigacion c WHERE c.id_entidad_federativa = @IdEntidad AND c.id_ci = j.value);";
+        return (await connection.QueryAsync<string>(sql, new { IdEntidad = idEntidad, Ids = JsonSerializer.Serialize(ids.ToArray()) })).ToArray();
+    }
+
     public async Task<bool> ExisteCarpetaAsync(int idEntidad, string idCi)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
@@ -749,7 +756,7 @@ public class BanciCargaRepository : IBanciCargaRepository
             // Conservar la referencia validada aunque falle la consulta; jamás aceptar sin huella.
             carga.VistaPrevia = null;
             carga.Mensaje = ex.Number == 52424
-                ? "La carpeta ya existe. El formulario sólo registra carpetas nuevas; rechace esta captura pendiente. No se sobrescribió información."
+                ? "La carpeta ya existe. La carga inicial sólo registra carpetas nuevas; rechace esta carga pendiente. No se sobrescribió información."
                 : "La carga sigue registrada. No fue posible obtener la vista previa; actualice el estado antes de aceptar. Si persiste, solicite revisar la instalación BANCI (scripts 16 a 18).";
         }
     }
@@ -817,7 +824,7 @@ public class BanciCargaRepository : IBanciCargaRepository
 
     private static string Valor(ArchivoFila fila, string columna)
     {
-        return fila.Columnas.TryGetValue(columna,out var valor)
+        return fila.Columnas.TryGetValue(columna, out var valor)
             ? valor?.Trim() ?? string.Empty
             : string.Empty;
     }

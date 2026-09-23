@@ -17,8 +17,7 @@ public class BanciCargasController : ControllerBase
 {
     private readonly IBanciCargaService _banciCargaService;
 
-    public BanciCargasController(
-        IBanciCargaService banciCargaService)
+    public BanciCargasController(IBanciCargaService banciCargaService)
     {
         _banciCargaService =
             banciCargaService;
@@ -126,6 +125,8 @@ public class BanciCargasController : ControllerBase
         {
             var carga = await _banciCargaService.ObtenerCargaAsync(request.CodigoReferencia, idUsuario);
             if (carga == null) return NotFound(new { mensaje = "La carga no está disponible para este usuario." });
+            if (request.Aceptar.Value && carga.Estado == "VALIDADO_PENDIENTE" && carga.VistaPrevia?.Resumen.Any(r => r.Actualizaciones > 0 || r.SinCambio > 0) == true)
+                return Conflict(new { codigo = "BANCI_CARPETA_EXISTENTE", mensaje = "La carga inicial sólo admite carpetas nuevas. Rechace esta operación y utilice Actualización de víctimas." });
             if (request.Aceptar.Value && carga.VersionFormato == 2 && carga.TotalAdvertencias > 0 && !request.AceptarAdvertencias)
                 return Conflict(new { codigo = "BANCI_ADVERTENCIAS", mensaje = "Debe aceptar explícitamente las advertencias antes de integrar." });
             return Ok(await _banciCargaService.ConfirmarCargaAsync(

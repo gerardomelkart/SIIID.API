@@ -17,11 +17,37 @@ public sealed class BanciResumenController : ControllerBase
 {
     private readonly IBanciCargaService _cargas;
     private readonly IDbConnectionFactory _factory;
+    private readonly IWebHostEnvironment _environment;
 
-    public BanciResumenController(IBanciCargaService cargas, IDbConnectionFactory factory)
+    public BanciResumenController(IBanciCargaService cargas, IDbConnectionFactory factory, IWebHostEnvironment environment)
     {
         _cargas = cargas;
         _factory = factory;
+        _environment = environment;
+    }
+
+    [HttpGet("{codigoReferencia}/acuse")]
+    public async Task<IActionResult> Acuse(string codigoReferencia)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var idUsuario)) return Unauthorized();
+        if (string.IsNullOrWhiteSpace(codigoReferencia) || codigoReferencia.Length > 50) return BadRequest(new { mensaje = "La referencia no es válida." });
+        var carga = await _cargas.ObtenerCargaAsync(codigoReferencia, idUsuario);
+        if (carga is null) return NotFound(new { mensaje = "La carga no está disponible para este usuario." });
+        if (carga.VersionFormato != 2 || carga.Estado is not ("VALIDADO_PENDIENTE" or "PROCESADO" or "PROCESADO_CON_ADVERTENCIAS")) return Conflict(new { mensaje = "La carga no tiene un estado válido para emitir el acuse." });
+        if (carga.Estado == "VALIDADO_PENDIENTE" && (carga.VistaPrevia == null || !carga.VistaPrevia.PuedeAceptar)) return Conflict(new { mensaje = carga.Mensaje });
+        if (carga.Estado == "VALIDADO_PENDIENTE" && carga.VistaPrevia?.Resumen.Any(r => r.Actualizaciones > 0 || r.SinCambio > 0) == true) return Conflict(new { mensaje = "La carga contiene carpetas existentes. Rechácela; la carga inicial sólo admite carpetas nuevas." });
+        using var connection = _factory.CrearConexion();
+        var datos = await connection.QuerySingleAsync<DatosAcuse>("SELECT e.nombre AS Entidad, u.usuario AS Usuario FROM dbo.banci_carga c JOIN dbo.usuario u ON u.id_usuario = c.id_usuario_carga JOIN dbo.catalogo_entidad_federativa e ON e.id_entidad_federativa = c.id_entidad_federativa WHERE c.id_banci_carga = @IdBanciCarga AND c.id_usuario_carga = @IdUsuario;", new { carga.IdBanciCarga, IdUsuario = idUsuario });
+        var bytes = BanciAcusePdf.Generar(carga, datos.Entidad, datos.Usuario, _environment.ContentRootPath);
+        var entidadArchivo = string.Concat(datos.Entidad.Select(c => char.IsLetterOrDigit(c) ? c : '_'));
+        var fecha = carga.FechaConfirmacion ?? carga.FechaCarga;
+        return File(bytes, "application/pdf", $"BANCI_{(carga.Estado == "VALIDADO_PENDIENTE" ? "previo" : "acuse")}_{entidadArchivo}_{fecha:yyyyMMdd_HHmmss}.pdf");
+    }
+
+    private sealed class DatosAcuse
+    {
+        public string Entidad { get; set; } = "";
+        public string Usuario { get; set; } = "";
     }
 
     [HttpGet("{codigoReferencia}/resumen")]

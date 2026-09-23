@@ -241,6 +241,13 @@ public class BanciCargaService : IBanciCargaService
                 lectura,
                 response.Errores);
 
+        if (idEntidadFederativa.HasValue && response.Errores.Count == 0)
+        {
+            var existentes = new HashSet<string>(await _banciCargaRepository.ObtenerCarpetasExistentesAsync(idEntidadFederativa.Value, lectura.Carpetas.Select(f => Valor(f, "id_ci"))), StringComparer.OrdinalIgnoreCase);
+            foreach (var fila in lectura.Carpetas.Where(f => existentes.Contains(Valor(f, "id_ci"))))
+                response.Errores.Add(new BanciCargaValidacionError { Archivo = "carpetas", NumeroFila = fila.NumeroFila, Campo = "id_ci", Valor = Valor(fila, "id_ci"), Codigo = "BANCI_CARPETA_EXISTENTE", Mensaje = "Esta carpeta ya está registrada en la entidad. La carga inicial sólo admite carpetas nuevas; utilice Actualización de víctimas para modificar sus datos." });
+        }
+
         if (response.Errores.Count > 0 || !idEntidadFederativa.HasValue)
         {
             response.Mensaje =
