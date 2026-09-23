@@ -53,4 +53,7 @@ public class BanciVictimaIdentificada
     public string IdVicf { get; set; } = "";
     public string? Curp { get; set; }
     public string? FolioRnpdno { get; set; }
+    public DateTime? FechaInicio { get; set; }
+    public DateTime? FechaHechos { get; set; }
+    public DateTime? FechaLocalizacion { get; set; }
 }

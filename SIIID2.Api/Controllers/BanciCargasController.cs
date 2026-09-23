@@ -54,15 +54,18 @@ public class BanciCargasController : ControllerBase
     }
 
     [HttpGet("plantilla")]
-    public async Task<IActionResult> DescargarPlantilla()
+    public async Task<IActionResult> DescargarPlantilla([FromQuery] string tipo = "libro")
     {
         if (!TryObtenerIdUsuario(out var idUsuario)) return TokenInvalido();
         try
         {
             await _banciCargaService.ObtenerFormularioOpcionesAsync(idUsuario);
+            tipo = tipo.Trim().ToLowerInvariant();
+            if (tipo is not ("libro" or "carpetas" or "delitos" or "victimas")) return BadRequest(new { mensaje = "Tipo de plantilla inválido." });
             using var libro = new XLWorkbook();
             foreach (var (nombre, columnas) in new[] { ("CI", BanciArchivoReader.ColumnasCarpetas), ("Delitos", BanciArchivoReader.ColumnasDelitos), ("Victimas", BanciArchivoReader.ColumnasVictimas.Except(BanciArchivoReader.ColumnasActualizacion).ToArray()) })
             {
+                if (tipo != "libro" && tipo != (nombre == "CI" ? "carpetas" : nombre.ToLowerInvariant())) continue;
                 var hoja = libro.Worksheets.Add(nombre);
                 var campos = columnas.Where(c => c != "entidad").ToArray();
                 for (var i = 0; i < campos.Length; i++) hoja.Cell(1, i + 1).Value = campos[i];
@@ -73,7 +76,7 @@ public class BanciCargasController : ControllerBase
             }
             using var archivo = new MemoryStream();
             libro.SaveAs(archivo);
-            return File(archivo.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "BANCI_carga_inicial_v2.xlsx");
+            return File(archivo.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", tipo == "libro" ? "BANCI_carga_inicial_v2.xlsx" : $"BANCI_{tipo}_v2.xlsx");
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
     }

@@ -76,7 +76,7 @@ public sealed class BanciActualizacionesController(BanciActualizacionService ser
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
         catch (ArgumentException ex) { return BadRequest(new { mensaje = ex.Message }); }
         catch (InvalidDataException) { return BadRequest(new { mensaje = "El Excel está dañado o no es un libro .xlsx válido." }); }
-        catch (SqlException ex) when (ex.Number is >= 52520 and <= 52535)
+        catch (SqlException ex) when (ex.Number is >= 52520 and <= 52536)
         {
             var status = ex.Number switch { 52521 => 404, 52523 => 403, 52520 or 52522 or 52532 or 52533 or 52534 => 409, _ => 400 };
             return StatusCode(status, new { codigo = $"BANCI_{ex.Number}", mensaje = ex.Message, traceId = HttpContext.TraceIdentifier });

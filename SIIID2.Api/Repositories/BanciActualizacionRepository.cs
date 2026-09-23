@@ -13,11 +13,11 @@ public sealed class BanciActualizacionRepository(IDbConnectionFactory factory)
         using var connection = factory.CrearConexion();
         // Sólo se llama después de verificar permiso de modificación y entidad en el servicio.
         return (await connection.QueryAsync<BanciVictimaIdentificada>("""
-            SELECT CONVERT(int, j.[key]) AS Indice, v.no_banci AS NoBanci, v.id_delito AS IdDelito, v.id_vicf AS IdVicf, v.curp AS Curp, v.folio_rnpdno AS FolioRnpdno
+            SELECT CONVERT(int, j.[key]) AS Indice, v.no_banci AS NoBanci, v.id_delito AS IdDelito, v.id_vicf AS IdVicf, v.curp AS Curp, v.folio_rnpdno AS FolioRnpdno, v.fha_de_ini AS FechaInicio, v.fha_de_hchos AS FechaHechos, v.fecha_localizacion AS FechaLocalizacion
             FROM OPENJSON(@Datos) j
             CROSS APPLY OPENJSON(j.value) WITH (identificador nvarchar(250), no_banci nvarchar(40), id_delito nvarchar(250), id_vicf nvarchar(250)) k
             CROSS APPLY (
-                SELECT TOP (2) v.no_banci, v.id_delito, v.id_vicf, v.curp, v.folio_rnpdno
+                SELECT TOP (2) v.no_banci, v.id_delito, v.id_vicf, v.curp, v.folio_rnpdno, v.fha_de_ini, v.fha_de_hchos, v.fecha_localizacion
                 FROM dbo.banci_vw_victimas_v2 v
                 WHERE v.id_entidad_federativa = @Entidad
                   AND (k.no_banci IS NULL OR v.no_banci = k.no_banci)

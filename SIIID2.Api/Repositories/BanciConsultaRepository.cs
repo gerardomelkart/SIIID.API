@@ -51,7 +51,11 @@ public class BanciConsultaRepository : IBanciConsultaRepository
               AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
               AND (@Entidad IS NULL OR c.id_entidad_federativa = @Entidad)
               AND c.fha_de_ini >= @Desde AND c.fha_de_ini < @Hasta
-              AND (@Busqueda IS NULL OR c.id_ci LIKE @Busqueda ESCAPE N'~' OR c.ntra_ci LIKE @Busqueda ESCAPE N'~')
+              AND (@Busqueda IS NULL OR c.no_banci LIKE @Busqueda ESCAPE N'~' OR c.id_ci LIKE @Busqueda ESCAPE N'~' OR c.ntra_ci LIKE @Busqueda ESCAPE N'~'
+                  OR EXISTS (SELECT 1 FROM dbo.banci_delito bd JOIN dbo.banci_victima bv ON bv.id_banci_delito = bd.id_banci_delito
+                      WHERE bd.id_banci_carpeta_investigacion = c.id_banci_carpeta_investigacion AND bd.activo = 1 AND bv.activo = 1
+                        AND (bv.curp LIKE @Busqueda ESCAPE N'~' OR bv.folio_rnpdno LIKE @Busqueda ESCAPE N'~'
+                          OR CONCAT(bv.nomb, N' ', bv.pro_apellido, N' ', bv.sdo_apellido) LIKE @Busqueda ESCAPE N'~')))
             OPTION (RECOMPILE);
 
             CREATE UNIQUE CLUSTERED INDEX IX_BanciConsultaFiltrada ON #BanciConsultaFiltrada(id_banci_carpeta_investigacion);
@@ -118,7 +122,11 @@ public class BanciConsultaRepository : IBanciConsultaRepository
               AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
               AND (@Entidad IS NULL OR c.id_entidad_federativa = @Entidad)
               AND c.fha_de_ini >= @Desde AND c.fha_de_ini < @Hasta
-              AND (@Busqueda IS NULL OR c.id_ci LIKE @Busqueda ESCAPE N'~' OR c.ntra_ci LIKE @Busqueda ESCAPE N'~')
+              AND (@Busqueda IS NULL OR c.no_banci LIKE @Busqueda ESCAPE N'~' OR c.id_ci LIKE @Busqueda ESCAPE N'~' OR c.ntra_ci LIKE @Busqueda ESCAPE N'~'
+                  OR EXISTS (SELECT 1 FROM dbo.banci_delito bd JOIN dbo.banci_victima bv ON bv.id_banci_delito = bd.id_banci_delito
+                      WHERE bd.id_banci_carpeta_investigacion = c.id_banci_carpeta_investigacion AND bd.activo = 1 AND bv.activo = 1
+                        AND (bv.curp LIKE @Busqueda ESCAPE N'~' OR bv.folio_rnpdno LIKE @Busqueda ESCAPE N'~'
+                          OR CONCAT(bv.nomb, N' ', bv.pro_apellido, N' ', bv.sdo_apellido) LIKE @Busqueda ESCAPE N'~')))
             OPTION (RECOMPILE);
             CREATE UNIQUE CLUSTERED INDEX IX_BanciExcel ON #BanciExcel(id_banci_carpeta_investigacion);
 

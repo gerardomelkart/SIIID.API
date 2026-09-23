@@ -35,6 +35,7 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios, Ba
             var fila = filas[i] ?? throw new ArgumentException("La fila no puede ser null.");
             if (fila.Keys.Any(k => !BanciActualizacionReader.Campos.Contains(k) && k != "fila")) throw new ArgumentException("La actualización contiene campos desconocidos; use los nombres de la plantilla.");
             var normal = fila.ToDictionary(p => p.Key, p => string.IsNullOrWhiteSpace(p.Value) ? null : p.Value.Trim());
+            foreach (var campo in new[] { "curp", "rfc" }) if (normal.GetValueOrDefault(campo) is string texto) normal[campo] = texto.ToUpperInvariant();
             if (!normal.ContainsKey("fila")) normal["fila"] = (i + 1).ToString(CultureInfo.InvariantCulture);
             if (!int.TryParse(normal["fila"], out var numero) || numero < 1) throw new ArgumentException("Número de fila inválido.");
             foreach (var (campo, valor) in normal)
@@ -62,6 +63,7 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios, Ba
         var identificadas = (await repository.ResolverAsync(entidad.Value, datos)).ToLookup(v => v.Indice);
         var curps = new List<ArchivoFila>();
         var llaves = new HashSet<(string, string, string)>();
+        var hoy = BanciLocalizacionValidator.Hoy();
         for (var i = 0; i < datos.Count; i++)
         {
             var fila = datos[i];
@@ -73,6 +75,7 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios, Ba
                 continue;
             }
             var victima = candidatas[0];
+            respuesta.Errores.AddRange(BanciLocalizacionValidator.Validar(fila, victima, numero, hoy));
             if (!llaves.Add((victima.NoBanci, victima.IdDelito, victima.IdVicf))) Error(respuesta, numero, "id_vicf", "La misma víctima aparece más de una vez.");
             fila.Remove("identificador");
             fila["no_banci"] = victima.NoBanci;
