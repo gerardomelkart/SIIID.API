@@ -165,6 +165,15 @@ public class BanciCargaService : IBanciCargaService
         var idUsuarioCarga = usuario.IdUsuario;
         var response = new BanciCargaValidacionResponse { CodigoReferencia = GenerarCodigoReferencia() };
         CompletarEntidad(lectura, usuario);
+        if (!usuario.EsSuperUsuario)
+        {
+            foreach (var fila in lectura.Delitos)
+            {
+                var valor = Valor(fila, "id_ent_hchos");
+                if (!int.TryParse(valor, out var entidadHechos) || entidadHechos != usuario.IdEntidadFederativa)
+                    lectura.Errores.Add(new BanciCargaValidacionError { Archivo = "delitos", NumeroFila = fila.NumeroFila, Campo = "id_ent_hchos", Valor = valor, Codigo = "BANCI_ENTIDAD_NO_CORRESPONDE_USUARIO", Mensaje = "La entidad de los hechos debe corresponder a la entidad asignada a su cuenta. No se integrará esta carga." });
+            }
+        }
         NormalizarHoras(lectura);
 
         response.ModalidadIngreso = lectura.ModalidadIngreso;
@@ -288,7 +297,7 @@ public class BanciCargaService : IBanciCargaService
 
         foreach (var fila in lectura.Carpetas.Concat(lectura.Delitos).Concat(lectura.Victimas))
         {
-            fila.Columnas["entidad"] = entidad;
+            if (string.IsNullOrWhiteSpace(Valor(fila, "entidad"))) fila.Columnas["entidad"] = entidad;
         }
     }
 
