@@ -57,10 +57,7 @@ public class AcusePdfService : IAcusePdfService
 
         var resumen = await _acuseRepository.ObtenerResumenAcuseAsync(carga.IdCarga);
 
-        return GenerarPdf(
-            carga,
-            resumen,
-            mostrarMarcaPrevio: true);
+        return GenerarPdf(carga, resumen,mostrarMarcaPrevio: true);
     }
 
     public async Task<byte[]> GenerarAcuseConfirmadoAsync(string codigoReferencia, int idUsuarioConsulta)
