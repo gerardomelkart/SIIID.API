@@ -14,6 +14,8 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
     private readonly CarpetasValidator _carpetasValidator;
     private readonly DelitosValidator _delitosValidator;
     private readonly VictimasValidator _victimasValidator;
+    private readonly FeminicidioVictimaValidator _feminicidioVictimaValidator;
+    private readonly FeminicidioRenapoValidator _feminicidioRenapoValidator;
     private readonly CargaIntegridadValidator _cargaIntegridadValidator;
     private readonly CatalogosValidator _catalogosValidator;
     private readonly IFederalCargaRepository _federalCargaRepository;
@@ -23,13 +25,15 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
     private readonly string[] _extensionesPermitidas = [".csv", ".xlsx"];
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public FederalActualizacionArchivosService(SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalActualizacionRepository federalActualizacionRepository, IFederalArchivosOriginalesService archivosOriginalesService)
+    public FederalActualizacionArchivosService(SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, FeminicidioRenapoValidator feminicidioRenapoValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalActualizacionRepository federalActualizacionRepository, IFederalArchivosOriginalesService archivosOriginalesService)
     {
         _config = config;
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
         _victimasValidator = victimasValidator;
+        _feminicidioVictimaValidator = feminicidioVictimaValidator;
+        _feminicidioRenapoValidator = feminicidioRenapoValidator;
         _cargaIntegridadValidator = cargaIntegridadValidator;
         _catalogosValidator = catalogosValidator;
         _federalCargaRepository = federalCargaRepository;
@@ -135,6 +139,17 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
         }
 
         response.Errores.AddRange(await _catalogosValidator.ValidarFederalAsync(filasCarpetas, filasDelitos, filasVictimas));
+        if (response.Errores.Count == 0 && _config.Activa("FEDERAL", "FEMINICIDIO_DATOS_ADICIONALES"))
+        {
+            var local = _feminicidioVictimaValidator.Validar(filasDelitos, filasVictimas);
+            response.Errores.AddRange(local.Errores); advertenciasPendientes.AddRange(local.Advertencias);
+            if (response.Errores.Count == 0)
+            {
+                var renapo = await _feminicidioRenapoValidator.ValidarAsync(filasDelitos, filasVictimas, modulo: "FEDERAL");
+                response.Errores.AddRange(renapo.Errores); advertenciasPendientes.AddRange(renapo.Advertencias);
+            }
+        }
+
 
         if (mesCorte.HasValue && anioCorte.HasValue)
         {
@@ -181,6 +196,8 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
         FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
 
         if (!mesCorte.HasValue || !anioCorte.HasValue || response.Errores.Any(x => x.Codigo is "FEDERAL_ACTUALIZACION_SIN_CARGA_CONFIRMADA" or "FEDERAL_ACTUALIZACION_PENDIENTE_EXISTENTE" or "FEDERAL_ACTUALIZACION_PENDIENTE_APROBACION")) return response;
+
+        if (response.EsValido) await _config.PrepararFeminicidioAsync(filasVictimas, 0, mesCorte.Value, anioCorte.Value, true, "FEDERAL");
 
         var estadoCarga = response.EsValido ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "RECHAZADO_VALIDACION_ACTUALIZACION";
         var mensajeError = response.EsValido ? null : $"La actualización federal contiene errores de validación. Total de errores: {response.Errores.Count}.";

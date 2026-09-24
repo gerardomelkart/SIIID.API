@@ -40,7 +40,29 @@ public sealed class SistemaConfiguracionController(SistemaConfiguracionService c
     {
         if (!await config.EsAdministradorAsync(Id)) return Forbid();
         using var db = factory.CrearConexion();
-        try { return Ok(await db.QuerySingleAsync("dbo.sp_sistema_configuracion_cambiar", new { IdUsuario = Id, request.Modulo, request.Clave, request.Habilitado, request.VersionEsperada, request.Motivo }, commandType: CommandType.StoredProcedure)); }
+        var motivo = string.IsNullOrWhiteSpace(request.Motivo) ? "Sin motivo reportado" : request.Motivo.Trim();
+        if (motivo.Length < 3) return BadRequest(new { mensaje = "Escriba al menos tres caracteres o deje el motivo vacío." });
+        try { return Ok(await db.QuerySingleAsync("dbo.sp_sistema_configuracion_cambiar", new { IdUsuario = Id, request.Modulo, request.Clave, request.Habilitado, request.VersionEsperada, Motivo = motivo }, commandType: CommandType.StoredProcedure)); }
+        catch (SqlException ex) when (ex.Number is >= 52600 and <= 52606) { return StatusCode(ex.Number == 52603 ? 403 : ex.Number is 52601 or 52604 ? 409 : 400, new { codigo = $"CONFIG_{ex.Number}", mensaje = ex.Message }); }
+    }
+    [HttpGet("administradores")]
+    public async Task<IActionResult> Administradores()
+    {
+        using var bloqueo = await config.BloquearLecturaAsync();
+        if (!await config.EsAdministradorAsync(Id)) return Forbid();
+        await config.CargarAsync();
+        using var db = factory.CrearConexion();
+        var filas = await db.QueryAsync("SELECT u.id_usuario AS idUsuario, u.usuario, CONCAT(u.nombre, N' ', u.primer_apellido, N' ', u.segundo_apellido) AS nombreCompleto, CAST(ISNULL(a.activo, 0) AS BIT) AS habilitado, CAST(CASE WHEN u.id_usuario = @Id THEN 1 ELSE 0 END AS BIT) AS esActual FROM dbo.usuario u JOIN dbo.roles r ON r.id_rol = u.id_rol LEFT JOIN dbo.sistema_administrador a ON a.id_usuario = u.id_usuario WHERE u.activo = 1 AND r.activo = 1 AND r.rol = N'SUPER_USUARIO' ORDER BY u.usuario;", new { Id });
+        return Ok(new { version = config.Version, usuarios = filas });
+    }
+    [HttpPut("administradores/{idUsuario:int:min(1)}")]
+    public async Task<IActionResult> CambiarAdministrador(int idUsuario, SistemaAdministradorCambio request)
+    {
+        if (!await config.EsAdministradorAsync(Id)) return Forbid();
+        var motivo = string.IsNullOrWhiteSpace(request.Motivo) ? "Sin motivo reportado" : request.Motivo.Trim();
+        if (motivo.Length < 3) return BadRequest(new { mensaje = "Escriba al menos tres caracteres o deje el motivo vacío." });
+        using var db = factory.CrearConexion();
+        try { return Ok(await db.QuerySingleAsync("dbo.sp_sistema_administrador_cambiar", new { IdUsuario = Id, IdUsuarioObjetivo = idUsuario, request.Habilitado, request.VersionEsperada, Motivo = motivo }, commandType: CommandType.StoredProcedure)); }
         catch (SqlException ex) when (ex.Number is >= 52600 and <= 52606) { return StatusCode(ex.Number == 52603 ? 403 : ex.Number is 52601 or 52604 ? 409 : 400, new { codigo = $"CONFIG_{ex.Number}", mensaje = ex.Message }); }
     }
     [HttpGet("bitacora")]
@@ -48,7 +70,7 @@ public sealed class SistemaConfiguracionController(SistemaConfiguracionService c
     {
         if (!await config.EsAdministradorAsync(Id)) return Forbid();
         using var db = factory.CrearConexion();
-        return Ok(await db.QueryAsync("SELECT b.id, b.fecha_utc AS fechaUtc, u.usuario, b.modulo, b.clave, b.valor_anterior AS valorAnterior, b.valor_nuevo AS valorNuevo, b.motivo, b.version FROM dbo.sistema_configuracion_bitacora b LEFT JOIN dbo.usuario u ON u.id_usuario = b.id_usuario ORDER BY b.id DESC OFFSET @Offset ROWS FETCH NEXT 50 ROWS ONLY;", new { Offset = (pagina - 1) * 50 }));
+        return Ok(await db.QueryAsync("SELECT b.id, b.fecha_utc AS fechaUtc, u.usuario, b.modulo, b.clave, b.valor_anterior AS valorAnterior, b.valor_nuevo AS valorNuevo, b.motivo, b.version, objetivo.usuario AS usuarioObjetivo FROM dbo.sistema_configuracion_bitacora b LEFT JOIN dbo.usuario u ON u.id_usuario = b.id_usuario LEFT JOIN dbo.usuario objetivo ON objetivo.id_usuario = b.id_usuario_objetivo ORDER BY b.id DESC OFFSET @Offset ROWS FETCH NEXT 50 ROWS ONLY;", new { Offset = (pagina - 1) * 50 }));
     }
 }
 public sealed class SistemaCambio
@@ -57,5 +79,12 @@ public sealed class SistemaCambio
     [Required, StringLength(60)] public string Clave { get; set; } = "";
     [Required] public bool? Habilitado { get; set; }
     [Range(1, long.MaxValue)] public long VersionEsperada { get; set; }
-    [Required, StringLength(500, MinimumLength = 3)] public string Motivo { get; set; } = "";
+    [StringLength(500)] public string? Motivo { get; set; }
+}
+
+public sealed class SistemaAdministradorCambio
+{
+    [Required] public bool? Habilitado { get; set; }
+    [Range(1, long.MaxValue)] public long VersionEsperada { get; set; }
+    [StringLength(500)] public string? Motivo { get; set; }
 }

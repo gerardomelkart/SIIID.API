@@ -25,7 +25,7 @@ public sealed class SistemaConfiguracionService(IDbConnectionFactory factory)
         if (!Modulos.Any(m => m.Clave == modulo && m.Activo)) return false;
         var opcion = Opciones.SingleOrDefault(o => o.Modulo == modulo && o.Clave == clave) ?? throw new InvalidOperationException($"Falta configurar {modulo}/{clave}.");
         if (!opcion.Habilitado || !opcion.Disponible) return false;
-        if (modulo == "MENSUAL" && clave == "RENAPO") return Activa("MENSUAL", "FEMINICIDIO_DATOS_ADICIONALES");
+        if ((modulo == "MENSUAL" || modulo == "FEDERAL") && clave == "RENAPO") return Activa(modulo, "FEMINICIDIO_DATOS_ADICIONALES");
         if (clave == "CRUCE_BANCI") return Modulos.Any(m => m.Clave == "BANCI" && m.Activo);
         return true;
     }
@@ -59,9 +59,9 @@ public sealed class SistemaConfiguracionService(IDbConnectionFactory factory)
             finally { db.Dispose(); }
         }
     }
-    public async Task PrepararFeminicidioAsync(List<ArchivoFila> filas, int entidad, int mes, int anio, bool conservar)
+    public async Task PrepararFeminicidioAsync(List<ArchivoFila> filas, int entidad, int mes, int anio, bool conservar, string modulo = "MENSUAL")
     {
-        if (Activa("MENSUAL", "FEMINICIDIO_DATOS_ADICIONALES")) return;
+        if (Activa(modulo, "FEMINICIDIO_DATOS_ADICIONALES")) return;
         foreach (var fila in filas) foreach (var campo in new[] { "nombre_vicfem", "1apellido_vicfem", "2apellido_vicfem", "curp_vicfem" }) fila.Columnas[campo] = null;
         if (!conservar || filas.Count == 0) return;
         var json = System.Text.Json.JsonSerializer.Serialize(filas.Select((f, i) => new { indice = i, ci = f.Columnas.GetValueOrDefault("id_ci"), delito = f.Columnas.GetValueOrDefault("id_delito"), victima = f.Columnas.GetValueOrDefault("id_vicf") }));
@@ -78,7 +78,13 @@ public sealed class SistemaConfiguracionService(IDbConnectionFactory factory)
                 WHERE c.id_entidad_federativa = @entidad AND c.mes_corte = @mes AND c.anio_corte = @anio AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
             ) SELECT Indice, Nombre, Primero, Segundo, Curp FROM existentes WHERE rn = 1;
             """;
-        foreach (var dato in await db.QueryAsync<FeminicidioConservado>(sql, new { json, entidad, mes, anio }, commandTimeout: 120))
+        var consulta = sql;
+        if (modulo == "FEDERAL")
+        {
+            foreach (var tabla in new[] { "carpeta_investigacion", "delito", "victima", "carga" }) consulta = consulta.Replace("dbo." + tabla + " ", "dbo.federal_" + tabla + " ").Replace(".id_" + tabla, ".id_federal_" + tabla);
+            consulta = consulta.Replace("c.id_entidad_federativa = @entidad AND ", "");
+        }
+        foreach (var dato in await db.QueryAsync<FeminicidioConservado>(consulta, new { json, entidad, mes, anio }, commandTimeout: 120))
         {
             var campos = filas[dato.Indice].Columnas;
             campos["nombre_vicfem"] = dato.Nombre; campos["1apellido_vicfem"] = dato.Primero; campos["2apellido_vicfem"] = dato.Segundo; campos["curp_vicfem"] = dato.Curp;

@@ -18,11 +18,11 @@ public sealed class FeminicidioRenapoValidator
         _config = config;
     }
 
-    public async Task<(List<CargaValidacionError> Errores, List<CargaValidacionError> Advertencias)> ValidarAsync(List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas, CancellationToken cancellationToken = default)
+    public async Task<(List<CargaValidacionError> Errores, List<CargaValidacionError> Advertencias)> ValidarAsync(List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas, CancellationToken cancellationToken = default, string modulo = "MENSUAL")
     {
         var errores = new List<CargaValidacionError>();
         var advertencias = new List<CargaValidacionError>();
-        if (!_config.Activa("MENSUAL", "RENAPO")) return (errores, advertencias);
+        if (!_config.Activa(modulo, "RENAPO")) return (errores, advertencias);
 
         var feminicidios = filasDelitos
             .Where(EsFeminicidio)

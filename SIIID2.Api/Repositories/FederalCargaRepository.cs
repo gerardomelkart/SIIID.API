@@ -599,12 +599,16 @@ public class FederalCargaRepository : IFederalCargaRepository
         tabla.Columns.Add("fha_nac", typeof(string));
         tabla.Columns.Add("edad", typeof(string));
         tabla.Columns.Add("nacional", typeof(string));
+        tabla.Columns.Add("nombre_vicfem", typeof(string));
+        tabla.Columns.Add("primer_apellido_vicfem", typeof(string));
+        tabla.Columns.Add("segundo_apellido_vicfem", typeof(string));
+        tabla.Columns.Add("curp_vicfem", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
 
         foreach (var fila in filasVictimas)
         {
-            tabla.Rows.Add(idFederalCarga, fila.NumeroFila, ValorTextoStaging(ObtenerValor(fila, "id_ci")), ValorTextoStaging(ObtenerValor(fila, "id_delito")), ValorTextoStaging(ObtenerValor(fila, "id_vicf")), ValorTextoStaging(ObtenerValor(fila, "id_tv")), ValorTextoStaging(ObtenerValor(fila, "id_tpm")), ValorTextoStaging(ObtenerValor(fila, "sexo")), ValorTextoStaging(ObtenerValor(fila, "genero")), ValorTextoStaging(ObtenerValor(fila, "pob")), ValorTextoStaging(ObtenerValor(fila, "disc")), ValorTextoStaging(ObtenerValor(fila, "fha_nac")), ValorTextoStaging(ObtenerValor(fila, "edad")), ValorTextoStaging(ObtenerValor(fila, "nacional")), "PENDIENTE", true);
+            tabla.Rows.Add(idFederalCarga, fila.NumeroFila, ValorTextoStaging(ObtenerValor(fila, "id_ci")), ValorTextoStaging(ObtenerValor(fila, "id_delito")), ValorTextoStaging(ObtenerValor(fila, "id_vicf")), ValorTextoStaging(ObtenerValor(fila, "id_tv")), ValorTextoStaging(ObtenerValor(fila, "id_tpm")), ValorTextoStaging(ObtenerValor(fila, "sexo")), ValorTextoStaging(ObtenerValor(fila, "genero")), ValorTextoStaging(ObtenerValor(fila, "pob")), ValorTextoStaging(ObtenerValor(fila, "disc")), ValorTextoStaging(ObtenerValor(fila, "fha_nac")), ValorTextoStaging(ObtenerValor(fila, "edad")), ValorTextoStaging(ObtenerValor(fila, "nacional")), ValorTextoStaging(ObtenerValor(fila, "nombre_vicfem")), ValorTextoStaging(ObtenerValor(fila, "1apellido_vicfem")), ValorTextoStaging(ObtenerValor(fila, "2apellido_vicfem")), ValorTextoStaging(ObtenerValor(fila, "curp_vicfem")), "PENDIENTE", true);
         }
 
         using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction) { DestinationTableName = "dbo.federal_carga_tmp_victima" };
@@ -886,6 +890,10 @@ public class FederalCargaRepository : IFederalCargaRepository
                 id_presenta_discapacidad,
                 fecha_nacimiento,
                 edad,
+                nombre_vicfem,
+                primer_apellido_vicfem,
+                segundo_apellido_vicfem,
+                curp_vicfem,
                 id_usuario_registro,
                 fecha_registro,
                 id_federal_carga,
@@ -903,6 +911,10 @@ public class FederalCargaRepository : IFederalCargaRepository
                 disc.id_presenta_discapacidad,
                 COALESCE(TRY_CONVERT(date, NULLIF(v.fha_nac, N''), 103), TRY_CONVERT(date, NULLIF(v.fha_nac, N''))),
                 TRY_CONVERT(smallint, NULLIF(v.edad, N'')),
+                NULLIF(v.nombre_vicfem, N''),
+                NULLIF(v.primer_apellido_vicfem, N''),
+                NULLIF(v.segundo_apellido_vicfem, N''),
+                NULLIF(v.curp_vicfem, N''),
                 @IdUsuarioRegistro,
                 SYSDATETIME(),
                 @IdFederalCarga,

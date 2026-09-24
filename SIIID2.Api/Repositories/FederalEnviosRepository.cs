@@ -494,7 +494,11 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
             CONVERT(varchar(10), disc.clave) AS disc,
             ISNULL(CONVERT(varchar(10), v.fecha_nacimiento, 103), '') AS fha_nac,
             ISNULL(CONVERT(varchar(10), v.edad), '') AS edad,
-            ISNULL(CONVERT(varchar(20), nac.clave), '') AS nacional
+            ISNULL(CONVERT(varchar(20), nac.clave), '') AS nacional,
+            v.nombre_vicfem AS [nombre_vicfem],
+            v.primer_apellido_vicfem AS [1apellido_vicfem],
+            v.segundo_apellido_vicfem AS [2apellido_vicfem],
+            v.curp_vicfem AS [curp_vicfem]
         FROM dbo.federal_victima v
         INNER JOIN cargas_periodo cp
             ON cp.id_federal_carga = v.id_federal_carga
@@ -598,7 +602,11 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
             disc,
             fha_nac,
             edad,
-            nacional
+            nacional,
+            nombre_vicfem AS [nombre_vicfem],
+            primer_apellido_vicfem AS [1apellido_vicfem],
+            segundo_apellido_vicfem AS [2apellido_vicfem],
+            curp_vicfem AS [curp_vicfem]
         FROM dbo.federal_carga_tmp_victima
         WHERE id_federal_carga = @IdFederalCarga
           AND activo = 1

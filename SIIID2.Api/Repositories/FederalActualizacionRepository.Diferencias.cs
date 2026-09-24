@@ -608,6 +608,10 @@ public partial class FederalActualizacionRepository
                 v.id_presenta_discapacidad,
                 v.fecha_nacimiento,
                 v.edad,
+                v.nombre_vicfem,
+                v.primer_apellido_vicfem,
+                v.segundo_apellido_vicfem,
+                v.curp_vicfem,
                 CONVERT(varchar(50), tv.clave) AS id_tv_valor,
                 CONVERT(varchar(50), tvm.clave) AS id_tpm_valor,
                 CONVERT(varchar(50), sx.clave) AS sexo_valor,
@@ -669,7 +673,11 @@ public partial class FederalActualizacionRepository
                     TRY_CONVERT(date, NULLIF(v.fha_nac, ''), 103),
                     TRY_CONVERT(date, NULLIF(v.fha_nac, ''))
                 ) AS fecha_nacimiento,
-                TRY_CONVERT(smallint, NULLIF(v.edad, '')) AS edad
+                TRY_CONVERT(smallint, NULLIF(v.edad, '')) AS edad,
+                NULLIF(v.nombre_vicfem, '') AS nombre_vicfem,
+                NULLIF(v.primer_apellido_vicfem, '') AS primer_apellido_vicfem,
+                NULLIF(v.segundo_apellido_vicfem, '') AS segundo_apellido_vicfem,
+                NULLIF(v.curp_vicfem, '') AS curp_vicfem
             FROM federal_carga_tmp_victima v
             INNER JOIN catalogo_tipo_victima tv
                 ON tv.clave = TRY_CONVERT(tinyint, v.id_tv)
@@ -721,7 +729,11 @@ public partial class FederalActualizacionRepository
                 ('disc', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.disc_excel)),
                 ('fha_nac', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.fha_nac_excel)),
                 ('edad', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.edad_excel)),
-                ('nacional', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.nacional_excel))
+                ('nacional', CAST(NULL AS varchar(max)), CONVERT(varchar(max), vt.nacional_excel)),
+                ('nombre_vicfem', CAST(NULL AS nvarchar(max)), CONVERT(nvarchar(max), vt.nombre_vicfem)),
+                ('1apellido_vicfem', CAST(NULL AS nvarchar(max)), CONVERT(nvarchar(max), vt.primer_apellido_vicfem)),
+                ('2apellido_vicfem', CAST(NULL AS nvarchar(max)), CONVERT(nvarchar(max), vt.segundo_apellido_vicfem)),
+                ('curp_vicfem', CAST(NULL AS nvarchar(max)), CONVERT(nvarchar(max), vt.curp_vicfem))
         ) dif(Campo, ValorAnterior, ValorNuevo)
         WHERE va.identificador_victima_fiscalia IS NULL
 
@@ -753,7 +765,11 @@ public partial class FederalActualizacionRepository
                 ('disc', CONVERT(varchar(max), va.disc_valor), CAST(NULL AS varchar(max))),
                 ('fha_nac', CONVERT(varchar(max), CONVERT(varchar(10), va.fecha_nacimiento, 103)), CAST(NULL AS varchar(max))),
                 ('edad', CONVERT(varchar(max), va.edad), CAST(NULL AS varchar(max))),
-                ('nacional', CONVERT(varchar(max), va.nacional_valor), CAST(NULL AS varchar(max)))
+                ('nacional', CONVERT(varchar(max), va.nacional_valor), CAST(NULL AS varchar(max))),
+                ('nombre_vicfem', CONVERT(nvarchar(max), va.nombre_vicfem), CAST(NULL AS nvarchar(max))),
+                ('1apellido_vicfem', CONVERT(nvarchar(max), va.primer_apellido_vicfem), CAST(NULL AS nvarchar(max))),
+                ('2apellido_vicfem', CONVERT(nvarchar(max), va.segundo_apellido_vicfem), CAST(NULL AS nvarchar(max))),
+                ('curp_vicfem', CONVERT(nvarchar(max), va.curp_vicfem), CAST(NULL AS nvarchar(max)))
         ) dif(Campo, ValorAnterior, ValorNuevo)
         WHERE vt.id_vicf IS NULL
 
@@ -782,7 +798,11 @@ public partial class FederalActualizacionRepository
                 ('disc', CONVERT(varchar(max), va.disc_valor), CONVERT(varchar(max), vt.disc_excel), CONVERT(varchar(max), va.id_presenta_discapacidad), CONVERT(varchar(max), vt.id_presenta_discapacidad)),
                 ('fha_nac', CONVERT(varchar(max), CONVERT(varchar(10), va.fecha_nacimiento, 103)), CONVERT(varchar(max), vt.fha_nac_excel), CONVERT(varchar(max), CONVERT(varchar(10), va.fecha_nacimiento, 120)), CONVERT(varchar(max), CONVERT(varchar(10), vt.fecha_nacimiento, 120))),
                 ('edad', CONVERT(varchar(max), va.edad), CONVERT(varchar(max), vt.edad_excel), CONVERT(varchar(max), va.edad), CONVERT(varchar(max), vt.edad)),
-                ('nacional', CONVERT(varchar(max), va.nacional_valor), CONVERT(varchar(max), vt.nacional_excel), CONVERT(varchar(max), va.id_nacionalidad), CONVERT(varchar(max), vt.id_nacionalidad))
+                ('nacional', CONVERT(varchar(max), va.nacional_valor), CONVERT(varchar(max), vt.nacional_excel), CONVERT(varchar(max), va.id_nacionalidad), CONVERT(varchar(max), vt.id_nacionalidad)),
+                ('nombre_vicfem', CONVERT(nvarchar(max), va.nombre_vicfem), CONVERT(nvarchar(max), vt.nombre_vicfem), CONVERT(nvarchar(max), va.nombre_vicfem), CONVERT(nvarchar(max), vt.nombre_vicfem)),
+                ('1apellido_vicfem', CONVERT(nvarchar(max), va.primer_apellido_vicfem), CONVERT(nvarchar(max), vt.primer_apellido_vicfem), CONVERT(nvarchar(max), va.primer_apellido_vicfem), CONVERT(nvarchar(max), vt.primer_apellido_vicfem)),
+                ('2apellido_vicfem', CONVERT(nvarchar(max), va.segundo_apellido_vicfem), CONVERT(nvarchar(max), vt.segundo_apellido_vicfem), CONVERT(nvarchar(max), va.segundo_apellido_vicfem), CONVERT(nvarchar(max), vt.segundo_apellido_vicfem)),
+                ('curp_vicfem', CONVERT(nvarchar(max), va.curp_vicfem), CONVERT(nvarchar(max), vt.curp_vicfem), CONVERT(nvarchar(max), va.curp_vicfem), CONVERT(nvarchar(max), vt.curp_vicfem))
         ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
         WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";

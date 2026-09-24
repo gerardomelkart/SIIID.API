@@ -14,6 +14,8 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
     private readonly CarpetasValidator _carpetasValidator;
     private readonly DelitosValidator _delitosValidator;
     private readonly VictimasValidator _victimasValidator;
+    private readonly FeminicidioVictimaValidator _feminicidioVictimaValidator;
+    private readonly FeminicidioRenapoValidator _feminicidioRenapoValidator;
     private readonly CargaIntegridadValidator _cargaIntegridadValidator;
     private readonly CatalogosValidator _catalogosValidator;
     private readonly IFederalCargaRepository _federalCargaRepository;
@@ -22,13 +24,15 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
     private readonly string[] _extensionesPermitidas = [".csv", ".xlsx"];
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public FederalCargaArchivosService(SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalArchivosOriginalesService archivosOriginalesService)
+    public FederalCargaArchivosService(SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, FeminicidioRenapoValidator feminicidioRenapoValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalArchivosOriginalesService archivosOriginalesService)
     {
         _config = config;
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
         _victimasValidator = victimasValidator;
+        _feminicidioVictimaValidator = feminicidioVictimaValidator;
+        _feminicidioRenapoValidator = feminicidioRenapoValidator;
         _cargaIntegridadValidator = cargaIntegridadValidator;
         _catalogosValidator = catalogosValidator;
         _federalCargaRepository = federalCargaRepository;
@@ -135,6 +139,17 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         }
 
         response.Errores.AddRange(await _catalogosValidator.ValidarFederalAsync(filasCarpetas, filasDelitos, filasVictimas));
+        if (response.Errores.Count == 0 && _config.Activa("FEDERAL", "FEMINICIDIO_DATOS_ADICIONALES"))
+        {
+            var local = _feminicidioVictimaValidator.Validar(filasDelitos, filasVictimas);
+            response.Errores.AddRange(local.Errores); advertenciasPendientes.AddRange(local.Advertencias);
+            if (response.Errores.Count == 0)
+            {
+                var renapo = await _feminicidioRenapoValidator.ValidarAsync(filasDelitos, filasVictimas, modulo: "FEDERAL");
+                response.Errores.AddRange(renapo.Errores); advertenciasPendientes.AddRange(renapo.Advertencias);
+            }
+        }
+
 
         var mesCorte = ObtenerMesCorteDesdeCarpetas(filasCarpetas);
         var anioCorte = ObtenerAnioCorteDesdeCarpetas(filasCarpetas);
@@ -183,6 +198,8 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
 
         if (response.Errores.Any(x => x.Codigo is "FEDERAL_CARGA_PERIODO_YA_CONFIRMADO" or "FEDERAL_CARGA_PENDIENTE_EXISTENTE" or "FEDERAL_CARGA_PENDIENTE_APROBACION")) return response;
+
+        if (response.EsValido) await _config.PrepararFeminicidioAsync(filasVictimas, 0, mesCorte, anioCorte, false, "FEDERAL");
 
         var estadoCarga = response.EsValido ? "VALIDADO_PENDIENTE" : "RECHAZADO_VALIDACION";
         var mensajeError = response.EsValido ? null : $"La información federal contiene errores de validación. Total de errores: {response.Errores.Count}.";
