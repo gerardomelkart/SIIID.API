@@ -10,6 +10,7 @@ namespace SIIID2.Api.Services;
 
 public class SemanalCargaService : ISemanalCargaService
 {
+    private readonly SistemaConfiguracionService _config;
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
     private const string CodigoExclusionFueraPeriodo = "FUERA_PERIODO_CARGA";
     private readonly IMemoryCache _cache;
@@ -195,8 +196,9 @@ public class SemanalCargaService : ISemanalCargaService
     private readonly ILogger<SemanalCargaService> _logger;
     private readonly IUltimosArchivosEntidadService _ultimosArchivosEntidadService;
 
-    public SemanalCargaService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ISemanalDelitoRepository semanalDelitoRepository, ISemanalCargaRepository semanalCargaRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService, ILogger<SemanalCargaService> logger, IMemoryCache cache)
+    public SemanalCargaService(SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ISemanalDelitoRepository semanalDelitoRepository, ISemanalCargaRepository semanalCargaRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService, ILogger<SemanalCargaService> logger, IMemoryCache cache)
     {
+        _config = config;
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
@@ -802,7 +804,7 @@ public class SemanalCargaService : ISemanalCargaService
 
         if (usuarioCarga.EsSuperUsuario)
         {
-            response.Advertencias.AddRange(erroresIntegridad.Where(x =>  x.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO"));
+            response.Advertencias.AddRange(erroresIntegridad.Where(x => x.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO"));
 
             erroresIntegridad = erroresIntegridad
                 .Where(x =>
@@ -861,7 +863,7 @@ public class SemanalCargaService : ISemanalCargaService
 
         if (response.Errores.Count == 0)
         {
-            response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(delitosIncluidos));
+            response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(delitosIncluidos, _config.Activa("SEMANAL", "COORDENADAS_FORMATO_RANGO"), _config.Activa("SEMANAL", "COORDENADAS_SIN_INFORMACION"), _config.Activa("SEMANAL", "COORDENADAS_CONCENTRACION")));
             response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(delitosIncluidos, victimasIncluidas));
             ValidarHomicidioDolosoResumenHechos(carpetasIncluidas, delitosIncluidos, response.Advertencias);
             ValidarLesionesDolosasElementoComision(delitosIncluidos, response.Advertencias);

@@ -5,7 +5,7 @@ using SIIID2.Api.Services;
 
 namespace SIIID2.Api.Validators;
 
-public sealed class BanciRenapoValidator(IRenapoCurpService renapo)
+public sealed class BanciRenapoValidator(IRenapoCurpService renapo, SistemaConfiguracionService config)
 {
     private static readonly Regex Formato = new(@"\A[A-Z][AEIOUX][A-Z]{2}[0-9]{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12][0-9]|3[01])[HM](?:AS|BC|BS|CC|CL|CM|CS|CH|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9][0-9]\z", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
@@ -30,7 +30,7 @@ public sealed class BanciRenapoValidator(IRenapoCurpService renapo)
             foreach (var fila in grupo) fila.Columnas["curp"] = grupo.Key;
             if (!EsFormatoValido(grupo.Key)) errores.Add(Error(grupo.First(), "BANCI_CURP_FORMATO", "La CURP debe tener estructura, fecha y dígito verificador válidos. Si no cuenta con CURP, deje el campo vacío."));
         }
-        if (errores.Count > 0) return (errores, advertencias);
+        if (errores.Count > 0 || !config.Activa("BANCI", "RENAPO")) return (errores, advertencias);
         foreach (var lote in grupos.Chunk(4))
         {
             var resultados = await Task.WhenAll(lote.Select(async g => (Grupo: g, Resultado: await renapo.ConsultarAsync(g.Key, cancellationToken))));

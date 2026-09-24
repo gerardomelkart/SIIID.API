@@ -7,6 +7,7 @@ namespace SIIID2.Api.Services;
 
 public class BanciCargaService : IBanciCargaService
 {
+    private readonly SistemaConfiguracionService _config;
     private readonly IBanciArchivoReader _archivoReader;
     private readonly IBanciCargaRepository _banciCargaRepository;
     private readonly CarpetasValidator _carpetasValidator;
@@ -30,8 +31,9 @@ public class BanciCargaService : IBanciCargaService
             "2.08.04"
         };
 
-    public BanciCargaService(IBanciArchivoReader archivoReader, IBanciCargaRepository banciCargaRepository, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, BanciMetodologiaValidator banciMetodologiaValidator, BanciRenapoValidator banciRenapoValidator)
+    public BanciCargaService(SistemaConfiguracionService config, IBanciArchivoReader archivoReader, IBanciCargaRepository banciCargaRepository, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, BanciMetodologiaValidator banciMetodologiaValidator, BanciRenapoValidator banciRenapoValidator)
     {
+        _config = config;
         _archivoReader = archivoReader;
         _banciCargaRepository = banciCargaRepository;
         _carpetasValidator = carpetasValidator;

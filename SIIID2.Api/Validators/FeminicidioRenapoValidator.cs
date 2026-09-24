@@ -10,16 +10,19 @@ public sealed class FeminicidioRenapoValidator
     private const int ConsultasSimultaneas = 4;
 
     private readonly IRenapoCurpService _renapoCurpService;
+    private readonly SistemaConfiguracionService _config;
 
-    public FeminicidioRenapoValidator(IRenapoCurpService renapoCurpService)
+    public FeminicidioRenapoValidator(IRenapoCurpService renapoCurpService, SistemaConfiguracionService config)
     {
         _renapoCurpService = renapoCurpService;
+        _config = config;
     }
 
     public async Task<(List<CargaValidacionError> Errores, List<CargaValidacionError> Advertencias)> ValidarAsync(List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas, CancellationToken cancellationToken = default)
     {
         var errores = new List<CargaValidacionError>();
         var advertencias = new List<CargaValidacionError>();
+        if (!_config.Activa("MENSUAL", "RENAPO")) return (errores, advertencias);
 
         var feminicidios = filasDelitos
             .Where(EsFeminicidio)

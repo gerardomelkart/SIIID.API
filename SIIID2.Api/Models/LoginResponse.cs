@@ -11,6 +11,7 @@ public class LoginResponse
 
 public class UsuarioLoginInfo
 {
+    public bool AdministraSistema { get; set; }
     public int IdUsuario { get; set; }
     public string Usuario { get; set; } = string.Empty;
     public string Nombre { get; set; } = string.Empty;

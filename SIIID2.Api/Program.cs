@@ -19,7 +19,9 @@ using SIIID2.Api.Authorization;
 var builder = WebApplication.CreateBuilder(args);
 
 // Habilita controladores MVC/API.
-builder.Services.AddControllers();
+builder.Services.AddScoped<SIIID2.Api.Services.SistemaConfiguracionService>();
+builder.Services.AddScoped<SIIID2.Api.Filters.SistemaConfiguracionFilter>();
+builder.Services.AddControllers(options => options.Filters.AddService<SIIID2.Api.Filters.SistemaConfiguracionFilter>());
 
 
 builder.Services.AddMemoryCache();

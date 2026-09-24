@@ -9,6 +9,7 @@ namespace SIIID2.Api.Services;
 
 public class FederalActualizacionArchivosService : IFederalActualizacionArchivosService
 {
+    private readonly SistemaConfiguracionService _config;
     private readonly IArchivoReader _archivoReader;
     private readonly CarpetasValidator _carpetasValidator;
     private readonly DelitosValidator _delitosValidator;
@@ -22,8 +23,9 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
     private readonly string[] _extensionesPermitidas = [".csv", ".xlsx"];
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public FederalActualizacionArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalActualizacionRepository federalActualizacionRepository, IFederalArchivosOriginalesService archivosOriginalesService)
+    public FederalActualizacionArchivosService(SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalActualizacionRepository federalActualizacionRepository, IFederalArchivosOriginalesService archivosOriginalesService)
     {
+        _config = config;
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
@@ -172,7 +174,7 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
         if (response.Errores.Count == 0)
         {
             response.Advertencias.AddRange(advertenciasPendientes);
-            response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(filasDelitos));
+            response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(filasDelitos, _config.Activa("FEDERAL", "COORDENADAS_FORMATO_RANGO"), _config.Activa("FEDERAL", "COORDENADAS_SIN_INFORMACION"), _config.Activa("FEDERAL", "COORDENADAS_CONCENTRACION")));
             response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(filasDelitos, filasVictimas));
         }
 

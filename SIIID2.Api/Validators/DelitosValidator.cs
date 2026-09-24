@@ -182,51 +182,51 @@ public class DelitosValidator
         return errores;
     }
 
-    public List<CargaValidacionError> ValidarAdvertencias(List<ArchivoFila> filas)
+    public List<CargaValidacionError> ValidarAdvertencias(List<ArchivoFila> filas, bool formatoRango = false, bool sinInformacion = false, bool concentracion = false)
     {
         var advertencias = new List<CargaValidacionError>();
 
 
-        //foreach (var fila in filas)
-        //{
-        //    ValidarCoordenadaOpcional(
-        //        fila,
-        //        "coord_x",
-        //        advertencias,
-        //        minimo: -118,
-        //        maximo: -86,
-        //        codigoFormato: "DELITOS_COORD_X_FORMATO_INCORRECTO_ADVERTENCIA",
-        //        codigoRango: "DELITOS_COORD_X_FUERA_RANGO_ADVERTENCIA",
-        //        descripcionFormato: "Formato coordenada X incorrecto",
-        //        descripcionRango: "Coordenada X fuera de rango");
+        foreach (var fila in filas)
+        {
+            if (formatoRango) ValidarCoordenadaOpcional(
+                fila,
+                "coord_x",
+                advertencias,
+                minimo: -118,
+                maximo: -86,
+                codigoFormato: "DELITOS_COORD_X_FORMATO_INCORRECTO_ADVERTENCIA",
+                codigoRango: "DELITOS_COORD_X_FUERA_RANGO_ADVERTENCIA",
+                descripcionFormato: "Formato coordenada X incorrecto",
+                descripcionRango: "Coordenada X fuera de rango");
 
-        //    ValidarCoordenadaOpcional(
-        //        fila,
-        //        "coord_y",
-        //        advertencias,
-        //        minimo: 13,
-        //        maximo: 34,
-        //        codigoFormato: "DELITOS_COORD_Y_FORMATO_INCORRECTO_ADVERTENCIA",
-        //        codigoRango: "DELITOS_COORD_Y_FUERA_RANGO_ADVERTENCIA",
-        //        descripcionFormato: "Formato coordenada Y incorrecto",
-        //        descripcionRango: "Coordenada Y fuera de rango");
+            if (formatoRango) ValidarCoordenadaOpcional(
+                fila,
+                "coord_y",
+                advertencias,
+                minimo: 13,
+                maximo: 34,
+                codigoFormato: "DELITOS_COORD_Y_FORMATO_INCORRECTO_ADVERTENCIA",
+                codigoRango: "DELITOS_COORD_Y_FUERA_RANGO_ADVERTENCIA",
+                descripcionFormato: "Formato coordenada Y incorrecto",
+                descripcionRango: "Coordenada Y fuera de rango");
 
-        //    ValidarCoordenadaSinInformacion(
-        //        fila,
-        //        "coord_x",
-        //        advertencias,
-        //        "DELITOS_COORD_X_SIN_INFORMACION_ADVERTENCIA",
-        //        "Coordenada X sin información");
+            if (sinInformacion) ValidarCoordenadaSinInformacion(
+                fila,
+                "coord_x",
+                advertencias,
+                "DELITOS_COORD_X_SIN_INFORMACION_ADVERTENCIA",
+                "Coordenada X sin información");
 
-        //    ValidarCoordenadaSinInformacion(
-        //        fila,
-        //        "coord_y",
-        //        advertencias,
-        //        "DELITOS_COORD_Y_SIN_INFORMACION_ADVERTENCIA",
-        //        "Coordenada Y sin información");
-        //}
+            if (sinInformacion) ValidarCoordenadaSinInformacion(
+                fila,
+                "coord_y",
+                advertencias,
+                "DELITOS_COORD_Y_SIN_INFORMACION_ADVERTENCIA",
+                "Coordenada Y sin información");
+        }
 
-        //ValidarConcentracionMismoPunto(filas, advertencias);
+        if (concentracion) ValidarConcentracionMismoPunto(filas, advertencias);
 
         return advertencias;
     }
@@ -380,7 +380,7 @@ public class DelitosValidator
         if (string.IsNullOrWhiteSpace(valor))
         {
             return;
-        }    
+        }
 
         valor = valor.Trim();
 
@@ -402,7 +402,7 @@ public class DelitosValidator
         if (!valor.All(char.IsDigit))
         {
             return;
-        } 
+        }
         // Si llegó aquí, el CP tiene 5 dígitos y es utilizable.
     }
 
@@ -436,7 +436,7 @@ public class DelitosValidator
         if (string.IsNullOrWhiteSpace(valor))
         {
             return;
-        }    
+        }
 
         if (!IntentarConvertirHora(valor, out _))
         {
@@ -457,7 +457,7 @@ public class DelitosValidator
         if (string.IsNullOrWhiteSpace(valor))
         {
             return;
-        } 
+        }
 
         valor = valor.Trim();
 
@@ -465,7 +465,7 @@ public class DelitosValidator
         if (valor.All(c => c == '0' || c == '.' || c == ',' || c == '-'))
         {
             return;
-        } 
+        }
 
         if (!IntentarConvertirDecimal(valor, out var coordenada))
         {

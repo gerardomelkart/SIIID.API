@@ -16,6 +16,7 @@ namespace SIIID2.Api.Services;
 // - Solo procede si ya existe una carga inicial confirmada para ese periodo.
 public class ActualizacionArchivosService : IActualizacionArchivosService
 {
+    private readonly SistemaConfiguracionService _config;
     private readonly IArchivoReader _archivoReader;
     private readonly CarpetasValidator _carpetasValidator;
     private readonly DelitosValidator _delitosValidator;
@@ -41,8 +42,9 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     // Tamaño máximo permitido por archivo: 50 MB.
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public ActualizacionArchivosService(IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, FeminicidioRenapoValidator feminicidioRenapoValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IActualizacionCargaRepository actualizacionCargaRepository, IActualizacionDiferenciasRepository actualizacionDiferenciasRepository, IActualizacionRepository actualizacionRepository, IUsuarioRepository usuarioRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService)
+    public ActualizacionArchivosService(SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, FeminicidioRenapoValidator feminicidioRenapoValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IActualizacionCargaRepository actualizacionCargaRepository, IActualizacionDiferenciasRepository actualizacionDiferenciasRepository, IActualizacionRepository actualizacionRepository, IUsuarioRepository usuarioRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService)
     {
+        _config = config;
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
@@ -132,7 +134,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         var mesCorte = periodo.MesCorte;
         var anioCorte = periodo.AnioCorte;
 
-        var idEntidadFederativaSeleccionada = ObtenerEntidadFederativaSeleccionadaDesdeForm(form, usuarioCarga,response.Errores);
+        var idEntidadFederativaSeleccionada = ObtenerEntidadFederativaSeleccionadaDesdeForm(form, usuarioCarga, response.Errores);
 
         // Validación base: deben llegar los tres archivos.
         if (archivos == null || archivos.Count == 0)
@@ -268,7 +270,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             filasDelitos,
             filasVictimas));
 
-        if (response.Errores.Count == 0)
+        if (response.Errores.Count == 0 && _config.Activa("MENSUAL", "FEMINICIDIO_DATOS_ADICIONALES"))
         {
             var validacionFeminicidio = _feminicidioVictimaValidator.Validar(filasDelitos, filasVictimas);
             response.Errores.AddRange(validacionFeminicidio.Errores);
@@ -339,10 +341,12 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             }
         }
 
+        if (response.Errores.Count == 0) await _config.PrepararFeminicidioAsync(filasVictimas, idEntidadFederativaCarga!.Value, mesCorte!.Value, anioCorte!.Value, true);
+
         if (response.Errores.Count == 0)
         {
             response.Advertencias.AddRange(advertenciasPendientes);
-            response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(filasDelitos));
+            response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(filasDelitos, _config.Activa("MENSUAL", "COORDENADAS_FORMATO_RANGO"), _config.Activa("MENSUAL", "COORDENADAS_SIN_INFORMACION"), _config.Activa("MENSUAL", "COORDENADAS_CONCENTRACION")));
 
             response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(
                 filasDelitos,

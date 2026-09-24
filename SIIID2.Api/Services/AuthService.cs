@@ -10,12 +10,14 @@ namespace SIIID2.Api.Services;
 public class AuthService : IAuthService
 {
     private readonly IUsuarioRepository _usuarioRepository;
+    private readonly SistemaConfiguracionService _sistema;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthService> _logger;
 
-    public AuthService(IUsuarioRepository usuarioRepository, IConfiguration configuration, ILogger<AuthService> logger)
+    public AuthService(SistemaConfiguracionService sistema, IUsuarioRepository usuarioRepository, IConfiguration configuration, ILogger<AuthService> logger)
     {
         _usuarioRepository = usuarioRepository;
+        _sistema = sistema;
         _configuration = configuration;
         _logger = logger;
     }
@@ -95,6 +97,7 @@ public class AuthService : IAuthService
             ExpiraEnMinutos = expiraEnMinutos,
             Usuario = new UsuarioLoginInfo
             {
+                AdministraSistema = await _sistema.EsAdministradorAsync(usuario.IdUsuario),
                 IdUsuario = usuario.IdUsuario,
                 Usuario = usuario.Usuario,
                 Nombre = usuario.Nombre,
