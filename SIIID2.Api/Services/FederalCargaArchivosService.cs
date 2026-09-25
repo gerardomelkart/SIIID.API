@@ -139,6 +139,9 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         }
 
         response.Errores.AddRange(await _catalogosValidator.ValidarFederalAsync(filasCarpetas, filasDelitos, filasVictimas));
+        var coordenadasMunicipio = await _catalogosValidator.ValidarCoordenadasConfiguradasAsync(filasDelitos, "FEDERAL", _config);
+        response.Errores.AddRange(coordenadasMunicipio.Errores);
+        if (coordenadasMunicipio.Advertencia is not null) response.Advertencias.Add(coordenadasMunicipio.Advertencia);
         if (response.Errores.Count == 0 && _config.Activa("FEDERAL", "FEMINICIDIO_DATOS_ADICIONALES"))
         {
             var local = _feminicidioVictimaValidator.Validar(filasDelitos, filasVictimas);

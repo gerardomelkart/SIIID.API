@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
+using SIIID2.Api.Services;
 
 namespace SIIID2.Api.Validators;
 
@@ -45,12 +46,25 @@ public class CatalogosValidator
         return errores;
     }
 
-    public async Task<(List<CargaValidacionError> Errores, CargaValidacionError? Advertencia)> ValidarCoordenadasHomicidioDolosoSemanalAsync(List<ArchivoFila> filasDelitos)
+    public Task<(List<CargaValidacionError> Errores, CargaValidacionError? Advertencia)> ValidarCoordenadasHomicidioDolosoSemanalAsync(List<ArchivoFila> filasDelitos) => ValidarCoordenadasMunicipioAsync(filasDelitos, "SEMANAL", true);
+
+    public async Task<(List<CargaValidacionError> Errores, CargaValidacionError? Advertencia)> ValidarCoordenadasConfiguradasAsync(List<ArchivoFila> filasDelitos, string modulo, SistemaConfiguracionService config)
+    {
+        var general = config.Activa(modulo, "COORDENADAS_MUNICIPIO");
+        var homicidio = modulo == "SEMANAL" && config.Activa(modulo, "COORDENADAS_MUNICIPIO_HOMICIDIO_DOLOSO");
+        if (!general && !homicidio) return ([], null);
+        return await ValidarCoordenadasMunicipioAsync(filasDelitos, modulo, !general && homicidio);
+    }
+
+    public async Task<(List<CargaValidacionError> Errores, CargaValidacionError? Advertencia)> ValidarCoordenadasMunicipioAsync(List<ArchivoFila> filasDelitos, string modulo, bool soloHomicidioDoloso = false)
     {
         var errores = new List<CargaValidacionError>();
         var totalSinCoordenadas = 0;
+        var prefijo = soloHomicidioDoloso ? "SEMANAL_HOMICIDIO_DOLOSO" : modulo;
+        var detalle = soloHomicidioDoloso ? " de homicidio doloso" : "";
+        var cache = new Dictionary<(int Entidad, int Municipio, decimal Longitud, decimal Latitud), bool>();
 
-        foreach (var fila in filasDelitos.Where(EsHomicidioDoloso))
+        foreach (var fila in filasDelitos.Where(f => !soloHomicidioDoloso || EsHomicidioDoloso(f)))
         {
             var valorX = ObtenerValor(fila, "coord_x")?.Trim();
             var valorY = ObtenerValor(fila, "coord_y")?.Trim();
@@ -70,8 +84,8 @@ public class CatalogosValidator
                     Columna = "coord_x+coord_y",
                     Campo = "coord_x+coord_y",
                     Valor = $"X={valorX}, Y={valorY}",
-                    Codigo = "SEMANAL_HOMICIDIO_DOLOSO_COORDENADAS_FORMATO_INCORRECTO",
-                    DescripcionResumen = "Coordenadas de homicidio doloso con formato incorrecto",
+                    Codigo = $"{prefijo}_COORDENADAS_FORMATO_INCORRECTO",
+                    DescripcionResumen = $"Coordenadas{detalle} con formato incorrecto",
                     Mensaje = "Los campos COORD_X y COORD_Y deben contener coordenadas numéricas válidas."
                 });
 
@@ -89,11 +103,12 @@ public class CatalogosValidator
 
             NormalizarCoordenadasMunicipio(coordX, coordY, out var longitud, out var latitud);
 
-            var corresponde = await _catalogoRepository.CoordenadasCorrespondenMunicipioAsync(
-                idEntidadFederativa,
-                idMunicipio,
-                longitud,
-                latitud);
+            var llave = (idEntidadFederativa, idMunicipio, longitud, latitud);
+            if (!cache.TryGetValue(llave, out var corresponde))
+            {
+                corresponde = longitud >= -180m && longitud <= 180m && latitud >= -90m && latitud <= 90m && await _catalogoRepository.CoordenadasCorrespondenMunicipioAsync(idEntidadFederativa, idMunicipio, longitud, latitud);
+                cache[llave] = corresponde;
+            }
 
             if (corresponde) continue;
 
@@ -104,8 +119,8 @@ public class CatalogosValidator
                 Columna = "coord_x+coord_y",
                 Campo = "coord_x+coord_y",
                 Valor = $"X={valorX}, Y={valorY}",
-                Codigo = "SEMANAL_HOMICIDIO_DOLOSO_COORDENADAS_NO_CORRESPONDEN_MUNICIPIO",
-                DescripcionResumen = "Coordenadas de homicidio doloso fuera del municipio",
+                Codigo = $"{prefijo}_COORDENADAS_NO_CORRESPONDEN_MUNICIPIO",
+                DescripcionResumen = $"Coordenadas{detalle} fuera del municipio",
                 Mensaje = $"Las coordenadas informadas no corresponden con la entidad {valorEntidad} y el municipio {valorMunicipio}."
             });
         }
@@ -121,9 +136,9 @@ public class CatalogosValidator
                 Columna = "coord_x+coord_y",
                 Campo = "coord_x+coord_y",
                 Valor = totalSinCoordenadas.ToString(CultureInfo.InvariantCulture),
-                Codigo = "SEMANAL_HOMICIDIO_DOLOSO_COORDENADAS_SIN_INFORMACION",
-                DescripcionResumen = "Homicidios dolosos sin coordenadas",
-                Mensaje = $"Se detectaron {totalSinCoordenadas} registros de homicidio doloso con una o ambas coordenadas vacías o con valor 0.",
+                Codigo = $"{prefijo}_COORDENADAS_SIN_INFORMACION",
+                DescripcionResumen = soloHomicidioDoloso ? "Homicidios dolosos sin coordenadas" : "Delitos sin coordenadas",
+                Mensaje = $"Se detectaron {totalSinCoordenadas} registros{detalle} con una o ambas coordenadas vacías o con valor 0.",
                 TotalRegistrosAfectados = totalSinCoordenadas
             };
         }
@@ -131,7 +146,7 @@ public class CatalogosValidator
         return (errores, advertencia);
     }
 
-    private async Task ValidarCatalogosVictimasAsync( List<ArchivoFila> filasVictimas, List<CargaValidacionError> errores)
+    private async Task ValidarCatalogosVictimasAsync(List<ArchivoFila> filasVictimas, List<CargaValidacionError> errores)
     {
         // Cargamos cada catálogo una sola vez.
         var tiposVictima = await _catalogoRepository.ObtenerClavesNumericasActivasAsync("catalogo_tipo_victima", "clave");
@@ -300,7 +315,7 @@ public class CatalogosValidator
         if (tiposPersonaMoral.Contains(clave))
         {
             return;
-        }    
+        }
 
         AgregarError(
             errores,
@@ -328,12 +343,12 @@ public class CatalogosValidator
             return;
         }
 
-        if (catalogo.Contains(clave)) 
+        if (catalogo.Contains(clave))
         {
             return;
         }
-            
-        AgregarError(errores,"victimas", fila, columna, codigo, descripcionResumen, mensaje);
+
+        AgregarError(errores, "victimas", fila, columna, codigo, descripcionResumen, mensaje);
     }
 
     private static bool EsValorVacioOCero(string? valor)
@@ -341,7 +356,7 @@ public class CatalogosValidator
         if (string.IsNullOrWhiteSpace(valor))
         {
             return true;
-        }    
+        }
         valor = valor.Trim();
         return valor.All(c => c == '0');
     }

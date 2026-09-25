@@ -220,6 +220,9 @@ public class BanciCargaService : IBanciCargaService
 
         var erroresCatalogos = await _catalogosValidator.ValidarBanciAsync(lectura.Carpetas, lectura.Delitos, lectura.Victimas);
         AgregarErroresHeredados(response.Errores, erroresCatalogos);
+        var coordenadasMunicipio = await _catalogosValidator.ValidarCoordenadasConfiguradasAsync(lectura.Delitos, "BANCI", _config);
+        AgregarErroresHeredados(response.Errores, coordenadasMunicipio.Errores);
+        if (coordenadasMunicipio.Advertencia is not null) AgregarErroresHeredados(response.Advertencias, new[] { coordenadasMunicipio.Advertencia });
 
         var validacionMetodologica = _banciMetodologiaValidator.Validar(lectura);
         response.Errores.AddRange(validacionMetodologica.Errores);

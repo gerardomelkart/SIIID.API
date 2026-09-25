@@ -829,7 +829,7 @@ public class SemanalCargaService : ISemanalCargaService
 
         ValidarHomicidioDolosoTipoVictima(delitosIncluidos, victimasIncluidas, response.Errores);
 
-        var validacionCoordenadas = await _catalogosValidator.ValidarCoordenadasHomicidioDolosoSemanalAsync(delitosIncluidos);
+        var validacionCoordenadas = await _catalogosValidator.ValidarCoordenadasConfiguradasAsync(delitosIncluidos, "SEMANAL", _config);
 
         response.Errores.AddRange(validacionCoordenadas.Errores);
 

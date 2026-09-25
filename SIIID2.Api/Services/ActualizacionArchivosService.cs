@@ -269,6 +269,9 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             filasCarpetas,
             filasDelitos,
             filasVictimas));
+        var coordenadasMunicipio = await _catalogosValidator.ValidarCoordenadasConfiguradasAsync(filasDelitos, "MENSUAL", _config);
+        response.Errores.AddRange(coordenadasMunicipio.Errores);
+        if (coordenadasMunicipio.Advertencia is not null) response.Advertencias.Add(coordenadasMunicipio.Advertencia);
 
         if (response.Errores.Count == 0 && _config.Activa("MENSUAL", "FEMINICIDIO_DATOS_ADICIONALES"))
         {
