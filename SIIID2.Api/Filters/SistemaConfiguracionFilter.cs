@@ -50,26 +50,94 @@ public sealed class SistemaConfiguracionFilter(SistemaConfiguracionService confi
         using var bloqueo = await config.BloquearLecturaAsync();
         await config.CargarAsync();
         if (!config.Modulos.Any(m => m.Clave == flujo.Modulo && m.Activo)) { context.Result = new ObjectResult(new { mensaje = "El módulo está desactivado." }) { StatusCode = 403 }; return; }
-        var confirmar = administrativa || accion.ActionName.StartsWith("Confirmar", StringComparison.Ordinal);
-        var request = context.ActionArguments.Values.FirstOrDefault(v => Propiedad(v, "Aceptar") != null);
-        var aceptar = administrativa || Propiedad(request, "Aceptar") is true;
-        var referencia = Convert.ToString(Propiedad(request, "CodigoReferencia")) ?? "";
-        if (context.ActionArguments.TryGetValue("referencia", out var guid)) referencia = Convert.ToString(guid) ?? "";
-        if (administrativa && context.ActionArguments.TryGetValue("codigoReferencia", out var codigo)) referencia = Convert.ToString(codigo) ?? "";
+        var confirmar =
+            administrativa ||
+            accion.ActionName.StartsWith(
+                "Confirmar",
+                StringComparison.Ordinal);
+
         using var db = factory.CrearConexion();
-        if (confirmar && aceptar)
-        {
-            var version = await db.QuerySingleOrDefaultAsync<long?>("SELECT CASE WHEN COUNT(*) = 1 THEN MIN(version) ELSE NULL END FROM dbo.sistema_validacion_configuracion WHERE modulo = @Modulo AND (@Tipo = N'' OR tipo = @Tipo) AND referencia = @referencia AND (@administrativa = 1 OR id_usuario = @usuario);", new { flujo.Modulo, flujo.Tipo, referencia, usuario, administrativa });
-            if (version != config.Version)
-            {
-                context.Result = new ConflictObjectResult(new { codigo = "CONFIG_VALIDACION_DESACTUALIZADA", mensaje = "Esta operación se validó con otra configuración o antes de instalar este control. Consulte su estado; si sigue pendiente, rechácela y vuelva a validar los datos con las reglas actuales." });
-                return;
-            }
-        }
+
+        /*
+            IMPORTANTE:
+
+            La configuración vigente únicamente determina las reglas
+            utilizadas cuando una operación se VALIDA.
+
+            Una operación que ya fue validada conserva el resultado de
+            aquella validación aunque posteriormente cambie la
+            configuración del sistema.
+
+            Por lo tanto:
+            - validar -> registra la versión vigente;
+            - confirmar -> NO compara contra la versión vigente;
+            - aprobar administrativamente -> NO compara contra la versión vigente.
+
+            sistema_validacion_configuracion queda exclusivamente como
+            información de trazabilidad/auditoría.
+        */
         var resultado = await next();
-        if (confirmar || resultado.Exception != null || resultado.Result is not ObjectResult respuesta || (respuesta.StatusCode ?? 200) >= 400) return;
-        referencia = Convert.ToString(Propiedad(respuesta.Value, "CodigoReferencia")) ?? "";
-        if (string.IsNullOrWhiteSpace(referencia)) return;
-        await db.ExecuteAsync("INSERT dbo.sistema_validacion_configuracion (modulo, tipo, referencia, id_usuario, version) SELECT @Modulo, @Tipo, @referencia, @usuario, @Version WHERE NOT EXISTS (SELECT 1 FROM dbo.sistema_validacion_configuracion WITH (UPDLOCK, HOLDLOCK) WHERE modulo = @Modulo AND tipo = @Tipo AND referencia = @referencia);", new { flujo.Modulo, flujo.Tipo, referencia, usuario, config.Version });
+
+        /*
+            Confirmaciones y aprobaciones no generan una nueva versión
+            de validación. Solamente las acciones Validar exitosas
+            registran la configuración con la que fueron evaluadas.
+        */
+        if (
+            confirmar ||
+            resultado.Exception != null ||
+            resultado.Result is not ObjectResult respuesta ||
+            (respuesta.StatusCode ?? 200) >= 400
+        )
+        {
+            return;
+        }
+
+        var referencia =
+            Convert.ToString(
+                Propiedad(
+                    respuesta.Value,
+                    "CodigoReferencia"))
+            ?? "";
+
+        if (string.IsNullOrWhiteSpace(referencia))
+        {
+            return;
+        }
+
+        await db.ExecuteAsync(
+                                """
+                        INSERT dbo.sistema_validacion_configuracion
+                        (
+                            modulo,
+                            tipo,
+                            referencia,
+                            id_usuario,
+                            version
+                        )
+                        SELECT
+                            @Modulo,
+                            @Tipo,
+                            @Referencia,
+                            @Usuario,
+                            @Version
+                        WHERE NOT EXISTS
+                        (
+                            SELECT 1
+                            FROM dbo.sistema_validacion_configuracion
+                                 WITH (UPDLOCK, HOLDLOCK)
+                            WHERE modulo = @Modulo
+                              AND tipo = @Tipo
+                              AND referencia = @Referencia
+                        );
+                        """,
+            new
+            {
+                Modulo = flujo.Modulo,
+                Tipo = flujo.Tipo,
+                Referencia = referencia,
+                Usuario = usuario,
+                Version = config.Version
+            });
     }
 }
