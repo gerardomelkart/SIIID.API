@@ -1639,6 +1639,38 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         INNER JOIN #DelitosVersionAnterior d ON d.id_semanal_delito = v.id_semanal_delito
         WHERE v.activo = 1;
 
+        CREATE UNIQUE CLUSTERED INDEX IX_tmp_VictimasVersionAnterior
+        ON #VictimasVersionAnterior(id_semanal_victima);
+
+        SELECT DISTINCT
+            v.id_semanal_victima
+        INTO #VictimasCoincidentes
+        FROM dbo.semanal_carga_tmp_victima nv
+        INNER JOIN dbo.semanal_carpeta_investigacion ci
+            ON ci.identificador_carpeta_fiscalia = nv.id_ci
+           AND ci.activo = 1
+        INNER JOIN #CarpetasVersionAnterior ca
+            ON ca.id_semanal_carpeta_investigacion = ci.id_semanal_carpeta_investigacion
+        INNER JOIN dbo.semanal_delito d
+            ON d.id_semanal_carpeta_investigacion = ci.id_semanal_carpeta_investigacion
+           AND d.identificador_delito_fiscalia = nv.id_delito
+           AND d.activo = 1
+        INNER JOIN #DelitosVersionAnterior da
+            ON da.id_semanal_delito = d.id_semanal_delito
+        INNER JOIN dbo.semanal_victima v
+            ON v.id_semanal_delito = d.id_semanal_delito
+           AND v.identificador_victima_fiscalia = nv.id_vicf
+           AND v.activo = 1
+        INNER JOIN #VictimasVersionAnterior va
+            ON va.id_semanal_victima = v.id_semanal_victima
+        WHERE nv.id_semanal_carga = @IdSemanalCargaNueva
+          AND nv.incluido = 1
+          AND nv.activo = 1
+        OPTION (FORCE ORDER, RECOMPILE);
+
+        CREATE UNIQUE CLUSTERED INDEX IX_tmp_VictimasCoincidentes
+        ON #VictimasCoincidentes(id_semanal_victima);
+
         INSERT INTO dbo.semanal_victima_historico
         (
             id_semanal_victima,
@@ -1680,24 +1712,18 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             v.fecha_registro,
             @IdUsuarioModificacion,
             @IdSemanalCargaNueva,
-            CASE WHEN EXISTS
-            (
-                SELECT 1
-                FROM dbo.semanal_delito d
-                INNER JOIN dbo.semanal_carpeta_investigacion ci ON ci.id_semanal_carpeta_investigacion = d.id_semanal_carpeta_investigacion
-                INNER JOIN dbo.semanal_carga_tmp_victima nv
-                    ON nv.id_semanal_carga = @IdSemanalCargaNueva
-                   AND nv.id_ci = ci.identificador_carpeta_fiscalia
-                   AND nv.id_delito = d.identificador_delito_fiscalia
-                   AND nv.id_vicf = v.identificador_victima_fiscalia
-                   AND nv.incluido = 1
-                   AND nv.activo = 1
-                WHERE d.id_semanal_delito = v.id_semanal_delito
-            ) THEN N'MODIFICADO' ELSE N'ELIMINADO' END,
+            CASE
+                WHEN coincidente.id_semanal_victima IS NOT NULL
+                    THEN N'MODIFICADO'
+                ELSE N'ELIMINADO'
+            END,
             SYSDATETIME(),
             1
-        FROM dbo.semanal_victima v
-        INNER JOIN #VictimasVersionAnterior objetivo ON objetivo.id_semanal_victima = v.id_semanal_victima;
+            FROM dbo.semanal_victima v
+            INNER JOIN #VictimasVersionAnterior objetivo
+                ON objetivo.id_semanal_victima = v.id_semanal_victima
+            LEFT JOIN #VictimasCoincidentes coincidente
+                ON coincidente.id_semanal_victima = v.id_semanal_victima;
 
         INSERT INTO dbo.semanal_delito_historico
         (
@@ -1838,12 +1864,16 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         INNER JOIN #CarpetasVersionAnterior objetivo ON objetivo.id_semanal_carpeta_investigacion = ci.id_semanal_carpeta_investigacion;
     ";
 
-        await connection.ExecuteAsync(sql, new
-        {
-            IdSemanalCargaNueva = carga.IdSemanalCarga,
-            IdEntidadFederativa = carga.IdEntidadFederativaCarga,
-            IdUsuarioModificacion = idUsuarioModificacion
-        }, transaction);
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                IdSemanalCargaNueva = carga.IdSemanalCarga,
+                IdEntidadFederativa = carga.IdEntidadFederativaCarga,
+                IdUsuarioModificacion = idUsuarioModificacion
+            },
+            transaction,
+            commandTimeout: 300);
     }
 
     private static async Task<int> InsertarCarpetasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioRegistro)
