@@ -7,6 +7,7 @@ namespace SIIID2.Api.Validators;
 public sealed class FeminicidioRenapoValidator
 {
     private const string ClaveFeminicidio = "1.03";
+    private const string ClaveConsumado = "1";
     private const int ConsultasSimultaneas = 4;
 
     private readonly IRenapoCurpService _renapoCurpService;
@@ -25,8 +26,8 @@ public sealed class FeminicidioRenapoValidator
         if (!_config.Activa(modulo, "RENAPO")) return (errores, advertencias);
 
         var feminicidios = filasDelitos
-            .Where(EsFeminicidio)
-            .Select(fila => CrearLlave(Valor(fila, "id_ci"), Valor(fila, "id_delito")))
+            .Where(EsFeminicidioConsumado)
+                    .Select(fila => CrearLlave(Valor(fila, "id_ci"), Valor(fila, "id_delito")))
             .Where(llave => !string.IsNullOrWhiteSpace(llave))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -153,7 +154,16 @@ public sealed class FeminicidioRenapoValidator
         return (errores, advertencias);
     }
 
-    private static bool EsFeminicidio(ArchivoFila fila) => string.Equals(Valor(fila, "clasf_de_dto")?.Trim(), ClaveFeminicidio, StringComparison.OrdinalIgnoreCase);
+    private static bool EsFeminicidioConsumado(ArchivoFila fila) =>
+        string.Equals(
+            Valor(fila, "clasf_de_dto")?.Trim(),
+            ClaveFeminicidio,
+            StringComparison.OrdinalIgnoreCase)
+        &&
+        string.Equals(
+            Valor(fila, "grdo_cons")?.Trim(),
+            ClaveConsumado,
+            StringComparison.OrdinalIgnoreCase);
 
     private static bool EsMexicana(string? nacionalidad) => int.TryParse(nacionalidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var clave) && clave == 73;
 

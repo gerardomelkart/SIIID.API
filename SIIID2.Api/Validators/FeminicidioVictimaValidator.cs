@@ -6,6 +6,7 @@ namespace SIIID2.Api.Validators;
 public class FeminicidioVictimaValidator
 {
     private const string ClaveFeminicidio = "1.03";
+    private const string ClaveConsumado = "1";
     private const string ClaveNacionalidadMexicana = "73";
 
     private static readonly string[] ColumnasFeminicidio =
@@ -22,8 +23,8 @@ public class FeminicidioVictimaValidator
         var advertencias = new List<CargaValidacionError>();
 
         var feminicidios = filasDelitos
-            .Where(EsFeminicidio)
-            .Select(fila => CrearLlave(
+            .Where(EsFeminicidioConsumado)
+                    .Select(fila => CrearLlave(
                 ObtenerValor(fila, "id_ci"),
                 ObtenerValor(fila, "id_delito")))
             .Where(llave => !string.IsNullOrWhiteSpace(llave))
@@ -69,8 +70,9 @@ public class FeminicidioVictimaValidator
                 ObtenerValor(fila, "id_ci"),
                 ObtenerValor(fila, "id_delito"));
 
-            // Las nuevas reglas solamente aplican a víctimas
-            // relacionadas con un delito de feminicidio.
+            // Las nuevas reglas de CURP, nombre y apellidos solamente aplican
+            // a víctimas relacionadas con feminicidio en grado consumado.
+            // En tentativa estos campos son opcionales.
             if (!feminicidios.Contains(llave)) continue;
 
             var nacionalidad = ObtenerValor(fila, "nacional")?.Trim();
@@ -177,12 +179,17 @@ public class FeminicidioVictimaValidator
         return (errores, advertencias);
     }
 
-    private static bool EsFeminicidio(ArchivoFila fila)
+    private static bool EsFeminicidioConsumado(ArchivoFila fila)
     {
         return string.Equals(
-            ObtenerValor(fila, "clasf_de_dto")?.Trim(),
-            ClaveFeminicidio,
-            StringComparison.OrdinalIgnoreCase);
+                   ObtenerValor(fila, "clasf_de_dto")?.Trim(),
+                   ClaveFeminicidio,
+                   StringComparison.OrdinalIgnoreCase)
+               &&
+               string.Equals(
+                   ObtenerValor(fila, "grdo_cons")?.Trim(),
+                   ClaveConsumado,
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool EsNacionalidadMexicana(string nacionalidad)
