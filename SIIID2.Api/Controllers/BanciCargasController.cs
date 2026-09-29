@@ -66,16 +66,23 @@ public class BanciCargasController : ControllerBase
             {
                 if (tipo != "libro" && tipo != (nombre == "CI" ? "carpetas" : nombre.ToLowerInvariant())) continue;
                 var hoja = libro.Worksheets.Add(nombre);
-                var campos = columnas.Where(c => c != "entidad").ToArray();
+                var campos = columnas.Where(c => c is not ("entidad" or "id_ci" or "id_delito" or "id_vicf")).ToArray();
                 for (var i = 0; i < campos.Length; i++) hoja.Cell(1, i + 1).Value = campos[i];
                 hoja.Row(1).Style.Font.Bold = true;
                 hoja.Columns(1, campos.Length).Width = 24;
                 hoja.Columns(1, campos.Length).Style.NumberFormat.Format = "@";
                 hoja.SheetView.FreezeRows(1);
             }
+            var instrucciones = libro.Worksheets.Add("Instrucciones");
+            instrucciones.Cell(1, 1).Value = "Repita NTRA_CI en CI, Delitos y Victimas para relacionar las filas. Una carpeta y exactamente un delito por NTRA_CI; puede incluir varias víctimas.";
+            instrucciones.Cell(2, 1).Value = "ID_CI, ID_DELITO e ID_VICF (ID de víctima) los genera el sistema. NO_BANCI pertenece a Carpetas: déjelo vacío en altas; se asignará al confirmar.";
+            instrucciones.Cell(3, 1).Value = "FHA_DE_INI: yyyy-MM-dd, exclusivamente del mes en curso o del anterior (hora de Ciudad de México). FUB es obligatorio. Localización inicial: Persona no localizada.";
+            instrucciones.Column(1).Width = 110;
+            instrucciones.Column(1).Style.Alignment.WrapText = true;
+            instrucciones.Rows(1, 3).Height = 60;
             using var archivo = new MemoryStream();
             libro.SaveAs(archivo);
-            return File(archivo.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", tipo == "libro" ? "BANCI_carga_inicial_v2.xlsx" : $"BANCI_{tipo}_v2.xlsx");
+            return File(archivo.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", tipo == "libro" ? "BANCI_carga_inicial_v3.xlsx" : $"BANCI_{tipo}_v3.xlsx");
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
     }
@@ -127,16 +134,17 @@ public class BanciCargasController : ControllerBase
             if (carga == null) return NotFound(new { mensaje = "La carga no está disponible para este usuario." });
             if (request.Aceptar.Value && carga.Estado == "VALIDADO_PENDIENTE" && carga.VistaPrevia?.Resumen.Any(r => r.Actualizaciones > 0 || r.SinCambio > 0) == true)
                 return Conflict(new { codigo = "BANCI_CARPETA_EXISTENTE", mensaje = "La carga inicial sólo admite carpetas nuevas. Rechace esta operación y utilice Actualización de víctimas." });
-            if (request.Aceptar.Value && carga.VersionFormato == 2 && carga.TotalAdvertencias > 0 && !request.AceptarAdvertencias)
+            if (request.Aceptar.Value && carga.VersionFormato >= 2 && carga.TotalAdvertencias > 0 && !request.AceptarAdvertencias)
                 return Conflict(new { codigo = "BANCI_ADVERTENCIAS", mensaje = "Debe aceptar explícitamente las advertencias antes de integrar." });
             return Ok(await _banciCargaService.ConfirmarCargaAsync(
                 request.CodigoReferencia, request.Aceptar.Value, idUsuario, request.HuellaVistaPrevia));
         }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
-        catch (SqlException ex) when (ex.Number is >= 52400 and <= 52513)
+        catch (SqlException ex) when (ex.Number is >= 52400 and <= 52513 or >= 52610 and <= 52612)
         {
             var mensaje = ex.Number switch
             {
+                52610 or 52611 or 52612 => ex.Message + " Rechace esta carga pendiente y vuelva a validar los archivos corregidos.",
                 52426 => "Sus permisos BANCI actuales no permiten integrar esta carga. Actualice el estado para revisar qué permiso falta; no se integró información.",
                 52425 => "La información cambió desde la vista previa o ésta no fue consultada. Actualice el estado, revise los cambios y vuelva a decidir. No se integró esta carga.",
                 52424 => "La carpeta ya fue registrada por otra carga. Rechace esta captura pendiente; no se duplicó ni se sobrescribió la carpeta existente.",

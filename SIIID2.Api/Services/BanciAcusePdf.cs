@@ -23,11 +23,11 @@ public static class BanciAcusePdf
                 });
                 table.Header(header =>
                 {
-                    foreach (var titulo in new[] { "Entidad", "NO_BANCI", "ID_CI", "NTRA_CI", "ID_DELITO", "ID_VICF", "FOLIO_RNPDNO", "Resultado", "FechaIntegracion", "Referencia" }) header.Cell().Background("#702b91").Padding(5).Text(titulo).FontColor(Colors.White).Bold();
+                    foreach (var titulo in new[] { "Entidad", "NO_BANCI", "ID_CI", "NTRA_CI", "ID_DELITO", "ID_VICF", "FUB", "Resultado", "FechaIntegracion", "Referencia" }) header.Cell().Background("#702b91").Padding(5).Text(titulo).FontColor(Colors.White).Bold();
                 });
                 foreach (var fila in filas)
                 {
-                    var valores = new[] { fila.Entidad, fila.NoBanci, fila.IdCi, fila.NtraCi, fila.IdDelito, fila.IdVicf, fila.FolioRnpdno ?? "", fila.Resultado, fila.FechaIntegracion?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "", referencia };
+                    var valores = new[] { fila.Entidad, fila.NoBanci, fila.IdCi, fila.NtraCi, fila.IdDelito, fila.IdVicf, fila.Fub ?? "", fila.Resultado, fila.FechaIntegracion?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "", referencia };
                     for (var i = 0; i < valores.Length; i++)
                     {
                         var celda = table.Cell().BorderBottom(0.5f).BorderColor("#dddddd").Padding(5);

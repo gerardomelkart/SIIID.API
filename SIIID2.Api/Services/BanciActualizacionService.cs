@@ -44,8 +44,8 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios, Ba
                 if (valor?.Length > limite) Error(respuesta, numero, campo, $"El campo admite hasta {limite} caracteres.");
             }
             if (normal.GetValueOrDefault("no_banci") == null && normal.GetValueOrDefault("identificador") == null)
-                normal["identificador"] = normal.GetValueOrDefault("curp") ?? normal.GetValueOrDefault("folio_rnpdno");
-            if (normal.GetValueOrDefault("no_banci") == null && normal.GetValueOrDefault("identificador") == null) Error(respuesta, numero, "identificador", "Indique NO_BANCI, CURP o folio RNPDNO para identificar la víctima.");
+                normal["identificador"] = normal.GetValueOrDefault("curp") ?? normal.GetValueOrDefault("fub");
+            if (normal.GetValueOrDefault("no_banci") == null && normal.GetValueOrDefault("identificador") == null) Error(respuesta, numero, "identificador", "Indique NO_BANCI, CURP o FUB para identificar la víctima.");
             foreach (var campo in new[] { "localizado_o_no_localizado", "con_o_sin_vida", "voluntaria_o_fue_delito" })
             {
                 var valor = normal.GetValueOrDefault(campo);
@@ -81,8 +81,8 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios, Ba
             fila["no_banci"] = victima.NoBanci;
             fila["id_delito"] = victima.IdDelito;
             fila["id_vicf"] = victima.IdVicf;
-            var folio = fila.GetValueOrDefault("folio_rnpdno") ?? victima.FolioRnpdno;
-            if (string.IsNullOrWhiteSpace(folio) || folio.ToUpperInvariant() is "N/D" or "ND" or "NO DISPONIBLE") Error(respuesta, numero, "folio_rnpdno", "El registro final debe contar con folio RNPDNO.");
+            var folio = fila.GetValueOrDefault("fub") ?? victima.Fub;
+            if (string.IsNullOrWhiteSpace(folio) || folio.ToUpperInvariant() is "N/D" or "ND" or "NO DISPONIBLE") Error(respuesta, numero, "fub", "El registro final debe contar con FUB.");
             // Validar sólo la CURP proporcionada; la ausencia conserva el dato almacenado.
             curps.Add(new ArchivoFila { NumeroFila = numero, Columnas = fila });
         }

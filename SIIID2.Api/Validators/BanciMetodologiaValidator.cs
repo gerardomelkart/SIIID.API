@@ -16,7 +16,7 @@ public class BanciMetodologiaValidator
         }
         foreach (var fila in lectura.Victimas)
         {
-            if (SinDato(Valor(fila, "folio_rnpdno"))) errores.Add(Error(fila, "victimas", "folio_rnpdno", "BANCI_RNPDNO_OBLIGATORIO", "Folio RNPDNO es obligatorio."));
+            if (SinDato(Valor(fila, "fub"))) errores.Add(Error(fila, "victimas", "fub", "BANCI_FUB_OBLIGATORIO", "FUB es obligatorio."));
             foreach (var campo in new[] { "pob", "disc" })
                 if (!SinDato(Valor(fila, campo)) && Valor(fila, campo) is not ("0" or "1")) errores.Add(Error(fila, "victimas", campo, "BANCI_CATALOGO_INVALIDO", $"{campo} sólo permite 0 o 1."));
             foreach (var campo in BanciArchivoReader.ColumnasActualizacion)
@@ -24,7 +24,8 @@ public class BanciMetodologiaValidator
                 if (!string.IsNullOrWhiteSpace(Valor(fila, campo))) advertencias.Add(Error(fila, "victimas", campo, "BANCI_CAMPO_SOLO_ACTUALIZACION", $"{campo} no se integrará en la carga inicial; captúrelo en Actualización de víctimas."));
                 fila.Columnas[campo] = null;
             }
-            foreach (var (campo, longitud) in new[] { ("folio_rnpdno", 250), ("pro_apellido", 250), ("sdo_apellido", 250), ("nomb", 500), ("entidad_nacimiento", 250), ("estado_migratorio", 500), ("rfc", 13) })
+            fila.Columnas["localizado_o_no_localizado"] = "1";
+            foreach (var (campo, longitud) in new[] { ("fub", 250), ("pro_apellido", 250), ("sdo_apellido", 250), ("nomb", 500), ("entidad_nacimiento", 250), ("estado_migratorio", 500), ("rfc", 13) })
                 if (Valor(fila, campo).Length > longitud) errores.Add(Error(fila, "victimas", campo, "BANCI_LONGITUD_INVALIDA", $"{campo} permite hasta {longitud} caracteres."));
         }
         return (errores, advertencias);

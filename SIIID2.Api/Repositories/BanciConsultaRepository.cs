@@ -54,7 +54,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
               AND (@Busqueda IS NULL OR c.no_banci LIKE @Busqueda ESCAPE N'~' OR c.id_ci LIKE @Busqueda ESCAPE N'~' OR c.ntra_ci LIKE @Busqueda ESCAPE N'~'
                   OR EXISTS (SELECT 1 FROM dbo.banci_delito bd JOIN dbo.banci_victima bv ON bv.id_banci_delito = bd.id_banci_delito
                       WHERE bd.id_banci_carpeta_investigacion = c.id_banci_carpeta_investigacion AND bd.activo = 1 AND bv.activo = 1
-                        AND (bv.curp LIKE @Busqueda ESCAPE N'~' OR bv.folio_rnpdno LIKE @Busqueda ESCAPE N'~'
+                        AND (bv.curp LIKE @Busqueda ESCAPE N'~' OR bv.fub LIKE @Busqueda ESCAPE N'~'
                           OR CONCAT(bv.nomb, N' ', bv.pro_apellido, N' ', bv.sdo_apellido) LIKE @Busqueda ESCAPE N'~')))
             OPTION (RECOMPILE);
 
@@ -125,7 +125,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
               AND (@Busqueda IS NULL OR c.no_banci LIKE @Busqueda ESCAPE N'~' OR c.id_ci LIKE @Busqueda ESCAPE N'~' OR c.ntra_ci LIKE @Busqueda ESCAPE N'~'
                   OR EXISTS (SELECT 1 FROM dbo.banci_delito bd JOIN dbo.banci_victima bv ON bv.id_banci_delito = bd.id_banci_delito
                       WHERE bd.id_banci_carpeta_investigacion = c.id_banci_carpeta_investigacion AND bd.activo = 1 AND bv.activo = 1
-                        AND (bv.curp LIKE @Busqueda ESCAPE N'~' OR bv.folio_rnpdno LIKE @Busqueda ESCAPE N'~'
+                        AND (bv.curp LIKE @Busqueda ESCAPE N'~' OR bv.fub LIKE @Busqueda ESCAPE N'~'
                           OR CONCAT(bv.nomb, N' ', bv.pro_apellido, N' ', bv.sdo_apellido) LIKE @Busqueda ESCAPE N'~')))
             OPTION (RECOMPILE);
             CREATE UNIQUE CLUSTERED INDEX IX_BanciExcel ON #BanciExcel(id_banci_carpeta_investigacion);
@@ -141,7 +141,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
               AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
             ORDER BY c.id_entidad_federativa, c.fha_de_ini, c.id_ci;
 
-            SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci, c.no_banci,
+            SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci,
                    d.id_delito, d.dto, d.moda_dto, d.forma_acc,
                    CONVERT(nvarchar(10), d.fha_de_hchos, 23) AS fha_de_hchos,
                    CONVERT(nvarchar(8), d.hra_de_hchos, 108) AS hra_de_hchos,
@@ -158,7 +158,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
 
             SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci, d.id_delito,
                    v.id_vicf, v.id_tv, v.id_tpm, v.sexo, v.genero, v.pob, v.disc,
-                   CONVERT(nvarchar(10), v.fha_nac, 23) AS fha_nac, v.edad, v.nacional, c.no_banci, v.folio_rnpdno, v.pro_apellido, v.sdo_apellido, v.nomb,
+                   CONVERT(nvarchar(10), v.fha_nac, 23) AS fha_nac, v.edad, v.nacional, v.fub, v.pro_apellido, v.sdo_apellido, v.nomb,
                    v.entidad_nacimiento, v.estado_migratorio, v.curp, v.rfc,
                    v.localizado_o_no_localizado, v.con_o_sin_vida,
                    CONVERT(nvarchar(10), v.fecha_localizacion, 23) AS fecha_localizacion,
@@ -226,7 +226,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
                    v.id_tv AS [Tipo de víctima (clave)], v.id_tpm AS [Tipo de persona moral (clave)],
                    v.sexo AS [Sexo (clave)], v.genero AS [Género (clave)], v.pob AS [POB], v.disc AS [DISC],
                    CONVERT(nvarchar(10), v.fha_nac, 23) AS [Fecha de nacimiento], v.edad AS [Edad],
-                   v.nacional AS [Nacionalidad (clave)], c.no_banci AS [NO_BANCI], v.folio_rnpdno AS [Folio RNPDNO],
+                   v.nacional AS [Nacionalidad (clave)], c.no_banci AS [NO_BANCI], v.fub AS [FUB],
                    v.pro_apellido AS [Primer apellido], v.sdo_apellido AS [Segundo apellido], v.nomb AS [Nombre],
                    v.entidad_nacimiento AS [Entidad de nacimiento], v.estado_migratorio AS [Estado migratorio],
                    v.curp AS [CURP], v.rfc AS [RFC],

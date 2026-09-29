@@ -19,7 +19,7 @@ public class BanciCargaRepository : IBanciCargaRepository
     public async Task<IReadOnlyCollection<string>> ObtenerCarpetasExistentesAsync(int idEntidad, IEnumerable<string> ids)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-        const string sql = "SELECT DISTINCT j.value FROM OPENJSON(@Ids) j WHERE EXISTS (SELECT 1 FROM dbo.banci_carpeta_investigacion c WHERE c.id_entidad_federativa = @IdEntidad AND c.id_ci = j.value);";
+        const string sql = "SELECT DISTINCT j.value FROM OPENJSON(@Ids) j WHERE EXISTS (SELECT 1 FROM dbo.banci_carpeta_investigacion c WHERE c.id_entidad_federativa = @IdEntidad AND LTRIM(RTRIM(c.ntra_ci)) = j.value);";
         return (await connection.QueryAsync<string>(sql, new { IdEntidad = idEntidad, Ids = JsonSerializer.Serialize(ids.ToArray()) })).ToArray();
     }
 
@@ -245,7 +245,7 @@ public class BanciCargaRepository : IBanciCargaRepository
             OUTPUT INSERTED.id_banci_carga
             VALUES
             (
-                2,
+                3,
                 @IdUsuarioCarga,
                 @IdEntidadFederativa,
                 @CodigoReferencia,
@@ -530,7 +530,7 @@ public class BanciCargaRepository : IBanciCargaRepository
         tabla.Columns.Add("nacional", typeof(string));
         tabla.Columns.Add("no_banci", typeof(string));
         tabla.Columns.Add("folio_fotovolante", typeof(string));
-        tabla.Columns.Add("folio_rnpdno", typeof(string));
+        tabla.Columns.Add("fub", typeof(string));
         tabla.Columns.Add("pro_apellido", typeof(string));
         tabla.Columns.Add("sdo_apellido", typeof(string));
         tabla.Columns.Add("nomb", typeof(string));
@@ -586,7 +586,7 @@ public class BanciCargaRepository : IBanciCargaRepository
                 Db(Valor(fila, "nacional")),
                 DBNull.Value, // El No_BANCI enviado nunca se almacena ni sustituye el existente.
                 Db(Valor(fila, "folio_fotovolante")),
-                Db(Valor(fila, "folio_rnpdno")),
+                Db(Valor(fila, "fub")),
                 Db(Valor(fila, "pro_apellido")),
                 Db(Valor(fila, "sdo_apellido")),
                 Db(Valor(fila, "nomb")),
@@ -745,7 +745,7 @@ public class BanciCargaRepository : IBanciCargaRepository
         try
         {
             using var connection = _dbConnectionFactory.CrearConexion();
-            using var resultados = await connection.QueryMultipleAsync(carga.VersionFormato == 2 ? "dbo.sp_banci_vista_previa_v2" : "dbo.sp_banci_vista_previa", new { carga.CodigoReferencia, IdUsuario = idUsuario }, commandTimeout: 300, commandType: CommandType.StoredProcedure);
+            using var resultados = await connection.QueryMultipleAsync(carga.VersionFormato >= 2 ? "dbo.sp_banci_vista_previa_v2" : "dbo.sp_banci_vista_previa", new { carga.CodigoReferencia, IdUsuario = idUsuario }, commandTimeout: 300, commandType: CommandType.StoredProcedure);
             var previa = await resultados.ReadSingleAsync<BanciVistaPrevia>();
             previa.Resumen = (await resultados.ReadAsync<BanciVistaPreviaResumen>()).ToList();
             previa.Cambios = (await resultados.ReadAsync<BanciVistaPreviaCambio>()).ToList();
@@ -755,9 +755,12 @@ public class BanciCargaRepository : IBanciCargaRepository
         {
             // Conservar la referencia validada aunque falle la consulta; jamás aceptar sin huella.
             carga.VistaPrevia = null;
-            carga.Mensaje = ex.Number == 52424
-                ? "La carpeta ya existe. La carga inicial sólo registra carpetas nuevas; rechace esta carga pendiente. No se sobrescribió información."
-                : "La carga sigue registrada. No fue posible obtener la vista previa; actualice el estado antes de aceptar. Si persiste, solicite revisar la instalación BANCI (scripts 16 a 18).";
+            carga.Mensaje = ex.Number switch
+            {
+                52424 => "La carpeta ya existe. La carga inicial sólo registra carpetas nuevas; rechace esta carga pendiente. No se sobrescribió información.",
+                52610 or 52611 or 52612 => ex.Message + " Rechace esta carga pendiente y vuelva a validar.",
+                _ => "La carga sigue registrada. No fue posible obtener la vista previa; actualice el estado antes de aceptar. Si persiste, solicite revisar la instalación BANCI."
+            };
         }
     }
 
@@ -768,7 +771,7 @@ public class BanciCargaRepository : IBanciCargaRepository
         // El procedimiento controla la transacción, bloqueo, autorización e idempotencia.
         // No envolver esta llamada en otra transacción ni invocar directamente procesar_carga.
         var fila = await connection.QuerySingleAsync(
-            carga.VersionFormato == 2 ? "dbo.sp_banci_confirmar_carga_v2" : "dbo.sp_banci_confirmar_carga",
+            carga.VersionFormato >= 2 ? "dbo.sp_banci_confirmar_carga_v2" : "dbo.sp_banci_confirmar_carga",
             new { CodigoReferencia = codigoReferencia, Aceptar = aceptar, IdUsuario = idUsuario, HuellaVistaPrevia = huellaVistaPrevia },
             commandTimeout: 300, commandType: CommandType.StoredProcedure);
 

@@ -13,17 +13,17 @@ public sealed class BanciActualizacionRepository(IDbConnectionFactory factory)
         using var connection = factory.CrearConexion();
         // Sólo se llama después de verificar permiso de modificación y entidad en el servicio.
         return (await connection.QueryAsync<BanciVictimaIdentificada>("""
-            SELECT CONVERT(int, j.[key]) AS Indice, v.no_banci AS NoBanci, v.id_delito AS IdDelito, v.id_vicf AS IdVicf, v.curp AS Curp, v.folio_rnpdno AS FolioRnpdno, v.fha_de_ini AS FechaInicio, v.fha_de_hchos AS FechaHechos, v.fecha_localizacion AS FechaLocalizacion
+            SELECT CONVERT(int, j.[key]) AS Indice, v.no_banci AS NoBanci, v.id_delito AS IdDelito, v.id_vicf AS IdVicf, v.curp AS Curp, v.fub AS Fub, v.fha_de_ini AS FechaInicio, v.fha_de_hchos AS FechaHechos, v.fecha_localizacion AS FechaLocalizacion
             FROM OPENJSON(@Datos) j
             CROSS APPLY OPENJSON(j.value) WITH (identificador nvarchar(250), no_banci nvarchar(40), id_delito nvarchar(250), id_vicf nvarchar(250)) k
             CROSS APPLY (
-                SELECT TOP (2) v.no_banci, v.id_delito, v.id_vicf, v.curp, v.folio_rnpdno, v.fha_de_ini, v.fha_de_hchos, v.fecha_localizacion
+                SELECT TOP (2) v.no_banci, v.id_delito, v.id_vicf, v.curp, v.fub, v.fha_de_ini, v.fha_de_hchos, v.fecha_localizacion
                 FROM dbo.banci_vw_victimas_v2 v
                 WHERE v.id_entidad_federativa = @Entidad
                   AND (k.no_banci IS NULL OR v.no_banci = k.no_banci)
                   AND (k.id_delito IS NULL OR v.id_delito = k.id_delito)
                   AND (k.id_vicf IS NULL OR v.id_vicf = k.id_vicf)
-                  AND (k.identificador IS NULL OR v.no_banci = k.identificador OR v.curp = k.identificador OR v.folio_rnpdno = k.identificador)
+                  AND (k.identificador IS NULL OR v.no_banci = k.identificador OR v.curp = k.identificador OR v.fub = k.identificador)
                 ORDER BY v.id_banci_victima
             ) v;
             """, new { Entidad = entidad, Datos = JsonSerializer.Serialize(filas) }, commandTimeout: 300)).AsList();

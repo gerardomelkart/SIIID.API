@@ -17,6 +17,7 @@ public class BanciArchivoReader : IBanciArchivoReader
     internal static readonly string[] ColumnasDelitos =
     [
         "entidad",
+        "ntra_ci",
         "id_ci",
         "id_delito",
         "dto",
@@ -41,7 +42,7 @@ public class BanciArchivoReader : IBanciArchivoReader
         "dom_hchos"
     ];
 
-    internal static readonly string[] ColumnasVictimas = ["entidad", "id_ci", "id_delito", "id_vicf", "id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional", "folio_rnpdno", "pro_apellido", "sdo_apellido", "nomb", "entidad_nacimiento", "estado_migratorio", "curp", "rfc", "localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "voluntaria_o_fue_delito", "delito", "acciones_busqueda", "obs"];
+    internal static readonly string[] ColumnasVictimas = ["entidad", "ntra_ci", "id_ci", "id_delito", "id_vicf", "id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional", "fub", "pro_apellido", "sdo_apellido", "nomb", "entidad_nacimiento", "estado_migratorio", "curp", "rfc", "localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "voluntaria_o_fue_delito", "delito", "acciones_busqueda", "obs"];
 
     private static readonly HashSet<string> ColumnasFecha =
     [
@@ -93,6 +94,9 @@ public class BanciArchivoReader : IBanciArchivoReader
     internal static readonly Dictionary<string, string> AliasVictimas =
         CrearMapaAlias(
             ColumnasVictimas,
+            ("folio_rnpdno", "fub"),
+            ("folio_rnpdo", "fub"),
+            ("id_victima", "id_vicf"),
             ("id_ci2", "id_ci"),
             ("nacionalidad", "nacional"),
             ("nombre", "nomb"),
@@ -111,7 +115,7 @@ public class BanciArchivoReader : IBanciArchivoReader
         );
 
     internal static readonly string[] ColumnasActualizacion = ["localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "voluntaria_o_fue_delito", "delito", "acciones_busqueda", "obs"];
-    private static bool EsColumnaOpcional(string columna) => columna is "entidad" or "no_banci" || ColumnasActualizacion.Contains(columna);
+    private static bool EsColumnaOpcional(string columna) => columna is "entidad" or "no_banci" or "id_ci" or "id_delito" or "id_vicf" || ColumnasActualizacion.Contains(columna);
 
     public BanciArchivoReader(IArchivoReader archivoReader)
     {
@@ -209,7 +213,7 @@ public class BanciArchivoReader : IBanciArchivoReader
             "CARPETA",
             ColumnasCarpetas,
             AliasCarpetas,
-            ["id_ci", "ntra_ci", "fha_de_ini"],
+            ["ntra_ci", "fha_de_ini"],
             resultado.Errores);
 
         resultado.Delitos = await LeerArchivoIndividualAsync(
@@ -217,7 +221,7 @@ public class BanciArchivoReader : IBanciArchivoReader
             "DELITO",
             ColumnasDelitos,
             AliasDelitos,
-            ["id_ci", "id_delito", "clasf_de_dto"],
+            ["ntra_ci", "clasf_de_dto"],
             resultado.Errores);
 
         resultado.Victimas = await LeerArchivoIndividualAsync(
@@ -225,7 +229,7 @@ public class BanciArchivoReader : IBanciArchivoReader
             "VICTIMA",
             ColumnasVictimas,
             AliasVictimas,
-            ["id_ci", "id_delito", "id_vicf"],
+            ["ntra_ci", "fub"],
             resultado.Errores);
 
         return resultado;
@@ -295,7 +299,7 @@ public class BanciArchivoReader : IBanciArchivoReader
             "CARPETA",
             ColumnasCarpetas,
             AliasCarpetas,
-            ["id_ci", "ntra_ci", "fha_de_ini"],
+            ["ntra_ci", "fha_de_ini"],
             resultado.Errores);
 
         resultado.Delitos = LeerHojaExcel(
@@ -304,7 +308,7 @@ public class BanciArchivoReader : IBanciArchivoReader
             "DELITO",
             ColumnasDelitos,
             AliasDelitos,
-            ["id_ci", "id_delito", "clasf_de_dto"],
+            ["ntra_ci", "clasf_de_dto"],
             resultado.Errores);
 
         resultado.Victimas = LeerHojaExcel(
@@ -313,7 +317,7 @@ public class BanciArchivoReader : IBanciArchivoReader
             "VICTIMA",
             ColumnasVictimas,
             AliasVictimas,
-            ["id_ci", "id_delito", "id_vicf"],
+            ["ntra_ci", "fub"],
             resultado.Errores);
     }
 

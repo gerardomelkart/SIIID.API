@@ -11,7 +11,7 @@ public class BanciCargaArchivosRequest
 
 public class BanciCargaValidacionResponse
 {
-    public int VersionFormato { get; set; } = 2;
+    public int VersionFormato { get; set; } = 3;
     public BanciVistaPrevia? VistaPrevia { get; set; }
     public bool EsValido => Errores.Count == 0;
 

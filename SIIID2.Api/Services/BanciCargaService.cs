@@ -81,33 +81,26 @@ public class BanciCargaService : IBanciCargaService
             throw new UnauthorizedAccessException("Sólo puede capturar información de su entidad federativa.");
         if (entidad is not (>= 1 and <= 32) || await _banciCargaRepository.ResolverEntidadFederativaAsync(entidad.Value.ToString()) != entidad)
             throw new ArgumentException("Seleccione una entidad federativa válida.");
-        if (request.Carpeta == null || request.Delitos == null || request.Delitos.Count is < 1 or > 100 || request.Delitos.Any(d => d == null || d.Datos == null || d.Victimas == null || d.Victimas.Count is < 1 or > 500 || d.Victimas.Any(v => v == null)) || request.Delitos.Sum(d => d.Victimas.Count) > 1000)
-            throw new ArgumentException("Capture una carpeta, de 1 a 100 delitos y al menos una víctima por delito (máximo 1000 víctimas por formulario).");
+        if (request.Carpeta == null || request.Delitos == null || request.Delitos.Count != 1 || request.Delitos.Any(d => d == null || d.Datos == null || d.Victimas == null || d.Victimas.Count is < 1 or > 500 || d.Victimas.Any(v => v == null)) || request.Delitos.Sum(d => d.Victimas.Count) > 1000)
+            throw new ArgumentException("Capture una carpeta, exactamente un delito y al menos una víctima por delito (máximo 1000 víctimas por formulario).");
 
-        var carpeta = CrearFilaFormulario(request.Carpeta, BanciArchivoReader.ColumnasCarpetas, 1, "entidad", "no_banci");
+        var carpeta = CrearFilaFormulario(request.Carpeta, BanciArchivoReader.ColumnasCarpetas, 1, "entidad", "no_banci", "id_ci");
         lectura.Carpetas.Add(carpeta);
         var numeroVictima = 0;
         for (var i = 0; i < request.Delitos.Count; i++)
         {
             var captura = request.Delitos[i];
-            var delito = CrearFilaFormulario(captura.Datos, BanciArchivoReader.ColumnasDelitos, i + 1, "entidad", "id_ci");
-            delito.Columnas["id_ci"] = Valor(carpeta, "id_ci");
+            var delito = CrearFilaFormulario(captura.Datos, BanciArchivoReader.ColumnasDelitos, i + 1, "entidad", "id_ci", "id_delito", "ntra_ci");
+            delito.Columnas["ntra_ci"] = Valor(carpeta, "ntra_ci");
             lectura.Delitos.Add(delito);
             foreach (var datosVictima in captura.Victimas)
             {
-                var victima = CrearFilaFormulario(datosVictima, BanciArchivoReader.ColumnasVictimas.Except(BanciArchivoReader.ColumnasActualizacion).ToArray(), ++numeroVictima, "entidad", "id_ci", "id_delito", "no_banci");
-                victima.Columnas["id_ci"] = Valor(carpeta, "id_ci");
+                var victima = CrearFilaFormulario(datosVictima, BanciArchivoReader.ColumnasVictimas.Except(BanciArchivoReader.ColumnasActualizacion).ToArray(), ++numeroVictima, "entidad", "id_ci", "id_delito", "id_vicf", "ntra_ci", "no_banci");
+                victima.Columnas["ntra_ci"] = Valor(carpeta, "ntra_ci");
                 victima.Columnas["id_delito"] = Valor(delito, "id_delito");
                 lectura.Victimas.Add(victima);
             }
         }
-        if (lectura.Delitos.Select(d => Valor(d, "id_delito")).Distinct(StringComparer.OrdinalIgnoreCase).Count() != lectura.Delitos.Count)
-            lectura.Errores.Add(ErrorGeneral("BANCI_DELITO_DUPLICADO", "No repita el ID_DELITO dentro de la carpeta."));
-        if (lectura.Victimas.Select(v => Llave(Valor(v, "id_delito"), Valor(v, "id_vicf"))).Distinct().Count() != lectura.Victimas.Count)
-            lectura.Errores.Add(ErrorGeneral("BANCI_VICTIMA_DUPLICADA", "No repita el ID_VICF dentro de un mismo delito."));
-        if (await _banciCargaRepository.ExisteCarpetaAsync(entidad.Value, Valor(carpeta, "id_ci")))
-            lectura.Errores.Add(ErrorGeneral("BANCI_CARPETA_EXISTENTE", "Ya existe ese ID_CI en su entidad. El formulario registra carpetas nuevas; no cambie la fecha para intentar registrarla otra vez."));
-
         // La entidad de reporte no procede de campos editables de cada fila.
         var contexto = new BanciUsuarioCargaInfo { IdUsuario = usuario.IdUsuario, Rol = usuario.Rol, IdEntidadFederativa = entidad };
         return await ValidarLecturaAsync(lectura, contexto);
@@ -132,7 +125,7 @@ public class BanciCargaService : IBanciCargaService
         ["id_vicf"] = 250,
         ["nacional"] = 5,
         ["folio_fotovolante"] = 250,
-        ["folio_rnpdno"] = 250,
+        ["fub"] = 250,
         ["pro_apellido"] = 250,
         ["sdo_apellido"] = 250,
         ["nomb"] = 500,
@@ -177,6 +170,7 @@ public class BanciCargaService : IBanciCargaService
             }
         }
         NormalizarHoras(lectura);
+        BanciAltaNormalizer.Preparar(lectura);
 
         response.ModalidadIngreso = lectura.ModalidadIngreso;
 
@@ -248,9 +242,9 @@ public class BanciCargaService : IBanciCargaService
 
         if (idEntidadFederativa.HasValue && response.Errores.Count == 0)
         {
-            var existentes = new HashSet<string>(await _banciCargaRepository.ObtenerCarpetasExistentesAsync(idEntidadFederativa.Value, lectura.Carpetas.Select(f => Valor(f, "id_ci"))), StringComparer.OrdinalIgnoreCase);
-            foreach (var fila in lectura.Carpetas.Where(f => existentes.Contains(Valor(f, "id_ci"))))
-                response.Errores.Add(new BanciCargaValidacionError { Archivo = "carpetas", NumeroFila = fila.NumeroFila, Campo = "id_ci", Valor = Valor(fila, "id_ci"), Codigo = "BANCI_CARPETA_EXISTENTE", Mensaje = "Esta carpeta ya está registrada en la entidad. La carga inicial sólo admite carpetas nuevas; utilice Actualización de víctimas para modificar sus datos." });
+            var existentes = new HashSet<string>(await _banciCargaRepository.ObtenerCarpetasExistentesAsync(idEntidadFederativa.Value, lectura.Carpetas.Select(f => Valor(f, "ntra_ci"))), StringComparer.OrdinalIgnoreCase);
+            foreach (var fila in lectura.Carpetas.Where(f => existentes.Contains(Valor(f, "ntra_ci"))))
+                response.Errores.Add(new BanciCargaValidacionError { Archivo = "carpetas", NumeroFila = fila.NumeroFila, Campo = "ntra_ci", Valor = Valor(fila, "ntra_ci"), Codigo = "BANCI_CARPETA_EXISTENTE", Mensaje = "Esta carpeta ya está registrada en la entidad. La carga inicial sólo admite carpetas nuevas; utilice Actualización de víctimas para modificar sus datos." });
         }
 
         if (response.Errores.Count > 0 || !idEntidadFederativa.HasValue)

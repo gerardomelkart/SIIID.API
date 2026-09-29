@@ -46,9 +46,9 @@ public sealed class BanciResumenController : ControllerBase
         // La consulta ya verifica autoría, entidad y acceso vigente; no exponer acuses ajenos.
         var carga = await _cargas.ObtenerCargaAsync(codigoReferencia, idUsuario);
         if (carga is null) return NotFound(new { mensaje = "La carga no está disponible para este usuario." });
-        if (carga.VersionFormato != 2 ||
+        if (carga.VersionFormato < 2 ||
             carga.Estado is not ("PROCESADO" or "PROCESADO_CON_ADVERTENCIAS"))
-            return Conflict(new { mensaje = "El resumen únicamente se emite para una carga BANCI V2 integrada." });
+            return Conflict(new { mensaje = "El resumen únicamente se emite para una carga BANCI integrada." });
 
         using var connection = _factory.CrearConexion();
         // El folio se lee de las tablas definitivas. Las tablas tmp sólo fijan qué llaves
@@ -61,7 +61,7 @@ public sealed class BanciResumenController : ControllerBase
                 ci.ntra_ci AS NtraCi,
                 di.id_delito AS IdDelito,
                 vi.id_vicf AS IdVicf,
-                v.folio_rnpdno AS FolioRnpdno,
+                v.fub AS Fub,
                 N'Registro asociado a la carga' AS Resultado,
                 carga.fecha_confirmacion AS FechaIntegracion
             FROM dbo.banci_carga carga
@@ -112,7 +112,7 @@ public sealed class BanciResumenController : ControllerBase
         public string NtraCi { get; set; } = "";
         public string IdDelito { get; set; } = "";
         public string IdVicf { get; set; } = "";
-        public string? FolioRnpdno { get; set; }
+        public string? Fub { get; set; }
         public string Resultado { get; set; } = "";
         public DateTime? FechaIntegracion { get; set; }
     }
