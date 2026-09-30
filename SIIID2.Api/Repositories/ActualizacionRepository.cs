@@ -1,4 +1,5 @@
-﻿using Dapper;
+﻿using SIIID2.Api.Services;
+using Dapper;
 using Microsoft.Data.SqlClient;
 using SIIID2.Api.Data;
 using SIIID2.Api.Models;
@@ -30,11 +31,13 @@ public class ActualizacionRepository : IActualizacionRepository
     }
 
     private readonly IDbConnectionFactory _dbConnectionFactory;
+    private readonly BanciCruceService _cruce;
     private readonly ILogger<ActualizacionRepository> _logger;
 
-    public ActualizacionRepository(IDbConnectionFactory dbConnectionFactory,ILogger<ActualizacionRepository> logger)
+    public ActualizacionRepository(BanciCruceService cruce, IDbConnectionFactory dbConnectionFactory, ILogger<ActualizacionRepository> logger)
     {
         _dbConnectionFactory = dbConnectionFactory;
+        _cruce = cruce;
         _logger = logger;
     }
 
@@ -2565,6 +2568,7 @@ public class ActualizacionRepository : IActualizacionRepository
 
     private async Task ConfirmarActualizacionFinalAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
     {
+        await _cruce.ConfirmarAsync(connection, transaction, idCarga);
         var sql = @"
         UPDATE carga
         SET estado = 'CONFIRMADO_ACTUALIZACION',

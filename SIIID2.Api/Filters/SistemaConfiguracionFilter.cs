@@ -75,8 +75,19 @@ public sealed class SistemaConfiguracionFilter(SistemaConfiguracionService confi
 
             sistema_validacion_configuracion queda exclusivamente como
             información de trazabilidad/auditoría.
+
+            Excepción de integridad: el cruce con BANCI consulta datos vivos
+            nuevamente dentro de la transacción de integración, si está activo.
+            No vuelve a ejecutar las demás reglas de los archivos.
         */
         var resultado = await next();
+        if (resultado.Exception is BanciCruceException cruce)
+        {
+            resultado.ExceptionHandled = true;
+            resultado.Result = new BadRequestObjectResult(new SIIID2.Api.Models.CargaValidacionResponse { Mensaje = cruce.Message, Errores = cruce.Errores });
+            return;
+        }
+
 
         /*
             Confirmaciones y aprobaciones no generan una nueva versión

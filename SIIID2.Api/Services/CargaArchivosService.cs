@@ -12,6 +12,7 @@ namespace SIIID2.Api.Services;
 public class CargaArchivosService : ICargaArchivosService
 {
     private readonly SistemaConfiguracionService _config;
+    private readonly BanciCruceService _cruce;
     private readonly IArchivoReader _archivoReader;
     private readonly CarpetasValidator _carpetasValidator;
     private readonly DelitosValidator _delitosValidator;
@@ -34,9 +35,10 @@ public class CargaArchivosService : ICargaArchivosService
     // Tamaño máximo permitido por archivo: 50 MB.
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public CargaArchivosService(SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, FeminicidioRenapoValidator feminicidioRenapoValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IUsuarioRepository usuarioRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService)
+    public CargaArchivosService(BanciCruceService cruce, SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, FeminicidioRenapoValidator feminicidioRenapoValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IUsuarioRepository usuarioRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService)
     {
         _config = config;
+        _cruce = cruce;
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
@@ -313,6 +315,8 @@ public class CargaArchivosService : ICargaArchivosService
 
         // Si no hay errores después de TODAS las validaciones,
         // ahora sí agregamos advertencias de decisión.
+        if (response.Errores.Count == 0) response.Errores.AddRange(await _cruce.ValidarAsync(idEntidadFederativaCarga!.Value, mesCorte, anioCorte, new(filasCarpetas, filasDelitos, filasVictimas)));
+
         if (response.Errores.Count == 0) await _config.PrepararFeminicidioAsync(filasVictimas, idEntidadFederativaCarga!.Value, mesCorte, anioCorte, false);
 
         if (response.Errores.Count == 0)
@@ -341,6 +345,7 @@ public class CargaArchivosService : ICargaArchivosService
         // - ya existe carga confirmada
         // - ya existe carga pendiente
         if (response.Errores.Any(x =>
+                x.Codigo.StartsWith("BANCI_", StringComparison.Ordinal) ||
                 x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD" ||
                 x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO" ||
                 x.Codigo == "CARGA_PERIODO_YA_CONFIRMADO" ||

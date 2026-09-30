@@ -1,4 +1,5 @@
-﻿using System.Data;
+﻿using SIIID2.Api.Services;
+using System.Data;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using SIIID2.Api.Data;
@@ -22,13 +23,15 @@ public class CargaRepository : ICargaRepository
     }
 
     private readonly IDbConnectionFactory _dbConnectionFactory;
+    private readonly BanciCruceService _cruce;
 
-    public CargaRepository(IDbConnectionFactory dbConnectionFactory)
+    public CargaRepository(BanciCruceService cruce, IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
+        _cruce = cruce;
     }
 
-    public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<CargaValidacionError> advertencias, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos,  List<ArchivoFila> filasVictimas)
+    public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<CargaValidacionError> advertencias, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
     {
         // Este método guarda todo el intento de carga en una sola transacción.
         // Si falla cualquier parte, se revierte carga y staging.
@@ -89,6 +92,8 @@ public class CargaRepository : ICargaRepository
                                     comentario: estado == "VALIDADO_PENDIENTE"
                                         ? "Carga inicial validada y pendiente de decisión del usuario."
                                         : "Intento de carga inicial registrado con errores de validación.");
+
+            await BanciCruceService.GuardarAsync(connection, transaction, idCarga, filasCarpetas, filasDelitos, filasVictimas);
 
             await transaction.CommitAsync();
 
@@ -1080,6 +1085,7 @@ public class CargaRepository : ICargaRepository
 
     private async Task ConfirmarCargaFinalAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
     {
+        await _cruce.ConfirmarAsync(connection, transaction, idCarga);
         var sql = @"
         UPDATE carga
         SET estado = 'CONFIRMADO',
@@ -1289,6 +1295,8 @@ public class CargaRepository : ICargaRepository
                 transaction,
                 idCarga,
                 filasVictimas);
+
+            await BanciCruceService.GuardarAsync(connection, transaction, idCarga, filasCarpetas, filasDelitos, filasVictimas);
 
             await InsertarCarpetasFinalesAsync(
                 connection,

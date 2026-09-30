@@ -1,4 +1,5 @@
-﻿using System.Data;
+﻿using SIIID2.Api.Services;
+using System.Data;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using SIIID2.Api.Data;
@@ -77,6 +78,8 @@ public class ActualizacionCargaRepository : IActualizacionCargaRepository
                                     comentario: estado == "VALIDADO_PENDIENTE_ACTUALIZACION"
                                         ? "Actualización validada y pendiente de decisión del usuario."
                                         : "Intento de actualización registrado con errores de validación.");
+
+            await BanciCruceService.GuardarAsync(connection, transaction, idCarga, filasCarpetas, filasDelitos, filasVictimas);
 
             await transaction.CommitAsync();
 
