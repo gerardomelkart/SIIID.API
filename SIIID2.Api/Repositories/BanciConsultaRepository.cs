@@ -162,7 +162,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
                    v.entidad_nacimiento, v.estado_migratorio, v.curp, v.rfc,
                    v.localizado_o_no_localizado, v.con_o_sin_vida,
                    CONVERT(nvarchar(10), v.fecha_localizacion, 23) AS fecha_localizacion,
-                   v.voluntaria_o_fue_delito, v.delito, v.acciones_busqueda, v.obs
+                   v.constitutiva_delito, v.motivo_desaparicion, v.acciones_busqueda, v.obs
             FROM #BanciExcel f
             JOIN dbo.banci_carpeta_investigacion c ON c.id_banci_carpeta_investigacion = f.id_banci_carpeta_investigacion
             JOIN dbo.catalogo_entidad_federativa e ON e.id_entidad_federativa = c.id_entidad_federativa
@@ -232,8 +232,13 @@ public class BanciConsultaRepository : IBanciConsultaRepository
                    v.curp AS [CURP], v.rfc AS [RFC],
                    v.localizado_o_no_localizado AS [Localización (clave)], v.con_o_sin_vida AS [Condición de vida (clave)],
                    CONVERT(nvarchar(10), v.fecha_localizacion, 23) AS [Fecha de localización],
-                   v.voluntaria_o_fue_delito AS [Motivo de localización (clave)], v.acciones_busqueda AS [Acciones de búsqueda],
-                   v.delito AS [Delito relacionado], v.obs AS [Observaciones]
+                   v.constitutiva_delito AS [Constitutiva de delito (clave)],
+                   (SELECT ct.descripcion FROM dbo.banci_catalogo_constitutiva_delito ct WHERE ct.clave = v.constitutiva_delito) AS [Constitutiva de delito],
+                   v.motivo_desaparicion AS [Motivo de desaparición (clave)],
+                   COALESCE(
+                       (SELECT TOP (1) cm.descripcion FROM dbo.banci_vw_motivo_desaparicion_catalogo cm WHERE cm.constitutiva_delito = v.constitutiva_delito AND cm.clave = v.motivo_desaparicion),
+                       v.motivo_desaparicion) AS [Motivo de desaparición],
+                   v.acciones_busqueda AS [Acciones de búsqueda], v.obs AS [Observaciones]
             FROM dbo.banci_victima v
             JOIN dbo.banci_delito d ON d.id_banci_delito = v.id_banci_delito
             JOIN dbo.banci_carpeta_investigacion c ON c.id_banci_carpeta_investigacion = d.id_banci_carpeta_investigacion

@@ -54,9 +54,11 @@ public class BanciCargaRepository : IBanciCargaRepository
         UNION ALL
         SELECT N'con_o_sin_vida' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_condicion_vida WHERE activo = 1
         UNION ALL
-        SELECT N'voluntaria_o_fue_delito' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_motivo_localizacion WHERE activo = 1
+        SELECT N'constitutiva_delito' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_constitutiva_delito WHERE activo = 1
         UNION ALL
-        SELECT N'delito' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_vw_delito_localizacion_catalogo
+        SELECT N'motivo_delito' AS Campo, CONVERT(nvarchar(1000), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_vw_delito_localizacion_catalogo
+        UNION ALL
+        SELECT N'motivo_no_delito' AS Campo, clave AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_motivo_no_delito WHERE activo = 1
         UNION ALL
         SELECT N'pob', v.clave, v.descripcion, CAST(NULL AS int) FROM (VALUES (N'0', N'No'), (N'1', N'Sí')) v(clave, descripcion)
         UNION ALL

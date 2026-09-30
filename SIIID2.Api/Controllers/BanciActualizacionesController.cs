@@ -24,8 +24,8 @@ public sealed class BanciActualizacionesController(BanciActualizacionService ser
     [HttpGet("plantilla")]
     public Task<IActionResult> Plantilla() => Ejecutar(async usuario =>
     {
-        await service.AutorizarAsync(usuario, true);
-        return File(BanciActualizacionReader.Plantilla(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "BANCI_actualizacion_victimas_v2.xlsx");
+        var opciones = await service.OpcionesAsync(usuario);
+        return File(BanciActualizacionReader.Plantilla(opciones.Catalogos), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "BANCI_actualizacion_victimas.xlsx");
     });
 
     [HttpPost("formulario/validar"), RequestSizeLimit(5 * 1024 * 1024)]
@@ -76,7 +76,7 @@ public sealed class BanciActualizacionesController(BanciActualizacionService ser
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { mensaje = ex.Message }); }
         catch (ArgumentException ex) { return BadRequest(new { mensaje = ex.Message }); }
         catch (InvalidDataException) { return BadRequest(new { mensaje = "El Excel está dañado o no es un libro .xlsx válido." }); }
-        catch (SqlException ex) when (ex.Number is >= 52520 and <= 52536)
+        catch (SqlException ex) when (ex.Number is >= 52520 and <= 52536 or 52630 or 52631)
         {
             var status = ex.Number switch { 52521 => 404, 52523 => 403, 52520 or 52522 or 52532 or 52533 or 52534 => 409, _ => 400 };
             return StatusCode(status, new { codigo = $"BANCI_{ex.Number}", mensaje = ex.Message, traceId = HttpContext.TraceIdentifier });

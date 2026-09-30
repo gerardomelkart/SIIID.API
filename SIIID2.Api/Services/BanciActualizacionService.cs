@@ -30,6 +30,7 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios, Ba
         if (filas.Count is < 1 or > 20000 || (origen == "FORMULARIO" && filas.Count != 1)) throw new ArgumentException("Cantidad de víctimas inválida.");
         var respuesta = new BanciActualizacionResultado();
         var datos = new List<Dictionary<string, string?>>();
+        var catalogos = await usuarios.ObtenerFormularioCatalogosAsync();
         for (var i = 0; i < filas.Count; i++)
         {
             var fila = filas[i] ?? throw new ArgumentException("La fila no puede ser null.");
@@ -40,16 +41,16 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios, Ba
             if (!int.TryParse(normal["fila"], out var numero) || numero < 1) throw new ArgumentException("Número de fila inválido.");
             foreach (var (campo, valor) in normal)
             {
-                var limite = campo switch { "no_banci" => 40, "curp" => 18, "rfc" => 13, "nomb" or "estado_migratorio" => 500, "delito" => 1000, "acciones_busqueda" or "obs" => 20000, _ => 250 };
+                var limite = campo switch { "no_banci" => 40, "curp" => 18, "rfc" => 13, "nomb" or "estado_migratorio" => 500, "motivo_desaparicion" => 1000, "acciones_busqueda" or "obs" => 20000, _ => 250 };
                 if (valor?.Length > limite) Error(respuesta, numero, campo, $"El campo admite hasta {limite} caracteres.");
             }
             if (normal.GetValueOrDefault("no_banci") == null && normal.GetValueOrDefault("identificador") == null)
                 normal["identificador"] = normal.GetValueOrDefault("curp") ?? normal.GetValueOrDefault("fub");
             if (normal.GetValueOrDefault("no_banci") == null && normal.GetValueOrDefault("identificador") == null) Error(respuesta, numero, "identificador", "Indique NO_BANCI, CURP o FUB para identificar la víctima.");
-            foreach (var campo in new[] { "localizado_o_no_localizado", "con_o_sin_vida", "voluntaria_o_fue_delito" })
+            foreach (var campo in new[] { "localizado_o_no_localizado", "con_o_sin_vida" })
             {
                 var valor = normal.GetValueOrDefault(campo);
-                if (valor != null && valor is not ("1" or "2") && !(campo == "voluntaria_o_fue_delito" && valor == "3")) Error(respuesta, numero, campo, "Valor fuera del catálogo permitido.");
+                if (valor != null && valor is not ("1" or "2")) Error(respuesta, numero, campo, "Valor fuera del catálogo permitido.");
             }
             var fecha = normal.GetValueOrDefault("fecha_localizacion");
             if (fecha != null)
@@ -57,6 +58,7 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios, Ba
                 if (DateTime.TryParseExact(fecha, new[] { "yyyy-MM-dd", "dd/MM/yyyy", "d/M/yyyy" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var f)) normal["fecha_localizacion"] = f.ToString("yyyy-MM-dd");
                 else Error(respuesta, numero, "fecha_localizacion", "Fecha inválida. Use yyyy-MM-dd o dd/MM/yyyy.");
             }
+            respuesta.Errores.AddRange(BanciMotivoValidator.Validar(normal, numero, catalogos));
             datos.Add(normal);
         }
         if (!respuesta.EsValido) return respuesta;

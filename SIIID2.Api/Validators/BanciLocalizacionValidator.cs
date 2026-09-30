@@ -10,7 +10,7 @@ public static class BanciLocalizacionValidator
 
     public static IEnumerable<BanciCargaValidacionError> Validar(Dictionary<string, string?> datos, BanciVictimaIdentificada victima, int fila, DateTime hoy)
     {
-        var campos = new[] { "fecha_localizacion", "localizado_o_no_localizado", "con_o_sin_vida", "voluntaria_o_fue_delito" };
+        var campos = new[] { "fecha_localizacion", "localizado_o_no_localizado", "con_o_sin_vida" };
         if (!campos.Any(c => !string.IsNullOrWhiteSpace(datos.GetValueOrDefault(c)))) yield break;
         var valor = datos.GetValueOrDefault("fecha_localizacion");
         var fecha = valor == null ? victima.FechaLocalizacion : DateTime.ParseExact(valor, "yyyy-MM-dd", CultureInfo.InvariantCulture);

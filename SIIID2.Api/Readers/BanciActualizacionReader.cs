@@ -8,7 +8,7 @@ namespace SIIID2.Api.Readers;
 
 public static class BanciActualizacionReader
 {
-    internal static readonly string[] Campos = ["identificador", "no_banci", "id_delito", "id_vicf", "fub", "pro_apellido", "sdo_apellido", "nomb", "entidad_nacimiento", "estado_migratorio", "curp", "rfc", "localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "voluntaria_o_fue_delito", "delito", "acciones_busqueda", "obs"];
+    internal static readonly string[] Campos = ["identificador", "no_banci", "id_delito", "id_vicf", "fub", "pro_apellido", "sdo_apellido", "nomb", "entidad_nacimiento", "estado_migratorio", "curp", "rfc", "localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "constitutiva_delito", "motivo_desaparicion", "acciones_busqueda", "obs"];
     private static string Canonico(string texto)
     {
         var normal = new string(texto.Normalize(NormalizationForm.FormD).Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray()).ToLowerInvariant();
@@ -38,6 +38,9 @@ public static class BanciActualizacionReader
         }
         if (candidatos.Count != 1) throw new ArgumentException("Debe existir una sola hoja de actualización con encabezados oficiales y un identificador (NO_BANCI, CURP o FUB).");
         var (datos, encabezado, columnas) = candidatos[0];
+        for (var c = 1; c <= datos.LastColumnUsed(XLCellsUsedOptions.Contents)!.ColumnNumber(); c++)
+            if (Canonico(datos.Cell(encabezado, c).GetString()) is "voluntaria_o_fue_delito" or "delito")
+                throw new ArgumentException("La plantilla contiene campos anteriores. Descargue la nueva con constitutiva_delito y motivo_desaparicion.");
         var resultado = new List<Dictionary<string, string?>>();
         var ultima = datos.LastRowUsed(XLCellsUsedOptions.Contents)!.RowNumber();
         for (var i = encabezado + 1; i <= ultima; i++)
@@ -59,7 +62,7 @@ public static class BanciActualizacionReader
         return resultado;
     }
 
-    public static byte[] Plantilla()
+    public static byte[] Plantilla(IReadOnlyList<BanciFormularioOpcion>? catalogos = null)
     {
         using var libro = new XLWorkbook();
         var hoja = libro.Worksheets.Add("Actualizacion");
@@ -71,10 +74,29 @@ public static class BanciActualizacionReader
         var instrucciones = libro.Worksheets.Add("Instrucciones");
         instrucciones.Cell(1, 1).Value = "Una fila por víctima. Use NO_BANCI + ID_DELITO + ID_VICF. Puede buscar por identificador (NO_BANCI, CURP o FUB); si hay varias coincidencias debe completar la llave.";
         instrucciones.Cell(2, 1).Value = "Los campos vacíos conservan el valor previo. FUB debe estar informado en el registro final. CURP opcional, validada contra RENAPO si se proporciona.";
-        instrucciones.Cell(3, 1).Value = "Fecha: yyyy-MM-dd. Voluntaria_o_fue_delito: 1 Voluntaria, 2 Delito, 3 No identificado. Delito es opcional y usa el catálogo Consolidado.";
+        instrucciones.Cell(3, 1).Value = "Fecha: yyyy-MM-dd. constitutiva_delito: 1 = Delito; 2 = No delito. motivo_desaparicion: clave del catálogo correspondiente (ver hojas de catálogos). Para No delito: 1 = Desarrollo.";
         instrucciones.Column(1).Width = 110;
         instrucciones.Column(1).Style.Alignment.WrapText = true;
-        instrucciones.Rows(1, 3).Height = 60;
+        instrucciones.Cell(4, 1).Value = "Informe constitutiva_delito y motivo_desaparicion juntos, o deje ambos vacíos para conservar los valores. No capture descripciones en lugar de claves.";
+        instrucciones.Rows(1, 4).Height = 60;
+        foreach (var (nombre, campo) in new[] { ("Constitutiva", "constitutiva_delito"), ("Motivos_delito", "motivo_delito"), ("Motivos_no_delito", "motivo_no_delito") })
+        {
+            var cat = libro.Worksheets.Add(nombre);
+            cat.Cell(1, 1).Value = "clave";
+            cat.Cell(1, 2).Value = "descripcion";
+            cat.Column(1).Style.NumberFormat.Format = "@";
+            var fila = 2;
+            foreach (var opcion in (catalogos ?? []).Where(o => o.Campo == campo))
+            {
+                cat.Cell(fila, 1).Value = opcion.Clave;
+                cat.Cell(fila++, 2).Value = opcion.Descripcion;
+            }
+            cat.Row(1).Style.Font.Bold = true;
+            cat.Column(1).Width = 24;
+            cat.Column(2).Width = 95;
+            cat.Column(2).Style.Alignment.WrapText = true;
+            cat.SheetView.FreezeRows(1);
+        }
         using var salida = new MemoryStream();
         libro.SaveAs(salida);
         return salida.ToArray();
