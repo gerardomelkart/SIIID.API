@@ -60,6 +60,29 @@ public static class BanciCruceValidator
         }
         void Error(string archivo, ArchivoFila? fila, string ntra, string campo, string codigo, string mensaje) => errores.Add(new() { NtraCi = ntra, Archivo = archivo, Fila = fila?.NumeroFila, Columna = campo, Campo = campo, Valor = fila == null ? ntra : Valor(fila, campo), Codigo = codigo, DescripcionResumen = "Cruce Consolidado–BANCI", Mensaje = $"Carpeta {ntra}: {mensaje}" });
     }
+    // Sólo cambia el diagnóstico de claves ausentes del período; no agrega
+    // registros históricos a la comparación ni elimina errores bloqueantes.
+    public static void AclararOtrosPeriodos(List<CargaValidacionError> errores,
+        BanciCruceArchivos carga, IEnumerable<ArchivoFila> otrasCarpetas, int mes, int anio)
+    {
+        var otras = otrasCarpetas.ToLookup(c => Clave(Valor(c, "ntra_ci")));
+        var enviadas = carga.Carpetas.ToLookup(c => Clave(Valor(c, "ntra_ci")));
+        foreach (var error in errores.Where(e => e.Codigo == "BANCI_NO_REPORTADA"))
+        {
+            var clave = Clave(error.NtraCi ?? "");
+            if (!otras.Contains(clave))
+            {
+                error.Mensaje = $"Carpeta {clave}: No está registrada en BANCI para el período {mes:00}/{anio}. Revise el número de carpeta; si es correcto, regístrela primero en BANCI y vuelva a cargar el Consolidado.";
+                continue;
+            }
+            var fechaCarga = string.Join(", ", enviadas[clave].Select(c => Normal(c, "fha_de_ini", false)).Distinct());
+            var fechasBanci = string.Join(", ", otras[clave].Select(c => Normal(c, "fha_de_ini", true)).Distinct().Order());
+            error.Codigo = "BANCI_OTRO_PERIODO";
+            error.Campo = error.Columna = "fha_de_ini";
+            error.Valor = fechaCarga;
+            error.Mensaje = $"Carpeta {clave}: Ya está registrada en BANCI en otro período. Fecha de inicio en Consolidado: {fechaCarga}; en BANCI: {fechasBanci}. El cruce corresponde a {mes:00}/{anio}. Revise el número de carpeta y la fecha de inicio; no vuelva a registrarla ni incluya carpetas de meses anteriores para resolver este aviso.";
+        }
+    }
     private static string Firma(ArchivoFila v, bool banci) => JsonSerializer.Serialize(CamposVictima.Select(c => Normal(v, c, banci)));
     private static string Describir(ArchivoFila v) => JsonSerializer.Serialize(CamposVictima.ToDictionary(c => c, c => Valor(v, c)));
     private static string Normal(ArchivoFila fila, string campo, bool banci)

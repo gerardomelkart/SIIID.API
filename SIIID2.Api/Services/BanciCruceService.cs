@@ -60,6 +60,25 @@ public sealed class BanciCruceService(IDbConnectionFactory factory, SistemaConfi
             var (banci, claves) = await LeerAsync(db, tx, e, mes, anio, usuarioFederal);
             var parcial = usuarioFederal.HasValue ? PorEntidad(archivos, claves, e) : archivos;
             var diferencias = BanciCruceValidator.Comparar(parcial, banci, claves);
+            // Consultar otros períodos sólo para claves enviadas que no se encontraron
+            // en el mes reportado. Nunca incorporarlas como carpetas obligatorias.
+            var noEncontradas = diferencias.Where(d => d.Codigo == "BANCI_NO_REPORTADA")
+                .Select(d => d.NtraCi).Where(n => n != null).Distinct().ToArray();
+            if (noEncontradas.Length > 0)
+            {
+                var inicio = new DateTime(anio, mes, 1);
+                var otras = Filas(await db.QueryAsync("""
+                    SELECT c.ntra_ci,c.fha_de_ini
+                    FROM dbo.banci_carpeta_investigacion c
+                    WHERE c.activo=1 AND c.id_entidad_federativa=@e
+                      AND ((@usuarioFederal IS NULL AND c.id_usuario_reporte_federal IS NULL)
+                           OR c.id_usuario_reporte_federal=@usuarioFederal)
+                      AND (c.fha_de_ini<@inicio OR c.fha_de_ini>=@fin)
+                      AND UPPER(LTRIM(RTRIM(c.ntra_ci))) COLLATE Latin1_General_100_BIN2 IN
+                          (SELECT [value] COLLATE Latin1_General_100_BIN2 FROM OPENJSON(@ntras));
+                    """, new { e, usuarioFederal, inicio, fin = inicio.AddMonths(1), ntras = JsonSerializer.Serialize(noEncontradas) }, tx));
+                BanciCruceValidator.AclararOtrosPeriodos(diferencias, parcial, otras, mes, anio);
+            }
             foreach (var error in diferencias)
             {
                 error.EntidadCruce = e;
