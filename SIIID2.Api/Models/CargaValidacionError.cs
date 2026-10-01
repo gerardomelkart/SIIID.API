@@ -3,6 +3,8 @@
 // La idea es que el usuario sepa archivo, fila, columna, valor y motivo del error.
 public class CargaValidacionError
 {
+    public string? NtraCi { get; set; }
+    public int? EntidadCruce { get; set; }
     // Archivo donde ocurrió el error: carpetas, delitos, víctimas o general.
     public string Archivo { get; set; } = string.Empty;
     // Número de fila donde ocurrió el error. Puede ser null si es un error general.

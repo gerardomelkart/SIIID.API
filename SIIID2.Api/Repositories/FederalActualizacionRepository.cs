@@ -1,4 +1,5 @@
-﻿using System.Data;
+﻿using SIIID2.Api.Services;
+using System.Data;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using SIIID2.Api.Data;
@@ -8,10 +9,12 @@ namespace SIIID2.Api.Repositories;
 
 public partial class FederalActualizacionRepository : IFederalActualizacionRepository
 {
+    private readonly BanciCruceService _cruce;
     private readonly IDbConnectionFactory _dbConnectionFactory;
 
-    public FederalActualizacionRepository(IDbConnectionFactory dbConnectionFactory)
+    public FederalActualizacionRepository(BanciCruceService cruce, IDbConnectionFactory dbConnectionFactory)
     {
+        _cruce = cruce;
         _dbConnectionFactory = dbConnectionFactory;
     }
 
@@ -61,6 +64,7 @@ public partial class FederalActualizacionRepository : IFederalActualizacionRepos
                 await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, mesCorte, anioCorte, actualizacion: true);
 
             var idFederalCarga = await CrearCargaAsync(connection, transaction, idUsuarioCarga, codigoReferencia, mesCorte, anioCorte, totalCarpetas, totalDelitos, totalVictimas, estado, mensajeError);
+            await BanciCruceService.GuardarFederalAsync(connection, transaction, idFederalCarga, filasCarpetas, filasDelitos, filasVictimas);
             await GuardarTmpCarpetasAsync(connection, transaction, idFederalCarga, filasCarpetas);
             await GuardarTmpDelitosAsync(connection, transaction, idFederalCarga, filasDelitos);
             await GuardarTmpVictimasAsync(connection, transaction, idFederalCarga, filasVictimas);

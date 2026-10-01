@@ -24,6 +24,7 @@ public class BanciFormularioOpcion
 public class BanciFormularioOpciones
 {
     public bool EsSuperUsuario { get; set; }
+    public bool PuedeElegirEntidad { get; set; }
     public int? IdEntidadFederativa { get; set; }
     public IReadOnlyList<BanciFormularioOpcion> Catalogos { get; set; } = [];
 }

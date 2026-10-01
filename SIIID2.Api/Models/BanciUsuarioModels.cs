@@ -46,6 +46,7 @@ public class BanciUsuarioDetalle : BanciUsuarioDatos
     public bool ActivoCuenta { get; set; }
     public bool TieneBanci { get; set; }
     public bool TieneOtrosModulos { get; set; }
+    public bool EsFederal { get; set; }
     public DateTime FechaAlta { get; set; }
     public DateTime FechaModificacion { get; set; }
 }

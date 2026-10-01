@@ -59,6 +59,7 @@ public class BanciUsuarioService : IBanciUsuarioService
 
     private async Task<UsuarioOperacionResponse> GuardarDatosAsync(int idAdministrador, int idUsuario, BanciUsuarioDatos request, string? password, bool crear)
     {
+        var esFederal = !crear && (await _repository.ObtenerDetalleAsync(idUsuario))?.EsFederal == true;
         Normalizar(request);
         if (crear && request.Rol == "SUPER_USUARIO") request.IdEntidadFederativa = null;
         var errores = ValidarCampos(request, request.Rol);
@@ -68,7 +69,7 @@ public class BanciUsuarioService : IBanciUsuarioService
             errores.Add(ErrorUsuario(crear ? "password" : "nuevaPassword", "USUARIO_PASSWORD_CORTO", "La contraseña debe tener al menos 8 caracteres."));
 
         int? idRol = string.IsNullOrWhiteSpace(request.Rol) ? null : await _usuarioRepository.ObtenerIdRolActivoAsync(request.Rol);
-        if (request.Rol == "ENLACE_ESTATAL" && request.IdEntidadFederativa is not (>= 1 and <= 32)) errores.Add(ErrorUsuario("idEntidadFederativa", "USUARIO_ENTIDAD_OBLIGATORIA", "El enlace estatal debe tener una entidad entre 1 y 32."));
+        if (!esFederal && request.Rol == "ENLACE_ESTATAL" && request.IdEntidadFederativa is not (>= 1 and <= 32)) errores.Add(ErrorUsuario("idEntidadFederativa", "USUARIO_ENTIDAD_OBLIGATORIA", "El enlace estatal debe tener una entidad entre 1 y 32."));
         if (request.IdEntidadFederativa.HasValue && !await _usuarioRepository.ExisteEntidadActivaAsync(request.IdEntidadFederativa.Value)) errores.Add(ErrorUsuario("idEntidadFederativa", "USUARIO_ENTIDAD_INVALIDA", "La entidad no existe o no está activa."));
         if (!idRol.HasValue && !string.IsNullOrWhiteSpace(request.Rol)) errores.Add(ErrorUsuario("rol", "USUARIO_ROL_INVALIDO", "El rol no existe o no está activo."));
         errores.AddRange(await _usuarioRepository.ObtenerDuplicadosUsuarioEdicionAsync(idUsuario, request.Usuario, request.CorreoElectronico, request.Rfc, request.Curp));

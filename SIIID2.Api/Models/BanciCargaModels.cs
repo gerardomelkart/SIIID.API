@@ -114,6 +114,8 @@ public class BanciUsuarioCargaInfo
     public bool HabilitaCarga { get; set; }
     public bool HabilitaModificacion { get; set; }
 
+    public bool EsFederal { get; set; }
+    public bool PuedeElegirEntidad => EsSuperUsuario || EsFederal;
     public bool EsSuperUsuario =>
         string.Equals(
             Rol,

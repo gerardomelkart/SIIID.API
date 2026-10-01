@@ -49,14 +49,14 @@ public sealed class BanciActualizacionesController(BanciActualizacionService ser
     public Task<IActionResult> Pendientes() => Ejecutar(async usuario =>
     {
         var acceso = await service.AutorizarAsync(usuario);
-        return Ok(await repository.EstadosAsync(usuario, acceso.EsSuperUsuario ? null : acceso.IdEntidadFederativa));
+        return Ok(await repository.EstadosAsync(usuario, acceso.PuedeElegirEntidad ? null : acceso.IdEntidadFederativa));
     });
 
     [HttpGet("{referencia:guid}")]
     public Task<IActionResult> Estado(Guid referencia) => Ejecutar(async usuario =>
     {
         var acceso = await service.AutorizarAsync(usuario);
-        return Ok(await repository.EstadosAsync(usuario, acceso.EsSuperUsuario ? null : acceso.IdEntidadFederativa, referencia));
+        return Ok(await repository.EstadosAsync(usuario, acceso.PuedeElegirEntidad ? null : acceso.IdEntidadFederativa, referencia));
     });
 
     [HttpGet("{referencia:guid}/vista-previa")]

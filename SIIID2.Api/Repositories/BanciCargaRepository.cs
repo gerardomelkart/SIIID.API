@@ -16,11 +16,11 @@ public class BanciCargaRepository : IBanciCargaRepository
         _dbConnectionFactory = dbConnectionFactory;
     }
 
-    public async Task<IReadOnlyCollection<string>> ObtenerCarpetasExistentesAsync(int idEntidad, IEnumerable<string> ids)
+    public async Task<IReadOnlyCollection<string>> ObtenerCarpetasExistentesAsync(int idUsuario, int idEntidad, IEnumerable<string> ids)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-        const string sql = "SELECT DISTINCT j.value FROM OPENJSON(@Ids) j WHERE EXISTS (SELECT 1 FROM dbo.banci_carpeta_investigacion c WHERE c.id_entidad_federativa = @IdEntidad AND LTRIM(RTRIM(c.ntra_ci)) = j.value);";
-        return (await connection.QueryAsync<string>(sql, new { IdEntidad = idEntidad, Ids = JsonSerializer.Serialize(ids.ToArray()) })).ToArray();
+        const string sql = "SELECT DISTINCT j.value FROM OPENJSON(@Ids) j WHERE EXISTS (SELECT 1 FROM dbo.banci_carpeta_investigacion c WHERE c.id_entidad_federativa = @IdEntidad AND ISNULL(c.id_usuario_reporte_federal,0) = CASE WHEN dbo.fn_banci_es_usuario_federal(@IdUsuario)=1 THEN @IdUsuario ELSE 0 END AND LTRIM(RTRIM(c.ntra_ci)) = j.value);";
+        return (await connection.QueryAsync<string>(sql, new { IdUsuario = idUsuario, IdEntidad = idEntidad, Ids = JsonSerializer.Serialize(ids.ToArray()) })).ToArray();
     }
 
     public async Task<bool> ExisteCarpetaAsync(int idEntidad, string idCi)
@@ -79,6 +79,7 @@ public class BanciCargaRepository : IBanciCargaRepository
             u.id_usuario AS IdUsuario,
             u.id_entidad_federativa AS IdEntidadFederativa,
             r.rol AS Rol,
+            dbo.fn_banci_es_usuario_federal(u.id_usuario) AS EsFederal,
             CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 WHEN r.rol = N'CONSULTA' THEN 0 ELSE ISNULL(um.habilita_carga, 0) END) AS HabilitaCarga,
             CONVERT(bit, CASE WHEN r.rol = N'SUPER_USUARIO' THEN 1 WHEN r.rol = N'CONSULTA' THEN 0 ELSE ISNULL(um.habilita_modificacion, 0) END) AS HabilitaModificacion
         FROM dbo.usuario u
@@ -694,7 +695,7 @@ public class BanciCargaRepository : IBanciCargaRepository
         INNER JOIN dbo.usuario u ON u.id_usuario = c.id_usuario_carga AND u.activo = 1
         INNER JOIN dbo.roles r ON r.id_rol = u.id_rol AND r.activo = 1
         WHERE c.activo = 1 AND c.id_usuario_carga = @IdUsuario
-          AND (r.rol = N'SUPER_USUARIO' OR (r.rol = N'ENLACE_ESTATAL' AND u.id_entidad_federativa = c.id_entidad_federativa))
+          AND (r.rol = N'SUPER_USUARIO' OR (r.rol = N'ENLACE_ESTATAL' AND (u.id_entidad_federativa = c.id_entidad_federativa OR dbo.fn_banci_es_usuario_federal(@IdUsuario)=1)))
           AND EXISTS (SELECT 1 FROM dbo.catalogo_modulo WHERE clave = N'BANCI' AND activo = 1)
           AND (r.rol = N'SUPER_USUARIO' OR EXISTS (
               SELECT 1 FROM dbo.usuario_modulo um

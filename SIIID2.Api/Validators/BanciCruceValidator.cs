@@ -10,7 +10,7 @@ public sealed record BanciCruceArchivos(List<ArchivoFila> Carpetas, List<Archivo
 public static class BanciCruceValidator
 {
     public static readonly string[] CamposCarpeta = ["fha_de_ini", "hra_de_ini", "rmen_de_hchos"];
-    public static readonly string[] CamposDelito = ["dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "nom_ent_hchos", "id_ent_hchos", "nom_mun_hchos", "id_mun_hchos", "nom_loc_hchos", "id_loc_hchos", "nom_col_hchos", "id_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos"];
+    public static readonly string[] CamposDelito = ["dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "nom_ent_hchos", "id_ent_hchos", "nom_mun_hchos", "id_mun_hchos", "nom_col_hchos", "id_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos"];
     public static readonly string[] CamposVictima = ["id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional"];
     public static string Valor(ArchivoFila fila, string campo) => fila.Columnas.GetValueOrDefault(campo)?.Trim() ?? "";
     public static string Clave(string valor) => valor.Trim().ToUpperInvariant();
@@ -58,7 +58,7 @@ public static class BanciCruceValidator
             foreach (var campo in campos.Where(c => Normal(m, c, false) != Normal(b, c, true)))
                 Error(archivo, m, ntra, campo, "BANCI_DIFERENCIA", $"Consolidado: '{Valor(m, campo)}'; BANCI: '{Valor(b, campo)}'. Corrija la diferencia antes de continuar.");
         }
-        void Error(string archivo, ArchivoFila? fila, string ntra, string campo, string codigo, string mensaje) => errores.Add(new() { Archivo = archivo, Fila = fila?.NumeroFila, Columna = campo, Campo = campo, Valor = fila == null ? ntra : Valor(fila, campo), Codigo = codigo, DescripcionResumen = "Cruce Consolidado–BANCI", Mensaje = $"Carpeta {ntra}: {mensaje}" });
+        void Error(string archivo, ArchivoFila? fila, string ntra, string campo, string codigo, string mensaje) => errores.Add(new() { NtraCi = ntra, Archivo = archivo, Fila = fila?.NumeroFila, Columna = campo, Campo = campo, Valor = fila == null ? ntra : Valor(fila, campo), Codigo = codigo, DescripcionResumen = "Cruce Consolidado–BANCI", Mensaje = $"Carpeta {ntra}: {mensaje}" });
     }
     private static string Firma(ArchivoFila v, bool banci) => JsonSerializer.Serialize(CamposVictima.Select(c => Normal(v, c, banci)));
     private static string Describir(ArchivoFila v) => JsonSerializer.Serialize(CamposVictima.ToDictionary(c => c, c => Valor(v, c)));

@@ -185,8 +185,9 @@ public partial class FederalActualizacionRepository
         await connection.ExecuteAsync(sql, new { IdFederalCarga = idFederalCarga, Estado = estado, IdUsuarioConfirmacion = idUsuarioConfirmacion, Mensaje = mensaje, RechazoVisto = rechazoVisto }, transaction);
     }
 
-    private static async Task AplicarActualizacionAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, int idUsuarioRegistro, int idUsuarioConfirmacion)
+    private async Task AplicarActualizacionAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, int idUsuarioRegistro, int idUsuarioConfirmacion)
     {
+        await _cruce.ConfirmarAsync(connection, transaction, idFederalCarga, federal: true);
         const string sql = """
         SET NOCOUNT ON;
         DECLARE @MesCorte TINYINT, @AnioCorte SMALLINT;

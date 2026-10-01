@@ -8,7 +8,7 @@ namespace SIIID2.Api.Repositories;
 
 public sealed class BanciActualizacionRepository(IDbConnectionFactory factory)
 {
-    public async Task<IReadOnlyList<BanciVictimaIdentificada>> ResolverAsync(int entidad, IEnumerable<Dictionary<string, string?>> filas)
+    public async Task<IReadOnlyList<BanciVictimaIdentificada>> ResolverAsync(int usuario, int entidad, IEnumerable<Dictionary<string, string?>> filas)
     {
         using var connection = factory.CrearConexion();
         // Sólo se llama después de verificar permiso de modificación y entidad en el servicio.
@@ -19,14 +19,14 @@ public sealed class BanciActualizacionRepository(IDbConnectionFactory factory)
             CROSS APPLY (
                 SELECT TOP (2) v.no_banci, v.id_delito, v.id_vicf, v.curp, v.fub, v.fha_de_ini, v.fha_de_hchos, v.fecha_localizacion
                 FROM dbo.banci_vw_victimas_v2 v
-                WHERE v.id_entidad_federativa = @Entidad
+                WHERE v.id_entidad_federativa = @Entidad AND dbo.fn_banci_puede_actualizar_victima(@Usuario,v.id_banci_victima)=1
                   AND (k.no_banci IS NULL OR v.no_banci = k.no_banci)
                   AND (k.id_delito IS NULL OR v.id_delito = k.id_delito)
                   AND (k.id_vicf IS NULL OR v.id_vicf = k.id_vicf)
                   AND (k.identificador IS NULL OR v.no_banci = k.identificador OR v.curp = k.identificador OR v.fub = k.identificador)
                 ORDER BY v.id_banci_victima
             ) v;
-            """, new { Entidad = entidad, Datos = JsonSerializer.Serialize(filas) }, commandTimeout: 300)).AsList();
+            """, new { Usuario = usuario, Entidad = entidad, Datos = JsonSerializer.Serialize(filas) }, commandTimeout: 300)).AsList();
     }
 
     public async Task<BanciActualizacionResultado> PrepararAsync(int usuario, int entidad, string origen, List<Dictionary<string, string?>> datos, List<BanciCargaValidacionError> advertencias)

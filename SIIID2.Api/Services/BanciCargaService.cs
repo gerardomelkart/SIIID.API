@@ -50,10 +50,11 @@ public class BanciCargaService : IBanciCargaService
         var usuario = await ObtenerUsuarioCapturaAsync(idUsuarioCarga);
         if (request.IdEntidadFederativa.HasValue)
         {
-            if (!usuario.EsSuperUsuario && request.IdEntidadFederativa != usuario.IdEntidadFederativa) throw new UnauthorizedAccessException("Sólo puede cargar información de su entidad.");
+            if (!usuario.PuedeElegirEntidad && request.IdEntidadFederativa != usuario.IdEntidadFederativa) throw new UnauthorizedAccessException("Sólo puede cargar información de su entidad.");
             if (await _banciCargaRepository.ResolverEntidadFederativaAsync(request.IdEntidadFederativa.Value.ToString()) != request.IdEntidadFederativa) throw new ArgumentException("Seleccione una entidad federativa válida.");
             usuario.IdEntidadFederativa = request.IdEntidadFederativa;
         }
+        if (usuario.EsFederal && !request.IdEntidadFederativa.HasValue) throw new ArgumentException("Seleccione la entidad del archivo BANCI. Puede reportar cualquiera de las 32 entidades, una por archivo.");
         var lectura = await _archivoReader.LeerAsync(request);
         return await ValidarLecturaAsync(lectura, usuario);
     }
@@ -61,13 +62,13 @@ public class BanciCargaService : IBanciCargaService
     public async Task<BanciFormularioOpciones> ObtenerFormularioOpcionesAsync(int idUsuario)
     {
         var usuario = await ObtenerUsuarioCapturaAsync(idUsuario);
-        return new BanciFormularioOpciones { EsSuperUsuario = usuario.EsSuperUsuario, IdEntidadFederativa = usuario.IdEntidadFederativa, Catalogos = await _banciCargaRepository.ObtenerFormularioCatalogosAsync() };
+        return new BanciFormularioOpciones { EsSuperUsuario = usuario.EsSuperUsuario, PuedeElegirEntidad = usuario.PuedeElegirEntidad, IdEntidadFederativa = usuario.IdEntidadFederativa, Catalogos = await _banciCargaRepository.ObtenerFormularioCatalogosAsync() };
     }
 
     private async Task<BanciUsuarioCargaInfo> ObtenerUsuarioCapturaAsync(int idUsuario)
     {
         var usuario = await _banciCargaRepository.ObtenerUsuarioCargaAsync(idUsuario);
-        if (usuario == null || (!usuario.EsSuperUsuario && (!usuario.HabilitaCarga || !string.Equals(usuario.Rol, "ENLACE_ESTATAL", StringComparison.OrdinalIgnoreCase) || usuario.IdEntidadFederativa is not (>= 1 and <= 32))))
+        if (usuario == null || (!usuario.EsSuperUsuario && (!usuario.HabilitaCarga || !string.Equals(usuario.Rol, "ENLACE_ESTATAL", StringComparison.OrdinalIgnoreCase) || (!usuario.EsFederal && usuario.IdEntidadFederativa is not (>= 1 and <= 32)))))
             throw new UnauthorizedAccessException("El usuario no tiene permiso para capturar información BANCI.");
         return usuario;
     }
@@ -76,8 +77,8 @@ public class BanciCargaService : IBanciCargaService
     {
         var usuario = await ObtenerUsuarioCapturaAsync(idUsuario);
         var lectura = new BanciLecturaArchivosResultado { ModalidadIngreso = "FORMULARIO" };
-        var entidad = usuario.EsSuperUsuario ? request.IdEntidadFederativa : usuario.IdEntidadFederativa;
-        if (!usuario.EsSuperUsuario && request.IdEntidadFederativa.HasValue && request.IdEntidadFederativa != entidad)
+        var entidad = usuario.PuedeElegirEntidad ? request.IdEntidadFederativa : usuario.IdEntidadFederativa;
+        if (!usuario.PuedeElegirEntidad && request.IdEntidadFederativa.HasValue && request.IdEntidadFederativa != entidad)
             throw new UnauthorizedAccessException("Sólo puede capturar información de su entidad federativa.");
         if (entidad is not (>= 1 and <= 32) || await _banciCargaRepository.ResolverEntidadFederativaAsync(entidad.Value.ToString()) != entidad)
             throw new ArgumentException("Seleccione una entidad federativa válida.");
@@ -102,7 +103,7 @@ public class BanciCargaService : IBanciCargaService
             }
         }
         // La entidad de reporte no procede de campos editables de cada fila.
-        var contexto = new BanciUsuarioCargaInfo { IdUsuario = usuario.IdUsuario, Rol = usuario.Rol, IdEntidadFederativa = entidad };
+        var contexto = new BanciUsuarioCargaInfo { IdUsuario = usuario.IdUsuario, Rol = usuario.Rol, EsFederal = usuario.EsFederal, IdEntidadFederativa = entidad };
         return await ValidarLecturaAsync(lectura, contexto);
     }
 
@@ -166,7 +167,7 @@ public class BanciCargaService : IBanciCargaService
             {
                 var valor = Valor(fila, "id_ent_hchos");
                 if (!int.TryParse(valor, out var entidadHechos) || entidadHechos != usuario.IdEntidadFederativa)
-                    lectura.Errores.Add(new BanciCargaValidacionError { Archivo = "delitos", NumeroFila = fila.NumeroFila, Campo = "id_ent_hchos", Valor = valor, Codigo = "BANCI_ENTIDAD_NO_CORRESPONDE_USUARIO", Mensaje = "La entidad de los hechos debe corresponder a la entidad asignada a su cuenta. No se integrará esta carga." });
+                    lectura.Errores.Add(new BanciCargaValidacionError { Archivo = "delitos", NumeroFila = fila.NumeroFila, Campo = "id_ent_hchos", Valor = valor, Codigo = "BANCI_ENTIDAD_NO_CORRESPONDE_USUARIO", Mensaje = usuario.EsFederal ? "La entidad de los hechos debe corresponder a la entidad seleccionada para este archivo BANCI." : "La entidad de los hechos debe corresponder a la entidad asignada a su cuenta. No se integrará esta carga." });
             }
         }
         NormalizarHoras(lectura);
@@ -242,7 +243,7 @@ public class BanciCargaService : IBanciCargaService
 
         if (idEntidadFederativa.HasValue && response.Errores.Count == 0)
         {
-            var existentes = new HashSet<string>(await _banciCargaRepository.ObtenerCarpetasExistentesAsync(idEntidadFederativa.Value, lectura.Carpetas.Select(f => Valor(f, "ntra_ci"))), StringComparer.OrdinalIgnoreCase);
+            var existentes = new HashSet<string>(await _banciCargaRepository.ObtenerCarpetasExistentesAsync(idUsuarioCarga, idEntidadFederativa.Value, lectura.Carpetas.Select(f => Valor(f, "ntra_ci"))), StringComparer.OrdinalIgnoreCase);
             foreach (var fila in lectura.Carpetas.Where(f => existentes.Contains(Valor(f, "ntra_ci"))))
                 response.Errores.Add(new BanciCargaValidacionError { Archivo = "carpetas", NumeroFila = fila.NumeroFila, Campo = "ntra_ci", Valor = Valor(fila, "ntra_ci"), Codigo = "BANCI_CARPETA_EXISTENTE", Mensaje = "Esta carpeta ya está registrada en la entidad. La carga inicial sólo admite carpetas nuevas; utilice Actualización de víctimas para modificar sus datos." });
         }
@@ -285,7 +286,7 @@ public class BanciCargaService : IBanciCargaService
     {
         string? entidad = usuario.IdEntidadFederativa?.ToString();
 
-        if (string.IsNullOrWhiteSpace(entidad) && usuario.EsSuperUsuario)
+        if (string.IsNullOrWhiteSpace(entidad) && usuario.PuedeElegirEntidad)
         {
             var entidades = lectura.Delitos
                 .Select(x => Valor(x, "id_ent_hchos"))

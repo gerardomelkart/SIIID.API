@@ -9,6 +9,7 @@ namespace SIIID2.Api.Services;
 
 public class FederalActualizacionArchivosService : IFederalActualizacionArchivosService
 {
+    private readonly BanciCruceService _cruce;
     private readonly SistemaConfiguracionService _config;
     private readonly IArchivoReader _archivoReader;
     private readonly CarpetasValidator _carpetasValidator;
@@ -25,8 +26,9 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
     private readonly string[] _extensionesPermitidas = [".csv", ".xlsx"];
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
 
-    public FederalActualizacionArchivosService(SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, FeminicidioRenapoValidator feminicidioRenapoValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalActualizacionRepository federalActualizacionRepository, IFederalArchivosOriginalesService archivosOriginalesService)
+    public FederalActualizacionArchivosService(BanciCruceService cruce, SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, FeminicidioRenapoValidator feminicidioRenapoValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalActualizacionRepository federalActualizacionRepository, IFederalArchivosOriginalesService archivosOriginalesService)
     {
+        _cruce = cruce;
         _config = config;
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
@@ -202,6 +204,13 @@ public class FederalActualizacionArchivosService : IFederalActualizacionArchivos
 
         if (response.EsValido) await _config.PrepararFeminicidioAsync(filasVictimas, 0, mesCorte.Value, anioCorte.Value, true, "FEDERAL");
 
+        if (response.Errores.Count == 0)
+            response.Errores.AddRange(await _cruce.ValidarFederalAsync(idUsuarioCarga, mesCorte.Value, anioCorte.Value, new(filasCarpetas, filasDelitos, filasVictimas)));
+        if (response.Errores.Any(e => e.Codigo.StartsWith("BANCI_", StringComparison.Ordinal)))
+        {
+            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+            return response;
+        }
         var estadoCarga = response.EsValido ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "RECHAZADO_VALIDACION_ACTUALIZACION";
         var mensajeError = response.EsValido ? null : $"La actualización federal contiene errores de validación. Total de errores: {response.Errores.Count}.";
 

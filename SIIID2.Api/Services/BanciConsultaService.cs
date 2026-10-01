@@ -20,10 +20,12 @@ public class BanciConsultaService : IBanciConsultaService
     public async Task<(byte[] Archivo, string NombreArchivo)> DescargarExcelAsync(int idUsuario, BanciConsultaFiltro filtro)
     {
         var alcance = await ObtenerAlcanceAsync(idUsuario);
+        var usuario = await _cargaRepository.ObtenerUsuarioCargaAsync(idUsuario);
+        int? usuarioFederal = usuario?.EsFederal == true ? idUsuario : usuario?.Rol == "ENLACE_ESTATAL" ? 0 : null;
         if (alcance.HasValue && filtro.IdEntidadFederativa.HasValue && filtro.IdEntidadFederativa != alcance)
             throw new UnauthorizedAccessException();
 
-        using var datos = await _consultaRepository.ObtenerExcelAsync(filtro, alcance);
+        using var datos = await _consultaRepository.ObtenerExcelAsync(filtro, alcance, usuarioFederal);
         using var libro = new XLWorkbook();
         foreach (DataTable tabla in datos.Tables)
         {
@@ -68,7 +70,7 @@ public class BanciConsultaService : IBanciConsultaService
         var usuario = await _cargaRepository.ObtenerUsuarioCargaAsync(idUsuario);
         if (usuario == null) throw new UnauthorizedAccessException();
 
-        if (usuario.EsSuperUsuario) return null;
+        if (usuario.PuedeElegirEntidad) return null;
         if (usuario.Rol == "CONSULTA" && !usuario.IdEntidadFederativa.HasValue)
             return null; // Mantiene la regla de consulta nacional existente en SIIID2.
 
@@ -82,22 +84,28 @@ public class BanciConsultaService : IBanciConsultaService
     public async Task<BanciConsultaOpciones> ObtenerOpcionesAsync(int idUsuario)
     {
         var alcance = await ObtenerAlcanceAsync(idUsuario);
-        return await _consultaRepository.ObtenerOpcionesAsync(alcance);
+        var usuario = await _cargaRepository.ObtenerUsuarioCargaAsync(idUsuario);
+        int? usuarioFederal = usuario?.EsFederal == true ? idUsuario : usuario?.Rol == "ENLACE_ESTATAL" ? 0 : null;
+        return await _consultaRepository.ObtenerOpcionesAsync(alcance, usuarioFederal);
     }
 
     public async Task<BanciConsultaResultado> ConsultarAsync(int idUsuario, BanciConsultaFiltro filtro)
     {
         var alcance = await ObtenerAlcanceAsync(idUsuario);
+        var usuario = await _cargaRepository.ObtenerUsuarioCargaAsync(idUsuario);
+        int? usuarioFederal = usuario?.EsFederal == true ? idUsuario : usuario?.Rol == "ENLACE_ESTATAL" ? 0 : null;
         if (alcance.HasValue && filtro.IdEntidadFederativa.HasValue && filtro.IdEntidadFederativa != alcance)
             throw new UnauthorizedAccessException();
 
         // El alcance autenticado es independiente del filtro que envía el navegador.
-        return await _consultaRepository.ConsultarAsync(filtro, alcance);
+        return await _consultaRepository.ConsultarAsync(filtro, alcance, usuarioFederal);
     }
 
     public async Task<BanciConsultaDetalle?> ObtenerDetalleAsync(int idUsuario, long idCarpeta)
     {
         var alcance = await ObtenerAlcanceAsync(idUsuario);
-        return await _consultaRepository.ObtenerDetalleAsync(idCarpeta, alcance);
+        var usuario = await _cargaRepository.ObtenerUsuarioCargaAsync(idUsuario);
+        int? usuarioFederal = usuario?.EsFederal == true ? idUsuario : usuario?.Rol == "ENLACE_ESTATAL" ? 0 : null;
+        return await _consultaRepository.ObtenerDetalleAsync(idCarpeta, alcance, usuarioFederal);
     }
 }

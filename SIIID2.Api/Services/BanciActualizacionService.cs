@@ -11,21 +11,21 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios, Ba
     public async Task<BanciUsuarioCargaInfo> AutorizarAsync(int idUsuario, bool modificar = false)
     {
         var usuario = await usuarios.ObtenerUsuarioCargaAsync(idUsuario);
-        if (usuario == null || (!usuario.EsSuperUsuario && (usuario.Rol != "ENLACE_ESTATAL" || usuario.IdEntidadFederativa is not (>= 1 and <= 32))) || (modificar && !usuario.EsSuperUsuario && !usuario.HabilitaModificacion)) throw new UnauthorizedAccessException("No tiene permiso vigente para actualizar víctimas BANCI.");
+        if (usuario == null || (!usuario.EsSuperUsuario && (usuario.Rol != "ENLACE_ESTATAL" || (!usuario.EsFederal && usuario.IdEntidadFederativa is not (>= 1 and <= 32)))) || (modificar && !usuario.EsSuperUsuario && !usuario.HabilitaModificacion)) throw new UnauthorizedAccessException("No tiene permiso vigente para actualizar víctimas BANCI.");
         return usuario;
     }
 
     public async Task<BanciFormularioOpciones> OpcionesAsync(int idUsuario)
     {
         var usuario = await AutorizarAsync(idUsuario, true);
-        return new() { EsSuperUsuario = usuario.EsSuperUsuario, IdEntidadFederativa = usuario.IdEntidadFederativa, Catalogos = await usuarios.ObtenerFormularioCatalogosAsync() };
+        return new() { EsSuperUsuario = usuario.EsSuperUsuario, PuedeElegirEntidad = usuario.PuedeElegirEntidad, IdEntidadFederativa = usuario.IdEntidadFederativa, Catalogos = await usuarios.ObtenerFormularioCatalogosAsync() };
     }
 
     public async Task<BanciActualizacionResultado> ValidarAsync(int idUsuario, int? entidadSolicitada, List<Dictionary<string, string?>> filas, string origen, CancellationToken cancellationToken)
     {
         var usuario = await AutorizarAsync(idUsuario, true);
-        var entidad = usuario.EsSuperUsuario ? entidadSolicitada : usuario.IdEntidadFederativa;
-        if (!usuario.EsSuperUsuario && entidadSolicitada.HasValue && entidadSolicitada != entidad) throw new UnauthorizedAccessException("Sólo puede actualizar víctimas de su entidad.");
+        var entidad = usuario.PuedeElegirEntidad ? entidadSolicitada : usuario.IdEntidadFederativa;
+        if (!usuario.PuedeElegirEntidad && entidadSolicitada.HasValue && entidadSolicitada != entidad) throw new UnauthorizedAccessException("Sólo puede actualizar víctimas de su entidad.");
         if (entidad is not (>= 1 and <= 32)) throw new ArgumentException("Seleccione una entidad federativa.");
         if (filas.Count is < 1 or > 20000 || (origen == "FORMULARIO" && filas.Count != 1)) throw new ArgumentException("Cantidad de víctimas inválida.");
         var respuesta = new BanciActualizacionResultado();
@@ -62,7 +62,7 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios, Ba
             datos.Add(normal);
         }
         if (!respuesta.EsValido) return respuesta;
-        var identificadas = (await repository.ResolverAsync(entidad.Value, datos)).ToLookup(v => v.Indice);
+        var identificadas = (await repository.ResolverAsync(idUsuario, entidad.Value, datos)).ToLookup(v => v.Indice);
         var curps = new List<ArchivoFila>();
         var llaves = new HashSet<(string, string, string)>();
         var hoy = BanciLocalizacionValidator.Hoy();

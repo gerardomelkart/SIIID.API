@@ -11,13 +11,13 @@ public class BanciConsultaRepository : IBanciConsultaRepository
     private readonly IDbConnectionFactory _factory;
     public BanciConsultaRepository(IDbConnectionFactory factory) { _factory = factory; }
 
-    public async Task<BanciConsultaOpciones> ObtenerOpcionesAsync(int? idEntidadAlcance)
+    public async Task<BanciConsultaOpciones> ObtenerOpcionesAsync(int? idEntidadAlcance, int? usuarioFederal = null)
     {
         using var connection = _factory.CrearConexion();
         using var resultados = await connection.QueryMultipleAsync("""
             SELECT DISTINCT YEAR(c.fha_de_ini)
             FROM dbo.banci_carpeta_investigacion c
-            WHERE c.activo = 1 AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+            WHERE c.activo = 1 AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance) AND (@UsuarioFederal IS NULL OR ISNULL(c.id_usuario_reporte_federal,0)=@UsuarioFederal)
             ORDER BY 1 DESC;
 
             SELECT CONVERT(int, e.id_entidad_federativa) AS IdEntidadFederativa, e.nombre AS Nombre
@@ -25,7 +25,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             WHERE e.id_entidad_federativa BETWEEN 1 AND 32
               AND (@Alcance IS NULL OR e.id_entidad_federativa = @Alcance)
             ORDER BY e.nombre;
-            """, new { Alcance = idEntidadAlcance });
+            """, new { UsuarioFederal = usuarioFederal, Alcance = idEntidadAlcance });
         return new BanciConsultaOpciones
         {
             AlcanceNacional = !idEntidadAlcance.HasValue,
@@ -34,7 +34,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
         };
     }
 
-    public async Task<BanciConsultaResultado> ConsultarAsync(BanciConsultaFiltro filtro, int? idEntidadAlcance)
+    public async Task<BanciConsultaResultado> ConsultarAsync(BanciConsultaFiltro filtro, int? idEntidadAlcance, int? usuarioFederal = null)
     {
         var desde = new DateTime(filtro.Anio, filtro.Mes ?? 1, 1);
         var hasta = filtro.Mes.HasValue ? desde.AddMonths(1) : desde.AddYears(1);
@@ -48,7 +48,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             INTO #BanciConsultaFiltrada
             FROM dbo.banci_carpeta_investigacion c
             WHERE c.activo = 1
-              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance) AND (@UsuarioFederal IS NULL OR ISNULL(c.id_usuario_reporte_federal,0)=@UsuarioFederal)
               AND (@Entidad IS NULL OR c.id_entidad_federativa = @Entidad)
               AND c.fha_de_ini >= @Desde AND c.fha_de_ini < @Hasta
               AND (@Busqueda IS NULL OR c.no_banci LIKE @Busqueda ESCAPE N'~' OR c.id_ci LIKE @Busqueda ESCAPE N'~' OR c.ntra_ci LIKE @Busqueda ESCAPE N'~'
@@ -90,6 +90,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             DROP TABLE #BanciConsultaFiltrada;
             """, new
         {
+            UsuarioFederal = usuarioFederal,
             Alcance = idEntidadAlcance,
             Entidad = filtro.IdEntidadFederativa,
             Desde = desde,
@@ -105,7 +106,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
         return respuesta;
     }
 
-    public async Task<DataSet> ObtenerExcelAsync(BanciConsultaFiltro filtro, int? idEntidadAlcance)
+    public async Task<DataSet> ObtenerExcelAsync(BanciConsultaFiltro filtro, int? idEntidadAlcance, int? usuarioFederal = null)
     {
         var desde = new DateTime(filtro.Anio, filtro.Mes ?? 1, 1);
         var hasta = filtro.Mes.HasValue ? desde.AddMonths(1) : desde.AddYears(1);
@@ -119,7 +120,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             SELECT c.id_banci_carpeta_investigacion INTO #BanciExcel
             FROM dbo.banci_carpeta_investigacion c
             WHERE c.activo = 1
-              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance) AND (@UsuarioFederal IS NULL OR ISNULL(c.id_usuario_reporte_federal,0)=@UsuarioFederal)
               AND (@Entidad IS NULL OR c.id_entidad_federativa = @Entidad)
               AND c.fha_de_ini >= @Desde AND c.fha_de_ini < @Hasta
               AND (@Busqueda IS NULL OR c.no_banci LIKE @Busqueda ESCAPE N'~' OR c.id_ci LIKE @Busqueda ESCAPE N'~' OR c.ntra_ci LIKE @Busqueda ESCAPE N'~'
@@ -138,7 +139,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             JOIN dbo.banci_carpeta_investigacion c ON c.id_banci_carpeta_investigacion = f.id_banci_carpeta_investigacion
             JOIN dbo.catalogo_entidad_federativa e ON e.id_entidad_federativa = c.id_entidad_federativa
             WHERE c.activo = 1
-              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance) AND (@UsuarioFederal IS NULL OR ISNULL(c.id_usuario_reporte_federal,0)=@UsuarioFederal)
             ORDER BY c.id_entidad_federativa, c.fha_de_ini, c.id_ci;
 
             SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci,
@@ -153,7 +154,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             JOIN dbo.catalogo_entidad_federativa e ON e.id_entidad_federativa = c.id_entidad_federativa
             JOIN dbo.banci_delito d ON d.id_banci_carpeta_investigacion = c.id_banci_carpeta_investigacion
             WHERE c.activo = 1 AND d.activo = 1
-              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance) AND (@UsuarioFederal IS NULL OR ISNULL(c.id_usuario_reporte_federal,0)=@UsuarioFederal)
             ORDER BY c.id_entidad_federativa, c.id_ci, d.id_delito;
 
             SELECT c.id_entidad_federativa, e.nombre AS entidad, c.id_ci, c.ntra_ci, d.id_delito,
@@ -169,12 +170,13 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             JOIN dbo.banci_delito d ON d.id_banci_carpeta_investigacion = c.id_banci_carpeta_investigacion
             JOIN dbo.banci_victima v ON v.id_banci_delito = d.id_banci_delito
             WHERE c.activo = 1 AND d.activo = 1 AND v.activo = 1
-              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance) AND (@UsuarioFederal IS NULL OR ISNULL(c.id_usuario_reporte_federal,0)=@UsuarioFederal)
             ORDER BY c.id_entidad_federativa, c.id_ci, d.id_delito, v.id_vicf;
 
             DROP TABLE #BanciExcel;
             """, new
         {
+            UsuarioFederal = usuarioFederal,
             Alcance = idEntidadAlcance,
             Entidad = filtro.IdEntidadFederativa,
             Desde = desde,
@@ -190,7 +192,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
         catch { datos.Dispose(); throw; }
     }
 
-    public async Task<BanciConsultaDetalle?> ObtenerDetalleAsync(long idCarpeta, int? idEntidadAlcance)
+    public async Task<BanciConsultaDetalle?> ObtenerDetalleAsync(long idCarpeta, int? idEntidadAlcance, int? usuarioFederal = null)
     {
         using var connection = _factory.CrearConexion();
         // Los tres resultados aplican el alcance a la entidad propietaria de la carpeta,
@@ -203,7 +205,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             FROM dbo.banci_carpeta_investigacion c
             JOIN dbo.catalogo_entidad_federativa e ON e.id_entidad_federativa = c.id_entidad_federativa
             WHERE c.id_banci_carpeta_investigacion = @IdCarpeta AND c.activo = 1
-              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance);
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance) AND (@UsuarioFederal IS NULL OR ISNULL(c.id_usuario_reporte_federal,0)=@UsuarioFederal);
 
             SELECT d.id_banci_delito AS _Id, d.id_delito AS [ID_DELITO], d.dto AS [Delito],
                    d.moda_dto AS [Modalidad], d.forma_acc AS [Forma de acción (clave)],
@@ -219,7 +221,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             FROM dbo.banci_delito d
             JOIN dbo.banci_carpeta_investigacion c ON c.id_banci_carpeta_investigacion = d.id_banci_carpeta_investigacion
             WHERE c.id_banci_carpeta_investigacion = @IdCarpeta AND c.activo = 1 AND d.activo = 1
-              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance) AND (@UsuarioFederal IS NULL OR ISNULL(c.id_usuario_reporte_federal,0)=@UsuarioFederal)
             ORDER BY d.id_banci_delito;
 
             SELECT v.id_banci_delito AS _IdDelito, v.id_vicf AS [ID_VICF],
@@ -243,9 +245,9 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             JOIN dbo.banci_delito d ON d.id_banci_delito = v.id_banci_delito
             JOIN dbo.banci_carpeta_investigacion c ON c.id_banci_carpeta_investigacion = d.id_banci_carpeta_investigacion
             WHERE c.id_banci_carpeta_investigacion = @IdCarpeta AND c.activo = 1 AND d.activo = 1 AND v.activo = 1
-              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance)
+              AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance) AND (@UsuarioFederal IS NULL OR ISNULL(c.id_usuario_reporte_federal,0)=@UsuarioFederal)
             ORDER BY v.id_banci_delito, v.id_banci_victima;
-            """, new { IdCarpeta = idCarpeta, Alcance = idEntidadAlcance }, commandTimeout: 120);
+            """, new { IdCarpeta = idCarpeta, UsuarioFederal = usuarioFederal, Alcance = idEntidadAlcance }, commandTimeout: 120);
 
         var carpeta = (await resultados.ReadAsync()).SingleOrDefault();
         if (carpeta == null) return null;
