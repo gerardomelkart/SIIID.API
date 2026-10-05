@@ -104,7 +104,7 @@ public class VictimasValidator
                 "Tipo de víctima sin información",
                 out var idTv);
 
-            if (!idTvValido) 
+            if (!idTvValido)
             {
                 continue;
             }
@@ -669,7 +669,7 @@ public class VictimasValidator
         {
             return;
         }
-            
+
 
         AgregarError(
             errores,
@@ -688,9 +688,9 @@ public class VictimasValidator
         if (EsValorVacioOCero(valor))
         {
             return;
-        }   
+        }
 
-        if (!IntentarConvertirFecha(valor, out _))
+        if (!IntentarConvertirFecha(valor, out var fechaNacimiento))
         {
             AgregarError(
                 errores,
@@ -699,6 +699,19 @@ public class VictimasValidator
                 "VICTIMAS_FHA_NAC_FORMATO_INCORRECTO",
                 "Fecha de nacimiento con formato incorrecto",
                 $"El campo {columna} no pudo interpretarse como una fecha válida.");
+            return;
+        }
+
+        var hoy = DateTime.Today;
+        if (fechaNacimiento > hoy || fechaNacimiento < hoy.AddYears(-120))
+        {
+            AgregarError(
+                errores,
+                fila,
+                columna,
+                "VICTIMAS_FHA_NAC_FUERA_DE_RANGO",
+                "Fecha de nacimiento fuera de rango",
+                $"El campo {columna} debe estar entre {hoy.AddYears(-120):dd/MM/yyyy} y {hoy:dd/MM/yyyy}; no se permiten fechas futuras ni con más de 120 años de antigüedad.");
         }
     }
 
@@ -707,7 +720,7 @@ public class VictimasValidator
         if (string.IsNullOrWhiteSpace(valor))
         {
             return true;
-        }   
+        }
 
         valor = valor.Trim();
 

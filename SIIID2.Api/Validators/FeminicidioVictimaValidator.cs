@@ -93,6 +93,21 @@ public class FeminicidioVictimaValidator
                 // Nombre y ambos apellidos opcionales, pero generan
                 // una sola advertencia agregada si falta alguno.
                 if (string.IsNullOrWhiteSpace(curp)) mexicanasSinCurp++;
+                else if (!BanciRenapoValidator.EsFormatoValido(curp.Trim().ToUpperInvariant()))
+                {
+                    errores.Add(new CargaValidacionError
+                    {
+                        Archivo = "victimas",
+                        Fila = fila.NumeroFila,
+                        Columna = "curp_vicfem",
+                        Campo = "curp_vicfem",
+                        Valor = curp,
+                        Codigo = "FEMINICIDIO_CURP_FORMATO_INVALIDO",
+                        DescripcionResumen = "CURP con formato inválido",
+                        Mensaje = "La CURP debe contener 18 caracteres y tener estructura, fecha de nacimiento y dígito verificador válidos. No se admite NO ESPECIFICADO. Esta validación aplica aunque la consulta a RENAPO esté desactivada.",
+                        TotalRegistrosAfectados = 1
+                    });
+                }
 
                 if (string.IsNullOrWhiteSpace(nombre) ||
                     string.IsNullOrWhiteSpace(primerApellido) ||
