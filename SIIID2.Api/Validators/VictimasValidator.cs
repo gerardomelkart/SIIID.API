@@ -104,7 +104,7 @@ public class VictimasValidator
                 "Tipo de víctima sin información",
                 out var idTv);
 
-            if (!idTvValido)
+            if (!idTvValido) 
             {
                 continue;
             }
@@ -669,7 +669,7 @@ public class VictimasValidator
         {
             return;
         }
-
+            
 
         AgregarError(
             errores,
@@ -688,7 +688,7 @@ public class VictimasValidator
         if (EsValorVacioOCero(valor))
         {
             return;
-        }
+        }   
 
         if (!IntentarConvertirFecha(valor, out var fechaNacimiento))
         {
@@ -703,7 +703,7 @@ public class VictimasValidator
         }
 
         var hoy = DateTime.Today;
-        if (fechaNacimiento > hoy || fechaNacimiento < hoy.AddYears(-120))
+        if (fechaNacimiento < new DateTime(1900, 1, 1) || fechaNacimiento > hoy)
         {
             AgregarError(
                 errores,
@@ -711,7 +711,7 @@ public class VictimasValidator
                 columna,
                 "VICTIMAS_FHA_NAC_FUERA_DE_RANGO",
                 "Fecha de nacimiento fuera de rango",
-                $"El campo {columna} debe estar entre {hoy.AddYears(-120):dd/MM/yyyy} y {hoy:dd/MM/yyyy}; no se permiten fechas futuras ni con más de 120 años de antigüedad.");
+                $"El campo {columna} debe ser una fecha entre 01/01/1900 y {hoy:dd/MM/yyyy}. No se permiten años anteriores a 1900 ni fechas futuras.");
         }
     }
 
@@ -720,7 +720,7 @@ public class VictimasValidator
         if (string.IsNullOrWhiteSpace(valor))
         {
             return true;
-        }
+        }   
 
         valor = valor.Trim();
 
