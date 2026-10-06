@@ -6,7 +6,7 @@ namespace SIIID2.Api.Validators;
 public static class BanciLocalizacionValidator
 {
     // Día civil de la sede del sistema (Ciudad de México), independiente de la zona del servidor.
-    public static DateTime Hoy() => DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(-6)).Date;
+    public static DateTime Hoy() => FechaRangoValidator.Hoy();
 
     public static IEnumerable<BanciCargaValidacionError> Validar(Dictionary<string, string?> datos, BanciVictimaIdentificada victima, int fila, DateTime hoy)
     {
@@ -15,7 +15,7 @@ public static class BanciLocalizacionValidator
         var valor = datos.GetValueOrDefault("fecha_localizacion");
         var fecha = valor == null ? victima.FechaLocalizacion : DateTime.ParseExact(valor, "yyyy-MM-dd", CultureInfo.InvariantCulture);
         if (!fecha.HasValue) yield break;
-        if (fecha.Value.Date > hoy.Date) yield return Error(fila, "La fecha de localización no puede ser posterior a hoy.");
+        if (!FechaRangoValidator.EsValida(fecha.Value, hoy)) yield return Error(fila, FechaRangoValidator.Mensaje("fecha_localizacion", hoy));
         if (victima.FechaInicio.HasValue && fecha.Value.Date < victima.FechaInicio.Value.Date) yield return Error(fila, "La fecha de localización no puede ser anterior al inicio de la carpeta.");
         if (victima.FechaHechos.HasValue && fecha.Value.Date < victima.FechaHechos.Value.Date) yield return Error(fila, "La fecha de localización no puede ser anterior a la fecha de los hechos.");
     }

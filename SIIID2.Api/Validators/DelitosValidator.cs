@@ -416,7 +416,7 @@ public class DelitosValidator
             return;
         }
 
-        if (!IntentarConvertirFecha(valor, out _))
+        if (!IntentarConvertirFecha(valor, out var fechaHechos))
         {
             AgregarError(
                 errores,
@@ -425,6 +425,14 @@ public class DelitosValidator
                 "DELITOS_FHA_DE_HCHOS_FORMATO_INCORRECTO",
                 "Fecha de hechos con formato incorrecto",
                 $"El campo {columna} no pudo interpretarse como una fecha válida.");
+            return;
+        }
+
+        var hoy = FechaRangoValidator.Hoy();
+        if (!FechaRangoValidator.EsValida(fechaHechos, hoy))
+        {
+            AgregarError(errores, fila, columna, "DELITOS_FHA_DE_HCHOS_FUERA_DE_RANGO",
+                "Fecha de hechos fuera de rango", FechaRangoValidator.Mensaje(columna, hoy));
         }
     }
 

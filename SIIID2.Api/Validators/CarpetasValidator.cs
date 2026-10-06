@@ -184,7 +184,7 @@ public class CarpetasValidator
         if (string.IsNullOrWhiteSpace(valor))
         {
             return;
-        }  
+        }
         // RMEN_DE_HCHOS puede venir lleno o vacío.
         // No se valida longitud porque en la tabla destino será TEXT.
     }
@@ -217,6 +217,14 @@ public class CarpetasValidator
                 "Fecha de inicio con formato incorrecto",
                 $"El campo {columna} no pudo interpretarse como una fecha válida.");
 
+            return;
+        }
+
+        var hoy = FechaRangoValidator.Hoy();
+        if (!FechaRangoValidator.EsValida(fechaInicio, hoy))
+        {
+            AgregarError(errores, fila, columna, "CARPETAS_FHA_DE_INI_ANTIGUEDAD_INVALIDA",
+                "Fecha de inicio fuera de rango", FechaRangoValidator.Mensaje(columna, hoy));
             return;
         }
 
