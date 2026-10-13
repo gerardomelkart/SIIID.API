@@ -16,9 +16,7 @@ public class BanciMetodologiaValidator
         }
         foreach (var fila in lectura.Victimas)
         {
-            if (SinDato(Valor(fila, "fub"))) errores.Add(Error(fila, "victimas", "fub", "BANCI_FUB_OBLIGATORIO", "FUB es obligatorio."));
-            foreach (var campo in new[] { "pob", "disc" })
-                if (!SinDato(Valor(fila, campo)) && Valor(fila, campo) is not ("0" or "1")) errores.Add(Error(fila, "victimas", campo, "BANCI_CATALOGO_INVALIDO", $"{campo} sólo permite 0 o 1."));
+            // POB y DISC se validan contra sus catálogos compartidos activos, no contra 0/1 locales.
             foreach (var campo in BanciArchivoReader.ColumnasActualizacion)
             {
                 if (!string.IsNullOrWhiteSpace(Valor(fila, campo))) advertencias.Add(Error(fila, "victimas", campo, "BANCI_CAMPO_SOLO_ACTUALIZACION", $"{campo} no se integrará en la carga inicial; captúrelo en Actualización de víctimas."));

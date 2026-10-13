@@ -37,7 +37,7 @@ public class DelitosValidator
 
     public IReadOnlyCollection<string> ColumnasObligatorias => _columnasObligatorias;
 
-    public List<CargaValidacionError> Validar(List<ArchivoFila> filas)
+    public List<CargaValidacionError> Validar(List<ArchivoFila> filas, bool camposBanciOpcionales = false)
     {
         var errores = new List<CargaValidacionError>();
 
@@ -97,29 +97,33 @@ public class DelitosValidator
                 "DELITOS_DTO_SIN_INFORMACION",
                 "Falta la descripción del delito");
 
-            ValidarTextoObligatorio(
-                fila,
-                "moda_dto",
-                errores,
-                2000,
-                "DELITOS_MODA_DTO_SIN_INFORMACION",
-                "Falta la descripción de la modalidad del delito");
+            // BANCI permite omitir modalidad. Cuando se informa, mantiene la validación de longitud.
+            if (!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "moda_dto")))
+                ValidarTextoObligatorio(
+                    fila,
+                    "moda_dto",
+                    errores,
+                    2000,
+                    "DELITOS_MODA_DTO_SIN_INFORMACION",
+                    "Falta la descripción de la modalidad del delito");
 
             // Claves numéricas de catálogos.
             // La existencia real contra catálogo se validará después con base de datos.
-            ValidarEnteroObligatorio(
-                fila,
-                "forma_acc",
-                errores,
-                "DELITOS_FORMA_ACC_SIN_INFORMACION",
-                "Clave de forma de acción sin información");
+            if (!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "forma_acc")))
+                ValidarEnteroObligatorio(
+                    fila,
+                    "forma_acc",
+                    errores,
+                    "DELITOS_FORMA_ACC_SIN_INFORMACION",
+                    "Clave de forma de acción sin información");
 
-            ValidarEnteroObligatorio(
-                fila,
-                "emto_com_dto",
-                errores,
-                "DELITOS_EMTO_COM_DTO_SIN_INFORMACION",
-                "Clave de elemento de comisión sin información");
+            if (!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "emto_com_dto")))
+                ValidarEnteroObligatorio(
+                    fila,
+                    "emto_com_dto",
+                    errores,
+                    "DELITOS_EMTO_COM_DTO_SIN_INFORMACION",
+                    "Clave de elemento de comisión sin información");
 
             ValidarEnteroObligatorio(
                 fila,

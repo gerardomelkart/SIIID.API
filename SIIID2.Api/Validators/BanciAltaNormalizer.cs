@@ -10,8 +10,8 @@ public static class BanciAltaNormalizer
     {
         var hoy = TimeZoneInfo.ConvertTime(ahora ?? DateTimeOffset.UtcNow,
             TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City")).Date;
-        var inicio = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-1);
-        var fin = inicio.AddMonths(2);
+        var inicio = new DateTime(2024, 10, 1);
+        var fin = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(1);
         var carpetas = new Dictionary<string, ArchivoFila>(StringComparer.OrdinalIgnoreCase);
         foreach (var (archivo, filas) in new[] { ("carpetas", lectura.Carpetas), ("delitos", lectura.Delitos), ("victimas", lectura.Victimas) })
             foreach (var fila in filas)
@@ -29,7 +29,7 @@ public static class BanciAltaNormalizer
             {
                 carpeta.Columnas["fha_de_ini"] = fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                 if (fecha < inicio || fecha >= fin)
-                    Error(lectura, carpeta, "carpetas", "fha_de_ini", "BANCI_PERIODO_NO_PERMITIDO", "La fecha de inicio debe pertenecer al mes en curso o al mes anterior (Ciudad de México).");
+                    Error(lectura, carpeta, "carpetas", "fha_de_ini", "BANCI_PERIODO_NO_PERMITIDO", "La fecha de inicio debe estar entre octubre de 2024 y el mes actual (Ciudad de México).");
             }
         }
         var delitos = new Dictionary<string, ArchivoFila>(StringComparer.OrdinalIgnoreCase);

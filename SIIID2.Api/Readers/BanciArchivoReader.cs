@@ -42,7 +42,7 @@ public class BanciArchivoReader : IBanciArchivoReader
         "dom_hchos"
     ];
 
-    internal static readonly string[] ColumnasVictimas = ["entidad", "ntra_ci", "id_ci", "id_delito", "id_vicf", "id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional", "fub", "pro_apellido", "sdo_apellido", "nomb", "entidad_nacimiento", "estado_migratorio", "curp", "rfc", "localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "constitutiva_delito", "motivo_desaparicion", "acciones_busqueda", "obs"];
+    internal static readonly string[] ColumnasVictimas = ["entidad", "ntra_ci", "id_ci", "id_delito", "id_vicf", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional", "fub", "pro_apellido", "sdo_apellido", "nomb", "entidad_nacimiento", "estado_migratorio", "curp", "rfc", "localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "constitutiva_delito", "motivo_desaparicion", "acciones_busqueda", "obs"];
 
     private static readonly HashSet<string> ColumnasFecha =
     [
@@ -229,7 +229,7 @@ public class BanciArchivoReader : IBanciArchivoReader
             "VICTIMA",
             ColumnasVictimas,
             AliasVictimas,
-            ["ntra_ci", "fub"],
+            ["ntra_ci"],
             resultado.Errores);
 
         return resultado;
@@ -317,7 +317,7 @@ public class BanciArchivoReader : IBanciArchivoReader
             "VICTIMA",
             ColumnasVictimas,
             AliasVictimas,
-            ["ntra_ci", "fub"],
+            ["ntra_ci"],
             resultado.Errores);
     }
 

@@ -171,6 +171,13 @@ public class BanciCargaService : IBanciCargaService
             }
         }
         NormalizarHoras(lectura);
+        // BANCI registra exclusivamente víctimas físicas. No se solicitan ID_TV/ID_TPM
+        // al usuario; se conserva el tipo físico para las estructuras compartidas.
+        foreach (var victima in lectura.Victimas)
+        {
+            victima.Columnas["id_tv"] = "1";
+            victima.Columnas["id_tpm"] = null;
+        }
         BanciAltaNormalizer.Preparar(lectura);
 
         response.ModalidadIngreso = lectura.ModalidadIngreso;
@@ -194,7 +201,7 @@ public class BanciCargaService : IBanciCargaService
         ValidarRegistrosMinimos(lectura, response.Errores);
 
         AgregarErroresHeredados(response.Errores, _carpetasValidator.Validar(lectura.Carpetas, validarMesInmediatoAnterior: false));
-        AgregarErroresHeredados(response.Errores, _delitosValidator.Validar(lectura.Delitos));
+        AgregarErroresHeredados(response.Errores, _delitosValidator.Validar(lectura.Delitos, camposBanciOpcionales: true));
         AgregarErroresHeredados(response.Errores, _victimasValidator.ValidarBanci(lectura.Victimas));
         var erroresIntegridad = _cargaIntegridadValidator.Validar(lectura.Carpetas, lectura.Delitos, lectura.Victimas);
 

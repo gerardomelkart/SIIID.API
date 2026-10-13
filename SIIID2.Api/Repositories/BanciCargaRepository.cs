@@ -38,10 +38,6 @@ public class BanciCargaRepository : IBanciCargaRepository
         UNION ALL
         SELECT N'grdo_cons' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_grado_consumacion WHERE activo = 1
         UNION ALL
-        SELECT N'id_tv' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_tipo_victima WHERE activo = 1
-        UNION ALL
-        SELECT N'id_tpm' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_tipo_victima_moral WHERE activo = 1
-        UNION ALL
         SELECT N'sexo' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_sexo WHERE activo = 1
         UNION ALL
         SELECT N'genero' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_genero WHERE activo = 1
@@ -60,9 +56,9 @@ public class BanciCargaRepository : IBanciCargaRepository
         UNION ALL
         SELECT N'motivo_no_delito' AS Campo, clave AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.banci_catalogo_motivo_no_delito WHERE activo = 1
         UNION ALL
-        SELECT N'pob', v.clave, v.descripcion, CAST(NULL AS int) FROM (VALUES (N'0', N'No'), (N'1', N'Sí')) v(clave, descripcion)
+        SELECT N'pob', CONVERT(nvarchar(20), clave), descripcion, CAST(NULL AS int) FROM dbo.catalogo_pertenece_poblacion_indigena WHERE activo = 1
         UNION ALL
-        SELECT N'disc', v.clave, v.descripcion, CAST(NULL AS int) FROM (VALUES (N'0', N'No'), (N'1', N'Sí')) v(clave, descripcion)
+        SELECT N'disc', CONVERT(nvarchar(20), clave), descripcion, CAST(NULL AS int) FROM dbo.catalogo_presenta_discapacidad WHERE activo = 1
         UNION ALL
         SELECT N'id_ent_hchos', CONVERT(nvarchar(20), id_entidad_federativa), nombre, CONVERT(int, id_entidad_federativa) FROM dbo.catalogo_entidad_federativa WHERE activo = 1
         UNION ALL

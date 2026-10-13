@@ -76,7 +76,7 @@ public class BanciCargasController : ControllerBase
             var instrucciones = libro.Worksheets.Add("Instrucciones");
             instrucciones.Cell(1, 1).Value = "Repita NTRA_CI en CI, Delitos y Victimas para relacionar las filas. Una carpeta y exactamente un delito por NTRA_CI; puede incluir varias víctimas.";
             instrucciones.Cell(2, 1).Value = "ID_CI, ID_DELITO e ID_VICF (ID de víctima) los genera el sistema. NO_BANCI pertenece a Carpetas: déjelo vacío en altas; se asignará al confirmar.";
-            instrucciones.Cell(3, 1).Value = "FHA_DE_INI: yyyy-MM-dd, exclusivamente del mes en curso o del anterior (hora de Ciudad de México). FUB es obligatorio. Localización inicial: Persona no localizada.";
+            instrucciones.Cell(3, 1).Value = "FHA_DE_INI: yyyy-MM-dd, desde octubre de 2024 hasta el mes en curso (Ciudad de México). MODA_DTO, FORMA_ACC, EMTO_COM_DTO, FUB y CURP son opcionales. ID_TV/ID_TPM no se capturan; BANCI registra sólo víctimas físicas. POB y DISC usan los catálogos institucionales. Localización inicial: Persona no localizada.";
             instrucciones.Column(1).Width = 110;
             instrucciones.Column(1).Style.Alignment.WrapText = true;
             instrucciones.Rows(1, 3).Height = 60;
