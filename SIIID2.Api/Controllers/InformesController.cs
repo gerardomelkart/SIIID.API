@@ -264,7 +264,7 @@ public class InformesController : ControllerBase
 
     // Descarga ZIP con sábanas estadísticas anuales.
     // SUPER_USUARIO descarga información nacional.
-    // ENLACE_ESTATAL y CONSULTA descargan únicamente información de su entidad.
+    // ENLACE_ESTATAL consulta su entidad. CONSULTA tiene alcance nacional cuando no tiene entidad asignada.
     // Ejemplo: GET /api/informes/sabanas?anioCorte=2026&tipo=COMPLETA
     [Authorize]
     [HttpGet("sabanas")]
