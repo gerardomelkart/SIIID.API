@@ -83,8 +83,12 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios, Ba
             fila["no_banci"] = victima.NoBanci;
             fila["id_delito"] = victima.IdDelito;
             fila["id_vicf"] = victima.IdVicf;
-            var folio = fila.GetValueOrDefault("fub") ?? victima.Fub;
-            if (string.IsNullOrWhiteSpace(folio) || folio.ToUpperInvariant() is "N/D" or "ND" or "NO DISPONIBLE") Error(respuesta, numero, "fub", "El registro final debe contar con FUB.");
+            // FUB es opcional. No exigirlo a registros históricos sin folio.
+            // Si se informa, no usar marcadores de ausencia como sustitutos del folio.
+            var folioInformado = fila.GetValueOrDefault("fub");
+            if (folioInformado != null &&
+                folioInformado.ToUpperInvariant() is "N/D" or "ND" or "NO DISPONIBLE")
+                Error(respuesta, numero, "fub", "El FUB es opcional. Si no dispone del folio, deje el campo vacío.");
             // Validar sólo la CURP proporcionada; la ausencia conserva el dato almacenado.
             curps.Add(new ArchivoFila { NumeroFila = numero, Columnas = fila });
         }

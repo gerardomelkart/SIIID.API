@@ -11,7 +11,8 @@ public static class BanciCruceValidator
 {
     public static readonly string[] CamposCarpeta = ["fha_de_ini", "hra_de_ini", "rmen_de_hchos"];
     public static readonly string[] CamposDelito = ["dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "nom_ent_hchos", "id_ent_hchos", "nom_mun_hchos", "id_mun_hchos", "nom_col_hchos", "id_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos"];
-    public static readonly string[] CamposVictima = ["id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional"];
+    // ID_TV verifica persona física. ID_TPM no se captura en BANCI y se excluye de la comparación.
+    public static readonly string[] CamposVictima = ["id_tv", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional"];
     public static string Valor(ArchivoFila fila, string campo) => fila.Columnas.GetValueOrDefault(campo)?.Trim() ?? "";
     public static string Clave(string valor) => valor.Trim().ToUpperInvariant();
     public static List<CargaValidacionError> Comparar(BanciCruceArchivos mensual, BanciCruceArchivos banci, ISet<string> clasificaciones)
