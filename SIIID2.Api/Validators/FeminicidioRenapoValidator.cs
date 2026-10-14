@@ -1,20 +1,23 @@
-﻿using System.Globalization;
+using System.Globalization;
 using SIIID2.Api.Models;
 using SIIID2.Api.Services;
+using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Validators;
 // Agrupa CURP repetidas para consultar una sola vez; distingue rechazos de fallas temporales del servicio.
 public sealed class FeminicidioRenapoValidator
 {
-    private const string ClaveFeminicidio = "1.03";
-    private const string ClaveConsumado = "1";
     private const int ConsultasSimultaneas = 4;
     private readonly IRenapoCurpService _renapoCurpService;
     private readonly SistemaConfiguracionService _config;
-    public FeminicidioRenapoValidator(IRenapoCurpService renapoCurpService, SistemaConfiguracionService config)
+    private readonly ICatalogoReglasRepository _reglas;
+    public FeminicidioRenapoValidator(IRenapoCurpService renapoCurpService,
+        SistemaConfiguracionService config,
+        ICatalogoReglasRepository reglas)
     {
         _renapoCurpService = renapoCurpService;
         _config = config;
+        _reglas = reglas;
     }
 
     public async Task<(List<CargaValidacionError> Errores, List<CargaValidacionError> Advertencias)> ValidarAsync(List<ArchivoFila> filasDelitos,
@@ -26,7 +29,8 @@ public sealed class FeminicidioRenapoValidator
         var advertencias = new List<CargaValidacionError>();
         if(!_config.Activa(modulo, "RENAPO"))
             return (errores, advertencias);
-        var feminicidios = filasDelitos.Where(EsFeminicidioConsumado).Select(fila => CrearLlave(Valor(fila, "id_ci"), Valor(fila, "id_delito"))).Where(llave => !string.IsNullOrWhiteSpace(llave)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        await _reglas.CargarAsync();
+        var feminicidios = filasDelitos.Where(f => EsFeminicidioConsumado(f, modulo)).Select(fila => CrearLlave(Valor(fila, "id_ci"), Valor(fila, "id_delito"))).Where(llave => !string.IsNullOrWhiteSpace(llave)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if(feminicidios.Count == 0)
             return (errores, advertencias);
         var victimas = filasVictimas.Select(fila => new { Fila = fila, Llave = CrearLlave(Valor(fila, "id_ci"), Valor(fila, "id_delito")), Nacionalidad = Valor(fila, "nacional")?.Trim(), Curp = Valor(fila, "curp_vicfem")?.Trim().ToUpperInvariant() }).Where(x => feminicidios.Contains(x.Llave) && EsMexicana(x.Nacionalidad) && !string.IsNullOrWhiteSpace(x.Curp)).ToList();
@@ -121,8 +125,9 @@ public sealed class FeminicidioRenapoValidator
         return (errores, advertencias);
     }
 
-    private static bool EsFeminicidioConsumado(ArchivoFila fila) => string.Equals(Valor(fila, "clasf_de_dto")?.Trim(), ClaveFeminicidio, StringComparison.OrdinalIgnoreCase) && string.Equals(Valor(fila, "grdo_cons")?.Trim(), ClaveConsumado, StringComparison.OrdinalIgnoreCase);
-    private static bool EsMexicana(string? nacionalidad) => int.TryParse(nacionalidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var clave) && clave == 73;
+    private bool EsFeminicidioConsumado(ArchivoFila fila,
+        string modulo) => string.Equals(Valor(fila, "clasf_de_dto")?.Trim(), _reglas.Clave(modulo == "FEDERAL" ? "federal_catalogo_modalidad_delito" : "catalogo_modalidad_delito", "FEMINICIDIO"), StringComparison.OrdinalIgnoreCase) && string.Equals(Valor(fila, "grdo_cons")?.Trim(), _reglas.Clave("catalogo_grado_consumacion", "CONSUMADO"), StringComparison.OrdinalIgnoreCase);
+    private bool EsMexicana(string? nacionalidad) => int.TryParse(nacionalidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var clave) && clave == _reglas.ClaveNumerica("catalogo_nacionalidad", "MEXICANA");
     private static string CrearLlave(string? idCi, string? idDelito)
     {
         idCi = idCi?.Trim();

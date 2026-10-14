@@ -1,8 +1,9 @@
-﻿using System.Globalization;
+using System.Globalization;
 using SIIID2.Api.Models;
+using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Validators;
-public class VictimasValidator
+public class VictimasValidator(ICatalogoReglasRepository reglas)
 {
     public string NombreArchivo => "victimas";
 
@@ -25,8 +26,9 @@ public class VictimasValidator
     };
     public IReadOnlyCollection<string> ColumnasObligatorias => _columnasObligatorias;
 
-    public List<CargaValidacionError> Validar(List<ArchivoFila> filas)
+    public async Task<List<CargaValidacionError>> ValidarAsync(List<ArchivoFila> filas)
     {
+        await reglas.CargarAsync();
         var errores = new List<CargaValidacionError>();
         // Si no hay filas, el archivo no tiene registros útiles.
         if(filas.Count == 0)
@@ -61,32 +63,28 @@ public class VictimasValidator
             ValidarTextoObligatorio(fila, "id_delito", errores, 250, "VICTIMAS_ID_DELITO_SIN_INFORMACION", "\"ID_DELITO\" sin información");
             ValidarTextoObligatorio(fila, "id_vicf", errores, 250, "VICTIMAS_ID_VICF_SIN_INFORMACION", "\"ID_VICF\" sin información");
             // ID_TV define el tipo de víctima.
-            // Catálogo actual:
-            // 1 = Persona Física
-            // 2 = Persona Moral
-            // 3 = Otro
-            // 4 = No identificado
             var idTvValido = ValidarEnteroObligatorio(fila, "id_tv", errores, "VICTIMAS_ID_TV_SIN_INFORMACION", "Tipo de víctima sin información", out var idTv);
             if(!idTvValido)
             {
                 continue;
             }
 
-            if(idTv == 2 && TieneVariablesPersonaFisicaInformadas(fila))
+            if(idTv == reglas.ClaveNumerica("catalogo_tipo_victima", "PERSONA_MORAL") && TieneVariablesPersonaFisicaInformadas(fila))
             {
                 AgregarError(errores, fila, "id_tv", "VICTIMAS_ID_TV_NO_CORRESPONDE_VARIABLES_PERSONA_FISICA", "Tipo de víctima no corresponde con variables de persona física", "El tipo de víctima (ID_TV) no corresponde con las variables de persona física (SEXO, GENERO, POB, DISC, FHA_NAC, EDAD y/o NACIONAL).");
                 continue;
             }
 
-            if(idTv == 1)
+            if(idTv == reglas.ClaveNumerica("catalogo_tipo_victima", "PERSONA_FISICA"))
             {
                 ValidarPersonaFisica(fila, errores);
             }
-            else if(idTv == 2)
+            else if(idTv == reglas.ClaveNumerica("catalogo_tipo_victima", "PERSONA_MORAL"))
             {
                 ValidarPersonaMoral(fila, errores);
             }
-            else if(idTv == 3 || idTv == 4)
+            else if(idTv == reglas.ClaveNumerica("catalogo_tipo_victima", "OTRO")
+                || idTv == reglas.ClaveNumerica("catalogo_tipo_victima", "NO_IDENTIFICADO"))
             {
                 ValidarVictimaOtroONoIdentificado(fila, idTv, errores);
             }
@@ -99,11 +97,7 @@ public class VictimasValidator
         return errores;
     }
 
-    public List<CargaValidacionError> ValidarBanci(List<ArchivoFila> filas)
-    {
-        return Validar(filas);
-    }
-
+    public Task<List<CargaValidacionError>> ValidarBanciAsync(List<ArchivoFila> filas) => ValidarAsync(filas);
     private bool TieneVariablesPersonaFisicaInformadas(ArchivoFila fila)
     {
         return TieneValorPersonaFisica(fila, "sexo") || TieneValorPersonaFisica(fila, "genero") || TieneValorPersonaFisica(fila, "fha_nac") || TieneValorPersonaFisica(fila, "edad") || TieneValorPersonaFisica(fila, "nacional") || TieneValorPersonaFisica(fila, "pob", aceptaNoAplica: true) || TieneValorPersonaFisica(fila, "disc", aceptaNoAplica: true);
@@ -118,9 +112,9 @@ public class VictimasValidator
         }
 
         valor = valor!.Trim();
-        // Para POB y DISC, 4 representa No aplica.
         // No debe contarse como dato de persona física en una persona moral.
-        if(aceptaNoAplica && valor == "4")
+        if(aceptaNoAplica
+            && valor == reglas.Clave(columna == "pob" ? "catalogo_pertenece_poblacion_indigena" : "catalogo_presenta_discapacidad", "NO_APLICA"))
         {
             return false;
         }
@@ -167,7 +161,7 @@ public class VictimasValidator
 
     private void ValidarPersonaFisica(ArchivoFila fila, List<CargaValidacionError> errores)
     {
-        // Para persona física, ID_TPM puede venir vacío, 0 o 6 No identificada.
+        // Para persona física, ID_TPM puede venir vacío, 0 o la opción No identificada del catálogo.
         ValidarIdTpmParaPersonaFisica(fila, errores);
         // Catálogos de persona física.
         // Por ahora solo validamos que sean enteros.
@@ -190,7 +184,7 @@ public class VictimasValidator
             var tipoVictima = ObtenerValor(fila, "id_tv");
             var edad = ObtenerValor(fila, "edad");
             if(int.TryParse(tipoVictima, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idTipoVictima)
-                && idTipoVictima == 1
+                && idTipoVictima == reglas.ClaveNumerica("catalogo_tipo_victima", "PERSONA_FISICA")
                 && string.IsNullOrWhiteSpace(edad))
             {
                 fila.Columnas["edad"] = "999";
@@ -210,23 +204,15 @@ public class VictimasValidator
             return;
         }
 
-        // 6 = No identificada.
         // Para persona física también se acepta.
-        if(idTpm == 6)
+        if(idTpm == reglas.ClaveNumerica("catalogo_tipo_victima_moral", "NO_IDENTIFICADO"))
             return;
-        AgregarError(errores, fila, "id_tpm", "VICTIMAS_FISICA_ID_TPM_CON_INFORMACION", "Persona física con tipo de persona moral", "Para persona física, id_tpm debe venir vacío, 0 o 6 No identificada.");
+        AgregarError(errores, fila, "id_tpm", "VICTIMAS_FISICA_ID_TPM_CON_INFORMACION", "Persona física con tipo de persona moral", "Para persona física, id_tpm debe venir vacío, 0 o la opción No identificada del catálogo.");
     }
 
     private void ValidarPersonaMoral(ArchivoFila fila, List<CargaValidacionError> errores)
     {
         // Para persona moral, ID_TPM sí es obligatorio.
-        // Catálogo actual de persona moral:
-        // 1 = Sociedad mercantil
-        // 2 = Sociedad civil
-        // 3 = Asociación civil
-        // 4 = Institución gubernamental
-        // 5 = Otra
-        // 6 = No identificada
         ValidarEnteroObligatorio(fila, "id_tpm", errores, "VICTIMAS_ID_TPM_SIN_INFORMACION", "Tipo de persona moral sin información", out _);
         // Persona moral no debe traer datos demográficos de persona física.
         // Vacío o 0 se acepta como sin información.
@@ -235,17 +221,17 @@ public class VictimasValidator
         ValidarCampoVacio(fila, "fha_nac", errores, "VICTIMAS_MORAL_FHA_NAC_CON_INFORMACION", "Persona moral con fecha de nacimiento informada");
         ValidarCampoVacio(fila, "edad", errores, "VICTIMAS_MORAL_EDAD_CON_INFORMACION", "Persona moral con edad informada");
         ValidarCampoVacio(fila, "nacional", errores, "VICTIMAS_MORAL_NACIONAL_CON_INFORMACION", "Persona moral con nacionalidad informada");
-        // Para persona moral, población indígena y discapacidad deben venir como 4: No aplica.
-        ValidarEnteroIgualA(fila, "pob", 4, errores, "VICTIMAS_MORAL_POB_NO_APLICA_INVALIDO", "Persona moral con población indígena distinta a No aplica");
-        ValidarEnteroIgualA(fila, "disc", 4, errores, "VICTIMAS_MORAL_DISC_NO_APLICA_INVALIDO", "Persona moral con discapacidad distinta a No aplica");
+        // Para persona moral, población indígena y discapacidad deben venir como la opción No aplica del catálogo.
+        ValidarEnteroIgualA(fila, "pob", reglas.ClaveNumerica("catalogo_pertenece_poblacion_indigena", "NO_APLICA"), errores, "VICTIMAS_MORAL_POB_NO_APLICA_INVALIDO", "Persona moral con población indígena distinta a No aplica");
+        ValidarEnteroIgualA(fila, "disc", reglas.ClaveNumerica("catalogo_presenta_discapacidad", "NO_APLICA"), errores, "VICTIMAS_MORAL_DISC_NO_APLICA_INVALIDO", "Persona moral con discapacidad distinta a No aplica");
     }
 
     private void ValidarVictimaOtroONoIdentificado(ArchivoFila fila, int idTv, List<CargaValidacionError> errores)
     {
-        // Para ID_TV = 3 Otro o ID_TV = 4 No identificado,
+        // Para los tipos Otro y No identificado del catálogo,
         // no aplicamos reglas estrictas de persona física ni persona moral.
         // Solo validamos formato si algunos campos vienen llenos.
-        // ID_TPM puede venir vacío, 0 o 6 No identificada.
+        // ID_TPM puede venir vacío, 0 o la opción No identificada del catálogo.
         ValidarIdTpmParaOtroONoIdentificado(fila, idTv, errores);
         ValidarEnteroOpcional(fila, "sexo", errores, "VICTIMAS_SEXO_FORMATO_INCORRECTO", "Sexo con formato incorrecto");
         ValidarEnteroOpcional(fila, "genero", errores, "VICTIMAS_GENERO_FORMATO_INCORRECTO", "Género con formato incorrecto");
@@ -271,26 +257,25 @@ public class VictimasValidator
             return;
         }
 
-        // 6 = No identificada.
-        if(idTpm == 6)
+        if(idTpm == reglas.ClaveNumerica("catalogo_tipo_victima_moral", "NO_IDENTIFICADO"))
         {
             return;
         }
 
         //3 = otro
-        if(idTv == 3)
+        if(idTv == reglas.ClaveNumerica("catalogo_tipo_victima", "OTRO"))
         {
             return;
         }
 
         // Regla general:
-        // id_tv = 4 No identificado permite id_tpm = 5 Otro.
-        if(idTv == 4 && idTpm == 5)
+        if(idTv == reglas.ClaveNumerica("catalogo_tipo_victima", "NO_IDENTIFICADO")
+            && idTpm == reglas.ClaveNumerica("catalogo_tipo_victima_moral", "OTRO"))
         {
             return;
         }
 
-        AgregarError(errores, fila, "id_tpm", "VICTIMAS_ID_TPM_NO_APLICA", "Tipo de persona moral no aplica para este tipo de víctima", "Para tipo de víctima Otro, id_tpm puede venir vacío, 0, 5 Otro o 6 No identificada. Para tipo de víctima No identificado, id_tpm debe venir vacío, 0 o 6 No identificada.");
+        AgregarError(errores, fila, "id_tpm", "VICTIMAS_ID_TPM_NO_APLICA", "Tipo de persona moral no aplica para este tipo de víctima", "Para tipo de víctima Otro, id_tpm puede venir vacío, 0 o las opciones Otro/No identificada del catálogo. Para tipo de víctima No identificado, id_tpm debe venir vacío, 0 o la opción No identificada del catálogo.");
     }
 
     private void ValidarTextoObligatorio(ArchivoFila fila,

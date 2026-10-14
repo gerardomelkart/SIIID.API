@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Globalization;
 using System.Text.Json;
 using Dapper;
@@ -14,7 +14,8 @@ public sealed class BanciCruceException(List<CargaValidacionError> errores) : Ex
 }
 
 // Compara el período reportado por entidad; en Federal también limita los registros al usuario que los reportó.
-public sealed class BanciCruceService(IDbConnectionFactory factory, SistemaConfiguracionService config,
+public sealed class BanciCruceService(IDbConnectionFactory factory,
+    SistemaConfiguracionService config,
     IBanciCargaRepository catalogosRepository)
 {
     public Task<List<CargaValidacionError>> ValidarAsync(int entidad,
@@ -101,12 +102,13 @@ public sealed class BanciCruceService(IDbConnectionFactory factory, SistemaConfi
         var errores = new List<CargaValidacionError>();
         var ids = new List<long>();
         // Todas las entidades, en orden fijo, para detectar también las omitidas por completo.
-        foreach (var e in entidad.HasValue ? new[]
+        var entidades = entidad.HasValue ? new[]
         {
             entidad.Value
         }
 
-        : Enumerable.Range(1, 32))
+        : (await db.QueryAsync<int>("SELECT id_entidad_federativa FROM dbo.catalogo_entidad_federativa WHERE activo=1 AND es_entidad_territorial=1 ORDER BY id_entidad_federativa;", transaction: tx)).ToArray();
+        foreach (var e in entidades)
         {
             var(banci, claves) = await LeerAsync(db, tx, e, mes, anio, usuarioFederal);
             var parcial = usuarioFederal.HasValue ? PorEntidad(archivos, claves, e) : archivos;

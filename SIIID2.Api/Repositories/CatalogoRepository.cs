@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
@@ -91,7 +91,8 @@ public class CatalogoRepository : ICatalogoRepository
         SELECT
             id_entidad_federativa AS IdEntidadFederativa,
             clave AS Clave,
-            nombre AS Nombre
+            nombre AS Nombre,
+            es_entidad_territorial AS EsEntidadTerritorial
         FROM catalogo_entidad_federativa
         WHERE activo = 1
         ORDER BY

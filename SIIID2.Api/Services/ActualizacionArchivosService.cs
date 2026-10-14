@@ -1,4 +1,4 @@
-﻿// La actualización parte de una carga validada y conserva sus diferencias para revisar qué se integrará.
+// La actualización parte de una carga validada y conserva sus diferencias para revisar qué se integrará.
 using System.Globalization;
 using System.Text;
 using SIIID2.Api.Models;
@@ -205,7 +205,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Validaciones individuales por archivo.
         response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas, validarMesInmediatoAnterior: false));
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
-        response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
+        response.Errores.AddRange(await _victimasValidator.ValidarAsync(filasVictimas));
         // Validamos que el usuario solo actualice información de su entidad.
         // El SUPER_USUARIO puede actualizar cualquier entidad.
         response.Errores.AddRange(ValidarEntidadUsuarioCarga(usuarioCarga, filasDelitos));
@@ -249,7 +249,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             response.Advertencias.Add(coordenadasMunicipio.Advertencia);
         if(response.Errores.Count == 0 && _config.Activa("MENSUAL", "FEMINICIDIO_DATOS_ADICIONALES"))
         {
-            var validacionFeminicidio = _feminicidioVictimaValidator.Validar(filasDelitos, filasVictimas);
+            var validacionFeminicidio = await _feminicidioVictimaValidator.ValidarAsync(filasDelitos, filasVictimas);
             response.Errores.AddRange(validacionFeminicidio.Errores);
             advertenciasPendientes.AddRange(validacionFeminicidio.Advertencias);
             if(response.Errores.Count == 0)

@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using Dapper;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
@@ -31,6 +31,7 @@ public class BanciCargaRepository : IBanciCargaRepository
     public async Task<IReadOnlyList<BanciFormularioOpcion>> ObtenerFormularioCatalogosAsync()
     {
         const string sql = """
+        WITH opciones AS (
         SELECT N'forma_acc' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_forma_accion WHERE activo = 1
         UNION ALL
         SELECT N'emto_com_dto' AS Campo, CONVERT(nvarchar(20), clave) AS Clave, descripcion AS Descripcion, CAST(NULL AS int) AS IdEntidadFederativa FROM dbo.catalogo_instrumento_comision WHERE activo = 1
@@ -59,9 +60,27 @@ public class BanciCargaRepository : IBanciCargaRepository
         UNION ALL
         SELECT N'disc', CONVERT(nvarchar(20), clave), descripcion, CAST(NULL AS int) FROM dbo.catalogo_presenta_discapacidad WHERE activo = 1
         UNION ALL
-        SELECT N'id_ent_hchos', CONVERT(nvarchar(20), id_entidad_federativa), nombre, CONVERT(int, id_entidad_federativa) FROM dbo.catalogo_entidad_federativa WHERE activo = 1
+        SELECT N'id_tv', CONVERT(nvarchar(20), clave), descripcion, CAST(NULL AS int) FROM dbo.catalogo_tipo_victima WHERE activo=1
         UNION ALL
-        SELECT N'id_mun_hchos', clave, nombre, CONVERT(int, id_entidad_federativa) FROM dbo.catalogo_municipio WHERE activo = 1;
+        SELECT N'id_ent_hchos', CONVERT(nvarchar(20), id_entidad_federativa), nombre, CONVERT(int, id_entidad_federativa) FROM dbo.catalogo_entidad_federativa WHERE activo = 1 AND es_entidad_territorial=1
+        UNION ALL
+        SELECT N'id_mun_hchos', clave, nombre, CONVERT(int, id_entidad_federativa) FROM dbo.catalogo_municipio WHERE activo = 1
+        )
+        SELECT o.*, r.CodigoRegla FROM opciones o
+        LEFT JOIN dbo.vw_catalogos_reglas r ON r.Clave=o.Clave AND r.Catalogo=CASE o.Campo
+            WHEN N'forma_acc' THEN N'catalogo_forma_accion'
+            WHEN N'emto_com_dto' THEN N'catalogo_instrumento_comision'
+            WHEN N'grdo_cons' THEN N'catalogo_grado_consumacion'
+            WHEN N'sexo' THEN N'catalogo_sexo'
+            WHEN N'genero' THEN N'catalogo_genero'
+            WHEN N'nacional' THEN N'catalogo_nacionalidad'
+            WHEN N'pob' THEN N'catalogo_pertenece_poblacion_indigena'
+            WHEN N'disc' THEN N'catalogo_presenta_discapacidad'
+            WHEN N'localizado_o_no_localizado' THEN N'banci_catalogo_localizacion'
+            WHEN N'con_o_sin_vida' THEN N'banci_catalogo_condicion_vida'
+            WHEN N'constitutiva_delito' THEN N'banci_catalogo_constitutiva_delito'
+            WHEN N'id_tv' THEN N'catalogo_tipo_victima'
+        END;
         """;
         using var connection = _dbConnectionFactory.CrearConexion();
         return (await connection.QueryAsync<BanciFormularioOpcion>(sql)).AsList();
@@ -106,7 +125,7 @@ public class BanciCargaRepository : IBanciCargaRepository
 
         SELECT TOP (1) CONVERT(int, ef.id_entidad_federativa)
         FROM dbo.catalogo_entidad_federativa ef
-        WHERE ef.activo = 1
+        WHERE ef.activo = 1 AND ef.es_entidad_territorial=1
           AND
           (
                 UPPER(LTRIM(RTRIM(ef.nombre))) = @Valor

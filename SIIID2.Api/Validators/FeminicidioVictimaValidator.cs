@@ -1,12 +1,10 @@
-﻿using System.Globalization;
+using System.Globalization;
 using SIIID2.Api.Models;
+using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Validators;
-public class FeminicidioVictimaValidator
+public class FeminicidioVictimaValidator(ICatalogoReglasRepository reglas)
 {
-    private const string ClaveFeminicidio = "1.03";
-    private const string ClaveConsumado = "1";
-    private const string ClaveNacionalidadMexicana = "73";
     private static readonly string[] ColumnasFeminicidio =
     {
         "nombre_vicfem",
@@ -14,12 +12,14 @@ public class FeminicidioVictimaValidator
         "2apellido_vicfem",
         "curp_vicfem"
     };
-    public (List<CargaValidacionError> Errores, List<CargaValidacionError> Advertencias) Validar(List<ArchivoFila> filasDelitos,
-        List<ArchivoFila> filasVictimas)
+    public async Task<(List<CargaValidacionError> Errores, List<CargaValidacionError> Advertencias)> ValidarAsync(List<ArchivoFila> filasDelitos,
+        List<ArchivoFila> filasVictimas,
+        string modulo = "MENSUAL")
     {
+        await reglas.CargarAsync();
         var errores = new List<CargaValidacionError>();
         var advertencias = new List<CargaValidacionError>();
-        var feminicidios = filasDelitos.Where(EsFeminicidioConsumado).Select(fila => CrearLlave(ObtenerValor(fila, "id_ci"), ObtenerValor(fila, "id_delito"))).Where(llave => !string.IsNullOrWhiteSpace(llave)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var feminicidios = filasDelitos.Where(f => EsFeminicidioConsumado(f, modulo)).Select(fila => CrearLlave(ObtenerValor(fila, "id_ci"), ObtenerValor(fila, "id_delito"))).Where(llave => !string.IsNullOrWhiteSpace(llave)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         // Si la carga no contiene feminicidios, las cuatro columnas
         // pueden incluso no existir en el archivo de víctimas.
         if(feminicidios.Count == 0)
@@ -178,16 +178,16 @@ public class FeminicidioVictimaValidator
         return (errores, advertencias);
     }
 
-    private static bool EsFeminicidioConsumado(ArchivoFila fila)
+    private bool EsFeminicidioConsumado(ArchivoFila fila, string modulo)
     {
-        return string.Equals(ObtenerValor(fila, "clasf_de_dto")?.Trim(), ClaveFeminicidio, StringComparison.OrdinalIgnoreCase) && string.Equals(ObtenerValor(fila, "grdo_cons")?.Trim(), ClaveConsumado, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(ObtenerValor(fila, "clasf_de_dto")?.Trim(), reglas.Clave(modulo == "FEDERAL" ? "federal_catalogo_modalidad_delito" : "catalogo_modalidad_delito", "FEMINICIDIO"), StringComparison.OrdinalIgnoreCase) && string.Equals(ObtenerValor(fila, "grdo_cons")?.Trim(), reglas.Clave("catalogo_grado_consumacion", "CONSUMADO"), StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool EsNacionalidadMexicana(string nacionalidad)
+    private bool EsNacionalidadMexicana(string nacionalidad)
     {
         if(int.TryParse(nacionalidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var clave))
-            return clave == 73;
-        return string.Equals(nacionalidad.Trim(), ClaveNacionalidadMexicana, StringComparison.OrdinalIgnoreCase);
+            return clave == reglas.ClaveNumerica("catalogo_nacionalidad", "MEXICANA");
+        return string.Equals(nacionalidad.Trim(), reglas.Clave("catalogo_nacionalidad", "MEXICANA"), StringComparison.OrdinalIgnoreCase);
     }
 
     private static string CrearLlave(string? idCi, string? idDelito)

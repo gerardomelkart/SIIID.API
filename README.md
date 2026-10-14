@@ -56,3 +56,11 @@ El cruce aplica la misma interpretación a copias de las filas de ambas fuentes,
 Tras publicar esta API, rechazar y volver a validar las cargas antiguas que quedaron pendientes con ceros en staging; la publicación no modifica propuestas previamente almacenadas. Conservar el script 09 de BD ya aplicado.
 
 Pruebas sin conexión a la base: `dotnet run --project SIIID2.Api.RegressionTests --configuration Release`.
+
+## Catálogos y significados de reglas
+
+Antes de publicar esta versión, ejecutar `desarrollo/10_significados_catalogos.sql` del repositorio SIIID2BD en cada base (después de 09). Después publicar API y Front, en ese orden. El código consulta las opciones activas y su `codigo_regla`; no usa IDs o descripciones para decidir el significado. Los ceros/omisiones BANCI siguen resolviéndose a No identificado según cada catálogo. Las reglas de validación permanecen en C#, incluyendo tipo de víctima, feminicidio y semanal. Las sábanas leen filas, etiquetas y orden de sexo del catálogo.
+
+`ICatalogoReglasRepository` carga los significados una vez por solicitud, sin caché global. Una configuración ausente o ambigua se informa; nunca se inventa una clave por defecto. El script incorpora también las guardas equivalentes en los SP BANCI existentes para que carga, vista previa y actualización usen los mismos catálogos, sin cambiar permisos ni períodos.
+
+Las pruebas de `SIIID2.Api.RegressionTests` cubren claves y etiquetas modificadas, omisiones, claves inválidas, ambos motivos BANCI, tipos de víctima, reglas de feminicidio mensual/federal y semanal. No requieren conexión a BD ni RENAPO.

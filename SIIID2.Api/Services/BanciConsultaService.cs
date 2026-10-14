@@ -1,4 +1,4 @@
-﻿using SIIID2.Api.Models;
+using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 using ClosedXML.Excel;
 using System.Data;
@@ -74,7 +74,9 @@ public class BanciConsultaService : IBanciConsultaService
             return null;
         if(usuario.Rol == "CONSULTA" && !usuario.IdEntidadFederativa.HasValue)
             return null; // Mantiene la regla de consulta nacional existente en SIIID2.
-        if(usuario.Rol is not ("ENLACE_ESTATAL" or "CONSULTA") || usuario.IdEntidadFederativa is not (>= 1 and <= 32))
+        if(usuario.Rol is not ("ENLACE_ESTATAL" or "CONSULTA")
+            || (!usuario.IdEntidadFederativa.HasValue
+            || await _cargaRepository.ResolverEntidadFederativaAsync(usuario.IdEntidadFederativa.Value.ToString()) != usuario.IdEntidadFederativa))
             throw new UnauthorizedAccessException();
         return usuario.IdEntidadFederativa.Value;
     }

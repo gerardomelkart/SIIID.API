@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 using SIIID2.Api.Services;
@@ -7,10 +7,12 @@ namespace SIIID2.Api.Validators;
 // Comprueba existencia y vigencia en la base; los formatos numéricos se validan previamente por archivo.
 public class CatalogosValidator
 {
+    private readonly ICatalogoReglasRepository _reglas;
     private readonly ICatalogoRepository _catalogoRepository;
-    public CatalogosValidator(ICatalogoRepository catalogoRepository)
+    public CatalogosValidator(ICatalogoRepository catalogoRepository, ICatalogoReglasRepository reglas)
     {
         _catalogoRepository = catalogoRepository;
+        _reglas = reglas;
     }
 
     public async Task<List<CargaValidacionError>> ValidarAsync(List<ArchivoFila> filasCarpetas,
@@ -68,6 +70,8 @@ public class CatalogosValidator
         bool soloHomicidioDoloso = false)
     {
         var errores = new List<CargaValidacionError>();
+        if(soloHomicidioDoloso)
+            await _reglas.CargarAsync();
         var totalSinCoordenadas = 0;
         var prefijo = soloHomicidioDoloso ? "SEMANAL_HOMICIDIO_DOLOSO" : modulo;
         var detalle = soloHomicidioDoloso ? " de homicidio doloso" : "";
@@ -289,7 +293,7 @@ public class CatalogosValidator
 
     private static bool EsLatitudMexico(decimal valor) => valor >= 13m && valor <= 34m;
     private static bool EsLongitudMexico(decimal valor) => valor >= -118m && valor <= -86m;
-    private static bool EsHomicidioDoloso(ArchivoFila fila) => string.Equals(ObtenerValor(fila, "clasf_de_dto")?.Trim(), "1.01.01", StringComparison.OrdinalIgnoreCase);
+    private bool EsHomicidioDoloso(ArchivoFila fila) => _reglas.Contiene("catalogo_subtipo_delito", "HOMICIDIO_DOLOSO", ObtenerValor(fila, "clasf_de_dto"));
     private static string? ObtenerValor(ArchivoFila fila, string columna)
     {
         fila.Columnas.TryGetValue(columna, out var valor);

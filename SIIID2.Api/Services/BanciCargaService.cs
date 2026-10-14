@@ -1,4 +1,4 @@
-﻿using SIIID2.Api.Models;
+using SIIID2.Api.Models;
 using SIIID2.Api.Readers;
 using SIIID2.Api.Repositories;
 using SIIID2.Api.Validators;
@@ -64,7 +64,7 @@ public class BanciCargaService : IBanciCargaService
         }
 
         if(usuario.EsFederal && !request.IdEntidadFederativa.HasValue)
-            throw new ArgumentException("Seleccione la entidad del archivo BANCI. Puede reportar cualquiera de las 32 entidades, una por archivo.");
+            throw new ArgumentException("Seleccione la entidad del archivo BANCI. Puede reportar cualquiera de las entidades del catálogo, una por archivo.");
         var lectura = await _archivoReader.LeerAsync(request);
         return await ValidarLecturaAsync(lectura, usuario);
     }
@@ -89,7 +89,8 @@ public class BanciCargaService : IBanciCargaService
             && (!usuario.HabilitaCarga
             || !string.Equals(usuario.Rol, "ENLACE_ESTATAL", StringComparison.OrdinalIgnoreCase)
             || (!usuario.EsFederal
-            && usuario.IdEntidadFederativa is not (>= 1 and <= 32)))))
+            && (!usuario.IdEntidadFederativa.HasValue
+            || await _banciCargaRepository.ResolverEntidadFederativaAsync(usuario.IdEntidadFederativa.Value.ToString()) != usuario.IdEntidadFederativa)))))
             throw new UnauthorizedAccessException("El usuario no tiene permiso para capturar información BANCI.");
         return usuario;
     }
@@ -104,8 +105,7 @@ public class BanciCargaService : IBanciCargaService
         var entidad = usuario.PuedeElegirEntidad ? request.IdEntidadFederativa : usuario.IdEntidadFederativa;
         if(!usuario.PuedeElegirEntidad && request.IdEntidadFederativa.HasValue && request.IdEntidadFederativa != entidad)
             throw new UnauthorizedAccessException("Sólo puede capturar información de su entidad federativa.");
-        if(entidad is not (>= 1 and <= 32)
-            || await _banciCargaRepository.ResolverEntidadFederativaAsync(entidad.Value.ToString()) != entidad)
+        if((!entidad.HasValue || await _banciCargaRepository.ResolverEntidadFederativaAsync(entidad.Value.ToString()) != entidad))
             throw new ArgumentException("Seleccione una entidad federativa válida.");
         if(request.Carpeta == null
             || request.Delitos == null
@@ -233,17 +233,18 @@ public class BanciCargaService : IBanciCargaService
             }
         }
 
+        var catalogos = await _banciCargaRepository.ObtenerFormularioCatalogosAsync();
+        var tipoFisico = catalogos.Single(o => o.Campo == "id_tv" && o.CodigoRegla == "PERSONA_FISICA").Clave;
         NormalizarHoras(lectura);
         // BANCI registra exclusivamente víctimas físicas. No se solicitan ID_TV/ID_TPM
         // al usuario; se conserva el tipo físico para las estructuras compartidas.
         foreach (var victima in lectura.Victimas)
         {
-            victima.Columnas["id_tv"] = "1";
+            victima.Columnas["id_tv"] = tipoFisico;
             victima.Columnas["id_tpm"] = null;
         }
 
         // Usar el catálogo vigente también para representar ceros y omisiones.
-        var catalogos = await _banciCargaRepository.ObtenerFormularioCatalogosAsync();
         BanciCatalogosNormalizer.Preparar(lectura, catalogos);
         BanciAltaNormalizer.Preparar(lectura);
         response.ModalidadIngreso = lectura.ModalidadIngreso;
@@ -260,7 +261,7 @@ public class BanciCargaService : IBanciCargaService
         ValidarRegistrosMinimos(lectura, response.Errores);
         AgregarErroresHeredados(response.Errores, _carpetasValidator.Validar(lectura.Carpetas, validarMesInmediatoAnterior: false));
         AgregarErroresHeredados(response.Errores, _delitosValidator.Validar(lectura.Delitos, camposBanciOpcionales: true));
-        AgregarErroresHeredados(response.Errores, _victimasValidator.ValidarBanci(lectura.Victimas));
+        AgregarErroresHeredados(response.Errores, await _victimasValidator.ValidarBanciAsync(lectura.Victimas));
         var erroresIntegridad = _cargaIntegridadValidator.Validar(lectura.Carpetas, lectura.Delitos, lectura.Victimas);
         if(usuario.EsSuperUsuario)
         {
@@ -276,7 +277,7 @@ public class BanciCargaService : IBanciCargaService
         AgregarErroresHeredados(response.Errores, coordenadasMunicipio.Errores);
         if(coordenadasMunicipio.Advertencia is not null)
             AgregarErroresHeredados(response.Advertencias, new[] { coordenadasMunicipio.Advertencia });
-        var validacionMetodologica = _banciMetodologiaValidator.Validar(lectura);
+        var validacionMetodologica = _banciMetodologiaValidator.Validar(lectura, catalogos);
         response.Errores.AddRange(validacionMetodologica.Errores);
         response.Advertencias.AddRange(validacionMetodologica.Advertencias);
         if(response.Errores.Count == 0)

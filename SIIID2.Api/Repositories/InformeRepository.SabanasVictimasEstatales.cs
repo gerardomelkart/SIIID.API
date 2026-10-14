@@ -12,6 +12,9 @@ public partial class InformeRepository : IInformeRepository
         int mesUltimoCorte)
     {
         var sql = @"
+                    DECLARE @TipoVictimaFisica INT = (SELECT clave FROM dbo.catalogo_tipo_victima WHERE codigo_regla=N'PERSONA_FISICA' AND activo=1);
+                    DECLARE @SexoNoIdentificado NVARCHAR(1000) = (SELECT descripcion FROM dbo.catalogo_sexo WHERE codigo_regla=N'NO_IDENTIFICADO' AND activo=1);
+                    IF @TipoVictimaFisica IS NULL OR @SexoNoIdentificado IS NULL THROW 52720, 'Revise los significados activos de tipo de víctima y sexo.', 1;
                     WITH pendientes_rankeadas AS (
                 SELECT
                     c.id_carga,
@@ -151,9 +154,7 @@ public partial class InformeRepository : IInformeRepository
                 WHERE @ModoPlano IN ('PREVIO', 'MIXTO')
             ),
             sexos AS (
-            SELECT 1 AS orden_sexo, 'Hombre' AS sexo
-            UNION ALL SELECT 2, 'Mujer'
-            UNION ALL SELECT 3, 'No identificado'
+            SELECT clave AS orden_sexo, descripcion AS sexo FROM dbo.catalogo_sexo WHERE activo=1
         ),
         rangos_edad AS (
             SELECT 1 AS orden_rango, '0 a 12 años' AS rango_edad
@@ -230,11 +231,11 @@ public partial class InformeRepository : IInformeRepository
                     s.subtipo_delito_sabana,
                     s.modalidad_delito_sabana,
                     CASE
-                        WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave IN (1, 2, 3) THEN fv.sexo_descripcion
-                        ELSE 'No identificado'
+                        WHEN fv.tipo_victima_clave = @TipoVictimaFisica AND fv.sexo_clave IS NOT NULL THEN fv.sexo_descripcion
+                        ELSE @SexoNoIdentificado
                     END AS sexo,
                     CASE
-                        WHEN fv.tipo_victima_clave <> 1 THEN 'No especificado'
+                        WHEN fv.tipo_victima_clave <> @TipoVictimaFisica THEN 'No especificado'
                         WHEN fv.edad IS NULL THEN 'No especificado'
                         WHEN fv.edad BETWEEN 0 AND 12 THEN '0 a 12 años'
                         WHEN fv.edad BETWEEN 13 AND 17 THEN '13 a 17 años'
@@ -276,11 +277,11 @@ public partial class InformeRepository : IInformeRepository
                     s.subtipo_delito_sabana,
                     s.modalidad_delito_sabana,
                     CASE
-                        WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave IN (1, 2, 3) THEN fv.sexo_descripcion
-                        ELSE 'No identificado'
+                        WHEN fv.tipo_victima_clave = @TipoVictimaFisica AND fv.sexo_clave IS NOT NULL THEN fv.sexo_descripcion
+                        ELSE @SexoNoIdentificado
                     END,
                     CASE
-                        WHEN fv.tipo_victima_clave <> 1 THEN 'No especificado'
+                        WHEN fv.tipo_victima_clave <> @TipoVictimaFisica THEN 'No especificado'
                         WHEN fv.edad IS NULL THEN 'No especificado'
                         WHEN fv.edad BETWEEN 0 AND 12 THEN '0 a 12 años'
                         WHEN fv.edad BETWEEN 13 AND 17 THEN '13 a 17 años'

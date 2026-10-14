@@ -1,4 +1,4 @@
-﻿using SIIID2.Api.Models;
+using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Validators;
 public static class BanciMotivoValidator
@@ -11,13 +11,18 @@ public static class BanciMotivoValidator
         var motivo = datos.GetValueOrDefault("motivo_desaparicion")?.Trim();
         if(string.IsNullOrEmpty(tipo) && string.IsNullOrEmpty(motivo))
             yield break;
-        if(tipo is not ("1" or "2"))
-            yield return Error(fila, "constitutiva_delito", "Indique 1 = Delito o 2 = No delito junto con motivo_desaparicion.");
+        var opcion = catalogos.SingleOrDefault(o => o.Campo == "constitutiva_delito" && o.Clave == tipo);
+        var campo = opcion?.CodigoRegla switch        {
+            "DELITO" => "motivo_delito",
+            "NO_DELITO" => "motivo_no_delito",
+            _ => null
+        };
+        if(campo is null)
+            yield return Error(fila, "constitutiva_delito", "Seleccione una clave activa de Constitutiva de delito junto con motivo_desaparicion.");
         if(string.IsNullOrEmpty(motivo))
             yield return Error(fila, "motivo_desaparicion", "Informe motivo_desaparicion junto con constitutiva_delito.");
-        else if(tipo is "1" or "2")
+        else if(campo is not null)
         {
-            var campo = tipo == "1" ? "motivo_delito" : "motivo_no_delito";
             if(catalogos.Count(o => o.Campo == campo && o.Clave == motivo) != 1)
                 yield return Error(fila, "motivo_desaparicion", "La clave no pertenece al catálogo de la opción seleccionada. Consulte la plantilla actualizada.");
         }

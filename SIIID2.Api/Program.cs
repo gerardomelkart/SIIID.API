@@ -69,6 +69,7 @@ builder.Services.AddScoped<IBanciConsultaRepository, BanciConsultaRepository>();
 // Registro de validadores específicos por archivo, validación cruzada y catálogos.
 builder.Services.AddScoped<CarpetasValidator>();
 builder.Services.AddScoped<DelitosValidator>();
+builder.Services.AddScoped<ICatalogoReglasRepository, CatalogoReglasRepository>();
 builder.Services.AddScoped<VictimasValidator>();
 builder.Services.AddScoped<CargaIntegridadValidator>();
 builder.Services.AddScoped<CatalogosValidator>();

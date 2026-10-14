@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using SIIID2.Api.Models;
 using SIIID2.Api.Readers;
 using SIIID2.Api.Repositories;
@@ -17,7 +17,8 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios,
             || (!usuario.EsSuperUsuario
             && (usuario.Rol != "ENLACE_ESTATAL"
             || (!usuario.EsFederal
-            && usuario.IdEntidadFederativa is not (>= 1 and <= 32))))
+            && (!usuario.IdEntidadFederativa.HasValue
+            || await usuarios.ResolverEntidadFederativaAsync(usuario.IdEntidadFederativa.Value.ToString()) != usuario.IdEntidadFederativa))))
             || (modificar
             && !usuario.EsSuperUsuario
             && !usuario.HabilitaModificacion))
@@ -47,7 +48,7 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios,
         var entidad = usuario.PuedeElegirEntidad ? entidadSolicitada : usuario.IdEntidadFederativa;
         if(!usuario.PuedeElegirEntidad && entidadSolicitada.HasValue && entidadSolicitada != entidad)
             throw new UnauthorizedAccessException("Sólo puede actualizar víctimas de su entidad.");
-        if(entidad is not (>= 1 and <= 32))
+        if((!entidad.HasValue || await usuarios.ResolverEntidadFederativaAsync(entidad.Value.ToString()) != entidad))
             throw new ArgumentException("Seleccione una entidad federativa.");
         if(filas.Count is < 1 or > 20000 || (origen == "FORMULARIO" && filas.Count != 1))
             throw new ArgumentException("Cantidad de víctimas inválida.");
@@ -101,7 +102,7 @@ public sealed class BanciActualizacionService(IBanciCargaRepository usuarios,
             )
             {
                 var valor = normal.GetValueOrDefault(campo);
-                if(valor != null && valor is not ("1" or "2"))
+                if(valor != null && !catalogos.Any(o => o.Campo == campo && o.Clave == valor))
                     Error(respuesta, numero, campo, "Valor fuera del catálogo permitido.");
             }
 

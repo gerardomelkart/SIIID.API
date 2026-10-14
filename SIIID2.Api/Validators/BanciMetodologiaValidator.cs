@@ -1,10 +1,11 @@
-﻿using SIIID2.Api.Models;
+using SIIID2.Api.Models;
 using SIIID2.Api.Readers;
 
 namespace SIIID2.Api.Validators;
 public class BanciMetodologiaValidator
 {
-    public (List<BanciCargaValidacionError> Errores, List<BanciCargaValidacionError> Advertencias) Validar(BanciLecturaArchivosResultado lectura)
+    public (List<BanciCargaValidacionError> Errores, List<BanciCargaValidacionError> Advertencias) Validar(BanciLecturaArchivosResultado lectura,
+        IReadOnlyList<BanciFormularioOpcion> catalogos)
     {
         var errores = new List<BanciCargaValidacionError>();
         var advertencias = new List<BanciCargaValidacionError>();
@@ -26,7 +27,7 @@ public class BanciMetodologiaValidator
                 fila.Columnas[campo] = null;
             }
 
-            fila.Columnas["localizado_o_no_localizado"] = "1";
+            fila.Columnas["localizado_o_no_localizado"] = catalogos.Single(o => o.Campo == "localizado_o_no_localizado" && o.CodigoRegla == "NO_LOCALIZADO").Clave;
             foreach (var(campo, longitud)in new[]
             {
                 ("fub", 250),

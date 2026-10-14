@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 
@@ -86,8 +86,11 @@ public class BanciUsuarioService : IBanciUsuarioService
         else if(!string.IsNullOrWhiteSpace(password) && password.Length < 8)
             errores.Add(ErrorUsuario(crear ? "password" : "nuevaPassword", "USUARIO_PASSWORD_CORTO", "La contraseña debe tener al menos 8 caracteres."));
         int? idRol = string.IsNullOrWhiteSpace(request.Rol) ? null : await _usuarioRepository.ObtenerIdRolActivoAsync(request.Rol);
-        if(!esFederal && request.Rol == "ENLACE_ESTATAL" && request.IdEntidadFederativa is not (>= 1 and <= 32))
-            errores.Add(ErrorUsuario("idEntidadFederativa", "USUARIO_ENTIDAD_OBLIGATORIA", "El enlace estatal debe tener una entidad entre 1 y 32."));
+        if(!esFederal
+            && request.Rol == "ENLACE_ESTATAL"
+            && (!request.IdEntidadFederativa.HasValue
+            || await _cargaRepository.ResolverEntidadFederativaAsync(request.IdEntidadFederativa.Value.ToString()) != request.IdEntidadFederativa))
+            errores.Add(ErrorUsuario("idEntidadFederativa", "USUARIO_ENTIDAD_OBLIGATORIA", "El enlace estatal debe tener una entidad territorial activa del catálogo."));
         if(request.IdEntidadFederativa.HasValue && !await _usuarioRepository.ExisteEntidadActivaAsync(request.IdEntidadFederativa.Value))
             errores.Add(ErrorUsuario("idEntidadFederativa", "USUARIO_ENTIDAD_INVALIDA", "La entidad no existe o no está activa."));
         if(!idRol.HasValue && !string.IsNullOrWhiteSpace(request.Rol))

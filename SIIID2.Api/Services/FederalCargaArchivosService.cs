@@ -142,7 +142,7 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         var filasVictimas = await _archivoReader.LeerAsync(archivoVictimas!);
         response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas));
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
-        response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
+        response.Errores.AddRange(await _victimasValidator.ValidarAsync(filasVictimas));
         var advertenciasPendientes = new List<CargaValidacionError>();
         if(response.Errores.Count == 0)
         {
@@ -163,7 +163,7 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
             response.Advertencias.Add(coordenadasMunicipio.Advertencia);
         if(response.Errores.Count == 0 && _config.Activa("FEDERAL", "FEMINICIDIO_DATOS_ADICIONALES"))
         {
-            var local = _feminicidioVictimaValidator.Validar(filasDelitos, filasVictimas);
+            var local = await _feminicidioVictimaValidator.ValidarAsync(filasDelitos, filasVictimas, "FEDERAL");
             response.Errores.AddRange(local.Errores);
             advertenciasPendientes.AddRange(local.Advertencias);
             if(response.Errores.Count == 0)

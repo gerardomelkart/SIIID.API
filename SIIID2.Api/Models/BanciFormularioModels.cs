@@ -1,4 +1,4 @@
-﻿namespace SIIID2.Api.Models;
+namespace SIIID2.Api.Models;
 public class BanciFormularioRequest
 {
     public int? IdEntidadFederativa { get; set; }
@@ -17,6 +17,7 @@ public class BanciFormularioOpcion
     public string Campo { get; set; } = string.Empty;
     public string Clave { get; set; } = string.Empty;
     public string Descripcion { get; set; } = string.Empty;
+    public string? CodigoRegla { get; set; }
     public int? IdEntidadFederativa { get; set; }
 }
 

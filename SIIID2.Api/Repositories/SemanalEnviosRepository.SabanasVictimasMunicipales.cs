@@ -14,6 +14,9 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
         int mesUltimoCorte)
     {
         var sql = @"
+            DECLARE @TipoVictimaFisica INT = (SELECT clave FROM dbo.catalogo_tipo_victima WHERE codigo_regla=N'PERSONA_FISICA' AND activo=1);
+            DECLARE @SexoNoIdentificado NVARCHAR(1000) = (SELECT descripcion FROM dbo.catalogo_sexo WHERE codigo_regla=N'NO_IDENTIFICADO' AND activo=1);
+            IF @TipoVictimaFisica IS NULL OR @SexoNoIdentificado IS NULL THROW 52720, 'Revise los significados activos de tipo de víctima y sexo.', 1;
             WITH periodos_carga AS
             (
                 SELECT
@@ -277,7 +280,7 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
                 s.delito_sabana,
                 s.subtipo_delito_sabana,
                 s.modalidad_delito_sabana,
-                'No identificado' AS sexo,
+                @SexoNoIdentificado AS sexo,
                 'No especificado' AS rango_edad,
                 0 AS enero,
                 0 AS febrero,
@@ -317,12 +320,11 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
                     s.subtipo_delito_sabana,
                     s.modalidad_delito_sabana,
                     CASE
-                        WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave = 1 THEN 'Hombre'
-                        WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave = 2 THEN 'Mujer'
-                        ELSE 'No identificado'
+                        WHEN fv.tipo_victima_clave = @TipoVictimaFisica AND fv.sexo_clave IS NOT NULL THEN fv.sexo_descripcion
+                        ELSE @SexoNoIdentificado
                     END AS sexo,
                     CASE
-                        WHEN fv.tipo_victima_clave <> 1 THEN 'No especificado'
+                        WHEN fv.tipo_victima_clave <> @TipoVictimaFisica THEN 'No especificado'
                         WHEN fv.edad IS NULL THEN 'No especificado'
                         WHEN fv.edad BETWEEN 0 AND 12 THEN '0 a 12 años'
                         WHEN fv.edad BETWEEN 13 AND 17 THEN '13 a 17 años'
@@ -389,12 +391,11 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
                     s.subtipo_delito_sabana,
                     s.modalidad_delito_sabana,
                     CASE
-                        WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave = 1 THEN 'Hombre'
-                        WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave = 2 THEN 'Mujer'
-                        ELSE 'No identificado'
+                        WHEN fv.tipo_victima_clave = @TipoVictimaFisica AND fv.sexo_clave IS NOT NULL THEN fv.sexo_descripcion
+                        ELSE @SexoNoIdentificado
                     END,
                     CASE
-                        WHEN fv.tipo_victima_clave <> 1 THEN 'No especificado'
+                        WHEN fv.tipo_victima_clave <> @TipoVictimaFisica THEN 'No especificado'
                         WHEN fv.edad IS NULL THEN 'No especificado'
                         WHEN fv.edad BETWEEN 0 AND 12 THEN '0 a 12 años'
                         WHEN fv.edad BETWEEN 13 AND 17 THEN '13 a 17 años'
@@ -510,11 +511,7 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
             CASE WHEN bloque_resultado = 2 THEN clave_ent END,
             CASE WHEN bloque_resultado = 2 THEN clave_municipio_compuesta END,
 
-            CASE sexo
-                WHEN 'Hombre' THEN 1
-                WHEN 'Mujer' THEN 2
-                ELSE 3
-            END,
+            (SELECT MIN(clave) FROM dbo.catalogo_sexo sx_orden WHERE sx_orden.descripcion=sexo AND sx_orden.activo=1),
             CASE rango_edad
                 WHEN '0 a 12 años' THEN 1
                 WHEN '13 a 17 años' THEN 2

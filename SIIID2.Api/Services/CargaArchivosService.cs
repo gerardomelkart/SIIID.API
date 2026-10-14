@@ -1,4 +1,4 @@
-﻿// Orquesta los tres archivos de Consolidado; la validación prepara una carga temporal antes de la decisión del usuario.
+// Orquesta los tres archivos de Consolidado; la validación prepara una carga temporal antes de la decisión del usuario.
 using System.Globalization;
 using System.Text;
 using SIIID2.Api.Models;
@@ -179,7 +179,7 @@ public class CargaArchivosService : ICargaArchivosService
         // Validaciones específicas de cada archivo.
         response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas));
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
-        response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
+        response.Errores.AddRange(await _victimasValidator.ValidarAsync(filasVictimas));
         // Validamos que el usuario solo cargue información de su entidad.
         response.Errores.AddRange(ValidarEntidadUsuarioCarga(usuarioCarga, filasDelitos));
         // Guardamos si las validaciones internas pasaron limpias.
@@ -209,7 +209,7 @@ public class CargaArchivosService : ICargaArchivosService
             response.Advertencias.Add(coordenadasMunicipio.Advertencia);
         if(response.Errores.Count == 0 && _config.Activa("MENSUAL", "FEMINICIDIO_DATOS_ADICIONALES"))
         {
-            var validacionFeminicidio = _feminicidioVictimaValidator.Validar(filasDelitos, filasVictimas);
+            var validacionFeminicidio = await _feminicidioVictimaValidator.ValidarAsync(filasDelitos, filasVictimas);
             response.Errores.AddRange(validacionFeminicidio.Errores);
             advertenciasPendientes.AddRange(validacionFeminicidio.Advertencias);
             if(response.Errores.Count == 0)

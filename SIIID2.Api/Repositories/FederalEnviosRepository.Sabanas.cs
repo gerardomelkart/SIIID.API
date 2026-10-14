@@ -1,4 +1,4 @@
-﻿// Consultas de sábanas Federal: aplicar el alcance autorizado y los filtros de período antes de exportar.
+// Consultas de sábanas Federal: aplicar el alcance autorizado y los filtros de período antes de exportar.
 using Dapper;
 using SIIID2.Api.Models;
 
@@ -449,6 +449,9 @@ public partial class FederalEnviosRepository
                 m.clave_municipio_compuesta
               """ : string.Empty;
         return $"""
+            DECLARE @TipoVictimaFisica INT = (SELECT clave FROM dbo.catalogo_tipo_victima WHERE codigo_regla=N'PERSONA_FISICA' AND activo=1);
+            DECLARE @SexoNoIdentificado NVARCHAR(1000) = (SELECT descripcion FROM dbo.catalogo_sexo WHERE codigo_regla=N'NO_IDENTIFICADO' AND activo=1);
+            IF @TipoVictimaFisica IS NULL OR @SexoNoIdentificado IS NULL THROW 52720, 'Revise los significados activos de tipo de víctima y sexo.', 1;
             WITH pendientes_rankeadas AS
             (
                 SELECT
@@ -585,9 +588,7 @@ public partial class FederalEnviosRepository
             ),
             sexos AS
             (
-                SELECT 1 AS orden_sexo, N'Hombre' AS sexo
-                UNION ALL SELECT 2, N'Mujer'
-                UNION ALL SELECT 3, N'No identificado'
+                SELECT clave AS orden_sexo, descripcion AS sexo FROM dbo.catalogo_sexo WHERE activo=1
             ),
             rangos_edad AS
             (
@@ -664,12 +665,12 @@ public partial class FederalEnviosRepository
                     s.subtipo_delito_sabana,
                     s.modalidad_delito_sabana,
                     CASE
-                        WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave IN (1, 2, 3)
-                            THEN ISNULL(fv.sexo_descripcion, N'No identificado')
-                        ELSE N'No identificado'
+                        WHEN fv.tipo_victima_clave = @TipoVictimaFisica AND fv.sexo_clave IS NOT NULL
+                            THEN ISNULL(fv.sexo_descripcion, @SexoNoIdentificado)
+                        ELSE @SexoNoIdentificado
                     END AS sexo,
                     CASE
-                        WHEN fv.tipo_victima_clave <> 1 THEN N'No especificado'
+                        WHEN fv.tipo_victima_clave <> @TipoVictimaFisica THEN N'No especificado'
                         WHEN fv.edad IS NULL THEN N'No especificado'
                         WHEN fv.edad BETWEEN 0 AND 12 THEN N'0 a 12 años'
                         WHEN fv.edad BETWEEN 13 AND 17 THEN N'13 a 17 años'
@@ -713,12 +714,12 @@ public partial class FederalEnviosRepository
                     s.subtipo_delito_sabana,
                     s.modalidad_delito_sabana,
                     CASE
-                        WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave IN (1, 2, 3)
-                            THEN ISNULL(fv.sexo_descripcion, N'No identificado')
-                        ELSE N'No identificado'
+                        WHEN fv.tipo_victima_clave = @TipoVictimaFisica AND fv.sexo_clave IS NOT NULL
+                            THEN ISNULL(fv.sexo_descripcion, @SexoNoIdentificado)
+                        ELSE @SexoNoIdentificado
                     END,
                     CASE
-                        WHEN fv.tipo_victima_clave <> 1 THEN N'No especificado'
+                        WHEN fv.tipo_victima_clave <> @TipoVictimaFisica THEN N'No especificado'
                         WHEN fv.edad IS NULL THEN N'No especificado'
                         WHEN fv.edad BETWEEN 0 AND 12 THEN N'0 a 12 años'
                         WHEN fv.edad BETWEEN 13 AND 17 THEN N'13 a 17 años'
@@ -793,6 +794,9 @@ public partial class FederalEnviosRepository
     private static string ConstruirSqlSabanaMunicipalVictimas()
     {
         return """
+            DECLARE @TipoVictimaFisica INT = (SELECT clave FROM dbo.catalogo_tipo_victima WHERE codigo_regla=N'PERSONA_FISICA' AND activo=1);
+            DECLARE @SexoNoIdentificado NVARCHAR(1000) = (SELECT descripcion FROM dbo.catalogo_sexo WHERE codigo_regla=N'NO_IDENTIFICADO' AND activo=1);
+            IF @TipoVictimaFisica IS NULL OR @SexoNoIdentificado IS NULL THROW 52720, 'Revise los significados activos de tipo de víctima y sexo.', 1;
             WITH pendientes_rankeadas AS
             (
                 SELECT
@@ -971,7 +975,7 @@ public partial class FederalEnviosRepository
                     s.delito_sabana,
                     s.subtipo_delito_sabana,
                     s.modalidad_delito_sabana,
-                    N'No identificado' AS sexo,
+                    @SexoNoIdentificado AS sexo,
                     N'No especificado' AS rango_edad,
                     0 AS enero,
                     0 AS febrero,
@@ -1010,12 +1014,11 @@ public partial class FederalEnviosRepository
                         s.subtipo_delito_sabana,
                         s.modalidad_delito_sabana,
                         CASE
-                            WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave = 1 THEN N'Hombre'
-                            WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave = 2 THEN N'Mujer'
-                            ELSE N'No identificado'
+                            WHEN fv.tipo_victima_clave = @TipoVictimaFisica AND fv.sexo_clave IS NOT NULL THEN fv.sexo_descripcion
+                            ELSE @SexoNoIdentificado
                         END AS sexo,
                         CASE
-                            WHEN fv.tipo_victima_clave <> 1 THEN N'No especificado'
+                            WHEN fv.tipo_victima_clave <> @TipoVictimaFisica THEN N'No especificado'
                             WHEN fv.edad IS NULL THEN N'No especificado'
                             WHEN fv.edad BETWEEN 0 AND 12 THEN N'0 a 12 años'
                             WHEN fv.edad BETWEEN 13 AND 17 THEN N'13 a 17 años'
@@ -1077,12 +1080,11 @@ public partial class FederalEnviosRepository
                         s.subtipo_delito_sabana,
                         s.modalidad_delito_sabana,
                         CASE
-                            WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave = 1 THEN N'Hombre'
-                            WHEN fv.tipo_victima_clave = 1 AND fv.sexo_clave = 2 THEN N'Mujer'
-                            ELSE N'No identificado'
+                            WHEN fv.tipo_victima_clave = @TipoVictimaFisica AND fv.sexo_clave IS NOT NULL THEN fv.sexo_descripcion
+                            ELSE @SexoNoIdentificado
                         END,
                         CASE
-                            WHEN fv.tipo_victima_clave <> 1 THEN N'No especificado'
+                            WHEN fv.tipo_victima_clave <> @TipoVictimaFisica THEN N'No especificado'
                             WHEN fv.edad IS NULL THEN N'No especificado'
                             WHEN fv.edad BETWEEN 0 AND 12 THEN N'0 a 12 años'
                             WHEN fv.edad BETWEEN 13 AND 17 THEN N'13 a 17 años'
@@ -1198,11 +1200,7 @@ public partial class FederalEnviosRepository
                 CASE WHEN bloque_resultado = 2 THEN clave_ent END,
                 CASE WHEN bloque_resultado = 2 THEN clave_municipio_compuesta END,
 
-                CASE sexo
-                    WHEN N'Hombre' THEN 1
-                    WHEN N'Mujer' THEN 2
-                    ELSE 3
-                END,
+                (SELECT MIN(clave) FROM dbo.catalogo_sexo sx_orden WHERE sx_orden.descripcion=sexo AND sx_orden.activo=1),
                 CASE rango_edad
                     WHEN N'0 a 12 años' THEN 1
                     WHEN N'13 a 17 años' THEN 2

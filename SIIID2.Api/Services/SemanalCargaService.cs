@@ -1,4 +1,4 @@
-﻿// Valida la remisión semanal dentro del período y los delitos autorizados; la aprobación pertenece a otra etapa.
+// Valida la remisión semanal dentro del período y los delitos autorizados; la aprobación pertenece a otra etapa.
 using System.Globalization;
 using SIIID2.Api.Models;
 using SIIID2.Api.Readers;
@@ -44,22 +44,6 @@ public class SemanalCargaService : ISemanalCargaService
         "denuncia_anonima",
         "denuncia_anonima_089",
         "denuncia_anonima_otro_medio"
-    };
-    private static readonly HashSet<string> ClavesExtorsion = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "4.04.01",
-        "4.04.02"
-    };
-    private static readonly HashSet<string> ClavesRoboVehiculo = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "4.01.02.01",
-        "4.01.02.02"
-    };
-    private static readonly HashSet<int> ElementosComisionLesionesDolosasAdvertencia = new()
-    {
-        6,
-        7,
-        8
     };
     private static readonly HashSet<string> ValoresControlDenunciaAnonima = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -165,6 +149,7 @@ public class SemanalCargaService : ISemanalCargaService
     private readonly IArchivoReader _archivoReader;
     private readonly CarpetasValidator _carpetasValidator;
     private readonly DelitosValidator _delitosValidator;
+    private readonly ICatalogoReglasRepository _reglas;
     private readonly VictimasValidator _victimasValidator;
     private readonly CargaIntegridadValidator _cargaIntegridadValidator;
     private readonly CatalogosValidator _catalogosValidator;
@@ -177,6 +162,7 @@ public class SemanalCargaService : ISemanalCargaService
         CarpetasValidator carpetasValidator,
         DelitosValidator delitosValidator,
         VictimasValidator victimasValidator,
+        ICatalogoReglasRepository reglas,
         CargaIntegridadValidator cargaIntegridadValidator,
         CatalogosValidator catalogosValidator,
         ISemanalDelitoRepository semanalDelitoRepository,
@@ -190,6 +176,7 @@ public class SemanalCargaService : ISemanalCargaService
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
         _victimasValidator = victimasValidator;
+        _reglas = reglas;
         _cargaIntegridadValidator = cargaIntegridadValidator;
         _catalogosValidator = catalogosValidator;
         _semanalDelitoRepository = semanalDelitoRepository;
@@ -563,10 +550,11 @@ public class SemanalCargaService : ISemanalCargaService
         var filasDelitos = await _archivoReader.LeerAsync(request.Delitos!);
         var filasVictimas = await _archivoReader.LeerAsync(request.Victimas!);
         NormalizarColumnasExtorsion(filasCarpetas);
+        await _reglas.CargarAsync();
         NormalizarGradoConsumacionExtorsion(filasDelitos);
         response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas, validarMesInmediatoAnterior: false));
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
-        response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
+        response.Errores.AddRange(await _victimasValidator.ValidarAsync(filasVictimas));
         if(response.Errores.Count > 0)
         {
             FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
@@ -1465,12 +1453,12 @@ public class SemanalCargaService : ISemanalCargaService
         response.TotalVictimasExcluidas = victimas.Count - response.TotalVictimasIncluidas;
     }
 
-    private static void ValidarRoboVehiculoFormaAccion(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    private void ValidarRoboVehiculoFormaAccion(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
     {
-        var filasRoboVehiculo = filasDelitos.Where(fila => ClavesRoboVehiculo.Contains(ObtenerValor(fila, "clasf_de_dto")?.Trim() ?? string.Empty)).ToList();
+        var filasRoboVehiculo = filasDelitos.Where(fila => _reglas.Contiene("catalogo_modalidad_delito", "ROBO_VEHICULO", ObtenerValor(fila, "clasf_de_dto"))).ToList();
         if(filasRoboVehiculo.Count == 0
             || !filasRoboVehiculo.All(fila => int.TryParse(ObtenerValor(fila, "forma_acc")?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var formaAccion)
-            && formaAccion == 3))
+            && formaAccion == _reglas.ClaveNumerica("catalogo_forma_accion", "NO_IDENTIFICADO")))
         {
             return;
         }
@@ -1481,19 +1469,24 @@ public class SemanalCargaService : ISemanalCargaService
             Fila = null,
             Columna = "forma_acc",
             Campo = "forma_acc",
-            Valor = "3",
+            Valor = _reglas.Clave("catalogo_forma_accion", "NO_IDENTIFICADO"),
             Codigo = "SEMANAL_ROBO_VEHICULO_FORMA_ACCION_NO_IDENTIFICADA",
             DescripcionResumen = "Robo de vehículo sin forma de acción identificada",
-            Mensaje = "Todos los registros de robo de vehículo contienen la clave 3, No identificado, en FORMA_ACC. Debe existir al menos un registro con clave 1, Con violencia, o clave 2, Sin violencia."
+            Mensaje = "Todos los registros de robo de vehículo contienen la opción No identificado en FORMA_ACC. Debe existir al menos un registro con Con violencia o Sin violencia del catálogo vigente."
         });
     }
 
-    private static void ValidarLesionesDolosasElementoComision(List<ArchivoFila> filasDelitos, List<CargaValidacionError> advertencias)
+    private void ValidarLesionesDolosasElementoComision(List<ArchivoFila> filasDelitos, List<CargaValidacionError> advertencias)
     {
-        var filasLesionesDolosas = filasDelitos.Where(fila => string.Equals(ObtenerValor(fila, "clasf_de_dto")?.Trim(), "1.02.01", StringComparison.OrdinalIgnoreCase)).ToList();
+        var filasLesionesDolosas = filasDelitos.Where(fila => _reglas.Contiene("catalogo_subtipo_delito", "LESIONES_DOLOSAS", ObtenerValor(fila, "clasf_de_dto"))).ToList();
         if(filasLesionesDolosas.Count == 0
             || !filasLesionesDolosas.All(fila => int.TryParse(ObtenerValor(fila, "emto_com_dto")?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var elementoComision)
-            && ElementosComisionLesionesDolosasAdvertencia.Contains(elementoComision)))
+            && new[]
+        {
+            "OTRO",
+            "NO_IDENTIFICADO",
+            "NO_APLICA"
+        }.Any(c => elementoComision == _reglas.ClaveNumerica("catalogo_instrumento_comision", c))))
         {
             return;
         }
@@ -1504,23 +1497,28 @@ public class SemanalCargaService : ISemanalCargaService
             Fila = null,
             Columna = "emto_com_dto",
             Campo = "emto_com_dto",
-            Valor = "6, 7 y/o 8",
+            Valor = string.Join(", ", new[]
+        {
+            "OTRO",
+            "NO_IDENTIFICADO",
+            "NO_APLICA"
+        }.Select(c => _reglas.Clave("catalogo_instrumento_comision", c))),
             Codigo = "SEMANAL_LESIONES_DOLOSAS_ELEMENTO_COMISION_ADVERTENCIA",
             DescripcionResumen = "Lesiones dolosas sin elemento de comisión específico",
             Mensaje = "Todos los registros de lesiones dolosas contienen como elemento de comisión Con otro instrumento, No identificado o No aplica. La carga puede continuar, pero debe revisar la información."
         });
     }
 
-    private static void ValidarHomicidioTentativa(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    private void ValidarHomicidioTentativa(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
     {
         foreach (var fila in filasDelitos)
         {
             var claveModalidad = ObtenerValor(fila, "clasf_de_dto")?.Trim();
             var valorGradoConsumacion = ObtenerValor(fila, "grdo_cons")?.Trim();
-            var esHomicidio = !string.IsNullOrWhiteSpace(claveModalidad) && (string.Equals(claveModalidad, "1.01", StringComparison.OrdinalIgnoreCase) || claveModalidad.StartsWith("1.01.", StringComparison.OrdinalIgnoreCase));
+            var esHomicidio = !string.IsNullOrWhiteSpace(claveModalidad) && (string.Equals(claveModalidad, _reglas.Clave("catalogo_delito", "HOMICIDIO"), StringComparison.OrdinalIgnoreCase) || claveModalidad.StartsWith(_reglas.Clave("catalogo_delito", "HOMICIDIO") + ".", StringComparison.OrdinalIgnoreCase));
             if(!esHomicidio
                 || !int.TryParse(valorGradoConsumacion, NumberStyles.Integer, CultureInfo.InvariantCulture, out var gradoConsumacion)
-                || gradoConsumacion != 2)
+                || gradoConsumacion != _reglas.ClaveNumerica("catalogo_grado_consumacion", "TENTATIVA"))
             {
                 continue;
             }
@@ -1539,12 +1537,13 @@ public class SemanalCargaService : ISemanalCargaService
         }
     }
 
-    private static void ValidarHomicidioDolosoGradoConsumacion(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    private void ValidarHomicidioDolosoGradoConsumacion(List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
     {
         foreach (var fila in filasDelitos.Where(EsHomicidioDoloso))
         {
             var valor = ObtenerValor(fila, "grdo_cons")?.Trim();
-            if(!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var gradoConsumacion) || gradoConsumacion != 3)
+            if(!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var gradoConsumacion)
+                || gradoConsumacion != _reglas.ClaveNumerica("catalogo_grado_consumacion", "NO_IDENTIFICADO"))
                 continue;
             errores.Add(new CargaValidacionError
             {
@@ -1555,12 +1554,12 @@ public class SemanalCargaService : ISemanalCargaService
                 Valor = valor,
                 Codigo = "SEMANAL_HOMICIDIO_DOLOSO_GRADO_CONSUMACION_NO_IDENTIFICADO",
                 DescripcionResumen = "Homicidio doloso con grado de consumación no identificado",
-                Mensaje = "Para homicidio doloso el campo GRDO_CONS solo permite la clave 1, Consumado. La clave 3, No identificado, impide la carga."
+                Mensaje = "Para homicidio doloso el campo GRDO_CONS solo permite Consumado del catálogo vigente. No identificado impide la carga."
             });
         }
     }
 
-    private static void ValidarHomicidioDolosoTipoVictima(List<ArchivoFila> filasDelitos,
+    private void ValidarHomicidioDolosoTipoVictima(List<ArchivoFila> filasDelitos,
         List<ArchivoFila> filasVictimas,
         List<CargaValidacionError> errores)
     {
@@ -1568,7 +1567,8 @@ public class SemanalCargaService : ISemanalCargaService
         foreach (var fila in filasVictimas.Where(fila => delitosHomicidioDoloso.Contains(CrearLlaveDelito(fila))))
         {
             var valor = ObtenerValor(fila, "id_tv")?.Trim();
-            if(!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tipoVictima) || tipoVictima == 1)
+            if(!int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tipoVictima)
+                || tipoVictima == _reglas.ClaveNumerica("catalogo_tipo_victima", "PERSONA_FISICA"))
                 continue;
             errores.Add(new CargaValidacionError
             {
@@ -1579,12 +1579,12 @@ public class SemanalCargaService : ISemanalCargaService
                 Valor = valor,
                 Codigo = "SEMANAL_HOMICIDIO_DOLOSO_TIPO_VICTIMA_NO_PERMITIDO",
                 DescripcionResumen = "Tipo de víctima no permitido para homicidio doloso",
-                Mensaje = "Para víctimas relacionadas con homicidio doloso el campo ID_TV solo permite la clave 1, Persona física."
+                Mensaje = "Para víctimas relacionadas con homicidio doloso el campo ID_TV solo permite Persona física del catálogo vigente."
             });
         }
     }
 
-    private static void ValidarHomicidioDolosoResumenHechos(List<ArchivoFila> filasCarpetas,
+    private void ValidarHomicidioDolosoResumenHechos(List<ArchivoFila> filasCarpetas,
         List<ArchivoFila> filasDelitos,
         List<CargaValidacionError> advertencias)
     {
@@ -1605,7 +1605,7 @@ public class SemanalCargaService : ISemanalCargaService
         }
     }
 
-    private static bool EsHomicidioDoloso(ArchivoFila fila) => string.Equals(ObtenerValor(fila, "clasf_de_dto")?.Trim(), "1.01.01", StringComparison.OrdinalIgnoreCase);
+    private bool EsHomicidioDoloso(ArchivoFila fila) => _reglas.Contiene("catalogo_subtipo_delito", "HOMICIDIO_DOLOSO", ObtenerValor(fila, "clasf_de_dto"));
     private static string CrearLlaveDelito(ArchivoFila fila)
     {
         var idCi = ObtenerValor(fila, "id_ci")?.Trim();
@@ -1655,16 +1655,16 @@ public class SemanalCargaService : ISemanalCargaService
         return valorLimpio;
     }
 
-    private static void NormalizarGradoConsumacionExtorsion(List<ArchivoFila> filasDelitos)
+    private void NormalizarGradoConsumacionExtorsion(List<ArchivoFila> filasDelitos)
     {
         foreach (var fila in filasDelitos.Where(EsDelitoExtorsion))
         {
             if(string.IsNullOrWhiteSpace(ObtenerValor(fila, "grdo_cons")))
-                fila.Columnas["grdo_cons"] = "3";
+                fila.Columnas["grdo_cons"] = _reglas.Clave("catalogo_grado_consumacion", "NO_IDENTIFICADO");
         }
     }
 
-    private static void ValidarExtorsionDenunciaAnonima(List<ArchivoFila> filasCarpetas,
+    private void ValidarExtorsionDenunciaAnonima(List<ArchivoFila> filasCarpetas,
         List<ArchivoFila> filasDelitos,
         List<CargaValidacionError> errores)
     {
@@ -1772,10 +1772,10 @@ public class SemanalCargaService : ISemanalCargaService
         }
     }
 
-    private static bool EsDelitoExtorsion(ArchivoFila fila)
+    private bool EsDelitoExtorsion(ArchivoFila fila)
     {
         var clasificacion = ObtenerValor(fila, "clasf_de_dto")?.Trim();
-        return !string.IsNullOrWhiteSpace(clasificacion) && ClavesExtorsion.Contains(clasificacion);
+        return !string.IsNullOrWhiteSpace(clasificacion) && _reglas.Contiene("catalogo_modalidad_delito", "EXTORSION", clasificacion);
     }
 
     private static void ValidarModalidadesConfiguradas(List<ArchivoFila> filasDelitos,
