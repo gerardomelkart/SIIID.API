@@ -7,11 +7,13 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace SIIID2.Api.Repositories;
-
 // Movimientos de carpetas dentro de la transacción recibida del coordinador.
 public partial class ActualizacionRepository : IActualizacionRepository
 {
-    private async Task InsertarHistoricoCarpetasModificadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
+    private async Task InsertarHistoricoCarpetasModificadasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCargaActualizacion,
+        int idUsuarioConfirmacion)
     {
         var sql = @"
         ;WITH carga_actualizacion AS (
@@ -104,15 +106,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
             activo
         FROM carpetas_modificadas;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCargaActualizacion = idCargaActualizacion,
-                IdUsuarioConfirmacion = idUsuarioConfirmacion
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCargaActualizacion = idCargaActualizacion, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
     private async Task ActualizarCarpetasModificadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion)
@@ -201,17 +195,13 @@ public partial class ActualizacionRepository : IActualizacionRepository
                 OR ISNULL(ci.resumen_hechos, '') <> ISNULL(ct.rmen_de_hchos, '')
               );
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCargaActualizacion = idCargaActualizacion
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCargaActualizacion = idCargaActualizacion }, transaction);
     }
 
-    private async Task InsertarCarpetasNuevasActualizacionAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
+    private async Task InsertarCarpetasNuevasActualizacionAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCargaActualizacion,
+        int idUsuarioConfirmacion)
     {
         var sql = @"
         ;WITH carga_actualizacion AS (
@@ -282,18 +272,13 @@ public partial class ActualizacionRepository : IActualizacionRepository
                     )
            );
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCargaActualizacion = idCargaActualizacion,
-                IdUsuarioConfirmacion = idUsuarioConfirmacion
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCargaActualizacion = idCargaActualizacion, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
-    private async Task InsertarHistoricoCarpetasEliminadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
+    private async Task InsertarHistoricoCarpetasEliminadasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCargaActualizacion,
+        int idUsuarioConfirmacion)
     {
         var sql = @"
         ;WITH carga_actualizacion AS (
@@ -364,15 +349,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
             activo
         FROM carpetas_eliminadas;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCargaActualizacion = idCargaActualizacion,
-                IdUsuarioConfirmacion = idUsuarioConfirmacion
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCargaActualizacion = idCargaActualizacion, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
     private async Task DesactivarCarpetasEliminadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion)
@@ -419,14 +396,6 @@ public partial class ActualizacionRepository : IActualizacionRepository
         WHERE ci.activo = 1
           AND ct.id_ci IS NULL;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCargaActualizacion = idCargaActualizacion
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCargaActualizacion = idCargaActualizacion }, transaction);
     }
-
 }

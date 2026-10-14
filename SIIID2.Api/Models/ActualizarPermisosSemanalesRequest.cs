@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class ActualizarPermisosSemanalesRequest
 {
     public bool HabilitaSemanal { get; set; }

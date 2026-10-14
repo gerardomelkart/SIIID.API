@@ -9,7 +9,6 @@ using System.IO.Compression;
 using System.Security.Claims;
 
 namespace SIIID2.Api.Controllers;
-
 [ApiController]
 [Authorize(Policy = "MODULO_MENSUAL")]
 [Route("api/informes/rechazos")]
@@ -18,8 +17,9 @@ public class InformesRechazosController : ControllerBase
     private readonly IDbConnectionFactory _dbConnectionFactory;
     private readonly IInformeRepository _informeRepository;
     private readonly IUsuarioRepository _usuarioRepository;
-
-    public InformesRechazosController(IDbConnectionFactory dbConnectionFactory, IInformeRepository informeRepository, IUsuarioRepository usuarioRepository)
+    public InformesRechazosController(IDbConnectionFactory dbConnectionFactory,
+        IInformeRepository informeRepository,
+        IUsuarioRepository usuarioRepository)
     {
         _dbConnectionFactory = dbConnectionFactory;
         _informeRepository = informeRepository;
@@ -28,34 +28,23 @@ public class InformesRechazosController : ControllerBase
 
     [Authorize]
     [HttpGet]
-    public async Task<IActionResult> ObtenerRechazos([FromQuery] int? idEntidadFederativa = null, [FromQuery] int? mesCorte = null, [FromQuery] int? anioCorte = null)
+    public async Task<IActionResult> ObtenerRechazos([FromQuery] int? idEntidadFederativa = null,
+        [FromQuery] int? mesCorte = null,
+        [FromQuery] int? anioCorte = null)
     {
         var idUsuarioConsulta = ObtenerIdUsuarioAutenticado();
-
-        if (!idUsuarioConsulta.HasValue)
+        if(!idUsuarioConsulta.HasValue)
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta.Value);
-
-        if (usuarioConsulta == null)
+        if(usuarioConsulta == null)
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_USUARIO_NO_DISPONIBLE",
-                mensaje = "El usuario autenticado no existe o no está activo."
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_USUARIO_NO_DISPONIBLE", mensaje = "El usuario autenticado no existe o no está activo." });
         }
 
-        if (!usuarioConsulta.TieneAlcanceNacionalConsulta && !usuarioConsulta.IdEntidadFederativa.HasValue)
+        if(!usuarioConsulta.TieneAlcanceNacionalConsulta && !usuarioConsulta.IdEntidadFederativa.HasValue)
         {
             return Ok(Array.Empty<InformeEnvioItem>());
         }
@@ -120,18 +109,8 @@ public class InformesRechazosController : ControllerBase
                 c.mes_corte DESC,
                 c.fecha_confirmacion DESC,
                 c.id_carga DESC;";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var rechazados = (await connection.QueryAsync<InformeEnvioItem>(sql, new
-        {
-            EsSuperUsuario = usuarioConsulta.TieneAlcanceNacionalConsulta,
-            IdEntidadFederativaUsuario = usuarioConsulta.IdEntidadFederativa,
-            IdEntidadFederativa = usuarioConsulta.TieneAlcanceNacionalConsulta ? idEntidadFederativa : null,
-            MesCorte = mesCorte,
-            AnioCorte = anioCorte
-        })).ToList();
-
+        var rechazados = (await connection.QueryAsync<InformeEnvioItem>(sql, new { EsSuperUsuario = usuarioConsulta.TieneAlcanceNacionalConsulta, IdEntidadFederativaUsuario = usuarioConsulta.IdEntidadFederativa, IdEntidadFederativa = usuarioConsulta.TieneAlcanceNacionalConsulta ? idEntidadFederativa : null, MesCorte = mesCorte, AnioCorte = anioCorte })).ToList();
         foreach (var envio in rechazados)
         {
             envio.FechaEnvioTexto = envio.FechaEnvio.ToString("dd-MM-yyyy");
@@ -152,28 +131,15 @@ public class InformesRechazosController : ControllerBase
     public async Task<IActionResult> DescargarArchivosRechazados(string codigoReferencia)
     {
         var idUsuarioConsulta = ObtenerIdUsuarioAutenticado();
-
-        if (!idUsuarioConsulta.HasValue)
+        if(!idUsuarioConsulta.HasValue)
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta.Value);
-
-        if (usuarioConsulta == null)
+        if(usuarioConsulta == null)
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_USUARIO_NO_DISPONIBLE",
-                mensaje = "El usuario autenticado no existe o no está activo."
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_USUARIO_NO_DISPONIBLE", mensaje = "El usuario autenticado no existe o no está activo." });
         }
 
         const string sql = @"
@@ -219,46 +185,29 @@ public class InformesRechazosController : ControllerBase
             WHERE c.codigo_referencia = @CodigoReferencia
               AND c.activo = 1
               AND c.estado = N'RECHAZADO_ADMIN';";
-
         using var connection = _dbConnectionFactory.CrearConexion();
         var carga = await connection.QueryFirstOrDefaultAsync<InformeArchivoCargaInfo>(sql, new { CodigoReferencia = codigoReferencia });
-
-        if (carga == null)
+        if(carga == null)
         {
-            return NotFound(new
-            {
-                esValido = false,
-                codigo = "INFORMES_RECHAZO_NO_ENCONTRADO",
-                mensaje = "No se encontró una carga rechazada por el administrador para el código de referencia indicado."
-            });
+            return NotFound(new { esValido = false, codigo = "INFORMES_RECHAZO_NO_ENCONTRADO", mensaje = "No se encontró una carga rechazada por el administrador para el código de referencia indicado." });
         }
 
-        if (!usuarioConsulta.TieneAlcanceNacionalConsulta && (!usuarioConsulta.IdEntidadFederativa.HasValue || usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa))
+        if(!usuarioConsulta.TieneAlcanceNacionalConsulta
+            && (!usuarioConsulta.IdEntidadFederativa.HasValue
+            || usuarioConsulta.IdEntidadFederativa.Value != carga.IdEntidadFederativa))
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new
-            {
-                esValido = false,
-                codigo = "INFORMES_SIN_PERMISO",
-                mensaje = "No tiene permiso para descargar archivos de otra entidad federativa."
-            });
+            return StatusCode(StatusCodes.Status403Forbidden, new { esValido = false, codigo = "INFORMES_SIN_PERMISO", mensaje = "No tiene permiso para descargar archivos de otra entidad federativa." });
         }
 
-        if (!carga.TieneStagingDisponible)
+        if(!carga.TieneStagingDisponible)
         {
-            return Conflict(new
-            {
-                esValido = false,
-                codigo = "INFORMES_RECHAZO_STAGING_NO_DISPONIBLE",
-                mensaje = "Los archivos reconstruidos ya no están disponibles para este rechazo."
-            });
+            return Conflict(new { esValido = false, codigo = "INFORMES_RECHAZO_STAGING_NO_DISPONIBLE", mensaje = "Los archivos reconstruidos ya no están disponibles para este rechazo." });
         }
 
         var carpetas = await _informeRepository.ObtenerCarpetasPendientesAsync(carga.IdCarga);
         var delitos = await _informeRepository.ObtenerDelitosPendientesAsync(carga.IdCarga);
         var victimas = await _informeRepository.ObtenerVictimasPendientesAsync(carga.IdCarga);
-
         using var zipStream = new MemoryStream();
-
         using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
         {
             AgregarExcelAlZip(archive, "carpetas.xlsx", "carpetas", carpetas);
@@ -267,7 +216,6 @@ public class InformesRechazosController : ControllerBase
         }
 
         var nombreArchivo = $"ARCHIVOS_RECHAZADOS_{NormalizarNombreArchivo(carga.EntidadFederativa)}_{NormalizarNombreArchivo(ObtenerNombreMes(carga.MesCorte))}_{carga.AnioCorte}.zip";
-
         return File(zipStream.ToArray(), "application/zip", nombreArchivo);
     }
 
@@ -279,20 +227,19 @@ public class InformesRechazosController : ControllerBase
 
     private static string ObtenerEndpointAcusePrevio(string tipoCarga, string codigoReferencia)
     {
-        return string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase)
-            ? $"/api/actualizaciones/{codigoReferencia}/acuse"
-            : $"/api/cargas/{codigoReferencia}/acuse";
+        return string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) ? $"/api/actualizaciones/{codigoReferencia}/acuse" : $"/api/cargas/{codigoReferencia}/acuse";
     }
 
-    private static void AgregarExcelAlZip(ZipArchive archive, string nombreArchivo, string nombreHoja, List<IDictionary<string, object?>> filas)
+    private static void AgregarExcelAlZip(ZipArchive archive,
+        string nombreArchivo,
+        string nombreHoja,
+        List<IDictionary<string, object?>> filas)
     {
         var entry = archive.CreateEntry(nombreArchivo, CompressionLevel.Fastest);
-
         using var entryStream = entry.Open();
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add(nombreHoja);
-
-        if (filas.Count == 0)
+        if(filas.Count == 0)
         {
             worksheet.Cell(1, 1).Value = "Sin registros";
             workbook.SaveAs(entryStream);
@@ -300,27 +247,24 @@ public class InformesRechazosController : ControllerBase
         }
 
         var columnas = filas.First().Keys.ToList();
-
-        for (var columna = 0; columna < columnas.Count; columna++)
+        for(var columna = 0; columna < columnas.Count; columna++)
         {
             worksheet.Cell(1, columna + 1).Value = columnas[columna];
             worksheet.Cell(1, columna + 1).Style.Font.Bold = true;
-
-            if (columnas[columna] == "Clave_Ent")
+            if(columnas[columna] == "Clave_Ent")
             {
                 worksheet.Column(columna + 1).Style.NumberFormat.Format = "@";
             }
         }
 
-        for (var fila = 0; fila < filas.Count; fila++)
+        for(var fila = 0; fila < filas.Count; fila++)
         {
-            for (var columna = 0; columna < columnas.Count; columna++)
+            for(var columna = 0; columna < columnas.Count; columna++)
             {
                 var nombreColumna = columnas[columna];
                 var valor = filas[fila].TryGetValue(nombreColumna, out var dato) ? dato : null;
                 var celda = worksheet.Cell(fila + 2, columna + 1);
-
-                if (nombreColumna == "Clave_Ent")
+                if(nombreColumna == "Clave_Ent")
                 {
                     celda.Style.NumberFormat.Format = "@";
                     celda.Value = valor?.ToString() ?? string.Empty;
@@ -332,7 +276,7 @@ public class InformesRechazosController : ControllerBase
             }
         }
 
-        for (var i = 0; i < columnas.Count; i++)
+        for(var i = 0; i < columnas.Count; i++)
         {
             worksheet.Column(i + 1).Width = 14;
         }
@@ -343,13 +287,12 @@ public class InformesRechazosController : ControllerBase
 
     private static XLCellValue ConvertirValorExcel(object? valor)
     {
-        if (valor == null || valor == DBNull.Value)
+        if(valor == null || valor == DBNull.Value)
         {
             return string.Empty;
         }
 
-        return valor switch
-        {
+        return valor switch        {
             DateTime fecha => fecha,
             int entero => entero,
             long enteroLargo => enteroLargo,
@@ -363,33 +306,51 @@ public class InformesRechazosController : ControllerBase
 
     private static string NormalizarNombreArchivo(string valor)
     {
-        if (string.IsNullOrWhiteSpace(valor))
+        if(string.IsNullOrWhiteSpace(valor))
         {
             return string.Empty;
         }
 
         valor = valor.Trim().ToUpperInvariant();
-
         var reemplazos = new Dictionary<char, char>
         {
-            { 'Á', 'A' },
-            { 'É', 'E' },
-            { 'Í', 'I' },
-            { 'Ó', 'O' },
-            { 'Ú', 'U' },
-            { 'Ü', 'U' },
-            { 'Ñ', 'N' }
+            {
+                'Á',
+                'A'
+            },
+            {
+                'É',
+                'E'
+            },
+            {
+                'Í',
+                'I'
+            },
+            {
+                'Ó',
+                'O'
+            },
+            {
+                'Ú',
+                'U'
+            },
+            {
+                'Ü',
+                'U'
+            },
+            {
+                'Ñ',
+                'N'
+            }
         };
-
         foreach (var reemplazo in reemplazos)
         {
             valor = valor.Replace(reemplazo.Key, reemplazo.Value);
         }
 
         var caracteres = valor.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray();
-        valor = new string(caracteres);
-
-        while (valor.Contains("__"))
+        valor = new string (caracteres);
+        while(valor.Contains("__"))
         {
             valor = valor.Replace("__", "_");
         }
@@ -399,8 +360,7 @@ public class InformesRechazosController : ControllerBase
 
     private static string ObtenerNombreMes(int mes)
     {
-        return mes switch
-        {
+        return mes switch        {
             1 => "Enero",
             2 => "Febrero",
             3 => "Marzo",
@@ -413,7 +373,6 @@ public class InformesRechazosController : ControllerBase
             10 => "Octubre",
             11 => "Noviembre",
             12 => "Diciembre",
-            _ => mes.ToString("00")
-        };
+            _ => mes.ToString("00")};
     }
 }

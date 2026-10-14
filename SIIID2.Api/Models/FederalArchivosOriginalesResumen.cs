@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class FederalArchivosOriginalesResumen
 {
     public int IdUsuarioCarga { get; set; }

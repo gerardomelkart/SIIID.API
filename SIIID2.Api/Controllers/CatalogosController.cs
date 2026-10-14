@@ -3,13 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Controllers;
-
 [ApiController]
 [Route("api/catalogos")]
 public class CatalogosController : ControllerBase
 {
     private readonly ICatalogoRepository _catalogoRepository;
-
     public CatalogosController(ICatalogoRepository catalogoRepository)
     {
         _catalogoRepository = catalogoRepository;
@@ -22,7 +20,6 @@ public class CatalogosController : ControllerBase
     public async Task<IActionResult> ObtenerEntidadesFederativas()
     {
         var entidades = await _catalogoRepository.ObtenerEntidadesFederativasActivasAsync();
-
         return Ok(entidades);
     }
 
@@ -33,7 +30,6 @@ public class CatalogosController : ControllerBase
     public async Task<IActionResult> ObtenerRoles()
     {
         var roles = await _catalogoRepository.ObtenerRolesActivosAsync();
-
         return Ok(roles);
     }
 }

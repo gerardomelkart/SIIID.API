@@ -3,7 +3,6 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class CatalogoRepository : ICatalogoRepository
 {
     private class MunicipioCatalogo
@@ -13,12 +12,11 @@ public class CatalogoRepository : ICatalogoRepository
     }
 
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public CatalogoRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
     }
-    
+
     public async Task<HashSet<string>> ObtenerMunicipiosPorEntidadActivosAsync()
     {
         // El municipio se valida por combinación:
@@ -30,15 +28,9 @@ public class CatalogoRepository : ICatalogoRepository
         FROM catalogo_municipio
         WHERE activo = 1;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
         var municipios = await connection.QueryAsync<MunicipioCatalogo>(sql);
-
-        return municipios
-            .Where(x => !string.IsNullOrWhiteSpace(x.ClaveMunicipio))
-            .Select(x => $"{x.IdEntidadFederativa}|{NormalizarClaveMunicipio(x.ClaveMunicipio)}")
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return municipios.Where(x => !string.IsNullOrWhiteSpace(x.ClaveMunicipio)).Select(x => $"{x.IdEntidadFederativa}|{NormalizarClaveMunicipio(x.ClaveMunicipio)}").ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     public async Task<bool> CoordenadasCorrespondenMunicipioAsync(int idEntidadFederativa, int idMunicipio, decimal coordX, decimal coordY)
@@ -61,18 +53,8 @@ public class CatalogoRepository : ICatalogoRepository
             END
         AS bit);
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.ExecuteScalarAsync<bool>(
-            sql,
-            new
-            {
-                ClaveEntidad = idEntidadFederativa.ToString("00"),
-                ClaveMunicipio = idMunicipio.ToString("000"),
-                CoordX = coordX,
-                CoordY = coordY
-            });
+        return await connection.ExecuteScalarAsync<bool>(sql, new { ClaveEntidad = idEntidadFederativa.ToString("00"), ClaveMunicipio = idMunicipio.ToString("000"), CoordX = coordX, CoordY = coordY });
     }
 
     public async Task<HashSet<int>> ObtenerClavesNumericasActivasAsync(string tabla, string columnaClave)
@@ -98,10 +80,7 @@ public class CatalogoRepository : ICatalogoRepository
         ";
         using var connection = _dbConnectionFactory.CrearConexion();
         var claves = await connection.QueryAsync<string>(sql);
-        return claves
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x.Trim())
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return claves.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     public async Task<List<EntidadFederativaCatalogoItem>> ObtenerEntidadesFederativasActivasAsync()
@@ -118,11 +97,8 @@ public class CatalogoRepository : ICatalogoRepository
         ORDER BY
             nombre;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
         var entidades = await connection.QueryAsync<EntidadFederativaCatalogoItem>(sql);
-
         return entidades.ToList();
     }
 
@@ -139,19 +115,15 @@ public class CatalogoRepository : ICatalogoRepository
         ORDER BY
             rol;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
         var roles = await connection.QueryAsync<RolCatalogoItem>(sql);
-
         return roles.ToList();
     }
 
     private static string NormalizarClaveMunicipio(string clave)
     {
         clave = clave.Trim();
-
-        if (int.TryParse(clave, out var numero))
+        if(int.TryParse(clave, out var numero))
         {
             return numero.ToString("000");
         }

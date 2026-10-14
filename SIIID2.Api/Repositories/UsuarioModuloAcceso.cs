@@ -2,7 +2,6 @@
 using Microsoft.Data.SqlClient;
 
 namespace SIIID2.Api.Repositories;
-
 public static class UsuarioModuloAcceso
 {
     // Se invoca dentro de la transacción de alta/edición, después de los permisos solicitados.

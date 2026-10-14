@@ -1,15 +1,25 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
 namespace SIIID2.Api.Models;
-
 public class BanciConsultaFiltro
 {
-    [Range(1900, 9998)] public int Anio { get; set; } = DateTime.Today.Year;
-    [Range(1, 12)] public int? Mes { get; set; }
-    [Range(1, 32)] public int? IdEntidadFederativa { get; set; }
-    [StringLength(250)] public string? Busqueda { get; set; }
-    [Range(1, 1000000)] public int Pagina { get; set; } = 1;
-    [Range(1, 100)] public int TamanoPagina { get; set; } = 25;
+    [Range(1900, 9998)]
+    public int Anio { get; set; } = DateTime.Today.Year;
+
+    [Range(1, 12)]
+    public int? Mes { get; set; }
+
+    [Range(1, 32)]
+    public int? IdEntidadFederativa { get; set; }
+
+    [StringLength(250)]
+    public string? Busqueda { get; set; }
+
+    [Range(1, 1000000)]
+    public int Pagina { get; set; } = 1;
+
+    [Range(1, 100)]
+    public int TamanoPagina { get; set; } = 25;
 }
 
 public class BanciConsultaOpciones

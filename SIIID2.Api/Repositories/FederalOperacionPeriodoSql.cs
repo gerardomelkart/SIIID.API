@@ -3,10 +3,11 @@ using Microsoft.Data.SqlClient;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 internal static class FederalOperacionPeriodoSql
 {
-    internal sealed class ConflictoException(string mensaje) : InvalidOperationException(mensaje) { }
+    internal sealed class ConflictoException(string mensaje) : InvalidOperationException(mensaje)
+    {
+    }
 
     private sealed class PeriodoInfo
     {
@@ -22,9 +23,9 @@ internal static class FederalOperacionPeriodoSql
                 @LockOwner = N'Transaction', @LockTimeout = 10000;
             SELECT @Resultado;
             """;
-
         var resultado = await connection.ExecuteScalarAsync<int>(sql, new { Recurso = $"SIIID2:FEDERAL:PERIODO:{anioCorte}:{mesCorte}" }, transaction);
-        if (resultado < 0) throw new ConflictoException("Hay otra operación federal en curso para este periodo. Espere a que termine e intente nuevamente.");
+        if(resultado < 0)
+            throw new ConflictoException("Hay otra operación federal en curso para este periodo. Espere a que termine e intente nuevamente.");
     }
 
     public static async Task BloquearPorCodigoAsync(SqlConnection connection, SqlTransaction transaction, string codigoReferencia)
@@ -32,7 +33,8 @@ internal static class FederalOperacionPeriodoSql
         // Leer el corte antes de tomar bloqueos de escritura sobre la carga. Todos los flujos conservan este orden.
         const string sql = "SELECT mes_corte AS MesCorte, anio_corte AS AnioCorte FROM dbo.federal_carga WHERE codigo_referencia = @CodigoReferencia;";
         var periodo = await connection.QueryFirstOrDefaultAsync<PeriodoInfo>(sql, new { CodigoReferencia = codigoReferencia }, transaction);
-        if (periodo != null) await BloquearAsync(connection, transaction, periodo.MesCorte, periodo.AnioCorte);
+        if(periodo != null)
+            await BloquearAsync(connection, transaction, periodo.MesCorte, periodo.AnioCorte);
     }
 
     public static async Task ExpirarPendientesAsync(SqlConnection connection, SqlTransaction transaction, int mesCorte, int anioCorte)
@@ -61,15 +63,17 @@ internal static class FederalOperacionPeriodoSql
             SELECT id_federal_carga, estado_anterior, N'EXPIRADO', NULL, @Ahora,
                 N'Validación federal vencida; se libera el periodo para una nueva operación.', 1 FROM @Expiradas;
             """;
-
         await connection.ExecuteAsync(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte }, transaction);
     }
 
-    public static async Task<CargaPendienteInfo?> ObtenerPendienteAsync(SqlConnection connection, SqlTransaction transaction, int mesCorte, int anioCorte, string tipoCarga)
+    public static async Task<CargaPendienteInfo?> ObtenerPendienteAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        int mesCorte,
+        int anioCorte,
+        string tipoCarga)
     {
         await BloquearAsync(connection, transaction, mesCorte, anioCorte);
         await ExpirarPendientesAsync(connection, transaction, mesCorte, anioCorte);
-
         const string sql = """
             SELECT TOP (1) codigo_referencia AS CodigoReferencia, estado AS Estado
             FROM dbo.federal_carga
@@ -77,11 +81,15 @@ internal static class FederalOperacionPeriodoSql
               AND estado IN (N'VALIDADO_PENDIENTE', N'VALIDADO_PENDIENTE_ACTUALIZACION', N'PENDIENTE_APROBACION')
             ORDER BY fecha_validacion DESC, id_federal_carga DESC;
             """;
-
         return await connection.QueryFirstOrDefaultAsync<CargaPendienteInfo>(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte, TipoCarga = tipoCarga }, transaction);
     }
 
-    public static async Task ValidarDisponibilidadAsync(SqlConnection connection, SqlTransaction transaction, int mesCorte, int anioCorte, bool actualizacion, long? idFederalCarga = null)
+    public static async Task ValidarDisponibilidadAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        int mesCorte,
+        int anioCorte,
+        bool actualizacion,
+        long? idFederalCarga = null)
     {
         const string sql = """
             SELECT CASE
@@ -107,8 +115,8 @@ internal static class FederalOperacionPeriodoSql
                 ) THEN N'Ya existe otra operación federal pendiente para este periodo. Atienda la solicitud anterior antes de continuar.'
                 ELSE NULL END;
             """;
-
         var mensaje = await connection.ExecuteScalarAsync<string?>(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte, Actualizacion = actualizacion, IdFederalCarga = idFederalCarga }, transaction);
-        if (mensaje != null) throw new ConflictoException(mensaje);
+        if(mensaje != null)
+            throw new ConflictoException(mensaje);
     }
 }

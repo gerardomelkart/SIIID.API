@@ -1,5 +1,4 @@
 namespace SIIID2.Api.Services;
-
 public interface IFederalAcusePdfService
 {
     Task<byte[]> GenerarAcusePrevioAsync(string codigoReferencia, int idUsuarioConsulta);

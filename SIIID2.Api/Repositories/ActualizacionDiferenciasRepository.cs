@@ -4,59 +4,48 @@ using SIIID2.Api.Models;
 using System.Data;
 
 namespace SIIID2.Api.Repositories;
-
 public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepository
 {
     private class ActualizacionDiferenciaRow
     {
         public string Seccion { get; set; } = string.Empty;
-
         public string TipoMovimiento { get; set; } = string.Empty;
-
         public string CampoIdentificador { get; set; } = string.Empty;
-
         public string IdentificadorFiscalia { get; set; } = string.Empty;
-
         public string? Campo { get; set; }
-
         public string? ValorAnterior { get; set; }
-
         public string? ValorNuevo { get; set; }
     }
 
     private class ActualizacionDiferenciasContexto
     {
         public long IdCarga { get; set; }
-
         public string CodigoReferencia { get; set; } = string.Empty;
-
         public int IdEntidadFederativa { get; set; }
-
         public int MesCorte { get; set; }
-
         public int AnioCorte { get; set; }
     }
 
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public ActualizacionDiferenciasRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
     }
 
-    public async Task<ActualizacionDiferenciasResponse?> ObtenerDetalleDiferenciasActualizacionAsync(string codigoReferencia, int? idEntidadFederativaUsuario, bool esSuperUsuario, int limitePorSeccion)
+    public async Task<ActualizacionDiferenciasResponse?> ObtenerDetalleDiferenciasActualizacionAsync(string codigoReferencia,
+        int? idEntidadFederativaUsuario,
+        bool esSuperUsuario,
+        int limitePorSeccion)
     {
         ActualizacionDiferenciasContexto? contexto;
-
         using (var connection = _dbConnectionFactory.CrearConexion())
             contexto = await ObtenerContextoActualizacionAsync(connection, codigoReferencia, idEntidadFederativaUsuario, esSuperUsuario);
-
-        if (contexto == null)
+        if(contexto == null)
         {
             return null;
         }
 
-        if (limitePorSeccion == 0)
+        if(limitePorSeccion == 0)
         {
             return new ActualizacionDiferenciasResponse
             {
@@ -71,34 +60,29 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         var carpetasTask = ObtenerDiferenciasCarpetasAsync(_dbConnectionFactory, contexto, limitePorSeccion);
         var delitosTask = ObtenerDiferenciasDelitosAsync(_dbConnectionFactory, contexto, limitePorSeccion);
         var victimasTask = ObtenerDiferenciasVictimasAsync(_dbConnectionFactory, contexto, limitePorSeccion);
-
         await Task.WhenAll(carpetasTask, delitosTask, victimasTask);
-
         var filas = new List<ActualizacionDiferenciaRow>();
         filas.AddRange(carpetasTask.Result);
         filas.AddRange(delitosTask.Result);
         filas.AddRange(victimasTask.Result);
-
         var response = new ActualizacionDiferenciasResponse
         {
             IdCarga = contexto.IdCarga,
             EsValido = true,
             CodigoReferencia = codigoReferencia,
-            Mensaje = filas.Count == 0
-                ? "No se encontraron diferencias detalladas para la actualización."
-                : "Detalle de diferencias obtenido correctamente."
+            Mensaje = filas.Count == 0 ? "No se encontraron diferencias detalladas para la actualización." : "Detalle de diferencias obtenido correctamente."
         };
-
         AgregarDiferenciasAlResponse(filas, "carpetas", response.Carpetas);
         AgregarDiferenciasAlResponse(filas, "delitos", response.Delitos);
         AgregarDiferenciasAlResponse(filas, "victimas", response.Victimas);
-
         AplicarLimiteDiferencias(response, limitePorSeccion);
-
         return response;
     }
 
-    private static async Task<ActualizacionDiferenciasContexto?> ObtenerContextoActualizacionAsync(IDbConnection connection, string codigoReferencia, int? idEntidadFederativaUsuario, bool esSuperUsuario)
+    private static async Task<ActualizacionDiferenciasContexto?> ObtenerContextoActualizacionAsync(IDbConnection connection,
+        string codigoReferencia,
+        int? idEntidadFederativaUsuario,
+        bool esSuperUsuario)
     {
         var sql = @"
         SELECT TOP 1
@@ -121,16 +105,12 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 OR id_entidad_federativa = @IdEntidadFederativaUsuario
               );
         ";
-
-        return await connection.QueryFirstOrDefaultAsync<ActualizacionDiferenciasContexto>(sql, new
-        {
-            CodigoReferencia = codigoReferencia,
-            IdEntidadFederativaUsuario = idEntidadFederativaUsuario,
-            EsSuperUsuario = esSuperUsuario
-        });
+        return await connection.QueryFirstOrDefaultAsync<ActualizacionDiferenciasContexto>(sql, new { CodigoReferencia = codigoReferencia, IdEntidadFederativaUsuario = idEntidadFederativaUsuario, EsSuperUsuario = esSuperUsuario });
     }
 
-    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasCarpetasAsync(IDbConnectionFactory dbConnectionFactory, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
+    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasCarpetasAsync(IDbConnectionFactory dbConnectionFactory,
+        ActualizacionDiferenciasContexto contexto,
+        int limitePorSeccion)
     {
         var sql = @"
             ;WITH carpetas_actuales AS (
@@ -276,9 +256,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
         WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";
-
         var limiteFilas = Math.Max(limitePorSeccion, 1) * 5;
-
         var parametros = new
         {
             contexto.IdCarga,
@@ -287,17 +265,14 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             contexto.AnioCorte,
             LimiteFilas = limiteFilas
         };
-
         using var connection = dbConnectionFactory.CrearConexion();
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(
-            sql,
-            parametros,
-            commandTimeout: 180);
-
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 180);
         return filas.ToList();
     }
 
-    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasDelitosAsync(IDbConnectionFactory dbConnectionFactory, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
+    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasDelitosAsync(IDbConnectionFactory dbConnectionFactory,
+        ActualizacionDiferenciasContexto contexto,
+        int limitePorSeccion)
     {
         var sql = @"
         ;WITH delitos_actuales AS (
@@ -580,12 +555,10 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
         WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";
-
         /*
             Un delito genera hasta veinte filas de campos.
         */
         var limiteFilas = Math.Max(limitePorSeccion, 1) * 20;
-
         var parametros = new
         {
             contexto.IdCarga,
@@ -595,16 +568,13 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             LimiteFilas = limiteFilas
         };
         using var connection = dbConnectionFactory.CrearConexion();
-
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(
-            sql,
-            parametros,
-            commandTimeout: 180);
-
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 180);
         return filas.ToList();
     }
 
-    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasVictimasAsync(IDbConnectionFactory dbConnectionFactory, ActualizacionDiferenciasContexto contexto, int limitePorSeccion)
+    private static async Task<List<ActualizacionDiferenciaRow>> ObtenerDiferenciasVictimasAsync(IDbConnectionFactory dbConnectionFactory,
+        ActualizacionDiferenciasContexto contexto,
+        int limitePorSeccion)
     {
         var sql = @"
         ;WITH victimas_actuales AS (
@@ -820,12 +790,10 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
         WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";
-
         /*
             Una víctima genera hasta dieciséis filas de campos.
         */
         var limiteFilas = Math.Max(limitePorSeccion, 1) * 16;
-
         var parametros = new
         {
             contexto.IdCarga,
@@ -835,26 +803,15 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             LimiteFilas = limiteFilas
         };
         using var connection = dbConnectionFactory.CrearConexion();
-
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(
-            sql,
-            parametros,
-            commandTimeout: 180);
-
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 180);
         return filas.ToList();
     }
 
-    private static void AgregarDiferenciasAlResponse(List<ActualizacionDiferenciaRow> filas, string seccion, List<ActualizacionDiferenciaRegistro> destino)
+    private static void AgregarDiferenciasAlResponse(List<ActualizacionDiferenciaRow> filas,
+        string seccion,
+        List<ActualizacionDiferenciaRegistro> destino)
     {
-        var grupos = filas
-            .Where(x => x.Seccion == seccion)
-            .GroupBy(x => new
-            {
-                x.TipoMovimiento,
-                x.CampoIdentificador,
-                x.IdentificadorFiscalia
-            });
-
+        var grupos = filas.Where(x => x.Seccion == seccion).GroupBy(x => new { x.TipoMovimiento, x.CampoIdentificador, x.IdentificadorFiscalia });
         foreach (var grupo in grupos)
         {
             var registro = new ActualizacionDiferenciaRegistro
@@ -863,7 +820,6 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 CampoIdentificador = grupo.Key.CampoIdentificador,
                 IdentificadorFiscalia = grupo.Key.IdentificadorFiscalia
             };
-
             foreach (var campo in grupo.Where(x => !string.IsNullOrWhiteSpace(x.Campo)))
             {
                 registro.CamposModificados.Add(new ActualizacionCampoDiferencia
@@ -883,41 +839,21 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         response.TotalCarpetas = response.Carpetas.Count;
         response.TotalDelitos = response.Delitos.Count;
         response.TotalVictimas = response.Victimas.Count;
-        response.TotalDiferencias =
-            response.TotalCarpetas +
-            response.TotalDelitos +
-            response.TotalVictimas;
-
+        response.TotalDiferencias = response.TotalCarpetas + response.TotalDelitos + response.TotalVictimas;
         response.LimitePorSeccion = limitePorSeccion;
-
-        if (limitePorSeccion == 0)
+        if(limitePorSeccion == 0)
         {
             response.DetalleLimitado = response.TotalDiferencias > 0;
-
             response.Carpetas = new List<ActualizacionDiferenciaRegistro>();
             response.Delitos = new List<ActualizacionDiferenciaRegistro>();
             response.Victimas = new List<ActualizacionDiferenciaRegistro>();
-
             return;
         }
 
-        var carpetasLimitadas = response.Carpetas
-            .Take(limitePorSeccion)
-            .ToList();
-
-        var delitosLimitados = response.Delitos
-            .Take(limitePorSeccion)
-            .ToList();
-
-        var victimasLimitadas = response.Victimas
-            .Take(limitePorSeccion)
-            .ToList();
-
-        response.DetalleLimitado =
-            response.TotalCarpetas > carpetasLimitadas.Count ||
-            response.TotalDelitos > delitosLimitados.Count ||
-            response.TotalVictimas > victimasLimitadas.Count;
-
+        var carpetasLimitadas = response.Carpetas.Take(limitePorSeccion).ToList();
+        var delitosLimitados = response.Delitos.Take(limitePorSeccion).ToList();
+        var victimasLimitadas = response.Victimas.Take(limitePorSeccion).ToList();
+        response.DetalleLimitado = response.TotalCarpetas > carpetasLimitadas.Count || response.TotalDelitos > delitosLimitados.Count || response.TotalVictimas > victimasLimitadas.Count;
         response.Carpetas = carpetasLimitadas;
         response.Delitos = delitosLimitados;
         response.Victimas = victimasLimitadas;

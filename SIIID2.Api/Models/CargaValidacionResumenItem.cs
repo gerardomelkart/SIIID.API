@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class CargaValidacionResumenItem
 {
     // Archivo al que pertenece el resumen: carpetas, delitos, víctimas o general.

@@ -1,17 +1,19 @@
-﻿using Dapper;
+﻿// Auditoría del ciclo semanal; conservar el SQL literal para mantener su correspondencia con las tablas de historial.
+using Dapper;
 using Microsoft.Data.SqlClient;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 internal static class SemanalCargaAuditoriaSql
 {
-    public static async Task GuardarAdvertenciasAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, IEnumerable<CargaValidacionError> advertencias)
+    public static async Task GuardarAdvertenciasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        IEnumerable<CargaValidacionError> advertencias)
     {
         var lista = advertencias?.ToList() ?? [];
-
-        if (lista.Count == 0) return;
-
+        if(lista.Count == 0)
+            return;
         const string sql = """
             INSERT INTO dbo.semanal_carga_advertencia
             (
@@ -46,24 +48,14 @@ internal static class SemanalCargaAuditoriaSql
                 1
             );
             """;
-
-        var parametros = lista.Select(advertencia => new
-        {
-            IdSemanalCarga = idSemanalCarga,
-            Codigo = Limitar(advertencia.Codigo, 150),
-            Archivo = Limitar(advertencia.Archivo, 50),
-            NumeroFila = advertencia.Fila,
-            Columna = LimitarNullable(advertencia.Columna, 150),
-            Campo = LimitarNullable(advertencia.Campo, 150),
-            Valor = LimitarNullable(advertencia.Valor, 1000),
-            DescripcionResumen = Limitar(advertencia.DescripcionResumen, 500),
-            Mensaje = Limitar(advertencia.Mensaje, 2000)
-        });
-
+        var parametros = lista.Select(advertencia => new { IdSemanalCarga = idSemanalCarga, Codigo = Limitar(advertencia.Codigo, 150), Archivo = Limitar(advertencia.Archivo, 50), NumeroFila = advertencia.Fila, Columna = LimitarNullable(advertencia.Columna, 150), Campo = LimitarNullable(advertencia.Campo, 150), Valor = LimitarNullable(advertencia.Valor, 1000), DescripcionResumen = Limitar(advertencia.DescripcionResumen, 500), Mensaje = Limitar(advertencia.Mensaje, 2000) });
         await connection.ExecuteAsync(sql, parametros, transaction);
     }
 
-    public static async Task MarcarAdvertenciasAceptadasAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioAceptacion)
+    public static async Task MarcarAdvertenciasAceptadasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        int idUsuarioAceptacion)
     {
         const string sql = """
             UPDATE dbo.semanal_carga_advertencia
@@ -74,7 +66,6 @@ internal static class SemanalCargaAuditoriaSql
               AND activo = 1
               AND aceptada_usuario = 0;
             """;
-
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioAceptacion = idUsuarioAceptacion }, transaction);
     }
 
@@ -86,8 +77,8 @@ internal static class SemanalCargaAuditoriaSql
 
     private static string? LimitarNullable(string? valor, int longitudMaxima)
     {
-        if (string.IsNullOrWhiteSpace(valor)) return null;
-
+        if(string.IsNullOrWhiteSpace(valor))
+            return null;
         var texto = valor.Trim();
         return texto.Length <= longitudMaxima ? texto : texto[..longitudMaxima];
     }

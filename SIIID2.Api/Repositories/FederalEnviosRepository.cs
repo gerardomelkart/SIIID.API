@@ -3,11 +3,9 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public partial class FederalEnviosRepository : IFederalEnviosRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public FederalEnviosRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
@@ -28,14 +26,10 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
                 c.anio_corte DESC,
                 c.mes_corte DESC;
             """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
         var periodos = (await connection.QueryAsync<InformePeriodoItem>(sql)).ToList();
-
         foreach (var periodo in periodos)
             periodo.Corte = $"{ObtenerNombreMes(periodo.MesCorte)} {periodo.AnioCorte}";
-
         return periodos;
     }
 
@@ -85,10 +79,8 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
             ORDER BY c.anio_corte DESC, c.mes_corte DESC
             OPTION (RECOMPILE);
             """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         var reporte = (await connection.QueryAsync<InformeReporteCargaItem>(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte })).ToList();
-
         foreach (var carga in reporte)
         {
             carga.Corte = $"{ObtenerNombreMes(carga.MesCorte)} {carga.AnioCorte}";
@@ -254,50 +246,29 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
                 FechaEnvio DESC
             OPTION (RECOMPILE);
             """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var envios = (await connection.QueryAsync<InformeEnvioItem>(sql, new
-        {
-            MesCorte = mesCorte,
-            AnioCorte = anioCorte
-        })).ToList();
-
+        var envios = (await connection.QueryAsync<InformeEnvioItem>(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte })).ToList();
         foreach (var envio in envios)
         {
             envio.FechaEnvioTexto = envio.FechaEnvio.ToString("dd-MM-yyyy");
             envio.FechaRechazoTexto = envio.FechaRechazo?.ToString("dd-MM-yyyy") ?? string.Empty;
             envio.Corte = $"{ObtenerNombreMes(envio.MesCorte)} {envio.AnioCorte}";
-
-            envio.EsConfirmado =
-                string.Equals(envio.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(envio.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
-
+            envio.EsConfirmado = string.Equals(envio.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) || string.Equals(envio.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
             envio.EstadoTexto = ObtenerEstadoTexto(envio.Estado, envio.TipoCarga);
-
-            if (envio.EsRechazadoAdministrador)
+            if(envio.EsRechazadoAdministrador)
             {
-                envio.EndpointAcuse = !envio.TieneStagingDisponible
-                    ? string.Empty
-                    : string.Equals(envio.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase)
-                        ? $"/api/federal/actualizaciones/{envio.CodigoReferencia}/acuse"
-                        : $"/api/federal/cargas/{envio.CodigoReferencia}/acuse";
-
+                envio.EndpointAcuse = !envio.TieneStagingDisponible ? string.Empty : string.Equals(envio.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) ? $"/api/federal/actualizaciones/{envio.CodigoReferencia}/acuse" : $"/api/federal/cargas/{envio.CodigoReferencia}/acuse";
                 envio.EndpointExcel = envio.TieneStagingDisponible ? $"/api/federal/informes/envios/{envio.CodigoReferencia}/archivos" : string.Empty;
                 continue;
             }
 
-            if (string.Equals(envio.TipoCarga, "CARGA_INICIAL", StringComparison.OrdinalIgnoreCase))
+            if(string.Equals(envio.TipoCarga, "CARGA_INICIAL", StringComparison.OrdinalIgnoreCase))
             {
-                envio.EndpointAcuse = envio.EsConfirmado
-                    ? $"/api/federal/cargas/{envio.CodigoReferencia}/acuse-confirmado"
-                    : $"/api/federal/cargas/{envio.CodigoReferencia}/acuse";
+                envio.EndpointAcuse = envio.EsConfirmado ? $"/api/federal/cargas/{envio.CodigoReferencia}/acuse-confirmado" : $"/api/federal/cargas/{envio.CodigoReferencia}/acuse";
             }
             else
             {
-                envio.EndpointAcuse = envio.EsConfirmado
-                    ? $"/api/federal/actualizaciones/{envio.CodigoReferencia}/acuse-confirmado"
-                    : $"/api/federal/actualizaciones/{envio.CodigoReferencia}/acuse";
+                envio.EndpointAcuse = envio.EsConfirmado ? $"/api/federal/actualizaciones/{envio.CodigoReferencia}/acuse-confirmado" : $"/api/federal/actualizaciones/{envio.CodigoReferencia}/acuse";
             }
 
             envio.EndpointExcel = $"/api/federal/informes/envios/{envio.CodigoReferencia}/archivos";
@@ -358,7 +329,6 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
           )
         ORDER BY c.id_federal_carga DESC;
         """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.QueryFirstOrDefaultAsync<InformeArchivoCargaInfo>(sql, new { CodigoReferencia = codigoReferencia });
     }
@@ -395,7 +365,6 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
         WHERE ci.activo = 1
         ORDER BY ci.identificador_carpeta_fiscalia;
         """;
-
         return await QueryDictionaryAsync(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte });
     }
 
@@ -462,7 +431,6 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
         WHERE d.activo = 1
         ORDER BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia;
         """;
-
         return await QueryDictionaryAsync(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte });
     }
 
@@ -525,7 +493,6 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
         WHERE v.activo = 1
         ORDER BY ci.identificador_carpeta_fiscalia, d.identificador_delito_fiscalia, v.identificador_victima_fiscalia;
         """;
-
         return await QueryDictionaryAsync(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte });
     }
 
@@ -543,7 +510,6 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
           AND activo = 1
         ORDER BY numero_fila;
         """;
-
         return await QueryDictionaryAsync(sql, new { IdFederalCarga = idFederalCarga });
     }
 
@@ -583,7 +549,6 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
           AND d.activo = 1
         ORDER BY d.numero_fila;
         """;
-
         return await QueryDictionaryAsync(sql, new { IdFederalCarga = idFederalCarga });
     }
 
@@ -612,7 +577,6 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
           AND activo = 1
         ORDER BY numero_fila;
         """;
-
         return await QueryDictionaryAsync(sql, new { IdFederalCarga = idFederalCarga });
     }
 
@@ -620,11 +584,7 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
     {
         using var connection = _dbConnectionFactory.CrearConexion();
         var filas = await connection.QueryAsync(sql, parametros);
-
-        return filas
-            .Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase))
-            .Cast<IDictionary<string, object?>>()
-            .ToList();
+        return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
     }
 
     private static string ObtenerEstadoTexto(string estado, string tipoCarga)
@@ -632,23 +592,19 @@ public partial class FederalEnviosRepository : IFederalEnviosRepository
         var estadoNormalizado = (estado ?? string.Empty).Trim().ToUpperInvariant();
         var esActualizacion = string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
         var sufijo = esActualizacion ? "actualización" : "carga";
-
-        return estadoNormalizado switch
-        {
+        return estadoNormalizado switch        {
             "CONFIRMADO" => $"Confirmado {sufijo}",
             "CONFIRMADO_ACTUALIZACION" => $"Confirmado {sufijo}",
             "PENDIENTE_APROBACION" => "Pendiente de aprobación",
             "VALIDADO_PENDIENTE" => $"Pendiente {sufijo}",
             "VALIDADO_PENDIENTE_ACTUALIZACION" => $"Pendiente {sufijo}",
             "RECHAZADO_ADMIN" => "Rechazado por administración",
-            _ => estadoNormalizado.Replace("_", " ")
-        };
+            _ => estadoNormalizado.Replace("_", " ")};
     }
 
     private static string ObtenerNombreMes(int mes)
     {
-        return mes switch
-        {
+        return mes switch        {
             1 => "Enero",
             2 => "Febrero",
             3 => "Marzo",

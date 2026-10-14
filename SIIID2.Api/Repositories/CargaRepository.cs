@@ -6,7 +6,7 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
+// Mantiene el ciclo de Consolidado: carga temporal, decisión del usuario e integración con trazabilidad.
 public class CargaRepository : ICargaRepository
 {
     private class CargaConfirmacionInfo
@@ -24,79 +24,42 @@ public class CargaRepository : ICargaRepository
 
     private readonly IDbConnectionFactory _dbConnectionFactory;
     private readonly BanciCruceService _cruce;
-
     public CargaRepository(BanciCruceService cruce, IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
         _cruce = cruce;
     }
 
-    public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<CargaValidacionError> advertencias, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga,
+        int? idEntidadFederativa,
+        string codigoReferencia,
+        int mesCorte,
+        int anioCorte,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas,
+        string estado,
+        string? mensajeError,
+        List<CargaValidacionError> advertencias,
+        List<ArchivoFila> filasCarpetas,
+        List<ArchivoFila> filasDelitos,
+        List<ArchivoFila> filasVictimas)
     {
         // Este método guarda todo el intento de carga en una sola transacción.
         // Si falla cualquier parte, se revierte carga y staging.
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
-
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
-            var idCarga = await CrearCargaAsync(
-                connection,
-                transaction,
-                idUsuarioCarga,
-                idEntidadFederativa,
-                codigoReferencia,
-                tipoCarga: "CARGA_INICIAL",
-                mesCorte,
-                anioCorte,
-                totalCarpetas,
-                totalDelitos,
-                totalVictimas,
-                estado,
-                mensajeError);
-
-            await GuardarTmpCarpetasAsync(
-                connection,
-                transaction,
-                idCarga,
-                filasCarpetas);
-
-            await GuardarTmpDelitosAsync(
-                connection,
-                transaction,
-                idCarga,
-                filasDelitos);
-
-            await GuardarTmpVictimasAsync(
-                connection,
-                transaction,
-                idCarga,
-                filasVictimas);
-
-            await CargaAuditoriaSql.GuardarAdvertenciasAsync(
-                                    connection,
-                                    transaction,
-                                    idCarga,
-                                    advertencias);
-
-            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                                    connection,
-                                    transaction,
-                                    idCarga,
-                                    estadoAnterior: null,
-                                    estadoNuevo: estado,
-                                    idUsuario: idUsuarioCarga,
-                                    comentario: estado == "VALIDADO_PENDIENTE"
-                                        ? "Carga inicial validada y pendiente de decisión del usuario."
-                                        : "Intento de carga inicial registrado con errores de validación.");
-
+            var idCarga = await CrearCargaAsync(connection, transaction, idUsuarioCarga, idEntidadFederativa, codigoReferencia, tipoCarga: "CARGA_INICIAL", mesCorte, anioCorte, totalCarpetas, totalDelitos, totalVictimas, estado, mensajeError);
+            await GuardarTmpCarpetasAsync(connection, transaction, idCarga, filasCarpetas);
+            await GuardarTmpDelitosAsync(connection, transaction, idCarga, filasDelitos);
+            await GuardarTmpVictimasAsync(connection, transaction, idCarga, filasVictimas);
+            await CargaAuditoriaSql.GuardarAdvertenciasAsync(connection, transaction, idCarga, advertencias);
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, idCarga, estadoAnterior: null, estadoNuevo: estado, idUsuario: idUsuarioCarga, comentario: estado == "VALIDADO_PENDIENTE" ? "Carga inicial validada y pendiente de decisión del usuario." : "Intento de carga inicial registrado con errores de validación.");
             await BanciCruceService.GuardarAsync(connection, transaction, idCarga, filasCarpetas, filasDelitos, filasVictimas);
-
             await transaction.CommitAsync();
-
             return idCarga;
         }
         catch
@@ -106,7 +69,19 @@ public class CargaRepository : ICargaRepository
         }
     }
 
-    private async Task<long> CrearCargaAsync(SqlConnection connection, SqlTransaction transaction, int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, string tipoCarga, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError)
+    private async Task<long> CrearCargaAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        int idUsuarioCarga,
+        int? idEntidadFederativa,
+        string codigoReferencia,
+        string tipoCarga,
+        int mesCorte,
+        int anioCorte,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas,
+        string estado,
+        string? mensajeError)
     {
         // Crea el intento de carga.
         // OUTPUT INSERTED.id_carga devuelve el ID generado por SQL Server.
@@ -145,25 +120,7 @@ public class CargaRepository : ICargaRepository
                 1
             );
         ";
-
-        var idCarga = await connection.ExecuteScalarAsync<long>(
-            sql,
-            new
-            {
-                IdUsuarioCarga = idUsuarioCarga,
-                IdEntidadFederativa = idEntidadFederativa,
-                CodigoReferencia = codigoReferencia,
-                TipoCarga = tipoCarga,
-                MesCorte = mesCorte,
-                AnioCorte = anioCorte,
-                TotalCarpetas = totalCarpetas,
-                TotalDelitos = totalDelitos,
-                TotalVictimas = totalVictimas,
-                Estado = estado,
-                MensajeError = mensajeError
-            },
-            transaction);
-
+        var idCarga = await connection.ExecuteScalarAsync<long>(sql, new { IdUsuarioCarga = idUsuarioCarga, IdEntidadFederativa = idEntidadFederativa, CodigoReferencia = codigoReferencia, TipoCarga = tipoCarga, MesCorte = mesCorte, AnioCorte = anioCorte, TotalCarpetas = totalCarpetas, TotalDelitos = totalDelitos, TotalVictimas = totalVictimas, Estado = estado, MensajeError = mensajeError }, transaction);
         return idCarga;
     }
 
@@ -181,25 +138,19 @@ public class CargaRepository : ICargaRepository
           AND estado = 'CONFIRMADO'
           AND activo = 1;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var total = await connection.ExecuteScalarAsync<int>(sql, new
-        {
-            IdEntidadFederativa = idEntidadFederativa,
-            MesCorte = mesCorte,
-            AnioCorte = anioCorte
-        });
-
+        var total = await connection.ExecuteScalarAsync<int>(sql, new { IdEntidadFederativa = idEntidadFederativa, MesCorte = mesCorte, AnioCorte = anioCorte });
         return total > 0;
     }
 
-    private async Task GuardarTmpCarpetasAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, List<ArchivoFila> filasCarpetas)
+    private async Task GuardarTmpCarpetasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        List<ArchivoFila> filasCarpetas)
     {
         // Guarda las carpetas leídas en staging usando carga masiva.
         // SqlBulkCopy evita insertar fila por fila.
         var tabla = new DataTable();
-
         tabla.Columns.Add("id_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("id_ci", typeof(string));
@@ -209,26 +160,15 @@ public class CargaRepository : ICargaRepository
         tabla.Columns.Add("rmen_de_hchos", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-
         foreach (var fila in filasCarpetas)
         {
-            tabla.Rows.Add(
-                idCarga,
-                fila.NumeroFila,
-                ValorTextoStaging(ObtenerValor(fila, "id_ci")),
-                ValorTextoStaging(ObtenerValor(fila, "ntra_ci")),
-                ValorTextoStaging(ObtenerValor(fila, "fha_de_ini")),
-                ValorTextoStaging(ObtenerValor(fila, "hra_de_ini")),
-                ValorTextoStaging(ObtenerValor(fila, "rmen_de_hchos")),
-                "PENDIENTE",
-                true);
+            tabla.Rows.Add(idCarga, fila.NumeroFila, ValorTextoStaging(ObtenerValor(fila, "id_ci")), ValorTextoStaging(ObtenerValor(fila, "ntra_ci")), ValorTextoStaging(ObtenerValor(fila, "fha_de_ini")), ValorTextoStaging(ObtenerValor(fila, "hra_de_ini")), ValorTextoStaging(ObtenerValor(fila, "rmen_de_hchos")), "PENDIENTE", true);
         }
 
         using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
         {
             DestinationTableName = "carga_tmp_carpeta"
         };
-
         // El primer valor es el índice de la columna en el DataTable.
         // El segundo valor es el nombre de la columna destino en SQL Server.
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(0, "id_carga"));
@@ -240,16 +180,17 @@ public class CargaRepository : ICargaRepository
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(6, "rmen_de_hchos"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(7, "estado"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(8, "activo"));
-
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
-    private async Task GuardarTmpDelitosAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, List<ArchivoFila> filasDelitos)
+    private async Task GuardarTmpDelitosAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        List<ArchivoFila> filasDelitos)
     {
         // Guarda los delitos leídos en staging usando carga masiva.
         // Esta parte era la más pesada cuando se insertaba registro por registro.
         var tabla = new DataTable();
-
         tabla.Columns.Add("id_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("id_ci", typeof(string));
@@ -274,41 +215,15 @@ public class CargaRepository : ICargaRepository
         tabla.Columns.Add("dom_hchos", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-
         foreach (var fila in filasDelitos)
         {
-            tabla.Rows.Add(
-                idCarga,
-                fila.NumeroFila,
-                ValorTextoStaging(ObtenerValor(fila, "id_ci")),
-                ValorTextoStaging(ObtenerValor(fila, "id_delito")),
-                ValorTextoStaging(ObtenerValor(fila, "dto")),
-                ValorTextoStaging(ObtenerValor(fila, "moda_dto")),
-                ValorTextoStaging(ObtenerValor(fila, "forma_acc")),
-                ValorTextoStaging(ObtenerValor(fila, "fha_de_hchos")),
-                ValorTextoStaging(ObtenerValor(fila, "hra_de_hchos")),
-                ValorTextoStaging(ObtenerValor(fila, "emto_com_dto")),
-                ValorTextoStaging(ObtenerValor(fila, "grdo_cons")),
-                ValorTextoStaging(ObtenerValor(fila, "clasf_de_dto")),
-                ValorTextoStaging(ObtenerValor(fila, "id_ent_hchos")),
-                ValorTextoStaging(ObtenerValor(fila, "id_mun_hchos")),
-                ValorTextoStaging(ObtenerValor(fila, "id_loc_hchos")),
-                ValorTextoStaging(ObtenerValor(fila, "nom_loc_hchos")),
-                ValorTextoStaging(ObtenerValor(fila, "id_col_hchos")),
-                ValorTextoStaging(ObtenerValor(fila, "nom_col_hchos")),
-                ValorTextoStaging(ObtenerValor(fila, "cp")),
-                ValorTextoStaging(ObtenerValor(fila, "coord_x")),
-                ValorTextoStaging(ObtenerValor(fila, "coord_y")),
-                ValorTextoStaging(ObtenerValor(fila, "dom_hchos")),
-                "PENDIENTE",
-                true);
+            tabla.Rows.Add(idCarga, fila.NumeroFila, ValorTextoStaging(ObtenerValor(fila, "id_ci")), ValorTextoStaging(ObtenerValor(fila, "id_delito")), ValorTextoStaging(ObtenerValor(fila, "dto")), ValorTextoStaging(ObtenerValor(fila, "moda_dto")), ValorTextoStaging(ObtenerValor(fila, "forma_acc")), ValorTextoStaging(ObtenerValor(fila, "fha_de_hchos")), ValorTextoStaging(ObtenerValor(fila, "hra_de_hchos")), ValorTextoStaging(ObtenerValor(fila, "emto_com_dto")), ValorTextoStaging(ObtenerValor(fila, "grdo_cons")), ValorTextoStaging(ObtenerValor(fila, "clasf_de_dto")), ValorTextoStaging(ObtenerValor(fila, "id_ent_hchos")), ValorTextoStaging(ObtenerValor(fila, "id_mun_hchos")), ValorTextoStaging(ObtenerValor(fila, "id_loc_hchos")), ValorTextoStaging(ObtenerValor(fila, "nom_loc_hchos")), ValorTextoStaging(ObtenerValor(fila, "id_col_hchos")), ValorTextoStaging(ObtenerValor(fila, "nom_col_hchos")), ValorTextoStaging(ObtenerValor(fila, "cp")), ValorTextoStaging(ObtenerValor(fila, "coord_x")), ValorTextoStaging(ObtenerValor(fila, "coord_y")), ValorTextoStaging(ObtenerValor(fila, "dom_hchos")), "PENDIENTE", true);
         }
 
         using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
         {
             DestinationTableName = "carga_tmp_delito"
         };
-
         // El primer valor es el índice de la columna en el DataTable.
         // El segundo valor es el nombre de la columna destino en SQL Server.
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(0, "id_carga"));
@@ -335,16 +250,17 @@ public class CargaRepository : ICargaRepository
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(21, "dom_hchos"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(22, "estado"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(23, "activo"));
-
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
-    private async Task GuardarTmpVictimasAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, List<ArchivoFila> filasVictimas)
+    private async Task GuardarTmpVictimasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        List<ArchivoFila> filasVictimas)
     {
         // Guarda las víctimas leídas en staging usando carga masiva.
         // Se conserva el valor crudo del Excel para confirmar o auditar después.
         var tabla = new DataTable();
-
         tabla.Columns.Add("id_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("id_ci", typeof(string));
@@ -365,37 +281,15 @@ public class CargaRepository : ICargaRepository
         tabla.Columns.Add("curp_vicfem", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-
         foreach (var fila in filasVictimas)
         {
-            tabla.Rows.Add(
-                idCarga,
-                fila.NumeroFila,
-                ValorTextoStaging(ObtenerValor(fila, "id_ci")),
-                ValorTextoStaging(ObtenerValor(fila, "id_delito")),
-                ValorTextoStaging(ObtenerValor(fila, "id_vicf")),
-                ValorTextoStaging(ObtenerValor(fila, "id_tv")),
-                ValorTextoStaging(ObtenerValor(fila, "id_tpm")),
-                ValorTextoStaging(ObtenerValor(fila, "sexo")),
-                ValorTextoStaging(ObtenerValor(fila, "genero")),
-                ValorTextoStaging(ObtenerValor(fila, "pob")),
-                ValorTextoStaging(ObtenerValor(fila, "disc")),
-                ValorTextoStaging(ObtenerValor(fila, "fha_nac")),
-                ValorTextoStaging(ObtenerValor(fila, "edad")),
-                ValorTextoStaging(ObtenerValor(fila, "nacional")),
-                ValorTextoStaging(ObtenerValor(fila, "nombre_vicfem")),
-                ValorTextoStaging(ObtenerValor(fila, "1apellido_vicfem")),
-                ValorTextoStaging(ObtenerValor(fila, "2apellido_vicfem")),
-                ValorTextoStaging(ObtenerValor(fila, "curp_vicfem")),
-                "PENDIENTE",
-                true);
+            tabla.Rows.Add(idCarga, fila.NumeroFila, ValorTextoStaging(ObtenerValor(fila, "id_ci")), ValorTextoStaging(ObtenerValor(fila, "id_delito")), ValorTextoStaging(ObtenerValor(fila, "id_vicf")), ValorTextoStaging(ObtenerValor(fila, "id_tv")), ValorTextoStaging(ObtenerValor(fila, "id_tpm")), ValorTextoStaging(ObtenerValor(fila, "sexo")), ValorTextoStaging(ObtenerValor(fila, "genero")), ValorTextoStaging(ObtenerValor(fila, "pob")), ValorTextoStaging(ObtenerValor(fila, "disc")), ValorTextoStaging(ObtenerValor(fila, "fha_nac")), ValorTextoStaging(ObtenerValor(fila, "edad")), ValorTextoStaging(ObtenerValor(fila, "nacional")), ValorTextoStaging(ObtenerValor(fila, "nombre_vicfem")), ValorTextoStaging(ObtenerValor(fila, "1apellido_vicfem")), ValorTextoStaging(ObtenerValor(fila, "2apellido_vicfem")), ValorTextoStaging(ObtenerValor(fila, "curp_vicfem")), "PENDIENTE", true);
         }
 
         using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
         {
             DestinationTableName = "carga_tmp_victima"
         };
-
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(0, "id_carga"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(1, "numero_fila"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(2, "id_ci"));
@@ -416,32 +310,20 @@ public class CargaRepository : ICargaRepository
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(17, "curp_vicfem"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(18, "estado"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(19, "activo"));
-
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
     public async Task<ConfirmarCargaResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion)
     {
-        using var connection =
-            (SqlConnection)_dbConnectionFactory.CrearConexion();
-
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
-        using var transaction =
-            (SqlTransaction)await connection.BeginTransactionAsync();
-
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
         try
         {
-            var carga = await ObtenerCargaConfirmacionAsync(
-                connection,
-                transaction,
-                codigoReferencia,
-                idUsuarioConfirmacion);
-
-            if (carga == null)
+            var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioConfirmacion);
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
@@ -451,119 +333,76 @@ public class CargaRepository : ICargaRepository
                 };
             }
 
-            if (!string.Equals(
-                    carga.Estado,
-                    "VALIDADO_PENDIENTE",
-                    StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "La carga no se encuentra en estado VALIDADO_PENDIENTE."
+                    Mensaje = "La carga no se encuentra en estado VALIDADO_PENDIENTE."
                 };
             }
 
-            if (carga.IdUsuarioCarga != idUsuarioConfirmacion)
+            if(carga.IdUsuarioCarga != idUsuarioConfirmacion)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "Solo el usuario que realizo la carga puede aceptar o rechazar esta validacion."
+                    Mensaje = "Solo el usuario que realizo la carga puede aceptar o rechazar esta validacion."
                 };
             }
 
-            if (carga.FechaExpiracion.HasValue &&
-                carga.FechaExpiracion.Value < DateTime.Now)
+            if(carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
             {
-                await ActualizarCargaExpiradaAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga);
-
-                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga,
-                    estadoAnterior: carga.Estado,
-                    estadoNuevo: "EXPIRADO",
-                    idUsuario: null,
-                    comentario:
-                        "La carga expiro antes de que el usuario tomara una decision.");
-
+                await ActualizarCargaExpiradaAsync(connection, transaction, carga.IdCarga);
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: carga.Estado, estadoNuevo: "EXPIRADO", idUsuario: null, comentario: "La carga expiro antes de que el usuario tomara una decision.");
                 await transaction.CommitAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = "EXPIRADO",
-                    Mensaje =
-                        "La carga ya expiro. Debe validar nuevamente los archivos."
+                    Mensaje = "La carga ya expiro. Debe validar nuevamente los archivos."
                 };
             }
 
-            if (!carga.HabilitaCarga)
+            if(!carga.HabilitaCarga)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "El usuario no tiene habilitada la carga de informacion."
+                    Mensaje = "El usuario no tiene habilitada la carga de informacion."
                 };
             }
 
-            if (!carga.EsSuperUsuario &&
-                carga.IdEntidadFederativaUsuario.HasValue &&
-                carga.IdEntidadFederativaCarga.HasValue &&
-                carga.IdEntidadFederativaUsuario.Value !=
-                carga.IdEntidadFederativaCarga.Value)
+            if(!carga.EsSuperUsuario
+                && carga.IdEntidadFederativaUsuario.HasValue
+                && carga.IdEntidadFederativaCarga.HasValue
+                && carga.IdEntidadFederativaUsuario.Value != carga.IdEntidadFederativaCarga.Value)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "El usuario no puede procesar cargas de otra entidad federativa."
+                    Mensaje = "El usuario no puede procesar cargas de otra entidad federativa."
                 };
             }
 
-            if (!aceptar)
+            if(!aceptar)
             {
-                await RechazarCargaAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga,
-                    idUsuarioConfirmacion);
-
-                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga,
-                    estadoAnterior: carga.Estado,
-                    estadoNuevo: "RECHAZADO_VALIDACION",
-                    idUsuario: idUsuarioConfirmacion,
-                    comentario:
-                        "La carga fue rechazada por el usuario despues de revisar el acuse previo y las validaciones.");
-
+                await RechazarCargaAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: carga.Estado, estadoNuevo: "RECHAZADO_VALIDACION", idUsuario: idUsuarioConfirmacion, comentario: "La carga fue rechazada por el usuario despues de revisar el acuse previo y las validaciones.");
                 await transaction.CommitAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = true,
@@ -573,77 +412,27 @@ public class CargaRepository : ICargaRepository
                 };
             }
 
-            await CargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioConfirmacion);
-
-            if (!carga.EsSuperUsuario)
+            await CargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
+            if(!carga.EsSuperUsuario)
             {
-                await EnviarCargaAprobacionAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga);
-
-                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga,
-                    estadoAnterior: carga.Estado,
-                    estadoNuevo: "PENDIENTE_APROBACION",
-                    idUsuario: idUsuarioConfirmacion,
-                    comentario:
-                        "El enlace estatal acepto la validacion y envio la carga a revision administrativa.");
-
+                await EnviarCargaAprobacionAsync(connection, transaction, carga.IdCarga);
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: carga.Estado, estadoNuevo: "PENDIENTE_APROBACION", idUsuario: idUsuarioConfirmacion, comentario: "El enlace estatal acepto la validacion y envio la carga a revision administrativa.");
                 await transaction.CommitAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = true,
                     CodigoReferencia = codigoReferencia,
                     Estado = "PENDIENTE_APROBACION",
-                    Mensaje =
-                        "La carga fue enviada correctamente a revision administrativa."
+                    Mensaje = "La carga fue enviada correctamente a revision administrativa."
                 };
             }
 
-            await InsertarCarpetasFinalesAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioConfirmacion);
-
-            await InsertarDelitosFinalesAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioConfirmacion);
-
-            await InsertarVictimasFinalesAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioConfirmacion);
-
-            await ConfirmarCargaFinalAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioConfirmacion);
-
-            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                estadoAnterior: carga.Estado,
-                estadoNuevo: "CONFIRMADO",
-                idUsuario: idUsuarioConfirmacion,
-                comentario:
-                    "Carga realizada y confirmada directamente por un superusuario.");
-
+            await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
+            await InsertarDelitosFinalesAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
+            await InsertarVictimasFinalesAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
+            await ConfirmarCargaFinalAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: carga.Estado, estadoNuevo: "CONFIRMADO", idUsuario: idUsuarioConfirmacion, comentario: "Carga realizada y confirmada directamente por un superusuario.");
             await transaction.CommitAsync();
-
             return new ConfirmarCargaResponse
             {
                 EsValido = true,
@@ -659,7 +448,10 @@ public class CargaRepository : ICargaRepository
         }
     }
 
-    private async Task<CargaConfirmacionInfo?> ObtenerCargaConfirmacionAsync(SqlConnection connection, SqlTransaction transaction, string codigoReferencia, int idUsuarioConfirmacion)
+    private async Task<CargaConfirmacionInfo?> ObtenerCargaConfirmacionAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        string codigoReferencia,
+        int idUsuarioConfirmacion)
     {
         // Obtiene datos de carga y permisos del usuario que confirma.
         var sql = @"
@@ -687,15 +479,7 @@ public class CargaRepository : ICargaRepository
           AND c.tipo_carga = 'CARGA_INICIAL'
           AND c.activo = 1;
         ";
-
-        return await connection.QueryFirstOrDefaultAsync<CargaConfirmacionInfo>(
-            sql,
-            new
-            {
-                CodigoReferencia = codigoReferencia,
-                IdUsuarioConfirmacion = idUsuarioConfirmacion
-            },
-            transaction);
+        return await connection.QueryFirstOrDefaultAsync<CargaConfirmacionInfo>(sql, new { CodigoReferencia = codigoReferencia, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
     private async Task ActualizarCargaExpiradaAsync(SqlConnection connection, SqlTransaction transaction, long idCarga)
@@ -721,14 +505,7 @@ public class CargaRepository : ICargaRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga }, transaction);
     }
 
     private async Task RechazarCargaAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
@@ -756,15 +533,7 @@ public class CargaRepository : ICargaRepository
                     fecha_procesamiento = SYSDATETIME()
                 WHERE id_carga = @IdCarga;
             ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                IdUsuarioConfirmacion = idUsuarioConfirmacion
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
     private static async Task EnviarCargaAprobacionAsync(SqlConnection connection, SqlTransaction transaction, long idCarga)
@@ -791,14 +560,7 @@ public class CargaRepository : ICargaRepository
             fecha_procesamiento = NULL
         WHERE id_carga = @IdCarga;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga }, transaction);
     }
 
     private static string? ObtenerValor(ArchivoFila fila, string columna)
@@ -809,12 +571,13 @@ public class CargaRepository : ICargaRepository
 
     private static string ValorTextoStaging(string? valor)
     {
-        return string.IsNullOrWhiteSpace(valor)
-            ? string.Empty
-            : valor.Trim();
+        return string.IsNullOrWhiteSpace(valor) ? string.Empty : valor.Trim();
     }
 
-    private async Task InsertarCarpetasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioRegistro)
+    private async Task InsertarCarpetasFinalesAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        int idUsuarioRegistro)
     {
         // Inserta carpetas desde staging a tabla final.
         var sql = @"
@@ -859,18 +622,13 @@ public class CargaRepository : ICargaRepository
         WHERE c.id_carga = @IdCarga
           AND c.activo = 1;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                IdUsuarioRegistro = idUsuarioRegistro
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioRegistro = idUsuarioRegistro }, transaction);
     }
 
-    private async Task InsertarDelitosFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioRegistro)
+    private async Task InsertarDelitosFinalesAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        int idUsuarioRegistro)
     {
         // Inserta delitos desde staging a tabla final.
         // Los ids de catálogos se resuelven aquí desde las claves recibidas en Excel.
@@ -978,18 +736,13 @@ public class CargaRepository : ICargaRepository
         WHERE d.id_carga = @IdCarga
           AND d.activo = 1;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                IdUsuarioRegistro = idUsuarioRegistro
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioRegistro = idUsuarioRegistro }, transaction);
     }
 
-    private async Task InsertarVictimasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioRegistro)
+    private async Task InsertarVictimasFinalesAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        int idUsuarioRegistro)
     {
         // Inserta víctimas desde staging a tabla final.
         // Los datos opcionales se insertan como NULL cuando vienen vacíos.
@@ -1072,18 +825,13 @@ public class CargaRepository : ICargaRepository
         WHERE v.id_carga = @IdCarga
           AND v.activo = 1;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                IdUsuarioRegistro = idUsuarioRegistro
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioRegistro = idUsuarioRegistro }, transaction);
     }
 
-    private async Task ConfirmarCargaFinalAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
+    private async Task ConfirmarCargaFinalAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        int idUsuarioConfirmacion)
     {
         await _cruce.ConfirmarAsync(connection, transaction, idCarga);
         var sql = @"
@@ -1109,15 +857,7 @@ public class CargaRepository : ICargaRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                IdUsuarioConfirmacion = idUsuarioConfirmacion
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
     public async Task<CargaPendienteInfo?> ObtenerCodigoCargaPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
@@ -1139,15 +879,8 @@ public class CargaRepository : ICargaRepository
           AND activo = 1
         ORDER BY fecha_validacion DESC;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<CargaPendienteInfo>(sql, new
-        {
-            IdEntidadFederativa = idEntidadFederativa,
-            MesCorte = mesCorte,
-            AnioCorte = anioCorte
-        });
+        return await connection.QueryFirstOrDefaultAsync<CargaPendienteInfo>(sql, new { IdEntidadFederativa = idEntidadFederativa, MesCorte = mesCorte, AnioCorte = anioCorte });
     }
 
     public async Task<CargaPendienteInfo?> ObtenerCodigoActualizacionPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte)
@@ -1169,15 +902,8 @@ public class CargaRepository : ICargaRepository
           AND activo = 1
         ORDER BY fecha_validacion DESC;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<CargaPendienteInfo>(sql, new
-        {
-            IdEntidadFederativa = idEntidadFederativa,
-            MesCorte = mesCorte,
-            AnioCorte = anioCorte
-        });
+        return await connection.QueryFirstOrDefaultAsync<CargaPendienteInfo>(sql, new { IdEntidadFederativa = idEntidadFederativa, MesCorte = mesCorte, AnioCorte = anioCorte });
     }
 
     public async Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idEntidadFederativa)
@@ -1202,37 +928,23 @@ public class CargaRepository : ICargaRepository
             c.anio_corte DESC,
             c.mes_corte DESC;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var periodos = await connection.QueryAsync<(int AnioCorte, int MesCorte)>(sql, new
+        var periodos = await connection.QueryAsync<(int AnioCorte, int MesCorte)>(sql, new { IdEntidadFederativa = idEntidadFederativa });
+        return periodos.GroupBy(x => x.AnioCorte).Select(g => new ActualizacionAnioDisponibleItem
         {
-            IdEntidadFederativa = idEntidadFederativa
-        });
-
-        return periodos
-            .GroupBy(x => x.AnioCorte)
-            .Select(g => new ActualizacionAnioDisponibleItem
-            {
-                AnioCorte = g.Key,
-                Meses = g
-                    .OrderByDescending(x => x.MesCorte)
-                    .Select(x => new ActualizacionMesDisponibleItem
-                    {
-                        MesCorte = x.MesCorte,
-                        NombreMes = ObtenerNombreMes(x.MesCorte),
-                        Periodo = $"{x.MesCorte:00}/{x.AnioCorte}"
-                    })
-                    .ToList()
-            })
-            .OrderByDescending(x => x.AnioCorte)
-            .ToList();
+            AnioCorte = g.Key,
+            Meses = g.OrderByDescending(x => x.MesCorte).Select(x => new ActualizacionMesDisponibleItem
+        {
+            MesCorte = x.MesCorte,
+            NombreMes = ObtenerNombreMes(x.MesCorte),
+            Periodo = $"{x.MesCorte:00}/{x.AnioCorte}"
+        }).ToList()
+        }).OrderByDescending(x => x.AnioCorte).ToList();
     }
 
     private static string ObtenerNombreMes(int mes)
     {
-        return mes switch
-        {
+        return mes switch        {
             1 => "Enero",
             2 => "Febrero",
             3 => "Marzo",
@@ -1249,81 +961,34 @@ public class CargaRepository : ICargaRepository
         };
     }
 
-    public async Task<ConfirmarCargaResponse> GuardarYConfirmarCargaDirectaAsync(int idUsuarioCarga, int idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    public async Task<ConfirmarCargaResponse> GuardarYConfirmarCargaDirectaAsync(int idUsuarioCarga,
+        int idEntidadFederativa,
+        string codigoReferencia,
+        int mesCorte,
+        int anioCorte,
+        List<ArchivoFila> filasCarpetas,
+        List<ArchivoFila> filasDelitos,
+        List<ArchivoFila> filasVictimas)
     {
         // Carga directa para migración:
         // - Usa el usuario autenticado como usuario de carga, registro y confirmación.
         // - No ejecuta validaciones de negocio.
         // - No espera confirmación posterior.
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
-
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
-            var idCarga = await CrearCargaAsync(
-                connection,
-                transaction,
-                idUsuarioCarga,
-                idEntidadFederativa,
-                codigoReferencia,
-                tipoCarga: "CARGA_INICIAL",
-                mesCorte,
-                anioCorte,
-                filasCarpetas.Count,
-                filasDelitos.Count,
-                filasVictimas.Count,
-                estado: "VALIDADO_PENDIENTE",
-                mensajeError: null);
-
-            await GuardarTmpCarpetasAsync(
-                connection,
-                transaction,
-                idCarga,
-                filasCarpetas);
-
-            await GuardarTmpDelitosAsync(
-                connection,
-                transaction,
-                idCarga,
-                filasDelitos);
-
-            await GuardarTmpVictimasAsync(
-                connection,
-                transaction,
-                idCarga,
-                filasVictimas);
-
+            var idCarga = await CrearCargaAsync(connection, transaction, idUsuarioCarga, idEntidadFederativa, codigoReferencia, tipoCarga: "CARGA_INICIAL", mesCorte, anioCorte, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count, estado: "VALIDADO_PENDIENTE", mensajeError: null);
+            await GuardarTmpCarpetasAsync(connection, transaction, idCarga, filasCarpetas);
+            await GuardarTmpDelitosAsync(connection, transaction, idCarga, filasDelitos);
+            await GuardarTmpVictimasAsync(connection, transaction, idCarga, filasVictimas);
             await BanciCruceService.GuardarAsync(connection, transaction, idCarga, filasCarpetas, filasDelitos, filasVictimas);
-
-            await InsertarCarpetasFinalesAsync(
-                connection,
-                transaction,
-                idCarga,
-                idUsuarioCarga);
-
-            await InsertarDelitosFinalesAsync(
-                connection,
-                transaction,
-                idCarga,
-                idUsuarioCarga);
-
-            await InsertarVictimasFinalesAsync(
-                connection,
-                transaction,
-                idCarga,
-                idUsuarioCarga);
-
-            await ConfirmarCargaFinalAsync(
-                connection,
-                transaction,
-                idCarga,
-                idUsuarioCarga);
-
+            await InsertarCarpetasFinalesAsync(connection, transaction, idCarga, idUsuarioCarga);
+            await InsertarDelitosFinalesAsync(connection, transaction, idCarga, idUsuarioCarga);
+            await InsertarVictimasFinalesAsync(connection, transaction, idCarga, idUsuarioCarga);
+            await ConfirmarCargaFinalAsync(connection, transaction, idCarga, idUsuarioCarga);
             await transaction.CommitAsync();
-
             return new ConfirmarCargaResponse
             {
                 EsValido = true,
@@ -1341,64 +1006,45 @@ public class CargaRepository : ICargaRepository
 
     public async Task<ConfirmarCargaResponse> AprobarCargaPendienteAsync(string codigoReferencia, int idUsuarioAprobacion)
     {
-        using var connection =
-            (SqlConnection)_dbConnectionFactory.CrearConexion();
-
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
-        using var transaction =
-            (SqlTransaction)await connection.BeginTransactionAsync();
-
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
         try
         {
-            var carga = await ObtenerCargaConfirmacionAsync(
-                connection,
-                transaction,
-                codigoReferencia,
-                idUsuarioAprobacion);
-
-            if (carga == null)
+            var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioAprobacion);
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = "NO_ENCONTRADA",
-                    Mensaje =
-                        "No se encontro la carga pendiente de aprobacion."
+                    Mensaje = "No se encontro la carga pendiente de aprobacion."
                 };
             }
 
-            if (!carga.EsSuperUsuario)
+            if(!carga.EsSuperUsuario)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "Solo un superusuario puede aprobar cargas."
+                    Mensaje = "Solo un superusuario puede aprobar cargas."
                 };
             }
 
-            if (!string.Equals(
-                    carga.Estado,
-                    "PENDIENTE_APROBACION",
-                    StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "La carga ya no se encuentra pendiente de aprobacion."
+                    Mensaje = "La carga ya no se encuentra pendiente de aprobacion."
                 };
             }
 
@@ -1406,52 +1052,21 @@ public class CargaRepository : ICargaRepository
                 Los registros finales conservan como usuario de registro
                 al enlace estatal que envio la informacion.
             */
-            await InsertarCarpetasFinalesAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                carga.IdUsuarioCarga);
-
-            await InsertarDelitosFinalesAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                carga.IdUsuarioCarga);
-
-            await InsertarVictimasFinalesAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                carga.IdUsuarioCarga);
-
+            await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdCarga, carga.IdUsuarioCarga);
+            await InsertarDelitosFinalesAsync(connection, transaction, carga.IdCarga, carga.IdUsuarioCarga);
+            await InsertarVictimasFinalesAsync(connection, transaction, carga.IdCarga, carga.IdUsuarioCarga);
             /*
                 La confirmacion sí queda asociada al administrador.
             */
-            await ConfirmarCargaFinalAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioAprobacion);
-
-            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                estadoAnterior: "PENDIENTE_APROBACION",
-                estadoNuevo: "CONFIRMADO",
-                idUsuario: idUsuarioAprobacion,
-                comentario:
-                    "La carga fue aprobada por el superusuario.");
-
+            await ConfirmarCargaFinalAsync(connection, transaction, carga.IdCarga, idUsuarioAprobacion);
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: "PENDIENTE_APROBACION", estadoNuevo: "CONFIRMADO", idUsuario: idUsuarioAprobacion, comentario: "La carga fue aprobada por el superusuario.");
             await transaction.CommitAsync();
-
             return new ConfirmarCargaResponse
             {
                 EsValido = true,
                 CodigoReferencia = codigoReferencia,
                 Estado = "CONFIRMADO",
-                Mensaje =
-                    "La carga fue aprobada y confirmada correctamente."
+                Mensaje = "La carga fue aprobada y confirmada correctamente."
             };
         }
         catch
@@ -1463,92 +1078,57 @@ public class CargaRepository : ICargaRepository
 
     public async Task<ConfirmarCargaResponse> RechazarCargaPendienteAsync(string codigoReferencia, int idUsuarioRechazo, string motivo)
     {
-        using var connection =
-            (SqlConnection)_dbConnectionFactory.CrearConexion();
-
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
-        using var transaction =
-            (SqlTransaction)await connection.BeginTransactionAsync();
-
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
         try
         {
-            var carga = await ObtenerCargaConfirmacionAsync(
-                connection,
-                transaction,
-                codigoReferencia,
-                idUsuarioRechazo);
-
-            if (carga == null)
+            var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioRechazo);
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = "NO_ENCONTRADA",
-                    Mensaje =
-                        "No se encontro la carga pendiente de aprobacion."
+                    Mensaje = "No se encontro la carga pendiente de aprobacion."
                 };
             }
 
-            if (!carga.EsSuperUsuario)
+            if(!carga.EsSuperUsuario)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "Solo un superusuario puede rechazar cargas."
+                    Mensaje = "Solo un superusuario puede rechazar cargas."
                 };
             }
 
-            if (!string.Equals(
-                    carga.Estado,
-                    "PENDIENTE_APROBACION",
-                    StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "La carga ya no se encuentra pendiente de aprobacion."
+                    Mensaje = "La carga ya no se encuentra pendiente de aprobacion."
                 };
             }
 
-            await RechazarCargaAdministracionAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioRechazo,
-                motivo);
-
-            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                estadoAnterior: "PENDIENTE_APROBACION",
-                estadoNuevo: "RECHAZADO_ADMIN",
-                idUsuario: idUsuarioRechazo,
-                comentario: motivo);
-
+            await RechazarCargaAdministracionAsync(connection, transaction, carga.IdCarga, idUsuarioRechazo, motivo);
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: "PENDIENTE_APROBACION", estadoNuevo: "RECHAZADO_ADMIN", idUsuario: idUsuarioRechazo, comentario: motivo);
             await transaction.CommitAsync();
-
             return new ConfirmarCargaResponse
             {
                 EsValido = true,
                 CodigoReferencia = codigoReferencia,
                 Estado = "RECHAZADO_ADMIN",
-                Mensaje =
-                    "La carga fue rechazada por el administrador."
+                Mensaje = "La carga fue rechazada por el administrador."
             };
         }
         catch
@@ -1558,7 +1138,11 @@ public class CargaRepository : ICargaRepository
         }
     }
 
-    private static async Task RechazarCargaAdministracionAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioRechazo, string motivo)
+    private static async Task RechazarCargaAdministracionAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        int idUsuarioRechazo,
+        string motivo)
     {
         const string sql = @"
         UPDATE dbo.carga
@@ -1585,15 +1169,6 @@ public class CargaRepository : ICargaRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                IdUsuarioRechazo = idUsuarioRechazo,
-                Motivo = motivo
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioRechazo = idUsuarioRechazo, Motivo = motivo }, transaction);
     }
 }

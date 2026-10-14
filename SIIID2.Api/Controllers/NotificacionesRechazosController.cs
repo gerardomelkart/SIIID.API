@@ -7,22 +7,19 @@ using SIIID2.Api.Models;
 using System.Security.Claims;
 
 namespace SIIID2.Api.Controllers;
-
 [ApiController]
 [Authorize]
 [Route("api/notificaciones/rechazos")]
 public class NotificacionesRechazosController : ControllerBase
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public NotificacionesRechazosController(IDbConnectionFactory dbConnectionFactory) => _dbConnectionFactory = dbConnectionFactory;
-
     [Authorize(Policy = "MODULO_MENSUAL")]
     [HttpPost("mensual/consumir")]
     public async Task<IActionResult> ConsumirMensual()
     {
-        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
-
+        if(!ObtenerIdUsuario(out var idUsuario))
+            return TokenSinUsuario();
         const string sql = @"
         DECLARE @Rechazos TABLE (id_carga BIGINT NOT NULL);
 
@@ -35,7 +32,6 @@ public class NotificacionesRechazosController : ControllerBase
           AND rechazo_visto = 0;
 
         SELECT id_carga FROM @Rechazos;";
-
         return Ok(await ConsumirAsync(sql, idUsuario));
     }
 
@@ -43,8 +39,8 @@ public class NotificacionesRechazosController : ControllerBase
     [HttpPost("semanal/consumir")]
     public async Task<IActionResult> ConsumirSemanal()
     {
-        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
-
+        if(!ObtenerIdUsuario(out var idUsuario))
+            return TokenSinUsuario();
         const string sql = @"
         DECLARE @Rechazos TABLE (id_semanal_carga BIGINT NOT NULL);
 
@@ -57,7 +53,6 @@ public class NotificacionesRechazosController : ControllerBase
           AND rechazo_visto = 0;
 
         SELECT id_semanal_carga FROM @Rechazos;";
-
         return Ok(await ConsumirAsync(sql, idUsuario));
     }
 
@@ -65,8 +60,8 @@ public class NotificacionesRechazosController : ControllerBase
     [HttpPost("federal/consumir")]
     public async Task<IActionResult> ConsumirFederal()
     {
-        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
-
+        if(!ObtenerIdUsuario(out var idUsuario))
+            return TokenSinUsuario();
         const string sql = @"
         DECLARE @Rechazos TABLE (id_federal_carga BIGINT NOT NULL);
 
@@ -79,7 +74,6 @@ public class NotificacionesRechazosController : ControllerBase
           AND rechazo_visto = 0;
 
         SELECT id_federal_carga FROM @Rechazos;";
-
         return Ok(await ConsumirAsync(sql, idUsuario));
     }
 
@@ -87,10 +81,8 @@ public class NotificacionesRechazosController : ControllerBase
     {
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
         var rechazos = await connection.QueryAsync<long>(sql, new { IdUsuario = idUsuario });
         var cantidad = rechazos.Count();
-
         return new NotificacionRechazoResponse
         {
             HayNotificacion = cantidad > 0,
@@ -99,15 +91,8 @@ public class NotificacionesRechazosController : ControllerBase
     }
 
     private bool ObtenerIdUsuario(out int idUsuario) => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out idUsuario);
-
     private IActionResult TokenSinUsuario()
     {
-        return Unauthorized(new
-        {
-            esValido = false,
-            codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-            mensaje = "El token no contiene un id de usuario válido.",
-            traceId = HttpContext.TraceIdentifier
-        });
+        return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
     }
 }

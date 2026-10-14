@@ -6,83 +6,45 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class ActualizacionCargaRepository : IActualizacionCargaRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public ActualizacionCargaRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
     }
 
-    public async Task<long> GuardarIntentoActualizacionAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<CargaValidacionError> advertencias, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    public async Task<long> GuardarIntentoActualizacionAsync(int idUsuarioCarga,
+        int? idEntidadFederativa,
+        string codigoReferencia,
+        int mesCorte,
+        int anioCorte,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas,
+        string estado,
+        string? mensajeError,
+        List<CargaValidacionError> advertencias,
+        List<ArchivoFila> filasCarpetas,
+        List<ArchivoFila> filasDelitos,
+        List<ArchivoFila> filasVictimas)
     {
         // Guarda la actualización igual que una carga:
         // registro en carga + staging de carpetas/delitos/víctimas.
         // La diferencia es tipo_carga = ACTUALIZACION.
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
-
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
-            var idCarga = await CrearCargaAsync(
-                connection,
-                transaction,
-                idUsuarioCarga,
-                idEntidadFederativa,
-                codigoReferencia,
-                tipoCarga: "ACTUALIZACION",
-                mesCorte,
-                anioCorte,
-                totalCarpetas,
-                totalDelitos,
-                totalVictimas,
-                estado,
-                mensajeError);
-
-            await GuardarTmpCarpetasAsync(
-                connection,
-                transaction,
-                idCarga,
-                filasCarpetas);
-
-            await GuardarTmpDelitosAsync(
-                connection,
-                transaction,
-                idCarga,
-                filasDelitos);
-
-            await GuardarTmpVictimasAsync(
-                connection,
-                transaction,
-                idCarga,
-                filasVictimas);
-
-            await CargaAuditoriaSql.GuardarAdvertenciasAsync(
-                                    connection,
-                                    transaction,
-                                    idCarga,
-                                    advertencias);
-
-            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                                    connection,
-                                    transaction,
-                                    idCarga,
-                                    estadoAnterior: null,
-                                    estadoNuevo: estado,
-                                    idUsuario: idUsuarioCarga,
-                                    comentario: estado == "VALIDADO_PENDIENTE_ACTUALIZACION"
-                                        ? "Actualización validada y pendiente de decisión del usuario."
-                                        : "Intento de actualización registrado con errores de validación.");
-
+            var idCarga = await CrearCargaAsync(connection, transaction, idUsuarioCarga, idEntidadFederativa, codigoReferencia, tipoCarga: "ACTUALIZACION", mesCorte, anioCorte, totalCarpetas, totalDelitos, totalVictimas, estado, mensajeError);
+            await GuardarTmpCarpetasAsync(connection, transaction, idCarga, filasCarpetas);
+            await GuardarTmpDelitosAsync(connection, transaction, idCarga, filasDelitos);
+            await GuardarTmpVictimasAsync(connection, transaction, idCarga, filasVictimas);
+            await CargaAuditoriaSql.GuardarAdvertenciasAsync(connection, transaction, idCarga, advertencias);
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, idCarga, estadoAnterior: null, estadoNuevo: estado, idUsuario: idUsuarioCarga, comentario: estado == "VALIDADO_PENDIENTE_ACTUALIZACION" ? "Actualización validada y pendiente de decisión del usuario." : "Intento de actualización registrado con errores de validación.");
             await BanciCruceService.GuardarAsync(connection, transaction, idCarga, filasCarpetas, filasDelitos, filasVictimas);
-
             await transaction.CommitAsync();
-
             return idCarga;
         }
         catch
@@ -99,7 +61,6 @@ public class ActualizacionCargaRepository : IActualizacionCargaRepository
         //
         // Después de confirmar actualizaciones, las versiones anteriores quedan inactivas.
         // Por eso no se reconstruye la versión vigente con ROW_NUMBER; se usa activo = 1.
-
         var sql = @"
         DECLARE @IdEntidadFederativa TINYINT;
         DECLARE @MesCorte TINYINT;
@@ -460,41 +421,35 @@ FROM victimas_clasificadas
 GROUP BY tipo
 OPTION (RECOMPILE);
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var resultados = await connection.QueryAsync<(string Archivo, string Tipo, int Total)>(
-            sql,
-            new
-            {
-                IdCargaActualizacion = idCargaActualizacion
-            });
-
+        var resultados = await connection.QueryAsync<(string Archivo, string Tipo, int Total)>(sql, new { IdCargaActualizacion = idCargaActualizacion });
         var resumen = new List<CargaValidacionResumenItem>();
-
         foreach (var item in resultados)
         {
-            resumen.Add(new CargaValidacionResumenItem
-            {
-                Archivo = item.Archivo,
-                Codigo = $"ACTUALIZACION_{item.Archivo.ToUpperInvariant()}_{item.Tipo}",
-                Descripcion = item.Tipo switch
-                {
-                    "NUEVO" => $"Registros nuevos en {item.Archivo}.",
-                    "MODIFICADO" => $"Registros modificados en {item.Archivo}.",
-                    "ELIMINADO" => $"Registros eliminados en {item.Archivo}.",
-                    "SIN_CAMBIOS" => $"Registros sin cambios en {item.Archivo}.",
-                    _ => $"Registros {item.Tipo} en {item.Archivo}."
-                },
-                TotalRegistros = item.Total,
-                EsError = false
-            });
+            resumen.Add(new CargaValidacionResumenItem { Archivo = item.Archivo, Codigo = $"ACTUALIZACION_{item.Archivo.ToUpperInvariant()}_{item.Tipo}", Descripcion = item.Tipo switch            {
+                "NUEVO" => $"Registros nuevos en {item.Archivo}.",
+                "MODIFICADO" => $"Registros modificados en {item.Archivo}.",
+                "ELIMINADO" => $"Registros eliminados en {item.Archivo}.",
+                "SIN_CAMBIOS" => $"Registros sin cambios en {item.Archivo}.",
+                _ => $"Registros {item.Tipo} en {item.Archivo}."}, TotalRegistros = item.Total, EsError = false });
         }
 
         return resumen;
     }
 
-    private async Task<long> CrearCargaAsync(SqlConnection connection, SqlTransaction transaction, int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, string tipoCarga, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError)
+    private async Task<long> CrearCargaAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        int idUsuarioCarga,
+        int? idEntidadFederativa,
+        string codigoReferencia,
+        string tipoCarga,
+        int mesCorte,
+        int anioCorte,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas,
+        string estado,
+        string? mensajeError)
     {
         // Crea el intento de carga.
         // OUTPUT INSERTED.id_carga devuelve el ID generado por SQL Server.
@@ -533,34 +488,18 @@ OPTION (RECOMPILE);
                 1
             );
         ";
-
-        var idCarga = await connection.ExecuteScalarAsync<long>(
-            sql,
-            new
-            {
-                IdUsuarioCarga = idUsuarioCarga,
-                IdEntidadFederativa = idEntidadFederativa,
-                CodigoReferencia = codigoReferencia,
-                TipoCarga = tipoCarga,
-                MesCorte = mesCorte,
-                AnioCorte = anioCorte,
-                TotalCarpetas = totalCarpetas,
-                TotalDelitos = totalDelitos,
-                TotalVictimas = totalVictimas,
-                Estado = estado,
-                MensajeError = mensajeError
-            },
-            transaction);
-
+        var idCarga = await connection.ExecuteScalarAsync<long>(sql, new { IdUsuarioCarga = idUsuarioCarga, IdEntidadFederativa = idEntidadFederativa, CodigoReferencia = codigoReferencia, TipoCarga = tipoCarga, MesCorte = mesCorte, AnioCorte = anioCorte, TotalCarpetas = totalCarpetas, TotalDelitos = totalDelitos, TotalVictimas = totalVictimas, Estado = estado, MensajeError = mensajeError }, transaction);
         return idCarga;
     }
 
-    private async Task GuardarTmpCarpetasAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, List<ArchivoFila> filasCarpetas)
+    private async Task GuardarTmpCarpetasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        List<ArchivoFila> filasCarpetas)
     {
         // Guarda las carpetas leídas en staging usando carga masiva.
         // SqlBulkCopy evita insertar fila por fila.
         var tabla = new DataTable();
-
         tabla.Columns.Add("id_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("id_ci", typeof(string));
@@ -570,26 +509,15 @@ OPTION (RECOMPILE);
         tabla.Columns.Add("rmen_de_hchos", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-
         foreach (var fila in filasCarpetas)
         {
-            tabla.Rows.Add(
-                idCarga,
-                fila.NumeroFila,
-                ObtenerValor(fila, "id_ci"),
-                ObtenerValor(fila, "ntra_ci"),
-                ObtenerValor(fila, "fha_de_ini"),
-                ObtenerValor(fila, "hra_de_ini"),
-                ObtenerValor(fila, "rmen_de_hchos"),
-                "PENDIENTE",
-                true);
+            tabla.Rows.Add(idCarga, fila.NumeroFila, ObtenerValor(fila, "id_ci"), ObtenerValor(fila, "ntra_ci"), ObtenerValor(fila, "fha_de_ini"), ObtenerValor(fila, "hra_de_ini"), ObtenerValor(fila, "rmen_de_hchos"), "PENDIENTE", true);
         }
 
         using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
         {
             DestinationTableName = "carga_tmp_carpeta"
         };
-
         // El primer valor es el índice de la columna en el DataTable.
         // El segundo valor es el nombre de la columna destino en SQL Server.
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(0, "id_carga"));
@@ -601,16 +529,17 @@ OPTION (RECOMPILE);
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(6, "rmen_de_hchos"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(7, "estado"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(8, "activo"));
-
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
-    private async Task GuardarTmpDelitosAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, List<ArchivoFila> filasDelitos)
+    private async Task GuardarTmpDelitosAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        List<ArchivoFila> filasDelitos)
     {
         // Guarda los delitos leídos en staging usando carga masiva.
         // Esta parte era la más pesada cuando se insertaba registro por registro.
         var tabla = new DataTable();
-
         tabla.Columns.Add("id_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("id_ci", typeof(string));
@@ -635,41 +564,15 @@ OPTION (RECOMPILE);
         tabla.Columns.Add("dom_hchos", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-
         foreach (var fila in filasDelitos)
         {
-            tabla.Rows.Add(
-                idCarga,
-                fila.NumeroFila,
-                ObtenerValor(fila, "id_ci"),
-                ObtenerValor(fila, "id_delito"),
-                ObtenerValor(fila, "dto"),
-                ObtenerValor(fila, "moda_dto"),
-                ObtenerValor(fila, "forma_acc"),
-                ObtenerValor(fila, "fha_de_hchos"),
-                ObtenerValor(fila, "hra_de_hchos"),
-                ObtenerValor(fila, "emto_com_dto"),
-                ObtenerValor(fila, "grdo_cons"),
-                ObtenerValor(fila, "clasf_de_dto"),
-                ObtenerValor(fila, "id_ent_hchos"),
-                ObtenerValor(fila, "id_mun_hchos"),
-                ObtenerValor(fila, "id_loc_hchos"),
-                ObtenerValor(fila, "nom_loc_hchos"),
-                ObtenerValor(fila, "id_col_hchos"),
-                ObtenerValor(fila, "nom_col_hchos"),
-                ObtenerValor(fila, "cp"),
-                ObtenerValor(fila, "coord_x"),
-                ObtenerValor(fila, "coord_y"),
-                ObtenerValor(fila, "dom_hchos"),
-                "PENDIENTE",
-                true);
+            tabla.Rows.Add(idCarga, fila.NumeroFila, ObtenerValor(fila, "id_ci"), ObtenerValor(fila, "id_delito"), ObtenerValor(fila, "dto"), ObtenerValor(fila, "moda_dto"), ObtenerValor(fila, "forma_acc"), ObtenerValor(fila, "fha_de_hchos"), ObtenerValor(fila, "hra_de_hchos"), ObtenerValor(fila, "emto_com_dto"), ObtenerValor(fila, "grdo_cons"), ObtenerValor(fila, "clasf_de_dto"), ObtenerValor(fila, "id_ent_hchos"), ObtenerValor(fila, "id_mun_hchos"), ObtenerValor(fila, "id_loc_hchos"), ObtenerValor(fila, "nom_loc_hchos"), ObtenerValor(fila, "id_col_hchos"), ObtenerValor(fila, "nom_col_hchos"), ObtenerValor(fila, "cp"), ObtenerValor(fila, "coord_x"), ObtenerValor(fila, "coord_y"), ObtenerValor(fila, "dom_hchos"), "PENDIENTE", true);
         }
 
         using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
         {
             DestinationTableName = "carga_tmp_delito"
         };
-
         // El primer valor es el índice de la columna en el DataTable.
         // El segundo valor es el nombre de la columna destino en SQL Server.
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(0, "id_carga"));
@@ -696,16 +599,17 @@ OPTION (RECOMPILE);
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(21, "dom_hchos"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(22, "estado"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(23, "activo"));
-
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
-    private async Task GuardarTmpVictimasAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, List<ArchivoFila> filasVictimas)
+    private async Task GuardarTmpVictimasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        List<ArchivoFila> filasVictimas)
     {
         // Guarda las víctimas leídas en staging usando carga masiva.
         // Se conserva el valor crudo del Excel para confirmar o auditar después.
         var tabla = new DataTable();
-
         tabla.Columns.Add("id_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("id_ci", typeof(string));
@@ -726,37 +630,15 @@ OPTION (RECOMPILE);
         tabla.Columns.Add("curp_vicfem", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-
         foreach (var fila in filasVictimas)
         {
-            tabla.Rows.Add(
-                idCarga,
-                fila.NumeroFila,
-                ObtenerValor(fila, "id_ci"),
-                ObtenerValor(fila, "id_delito"),
-                ObtenerValor(fila, "id_vicf"),
-                ObtenerValor(fila, "id_tv"),
-                ObtenerValor(fila, "id_tpm"),
-                ObtenerValor(fila, "sexo"),
-                ObtenerValor(fila, "genero"),
-                ObtenerValor(fila, "pob"),
-                ObtenerValor(fila, "disc"),
-                ObtenerValor(fila, "fha_nac"),
-                ObtenerValor(fila, "edad"),
-                ObtenerValor(fila, "nacional"),
-                ObtenerValor(fila, "nombre_vicfem"),
-                ObtenerValor(fila, "1apellido_vicfem"),
-                ObtenerValor(fila, "2apellido_vicfem"),
-                ObtenerValor(fila, "curp_vicfem"),
-                "PENDIENTE",
-                true);
+            tabla.Rows.Add(idCarga, fila.NumeroFila, ObtenerValor(fila, "id_ci"), ObtenerValor(fila, "id_delito"), ObtenerValor(fila, "id_vicf"), ObtenerValor(fila, "id_tv"), ObtenerValor(fila, "id_tpm"), ObtenerValor(fila, "sexo"), ObtenerValor(fila, "genero"), ObtenerValor(fila, "pob"), ObtenerValor(fila, "disc"), ObtenerValor(fila, "fha_nac"), ObtenerValor(fila, "edad"), ObtenerValor(fila, "nacional"), ObtenerValor(fila, "nombre_vicfem"), ObtenerValor(fila, "1apellido_vicfem"), ObtenerValor(fila, "2apellido_vicfem"), ObtenerValor(fila, "curp_vicfem"), "PENDIENTE", true);
         }
 
         using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
         {
             DestinationTableName = "carga_tmp_victima"
         };
-
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(0, "id_carga"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(1, "numero_fila"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(2, "id_ci"));
@@ -777,7 +659,6 @@ OPTION (RECOMPILE);
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(17, "curp_vicfem"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(18, "estado"));
         bulkCopy.ColumnMappings.Add(new SqlBulkCopyColumnMapping(19, "activo"));
-
         await bulkCopy.WriteToServerAsync(tabla);
     }
 

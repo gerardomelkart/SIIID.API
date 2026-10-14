@@ -3,11 +3,9 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class FederalAcuseRepository : IFederalAcuseRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public FederalAcuseRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
@@ -41,7 +39,6 @@ public class FederalAcuseRepository : IFederalAcuseRepository
             WHERE c.codigo_referencia = @CodigoReferencia
               AND c.activo = 1;
             """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.QueryFirstOrDefaultAsync<CargaAcuseInfo>(sql, new { CodigoReferencia = codigoReferencia });
     }
@@ -105,7 +102,6 @@ public class FederalAcuseRepository : IFederalAcuseRepository
                 OrdenClave3,
                 Orden;
             """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         var resumen = await connection.QueryAsync<CargaAcuseResumenItem>(sql, new { IdFederalCarga = idFederalCarga });
         return resumen.ToList();
@@ -166,7 +162,6 @@ public class FederalAcuseRepository : IFederalAcuseRepository
                 OrdenClave3,
                 Orden;
             """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         var resumen = await connection.QueryAsync<CargaAcuseResumenItem>(sql, new { IdFederalCarga = idFederalCarga });
         return resumen.ToList();

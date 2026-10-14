@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class CargaAcuseResumenItem
 {
     public string ClaveDelito { get; set; } = string.Empty;

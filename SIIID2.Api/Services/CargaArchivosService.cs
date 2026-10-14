@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿// Orquesta los tres archivos de Consolidado; la validación prepara una carga temporal antes de la decisión del usuario.
+using System.Globalization;
 using System.Text;
 using SIIID2.Api.Models;
 using SIIID2.Api.Readers;
@@ -6,7 +7,6 @@ using SIIID2.Api.Validators;
 using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Services;
-
 // Servicio principal del flujo de carga.
 // Coordina validación base, lectura de archivos y validadores específicos.
 public class CargaArchivosService : ICargaArchivosService
@@ -24,18 +24,27 @@ public class CargaArchivosService : ICargaArchivosService
     private readonly ICargaRepository _cargaRepository;
     private readonly IUsuarioRepository _usuarioRepository;
     private readonly IUltimosArchivosEntidadService _ultimosArchivosEntidadService;
-
     // Extensiones permitidas para los archivos de carga.
     private readonly string[] _extensionesPermitidas =
     {
         ".csv",
         ".xlsx"
     };
-
     // Tamaño máximo permitido por archivo: 50 MB.
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
-
-    public CargaArchivosService(BanciCruceService cruce, SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, FeminicidioRenapoValidator feminicidioRenapoValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IUsuarioRepository usuarioRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService)
+    public CargaArchivosService(BanciCruceService cruce,
+        SistemaConfiguracionService config,
+        IArchivoReader archivoReader,
+        CarpetasValidator carpetasValidator,
+        DelitosValidator delitosValidator,
+        VictimasValidator victimasValidator,
+        FeminicidioVictimaValidator feminicidioVictimaValidator,
+        FeminicidioRenapoValidator feminicidioRenapoValidator,
+        CargaIntegridadValidator cargaIntegridadValidator,
+        CatalogosValidator catalogosValidator,
+        ICargaRepository cargaRepository,
+        IUsuarioRepository usuarioRepository,
+        IUltimosArchivosEntidadService ultimosArchivosEntidadService)
     {
         _config = config;
         _cruce = cruce;
@@ -56,18 +65,15 @@ public class CargaArchivosService : ICargaArchivosService
     {
         // Los archivos vienen dentro del form-data.
         var archivos = form.Files;
-
         // El usuario viene del token.
         // Aquí se consulta base para validar que exista, esté activo, tenga rol activo y permisos.
         var usuarioCarga = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioCarga);
-
-        if (usuarioCarga == null)
+        if(usuarioCarga == null)
         {
             var responseUsuario = new CargaValidacionResponse
             {
                 CodigoReferencia = GenerarCodigoReferencia()
             };
-
             responseUsuario.Errores.Add(new CargaValidacionError
             {
                 Archivo = "general",
@@ -79,20 +85,18 @@ public class CargaArchivosService : ICargaArchivosService
                 DescripcionResumen = "Usuario de carga no existe",
                 Mensaje = "El usuario autenticado no existe o no está activo."
             });
-
             FinalizarRespuesta(responseUsuario, 0, 0, 0);
             return responseUsuario;
         }
 
         // El usuario debe tener habilitada la carga.
         // Esto se controla desde habilita_carga_modificacion.
-        if (!usuarioCarga.HabilitaCarga)
+        if(!usuarioCarga.HabilitaCarga)
         {
             var responseUsuario = new CargaValidacionResponse
             {
                 CodigoReferencia = GenerarCodigoReferencia()
             };
-
             responseUsuario.Errores.Add(new CargaValidacionError
             {
                 Archivo = "general",
@@ -104,7 +108,6 @@ public class CargaArchivosService : ICargaArchivosService
                 DescripcionResumen = "Usuario sin permiso de carga",
                 Mensaje = "El usuario autenticado no tiene habilitada la carga de información."
             });
-
             FinalizarRespuesta(responseUsuario, 0, 0, 0);
             return responseUsuario;
         }
@@ -114,9 +117,8 @@ public class CargaArchivosService : ICargaArchivosService
         {
             CodigoReferencia = GenerarCodigoReferencia()
         };
-
         // Si no llegó ningún archivo, se regresa error controlado.
-        if (archivos == null || archivos.Count == 0)
+        if(archivos == null || archivos.Count == 0)
         {
             response.Errores.Add(new CargaValidacionError
             {
@@ -129,13 +131,11 @@ public class CargaArchivosService : ICargaArchivosService
                 DescripcionResumen = "No se recibieron archivos",
                 Mensaje = "Debe enviar los archivos de carpetas, delitos y víctimas."
             });
-
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
         }
 
         var listaArchivos = archivos.ToList();
-
         // Validamos extensión y tamaño de cada archivo.
         foreach (var archivo in listaArchivos)
         {
@@ -146,19 +146,16 @@ public class CargaArchivosService : ICargaArchivosService
         var archivoCarpetas = BuscarArchivoPorNombre(listaArchivos, "carpeta");
         var archivoDelitos = BuscarArchivoPorNombre(listaArchivos, "delito");
         var archivoVictimas = BuscarArchivoPorNombre(listaArchivos, "victima");
-
         // Validamos que llegue un archivo de cada tipo.
         ValidarArchivoEsperado(archivoCarpetas, "carpetas", "carpeta", response.Errores);
         ValidarArchivoEsperado(archivoDelitos, "delitos", "delito", response.Errores);
         ValidarArchivoEsperado(archivoVictimas, "victimas", "victima", response.Errores);
-
         // Validamos que no se envíen archivos duplicados del mismo tipo.
         ValidarDuplicadosPorTipo(listaArchivos, "carpeta", "carpetas", response.Errores);
         ValidarDuplicadosPorTipo(listaArchivos, "delito", "delitos", response.Errores);
         ValidarDuplicadosPorTipo(listaArchivos, "victima", "victimas", response.Errores);
-
         // Si ya hay errores generales, no intentamos leer los archivos.
-        if (response.Errores.Count > 0)
+        if(response.Errores.Count > 0)
         {
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
@@ -167,15 +164,10 @@ public class CargaArchivosService : ICargaArchivosService
         // Validación estructural temprana.
         // Si falta una columna obligatoria, no leemos filas completas,
         // no corremos más validaciones y no guardamos temporales.
-        var erroresEstructura = await ValidarEstructuraArchivosAsync(
-            archivoCarpetas!,
-            archivoDelitos!,
-            archivoVictimas!);
-
-        if (erroresEstructura.Count > 0)
+        var erroresEstructura = await ValidarEstructuraArchivosAsync(archivoCarpetas!, archivoDelitos!, archivoVictimas!);
+        if(erroresEstructura.Count > 0)
         {
             response.Errores.AddRange(erroresEstructura);
-
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
         }
@@ -184,40 +176,25 @@ public class CargaArchivosService : ICargaArchivosService
         var filasCarpetas = await _archivoReader.LeerAsync(archivoCarpetas!);
         var filasDelitos = await _archivoReader.LeerAsync(archivoDelitos!);
         var filasVictimas = await _archivoReader.LeerAsync(archivoVictimas!);
-
         // Validaciones específicas de cada archivo.
         response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas));
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
         response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
-
         // Validamos que el usuario solo cargue información de su entidad.
         response.Errores.AddRange(ValidarEntidadUsuarioCarga(usuarioCarga, filasDelitos));
-
         // Guardamos si las validaciones internas pasaron limpias.
         var sinErroresInternos = response.Errores.Count == 0;
-
         var advertenciasPendientes = new List<CargaValidacionError>();
-
         // Las validaciones cruzadas se ejecutan solo si las validaciones internas pasaron.
         // Esto evita errores repetidos o confusos cuando falta estructura básica.
-        if (sinErroresInternos)
+        if(sinErroresInternos)
         {
-            var erroresIntegridad = _cargaIntegridadValidator.Validar(
-                filasCarpetas,
-                filasDelitos,
-                filasVictimas);
-
-            if (usuarioCarga.EsSuperUsuario)
+            var erroresIntegridad = _cargaIntegridadValidator.Validar(filasCarpetas, filasDelitos, filasVictimas);
+            if(usuarioCarga.EsSuperUsuario)
             {
-                var advertenciasFechaHechos = erroresIntegridad
-                    .Where(e => e.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
-                    .ToList();
-
+                var advertenciasFechaHechos = erroresIntegridad.Where(e => e.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO").ToList();
                 advertenciasPendientes.AddRange(advertenciasFechaHechos);
-
-                erroresIntegridad = erroresIntegridad
-                    .Where(e => e.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
-                    .ToList();
+                erroresIntegridad = erroresIntegridad.Where(e => e.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO").ToList();
             }
 
             response.Errores.AddRange(erroresIntegridad);
@@ -225,22 +202,17 @@ public class CargaArchivosService : ICargaArchivosService
 
         // Las validaciones contra catálogos sí pueden ejecutarse aunque existan errores internos.
         // La primera se reporta como formato incorrecto; la segunda se reporta como clave inexistente.
-        response.Errores.AddRange(await _catalogosValidator.ValidarAsync(
-            filasCarpetas,
-            filasDelitos,
-            filasVictimas));
+        response.Errores.AddRange(await _catalogosValidator.ValidarAsync(filasCarpetas, filasDelitos, filasVictimas));
         var coordenadasMunicipio = await _catalogosValidator.ValidarCoordenadasConfiguradasAsync(filasDelitos, "MENSUAL", _config);
         response.Errores.AddRange(coordenadasMunicipio.Errores);
-        if (coordenadasMunicipio.Advertencia is not null) response.Advertencias.Add(coordenadasMunicipio.Advertencia);
-
-
-        if (response.Errores.Count == 0 && _config.Activa("MENSUAL", "FEMINICIDIO_DATOS_ADICIONALES"))
+        if(coordenadasMunicipio.Advertencia is not null)
+            response.Advertencias.Add(coordenadasMunicipio.Advertencia);
+        if(response.Errores.Count == 0 && _config.Activa("MENSUAL", "FEMINICIDIO_DATOS_ADICIONALES"))
         {
             var validacionFeminicidio = _feminicidioVictimaValidator.Validar(filasDelitos, filasVictimas);
             response.Errores.AddRange(validacionFeminicidio.Errores);
             advertenciasPendientes.AddRange(validacionFeminicidio.Advertencias);
-
-            if (response.Errores.Count == 0)
+            if(response.Errores.Count == 0)
             {
                 var validacionRenapo = await _feminicidioRenapoValidator.ValidarAsync(filasDelitos, filasVictimas);
                 response.Errores.AddRange(validacionRenapo.Errores);
@@ -256,25 +228,16 @@ public class CargaArchivosService : ICargaArchivosService
         // La fecha en que se carga o confirma queda registrada aparte en fecha_validacion / fecha_confirmacion.
         var mesCorte = ObtenerMesCorteDesdeCarpetas(filasCarpetas);
         var anioCorte = ObtenerAnioCorteDesdeCarpetas(filasCarpetas);
-
         // Obtenemos la entidad real de la carga.
         // Para usuario normal viene de su usuario.
         // Para SUPER_USUARIO se toma del Excel de delitos.
-        var idEntidadFederativaCarga = ObtenerEntidadFederativaCarga(
-            usuarioCarga,
-            filasDelitos,
-            response.Errores);
-
+        var idEntidadFederativaCarga = ObtenerEntidadFederativaCarga(usuarioCarga, filasDelitos, response.Errores);
         // Si no hay errores hasta este punto, revisamos si ya existe una carga
         // confirmada o pendiente para la misma entidad y periodo.
-        if (idEntidadFederativaCarga.HasValue && response.Errores.Count == 0)
+        if(idEntidadFederativaCarga.HasValue && response.Errores.Count == 0)
         {
-            var existeCargaConfirmada = await _cargaRepository.ExisteCargaConfirmadaAsync(
-                idEntidadFederativaCarga.Value,
-                mesCorte,
-                anioCorte);
-
-            if (existeCargaConfirmada)
+            var existeCargaConfirmada = await _cargaRepository.ExisteCargaConfirmadaAsync(idEntidadFederativaCarga.Value, mesCorte, anioCorte);
+            if(existeCargaConfirmada)
             {
                 response.Errores.Add(new CargaValidacionError
                 {
@@ -291,11 +254,9 @@ public class CargaArchivosService : ICargaArchivosService
             else
             {
                 var cargaPendiente = await _cargaRepository.ObtenerCodigoCargaPendienteAsync(idEntidadFederativaCarga.Value, mesCorte, anioCorte);
-
-                if (cargaPendiente != null)
+                if(cargaPendiente != null)
                 {
                     var enRevisionAdministrativa = string.Equals(cargaPendiente.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
-
                     response.Errores.Add(new CargaValidacionError
                     {
                         Archivo = "general",
@@ -305,9 +266,7 @@ public class CargaArchivosService : ICargaArchivosService
                         Valor = cargaPendiente.CodigoReferencia,
                         Codigo = enRevisionAdministrativa ? "CARGA_PENDIENTE_APROBACION" : "CARGA_PENDIENTE_EXISTENTE",
                         DescripcionResumen = enRevisionAdministrativa ? "Carga en revisión administrativa" : "Ya existe carga pendiente",
-                        Mensaje = enRevisionAdministrativa
-                            ? $"Ya existe una carga en revisión administrativa para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {cargaPendiente.CodigoReferencia}. Debe esperar la resolución del administrador."
-                            : $"Ya existe una carga validada pendiente de confirmar para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {cargaPendiente.CodigoReferencia}. Debe aceptar o rechazar esa carga antes de enviar una nueva."
+                        Mensaje = enRevisionAdministrativa ? $"Ya existe una carga en revisión administrativa para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {cargaPendiente.CodigoReferencia}. Debe esperar la resolución del administrador." : $"Ya existe una carga validada pendiente de confirmar para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {cargaPendiente.CodigoReferencia}. Debe aceptar o rechazar esa carga antes de enviar una nueva."
                     });
                 }
             }
@@ -315,27 +274,19 @@ public class CargaArchivosService : ICargaArchivosService
 
         // Si no hay errores después de TODAS las validaciones,
         // ahora sí agregamos advertencias de decisión.
-        if (response.Errores.Count == 0) response.Errores.AddRange(await _cruce.ValidarAsync(idEntidadFederativaCarga!.Value, mesCorte, anioCorte, new(filasCarpetas, filasDelitos, filasVictimas)));
-
-        if (response.Errores.Count == 0) await _config.PrepararFeminicidioAsync(filasVictimas, idEntidadFederativaCarga!.Value, mesCorte, anioCorte, false);
-
-        if (response.Errores.Count == 0)
+        if(response.Errores.Count == 0)
+            response.Errores.AddRange(await _cruce.ValidarAsync(idEntidadFederativaCarga!.Value, mesCorte, anioCorte, new(filasCarpetas, filasDelitos, filasVictimas)));
+        if(response.Errores.Count == 0)
+            await _config.PrepararFeminicidioAsync(filasVictimas, idEntidadFederativaCarga!.Value, mesCorte, anioCorte, false);
+        if(response.Errores.Count == 0)
         {
             response.Advertencias.AddRange(advertenciasPendientes);
             response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(filasDelitos, _config.Activa("MENSUAL", "COORDENADAS_FORMATO_RANGO"), _config.Activa("MENSUAL", "COORDENADAS_SIN_INFORMACION"), _config.Activa("MENSUAL", "COORDENADAS_CONCENTRACION")));
-
-            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(
-                filasDelitos,
-                filasVictimas));
+            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(filasDelitos, filasVictimas));
         }
 
         // Construimos resumen y mensaje final.
-        FinalizarRespuesta(
-            response,
-            filasCarpetas.Count,
-            filasDelitos.Count,
-            filasVictimas.Count);
-
+        FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
         // Errores bloqueantes.
         // No se guarda fila en carga ni staging para evitar ensuciar la base.
         //
@@ -344,48 +295,26 @@ public class CargaArchivosService : ICargaArchivosService
         // - el Excel contiene una entidad distinta a la del usuario
         // - ya existe carga confirmada
         // - ya existe carga pendiente
-        if (response.Errores.Any(x =>
-                x.Codigo.StartsWith("BANCI_", StringComparison.Ordinal) ||
-                x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD" ||
-                x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO" ||
-                x.Codigo == "CARGA_PERIODO_YA_CONFIRMADO" ||
-                x.Codigo == "CARGA_PENDIENTE_EXISTENTE" ||
-                x.Codigo == "CARGA_PENDIENTE_APROBACION"))
+        if(response.Errores.Any(x => x.Codigo.StartsWith("BANCI_", StringComparison.Ordinal)
+            || x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD"
+            || x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO"
+            || x.Codigo == "CARGA_PERIODO_YA_CONFIRMADO"
+            || x.Codigo == "CARGA_PENDIENTE_EXISTENTE"
+            || x.Codigo == "CARGA_PENDIENTE_APROBACION"))
         {
             return response;
         }
 
         // Determinamos el estado inicial del intento de carga.
-        var estadoCarga = response.EsValido
-            ? "VALIDADO_PENDIENTE"
-            : "RECHAZADO_VALIDACION";
-
+        var estadoCarga = response.EsValido ? "VALIDADO_PENDIENTE" : "RECHAZADO_VALIDACION";
         // Si hubo errores, guardamos solo mensaje general.
         // El detalle completo se devuelve en la respuesta de la API.
-        var mensajeError = response.EsValido
-            ? null
-            : $"La información contiene errores de validación. Total de errores: {response.Errores.Count}.";
-
+        var mensajeError = response.EsValido ? null : $"La información contiene errores de validación. Total de errores: {response.Errores.Count}.";
         // Se guarda el intento completo de carga.
         // Incluye registro en carga y staging de los tres archivos.
         // Todo se ejecuta dentro de una transacción en el repository.
-        var idCarga = await _cargaRepository.GuardarIntentoCargaAsync(
-            idUsuarioCarga,
-            idEntidadFederativaCarga,
-            response.CodigoReferencia,
-            mesCorte,
-            anioCorte,
-            filasCarpetas.Count,
-            filasDelitos.Count,
-            filasVictimas.Count,
-            estadoCarga,
-            mensajeError,
-            response.Advertencias,
-            filasCarpetas,
-            filasDelitos,
-            filasVictimas);
-
-        if (idEntidadFederativaCarga.HasValue)
+        var idCarga = await _cargaRepository.GuardarIntentoCargaAsync(idUsuarioCarga, idEntidadFederativaCarga, response.CodigoReferencia, mesCorte, anioCorte, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count, estadoCarga, mensajeError, response.Advertencias, filasCarpetas, filasDelitos, filasVictimas);
+        if(idEntidadFederativaCarga.HasValue)
         {
             await _ultimosArchivosEntidadService.GuardarAsync(idEntidadFederativaCarga.Value, response.CodigoReferencia, "CARGA_INICIAL", mesCorte, anioCorte, archivoCarpetas!, archivoDelitos!, archivoVictimas!);
         }
@@ -393,28 +322,27 @@ public class CargaArchivosService : ICargaArchivosService
         return response;
     }
 
-    private int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    private int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga,
+        List<ArchivoFila> filasDelitos,
+        List<CargaValidacionError> errores)
     {
         // Para usuarios normales, la entidad de la carga es la entidad asignada al usuario.
-        if (!usuarioCarga.EsSuperUsuario)
+        if(!usuarioCarga.EsSuperUsuario)
         {
             return usuarioCarga.IdEntidadFederativa;
         }
 
         var entidades = new HashSet<int>();
-
         foreach (var fila in filasDelitos)
         {
             fila.Columnas.TryGetValue("id_ent_hchos", out var valorEntidad);
-
-            if (string.IsNullOrWhiteSpace(valorEntidad))
+            if(string.IsNullOrWhiteSpace(valorEntidad))
             {
                 continue;
             }
 
             valorEntidad = valorEntidad.Trim();
-
-            if (!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidad))
+            if(!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidad))
             {
                 continue;
             }
@@ -422,7 +350,7 @@ public class CargaArchivosService : ICargaArchivosService
             entidades.Add(idEntidad);
         }
 
-        if (entidades.Count == 0)
+        if(entidades.Count == 0)
         {
             errores.Add(new CargaValidacionError
             {
@@ -435,11 +363,10 @@ public class CargaArchivosService : ICargaArchivosService
                 DescripcionResumen = "No se pudo determinar la entidad de la carga",
                 Mensaje = "No se pudo determinar la entidad de la carga a partir del archivo de delitos."
             });
-
             return null;
         }
 
-        if (entidades.Count > 1)
+        if(entidades.Count > 1)
         {
             errores.Add(new CargaValidacionError
             {
@@ -452,27 +379,24 @@ public class CargaArchivosService : ICargaArchivosService
                 DescripcionResumen = "La carga contiene múltiples entidades",
                 Mensaje = "La carga contiene delitos de más de una entidad federativa. Una carga solo puede corresponder a una entidad."
             });
-
             return null;
         }
 
         var idEntidadExcel = entidades.First();
-
         return entidades.First();
     }
 
     private List<CargaValidacionError> ValidarEntidadUsuarioCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos)
     {
         var errores = new List<CargaValidacionError>();
-
         // El SUPER_USUARIO puede cargar información de cualquier entidad.
-        if (usuarioCarga.EsSuperUsuario)
+        if(usuarioCarga.EsSuperUsuario)
         {
             return errores;
         }
 
         // Los usuarios normales deben tener entidad asignada.
-        if (!usuarioCarga.IdEntidadFederativa.HasValue)
+        if(!usuarioCarga.IdEntidadFederativa.HasValue)
         {
             errores.Add(new CargaValidacionError
             {
@@ -485,30 +409,27 @@ public class CargaArchivosService : ICargaArchivosService
                 DescripcionResumen = "Usuario sin entidad federativa asignada",
                 Mensaje = "El usuario no tiene una entidad federativa asignada y no puede realizar cargas."
             });
-
             return errores;
         }
 
         foreach (var fila in filasDelitos)
         {
             fila.Columnas.TryGetValue("id_ent_hchos", out var valorEntidad);
-
             // Si viene vacío, lo reporta el DelitosValidator.
-            if (string.IsNullOrWhiteSpace(valorEntidad))
+            if(string.IsNullOrWhiteSpace(valorEntidad))
             {
                 continue;
             }
 
             valorEntidad = valorEntidad.Trim();
-
             // Si no se puede convertir, lo reportan otras validaciones.
-            if (!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidadExcel))
+            if(!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidadExcel))
             {
                 continue;
             }
 
             // Acepta valores como 9 y 09 porque ambos se convierten a 9.
-            if (idEntidadExcel == usuarioCarga.IdEntidadFederativa.Value)
+            if(idEntidadExcel == usuarioCarga.IdEntidadFederativa.Value)
             {
                 continue;
             }
@@ -532,7 +453,7 @@ public class CargaArchivosService : ICargaArchivosService
     private void ValidarArchivoBase(IFormFile archivo, List<CargaValidacionError> errores)
     {
         // Archivo vacío.
-        if (archivo.Length == 0)
+        if(archivo.Length == 0)
         {
             errores.Add(new CargaValidacionError
             {
@@ -544,7 +465,7 @@ public class CargaArchivosService : ICargaArchivosService
         }
 
         // Archivo demasiado grande.
-        if (archivo.Length > TamanioMaximoBytes)
+        if(archivo.Length > TamanioMaximoBytes)
         {
             errores.Add(new CargaValidacionError
             {
@@ -556,9 +477,8 @@ public class CargaArchivosService : ICargaArchivosService
         }
 
         var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
-
         // Extensión no permitida.
-        if (!_extensionesPermitidas.Contains(extension))
+        if(!_extensionesPermitidas.Contains(extension))
         {
             errores.Add(new CargaValidacionError
             {
@@ -573,19 +493,17 @@ public class CargaArchivosService : ICargaArchivosService
     private IFormFile? BuscarArchivoPorNombre(List<IFormFile> archivos, string palabraEsperada)
     {
         var palabraNormalizada = NormalizarTexto(palabraEsperada);
-
         return archivos.FirstOrDefault(archivo =>
         {
             var nombreSinExtension = Path.GetFileNameWithoutExtension(archivo.FileName);
             var nombreNormalizado = NormalizarTexto(nombreSinExtension);
-
             return nombreNormalizado.Contains(palabraNormalizada);
         });
     }
 
     private void ValidarArchivoEsperado(IFormFile? archivo, string tipoArchivo, string palabraEsperada, List<CargaValidacionError> errores)
     {
-        if (archivo != null)
+        if(archivo != null)
         {
             return;
         }
@@ -599,21 +517,19 @@ public class CargaArchivosService : ICargaArchivosService
         });
     }
 
-    private void ValidarDuplicadosPorTipo(List<IFormFile> archivos, string palabraEsperada, string tipoArchivo, List<CargaValidacionError> errores)
+    private void ValidarDuplicadosPorTipo(List<IFormFile> archivos,
+        string palabraEsperada,
+        string tipoArchivo,
+        List<CargaValidacionError> errores)
     {
         var palabraNormalizada = NormalizarTexto(palabraEsperada);
-
-        var coincidencias = archivos
-            .Where(archivo =>
-            {
-                var nombreSinExtension = Path.GetFileNameWithoutExtension(archivo.FileName);
-                var nombreNormalizado = NormalizarTexto(nombreSinExtension);
-
-                return nombreNormalizado.Contains(palabraNormalizada);
-            })
-            .ToList();
-
-        if (coincidencias.Count <= 1)
+        var coincidencias = archivos.Where(archivo =>
+        {
+            var nombreSinExtension = Path.GetFileNameWithoutExtension(archivo.FileName);
+            var nombreNormalizado = NormalizarTexto(nombreSinExtension);
+            return nombreNormalizado.Contains(palabraNormalizada);
+        }).ToList();
+        if(coincidencias.Count <= 1)
         {
             return;
         }
@@ -630,25 +546,21 @@ public class CargaArchivosService : ICargaArchivosService
     private void FinalizarRespuesta(CargaValidacionResponse response, int totalCarpetas, int totalDelitos, int totalVictimas)
     {
         // Armamos el resumen que puede alimentar una vista tipo tabla.
-        response.ResumenValidacion = ConstruirResumenValidacion(
-            response.Errores.Concat(response.Advertencias).ToList(),
-            totalCarpetas,
-            totalDelitos,
-            totalVictimas);
-
-        if (response.EsValido && response.Advertencias.Count > 0)
+        response.ResumenValidacion = ConstruirResumenValidacion(response.Errores.Concat(response.Advertencias).ToList(), totalCarpetas, totalDelitos, totalVictimas);
+        if(response.EsValido && response.Advertencias.Count > 0)
         {
             response.Mensaje = "La información fue validada con advertencias. Revise las advertencias antes de continuar.";
         }
         else
         {
-            response.Mensaje = response.EsValido
-                ? "La información fue validada correctamente. Puede continuar con el acuse previo."
-                : "La información contiene errores de validación.";
+            response.Mensaje = response.EsValido ? "La información fue validada correctamente. Puede continuar con el acuse previo." : "La información contiene errores de validación.";
         }
     }
 
-    private List<CargaValidacionResumenItem> ConstruirResumenValidacion(List<CargaValidacionError> errores, int totalCarpetas, int totalDelitos, int totalVictimas)
+    private List<CargaValidacionResumenItem> ConstruirResumenValidacion(List<CargaValidacionError> errores,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas)
     {
         // Totales principales de los tres archivos.
         var resumen = new List<CargaValidacionResumenItem>
@@ -678,40 +590,23 @@ public class CargaArchivosService : ICargaArchivosService
                 EsError = false
             }
         };
-
         // Agrupamos errores por código para obtener conteos por tipo de validación.
-        var resumenErrores = errores
-            .Where(e =>
-                !string.IsNullOrWhiteSpace(e.Codigo) &&
-                !string.IsNullOrWhiteSpace(e.DescripcionResumen))
-            .GroupBy(e => new
-            {
-                e.Archivo,
-                e.Codigo,
-                e.DescripcionResumen
-            })
-            .Select(g => new CargaValidacionResumenItem
-            {
-                Archivo = g.Key.Archivo,
-                Codigo = g.Key.Codigo,
-                Descripcion = g.Key.DescripcionResumen,
-                TotalRegistros = g.Count(),
-                EsError = true
-            })
-            .OrderBy(x => x.Archivo)
-            .ThenBy(x => x.Codigo)
-            .ToList();
-
+        var resumenErrores = errores.Where(e => !string.IsNullOrWhiteSpace(e.Codigo) && !string.IsNullOrWhiteSpace(e.DescripcionResumen)).GroupBy(e => new { e.Archivo, e.Codigo, e.DescripcionResumen }).Select(g => new CargaValidacionResumenItem
+        {
+            Archivo = g.Key.Archivo,
+            Codigo = g.Key.Codigo,
+            Descripcion = g.Key.DescripcionResumen,
+            TotalRegistros = g.Count(),
+            EsError = true
+        }).OrderBy(x => x.Archivo).ThenBy(x => x.Codigo).ToList();
         resumen.AddRange(resumenErrores);
-
         return resumen;
     }
 
     private int ObtenerMesCorteDesdeCarpetas(List<ArchivoFila> filasCarpetas)
     {
         var fecha = ObtenerPrimeraFechaInicioValida(filasCarpetas);
-
-        if (fecha.HasValue)
+        if(fecha.HasValue)
         {
             return fecha.Value.Month;
         }
@@ -723,8 +618,7 @@ public class CargaArchivosService : ICargaArchivosService
     private int ObtenerAnioCorteDesdeCarpetas(List<ArchivoFila> filasCarpetas)
     {
         var fecha = ObtenerPrimeraFechaInicioValida(filasCarpetas);
-
-        if (fecha.HasValue)
+        if(fecha.HasValue)
         {
             return fecha.Value.Year;
         }
@@ -738,20 +632,19 @@ public class CargaArchivosService : ICargaArchivosService
         foreach (var fila in filasCarpetas)
         {
             fila.Columnas.TryGetValue("fha_de_ini", out var valor);
-
-            if (string.IsNullOrWhiteSpace(valor))
+            if(string.IsNullOrWhiteSpace(valor))
             {
                 continue;
             }
 
             // Primero intentamos con cultura mexicana.
-            if (DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out var fecha))
+            if(DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out var fecha))
             {
                 return fecha.Date;
             }
 
             // Si no se puede, intentamos con cultura invariante.
-            if (DateTime.TryParse(valor, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fechaInvariant))
+            if(DateTime.TryParse(valor, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fechaInvariant))
             {
                 return fechaInvariant.Date;
             }
@@ -763,25 +656,15 @@ public class CargaArchivosService : ICargaArchivosService
     private static string GenerarCodigoReferencia()
     {
         // Referencia corta estilo sistema anterior.
-        return Guid.NewGuid()
-            .ToString("N")
-            .Substring(0, 13)
-            .ToLowerInvariant();
+        return Guid.NewGuid().ToString("N").Substring(0, 13).ToLowerInvariant();
     }
 
     private static string NormalizarTexto(string texto)
     {
         // Normaliza texto para comparar sin importar mayúsculas o acentos.
-        var textoNormalizado = texto
-            .Trim()
-            .ToLowerInvariant()
-            .Normalize(NormalizationForm.FormD);
-
-        var caracteres = textoNormalizado
-            .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
-            .ToArray();
-
-        return new string(caracteres).Normalize(NormalizationForm.FormC);
+        var textoNormalizado = texto.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var caracteres = textoNormalizado.Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray();
+        return new string (caracteres).Normalize(NormalizationForm.FormC);
     }
 
     public async Task<ConfirmarCargaResponse> CargarMigracionDirectaAsync(IFormCollection form, int idUsuarioCarga)
@@ -789,10 +672,8 @@ public class CargaArchivosService : ICargaArchivosService
         // Endpoint exclusivo para migración histórica.
         // Usa el usuario autenticado como usuario de carga, registro y confirmación.
         // No ejecuta validaciones de negocio ni requiere confirmación posterior.
-
         var usuarioCarga = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioCarga);
-
-        if (usuarioCarga == null)
+        if(usuarioCarga == null)
         {
             return new ConfirmarCargaResponse
             {
@@ -802,7 +683,7 @@ public class CargaArchivosService : ICargaArchivosService
             };
         }
 
-        if (!usuarioCarga.HabilitaCarga)
+        if(!usuarioCarga.HabilitaCarga)
         {
             return new ConfirmarCargaResponse
             {
@@ -812,7 +693,7 @@ public class CargaArchivosService : ICargaArchivosService
             };
         }
 
-        if (!usuarioCarga.IdEntidadFederativa.HasValue)
+        if(!usuarioCarga.IdEntidadFederativa.HasValue)
         {
             return new ConfirmarCargaResponse
             {
@@ -822,7 +703,7 @@ public class CargaArchivosService : ICargaArchivosService
             };
         }
 
-        if (!TryObtenerEnteroForm(form, "mesCorte", out var mesCorte) || mesCorte < 1 || mesCorte > 12)
+        if(!TryObtenerEnteroForm(form, "mesCorte", out var mesCorte) || mesCorte < 1 || mesCorte > 12)
         {
             return new ConfirmarCargaResponse
             {
@@ -832,7 +713,7 @@ public class CargaArchivosService : ICargaArchivosService
             };
         }
 
-        if (!TryObtenerEnteroForm(form, "anioCorte", out var anioCorte) || anioCorte < 2000 || anioCorte > 2100)
+        if(!TryObtenerEnteroForm(form, "anioCorte", out var anioCorte) || anioCorte < 2000 || anioCorte > 2100)
         {
             return new ConfirmarCargaResponse
             {
@@ -843,8 +724,7 @@ public class CargaArchivosService : ICargaArchivosService
         }
 
         var archivos = form.Files;
-
-        if (archivos == null || archivos.Count == 0)
+        if(archivos == null || archivos.Count == 0)
         {
             return new ConfirmarCargaResponse
             {
@@ -855,12 +735,10 @@ public class CargaArchivosService : ICargaArchivosService
         }
 
         var listaArchivos = archivos.ToList();
-
         var archivoCarpetas = BuscarArchivoPorNombre(listaArchivos, "carpeta");
         var archivoDelitos = BuscarArchivoPorNombre(listaArchivos, "delito");
         var archivoVictimas = BuscarArchivoPorNombre(listaArchivos, "victima");
-
-        if (archivoCarpetas == null || archivoDelitos == null || archivoVictimas == null)
+        if(archivoCarpetas == null || archivoDelitos == null || archivoVictimas == null)
         {
             return new ConfirmarCargaResponse
             {
@@ -875,74 +753,39 @@ public class CargaArchivosService : ICargaArchivosService
         var filasCarpetas = await _archivoReader.LeerAsync(archivoCarpetas);
         var filasDelitos = await _archivoReader.LeerAsync(archivoDelitos);
         var filasVictimas = await _archivoReader.LeerAsync(archivoVictimas);
-
         var idEntidadFederativa = usuarioCarga.IdEntidadFederativa.Value;
-
-        var codigoReferencia =
-            $"MIGRACION-{idEntidadFederativa}-{anioCorte}{mesCorte:00}-{DateTime.Now:yyyyMMddHHmmss}";
-
-        return await _cargaRepository.GuardarYConfirmarCargaDirectaAsync(
-            idUsuarioCarga,
-            idEntidadFederativa,
-            codigoReferencia,
-            mesCorte,
-            anioCorte,
-            filasCarpetas,
-            filasDelitos,
-            filasVictimas);
+        var codigoReferencia = $"MIGRACION-{idEntidadFederativa}-{anioCorte}{mesCorte:00}-{DateTime.Now:yyyyMMddHHmmss}";
+        return await _cargaRepository.GuardarYConfirmarCargaDirectaAsync(idUsuarioCarga, idEntidadFederativa, codigoReferencia, mesCorte, anioCorte, filasCarpetas, filasDelitos, filasVictimas);
     }
 
     private static bool TryObtenerEnteroForm(IFormCollection form, string campo, out int valor)
     {
         valor = 0;
-
-        var texto = form.TryGetValue(campo, out var values)
-            ? values.FirstOrDefault()
-            : null;
-
-        return int.TryParse(
-            texto,
-            NumberStyles.Integer,
-            CultureInfo.InvariantCulture,
-            out valor);
+        var texto = form.TryGetValue(campo, out var values) ? values.FirstOrDefault() : null;
+        return int.TryParse(texto, NumberStyles.Integer, CultureInfo.InvariantCulture, out valor);
     }
 
-    private async Task<List<CargaValidacionError>> ValidarEstructuraArchivosAsync(IFormFile archivoCarpetas, IFormFile archivoDelitos, IFormFile archivoVictimas)
+    private async Task<List<CargaValidacionError>> ValidarEstructuraArchivosAsync(IFormFile archivoCarpetas,
+        IFormFile archivoDelitos,
+        IFormFile archivoVictimas)
     {
         var errores = new List<CargaValidacionError>();
-
-        await ValidarColumnasObligatoriasArchivoAsync(
-            archivoCarpetas,
-            "carpetas",
-            _carpetasValidator.ColumnasObligatorias,
-            errores);
-
-        await ValidarColumnasObligatoriasArchivoAsync(
-            archivoDelitos,
-            "delitos",
-            _delitosValidator.ColumnasObligatorias,
-            errores);
-
-        await ValidarColumnasObligatoriasArchivoAsync(
-            archivoVictimas,
-            "victimas",
-            _victimasValidator.ColumnasObligatorias,
-            errores);
-
+        await ValidarColumnasObligatoriasArchivoAsync(archivoCarpetas, "carpetas", _carpetasValidator.ColumnasObligatorias, errores);
+        await ValidarColumnasObligatoriasArchivoAsync(archivoDelitos, "delitos", _delitosValidator.ColumnasObligatorias, errores);
+        await ValidarColumnasObligatoriasArchivoAsync(archivoVictimas, "victimas", _victimasValidator.ColumnasObligatorias, errores);
         return errores;
     }
 
-    private async Task ValidarColumnasObligatoriasArchivoAsync(IFormFile archivo, string nombreArchivo, IReadOnlyCollection<string> columnasObligatorias, List<CargaValidacionError> errores)
+    private async Task ValidarColumnasObligatoriasArchivoAsync(IFormFile archivo,
+        string nombreArchivo,
+        IReadOnlyCollection<string> columnasObligatorias,
+        List<CargaValidacionError> errores)
     {
         var encabezados = await _archivoReader.LeerEncabezadosAsync(archivo);
-
-        var columnasArchivo = encabezados
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
+        var columnasArchivo = encabezados.Where(x => !string.IsNullOrWhiteSpace(x)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var columna in columnasObligatorias)
         {
-            if (columnasArchivo.Contains(columna))
+            if(columnasArchivo.Contains(columna))
             {
                 continue;
             }

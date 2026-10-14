@@ -6,7 +6,6 @@ using SIIID2.Api.Models;
 using SIIID2.Api.Services;
 
 namespace SIIID2.Api.Controllers;
-
 [ApiController]
 [Authorize(Policy = "MODULO_MENSUAL")]
 [Route("api/actualizaciones")]
@@ -15,8 +14,9 @@ public class ActualizacionesController : ControllerBase
     private readonly IActualizacionArchivosService _actualizacionArchivosService;
     private readonly IAcusePdfService _acusePdfService;
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
-    public ActualizacionesController(IActualizacionArchivosService actualizacionArchivosService, IAcusePdfService acusePdfService, IDbConnectionFactory dbConnectionFactory)
+    public ActualizacionesController(IActualizacionArchivosService actualizacionArchivosService,
+        IAcusePdfService acusePdfService,
+        IDbConnectionFactory dbConnectionFactory)
     {
         _actualizacionArchivosService = actualizacionArchivosService;
         _acusePdfService = acusePdfService;
@@ -30,46 +30,33 @@ public class ActualizacionesController : ControllerBase
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> ValidarActualizacion()
     {
-        if (!Request.HasFormContentType)
+        if(!Request.HasFormContentType)
         {
             return BadRequest(new CargaValidacionResponse
             {
                 Mensaje = "La petición debe enviarse como multipart/form-data.",
-                Errores = new List<CargaValidacionError>
-                {
-                    new CargaValidacionError
-                    {
-                        Archivo = "general",
-                        Fila = null,
-                        Columna = "",
-                        Campo = "",
-                        Valor = Request.ContentType,
-                        Codigo = "GENERAL_CONTENT_TYPE_INVALIDO",
-                        DescripcionResumen = "Tipo de petición inválido",
-                        Mensaje = "La petición debe enviarse como multipart/form-data."
-                    }
-                }
+                Errores = new List<CargaValidacionError> { new CargaValidacionError
+            {
+                Archivo = "general",
+                Fila = null,
+                Columna = "",
+                Campo = "",
+                Valor = Request.ContentType,
+                Codigo = "GENERAL_CONTENT_TYPE_INVALIDO",
+                DescripcionResumen = "Tipo de petición inválido",
+                Mensaje = "La petición debe enviarse como multipart/form-data."
+            } }
             });
         }
 
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioCarga))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioCarga))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
-        var resultado = await _actualizacionArchivosService.ValidarActualizacionAsync(
-            Request.Form,
-            idUsuarioCarga);
-
-        if (!resultado.EsValido)
+        var resultado = await _actualizacionArchivosService.ValidarActualizacionAsync(Request.Form, idUsuarioCarga);
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
@@ -79,33 +66,22 @@ public class ActualizacionesController : ControllerBase
 
     [Authorize]
     [HttpGet("diferencias/{codigoReferencia}")]
-    public async Task<IActionResult> ObtenerDiferencias(string codigoReferencia, [FromQuery] int limitePorSeccion = 100, [FromQuery] bool incluirResumen = true)
+    public async Task<IActionResult> ObtenerDiferencias(string codigoReferencia,
+        [FromQuery] int limitePorSeccion = 100,
+        [FromQuery] bool incluirResumen = true)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
         limitePorSeccion = Math.Clamp(limitePorSeccion, 0, 200);
-
-        var resultado = await _actualizacionArchivosService.ObtenerDetalleDiferenciasAsync(
-            codigoReferencia,
-            idUsuarioConsulta,
-            limitePorSeccion,
-            incluirResumen);
-
-        if (!resultado.EsValido) return BadRequest(resultado);
-
-        if (limitePorSeccion > 0) await CodigoPostalActualizacionHelper.AplicarDetalleAsync(_dbConnectionFactory, codigoReferencia, resultado, limitePorSeccion, !incluirResumen);
-
+        var resultado = await _actualizacionArchivosService.ObtenerDetalleDiferenciasAsync(codigoReferencia, idUsuarioConsulta, limitePorSeccion, incluirResumen);
+        if(!resultado.EsValido)
+            return BadRequest(resultado);
+        if(limitePorSeccion > 0)
+            await CodigoPostalActualizacionHelper.AplicarDetalleAsync(_dbConnectionFactory, codigoReferencia, resultado, limitePorSeccion, !incluirResumen);
         return Ok(resultado);
     }
 
@@ -114,23 +90,13 @@ public class ActualizacionesController : ControllerBase
     public async Task<IActionResult> ConfirmarActualizacion([FromBody] ConfirmarCargaRequest request)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConfirmacion))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioConfirmacion))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
-        var resultado = await _actualizacionArchivosService.ConfirmarActualizacionAsync(
-            request,
-            idUsuarioConfirmacion);
-
-        if (!resultado.EsValido)
+        var resultado = await _actualizacionArchivosService.ConfirmarActualizacionAsync(request, idUsuarioConfirmacion);
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
@@ -143,46 +109,23 @@ public class ActualizacionesController : ControllerBase
     public async Task<IActionResult> DescargarAcusePrevioActualizacion(string codigoReferencia)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
         try
         {
-            var pdf = await _acusePdfService.GenerarAcusePrevioActualizacionAsync(
-                codigoReferencia,
-                idUsuarioConsulta);
-
-            return File(
-                pdf,
-                "application/pdf",
-                $"INFORME_PREVIO_ACTUALIZACION_{codigoReferencia}.pdf");
+            var pdf = await _acusePdfService.GenerarAcusePrevioActualizacionAsync(codigoReferencia, idUsuarioConsulta);
+            return File(pdf, "application/pdf", $"INFORME_PREVIO_ACTUALIZACION_{codigoReferencia}.pdf");
         }
         catch (UnauthorizedAccessException ex)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new
-            {
-                esValido = false,
-                codigo = "ACUSE_SIN_PERMISO",
-                mensaje = ex.Message
-            });
+            return StatusCode(StatusCodes.Status403Forbidden, new { esValido = false, codigo = "ACUSE_SIN_PERMISO", mensaje = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new
-            {
-                esValido = false,
-                codigo = "ACUSE_NO_DISPONIBLE",
-                mensaje = ex.Message
-            });
+            return BadRequest(new { esValido = false, codigo = "ACUSE_NO_DISPONIBLE", mensaje = ex.Message });
         }
     }
 
@@ -191,73 +134,40 @@ public class ActualizacionesController : ControllerBase
     public async Task<IActionResult> DescargarAcuseConfirmadoActualizacion(string codigoReferencia)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
         try
         {
-            var pdf = await _acusePdfService.GenerarAcuseConfirmadoActualizacionAsync(
-                codigoReferencia,
-                idUsuarioConsulta);
-
-            return File(
-                pdf,
-                "application/pdf",
-                $"ACUSE_ACTUALIZACION_{codigoReferencia}.pdf");
+            var pdf = await _acusePdfService.GenerarAcuseConfirmadoActualizacionAsync(codigoReferencia, idUsuarioConsulta);
+            return File(pdf, "application/pdf", $"ACUSE_ACTUALIZACION_{codigoReferencia}.pdf");
         }
         catch (UnauthorizedAccessException ex)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new
-            {
-                esValido = false,
-                codigo = "ACUSE_SIN_PERMISO",
-                mensaje = ex.Message
-            });
+            return StatusCode(StatusCodes.Status403Forbidden, new { esValido = false, codigo = "ACUSE_SIN_PERMISO", mensaje = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new
-            {
-                esValido = false,
-                codigo = "ACUSE_NO_DISPONIBLE",
-                mensaje = ex.Message
-            });
+            return BadRequest(new { esValido = false, codigo = "ACUSE_NO_DISPONIBLE", mensaje = ex.Message });
         }
     }
 
     [Authorize]
     [HttpGet("periodo")]
-    public async Task<IActionResult> ConsultarPeriodoActualizacion([FromQuery] int mesCorte, [FromQuery] int anioCorte, [FromQuery] int? idEntidadFederativa = null)
+    public async Task<IActionResult> ConsultarPeriodoActualizacion([FromQuery] int mesCorte,
+        [FromQuery] int anioCorte,
+        [FromQuery] int? idEntidadFederativa = null)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
-        var resultado = await _actualizacionArchivosService.ConsultarPeriodoActualizacionAsync(
-            mesCorte,
-            anioCorte,
-            idUsuarioConsulta,
-            idEntidadFederativa);
-
-        if (!resultado.EsValido)
+        var resultado = await _actualizacionArchivosService.ConsultarPeriodoActualizacionAsync(mesCorte, anioCorte, idUsuarioConsulta, idEntidadFederativa);
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
@@ -270,22 +180,12 @@ public class ActualizacionesController : ControllerBase
     public async Task<IActionResult> ObtenerPeriodosDisponiblesActualizacion([FromQuery] int? idEntidadFederativa = null)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
-        var periodos = await _actualizacionArchivosService.ObtenerPeriodosDisponiblesActualizacionAsync(
-            idUsuarioConsulta,
-            idEntidadFederativa);
-
+        var periodos = await _actualizacionArchivosService.ObtenerPeriodosDisponiblesActualizacionAsync(idUsuarioConsulta, idEntidadFederativa);
         return Ok(periodos);
     }
 }

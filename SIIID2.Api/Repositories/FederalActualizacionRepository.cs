@@ -6,12 +6,10 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public partial class FederalActualizacionRepository : IFederalActualizacionRepository
 {
     private readonly BanciCruceService _cruce;
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public FederalActualizacionRepository(BanciCruceService cruce, IDbConnectionFactory dbConnectionFactory)
     {
         _cruce = cruce;
@@ -39,30 +37,43 @@ public partial class FederalActualizacionRepository : IFederalActualizacionRepos
               AND activo = 1
             ORDER BY anio_corte DESC, mes_corte DESC;
             """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         var periodos = await connection.QueryAsync<(int AnioCorte, int MesCorte)>(sql);
-
         return periodos.GroupBy(x => x.AnioCorte).Select(anio => new ActualizacionAnioDisponibleItem
         {
             AnioCorte = anio.Key,
-            Meses = anio.Select(x => new ActualizacionMesDisponibleItem { MesCorte = x.MesCorte, NombreMes = ObtenerNombreMes(x.MesCorte), Periodo = $"{x.MesCorte:00}/{x.AnioCorte}" }).ToList()
+            Meses = anio.Select(x => new ActualizacionMesDisponibleItem
+        {
+            MesCorte = x.MesCorte,
+            NombreMes = ObtenerNombreMes(x.MesCorte),
+            Periodo = $"{x.MesCorte:00}/{x.AnioCorte}"
+        }).ToList()
         }).ToList();
     }
 
-    public async Task<long> GuardarIntentoAsync(int idUsuarioCarga, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<CargaValidacionError> advertencias, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    public async Task<long> GuardarIntentoAsync(int idUsuarioCarga,
+        string codigoReferencia,
+        int mesCorte,
+        int anioCorte,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas,
+        string estado,
+        string? mensajeError,
+        List<CargaValidacionError> advertencias,
+        List<ArchivoFila> filasCarpetas,
+        List<ArchivoFila> filasDelitos,
+        List<ArchivoFila> filasVictimas)
     {
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             await FederalOperacionPeriodoSql.BloquearAsync(connection, transaction, mesCorte, anioCorte);
             await FederalOperacionPeriodoSql.ExpirarPendientesAsync(connection, transaction, mesCorte, anioCorte);
-            if (estado == "VALIDADO_PENDIENTE_ACTUALIZACION")
+            if(estado == "VALIDADO_PENDIENTE_ACTUALIZACION")
                 await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, mesCorte, anioCorte, actualizacion: true);
-
             var idFederalCarga = await CrearCargaAsync(connection, transaction, idUsuarioCarga, codigoReferencia, mesCorte, anioCorte, totalCarpetas, totalDelitos, totalVictimas, estado, mensajeError);
             await BanciCruceService.GuardarFederalAsync(connection, transaction, idFederalCarga, filasCarpetas, filasDelitos, filasVictimas);
             await GuardarTmpCarpetasAsync(connection, transaction, idFederalCarga, filasCarpetas);
@@ -75,7 +86,8 @@ public partial class FederalActualizacionRepository : IFederalActualizacionRepos
         }
         catch
         {
-            if (transaction.Connection != null) await transaction.RollbackAsync();
+            if(transaction.Connection != null)
+                await transaction.RollbackAsync();
             throw;
         }
     }
@@ -83,15 +95,12 @@ public partial class FederalActualizacionRepository : IFederalActualizacionRepos
     public async Task<List<CargaValidacionResumenItem>> ObtenerResumenDiferenciasAsync(long idFederalCarga)
     {
         var resultados = await ObtenerConteosDiferenciasAsync(idFederalCarga);
-
-        return resultados.Select(x => new CargaValidacionResumenItem
-        {
-            Archivo = x.Archivo,
-            Codigo = $"FEDERAL_ACTUALIZACION_{x.Archivo.ToUpperInvariant()}_{x.Tipo}",
-            Descripcion = x.Tipo switch { "NUEVO" => $"Registros nuevos en {x.Archivo}.", "MODIFICADO" => $"Registros modificados en {x.Archivo}.", "ELIMINADO" => $"Registros eliminados en {x.Archivo}.", "SIN_CAMBIOS" => $"Registros sin cambios en {x.Archivo}.", _ => $"Registros {x.Tipo} en {x.Archivo}." },
-            TotalRegistros = x.Total,
-            EsError = false
-        }).ToList();
+        return resultados.Select(x => new CargaValidacionResumenItem { Archivo = x.Archivo, Codigo = $"FEDERAL_ACTUALIZACION_{x.Archivo.ToUpperInvariant()}_{x.Tipo}", Descripcion = x.Tipo switch        {
+            "NUEVO" => $"Registros nuevos en {x.Archivo}.",
+            "MODIFICADO" => $"Registros modificados en {x.Archivo}.",
+            "ELIMINADO" => $"Registros eliminados en {x.Archivo}.",
+            "SIN_CAMBIOS" => $"Registros sin cambios en {x.Archivo}.",
+            _ => $"Registros {x.Tipo} en {x.Archivo}."}, TotalRegistros = x.Total, EsError = false }).ToList();
     }
 
     private async Task<IEnumerable<(string Archivo, string Tipo, int Total)>> ObtenerConteosDiferenciasAsync(long idFederalCarga)
@@ -162,48 +171,134 @@ public partial class FederalActualizacionRepository : IFederalActualizacionRepos
         UNION ALL SELECT N'victimas', tipo, COUNT(1) FROM victimas_clasificadas GROUP BY tipo
         OPTION (RECOMPILE);
         """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.QueryAsync<(string Archivo, string Tipo, int Total)>(sql, new { IdFederalCarga = idFederalCarga }, commandTimeout: 180);
     }
 
-    private static async Task<long> CrearCargaAsync(SqlConnection connection, SqlTransaction transaction, int idUsuarioCarga, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError)
+    private static async Task<long> CrearCargaAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        int idUsuarioCarga,
+        string codigoReferencia,
+        int mesCorte,
+        int anioCorte,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas,
+        string estado,
+        string? mensajeError)
     {
         const string sql = """
             INSERT INTO dbo.federal_carga (id_usuario_carga, id_entidad_federativa, codigo_referencia, tipo_carga, mes_corte, anio_corte, total_carpetas_investigacion, total_delitos, total_victimas, estado, fecha_validacion, fecha_expiracion, mensaje_error, activo)
             OUTPUT INSERTED.id_federal_carga
             VALUES (@IdUsuarioCarga, NULL, @CodigoReferencia, N'ACTUALIZACION', @MesCorte, @AnioCorte, @TotalCarpetas, @TotalDelitos, @TotalVictimas, @Estado, SYSDATETIME(), DATEADD(HOUR, 48, SYSDATETIME()), @MensajeError, 1);
             """;
-
         return await connection.ExecuteScalarAsync<long>(sql, new { IdUsuarioCarga = idUsuarioCarga, CodigoReferencia = codigoReferencia, MesCorte = mesCorte, AnioCorte = anioCorte, TotalCarpetas = totalCarpetas, TotalDelitos = totalDelitos, TotalVictimas = totalVictimas, Estado = estado, MensajeError = mensajeError }, transaction);
     }
 
-    private static async Task GuardarTmpCarpetasAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, List<ArchivoFila> filas)
+    private static async Task GuardarTmpCarpetasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        List<ArchivoFila> filas)
     {
         var tabla = new DataTable();
-        foreach (var columna in new[] { "id_ci", "ntra_ci", "fha_de_ini", "hra_de_ini", "rmen_de_hchos" }) tabla.Columns.Add(columna, typeof(string));
+        foreach (var columna in new[]
+        {
+            "id_ci",
+            "ntra_ci",
+            "fha_de_ini",
+            "hra_de_ini",
+            "rmen_de_hchos"
+        }
+
+        )
+            tabla.Columns.Add(columna, typeof(string));
         tabla.Columns.Add("id_federal_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
         tabla.Columns["id_federal_carga"]!.SetOrdinal(0);
         tabla.Columns["numero_fila"]!.SetOrdinal(1);
-        foreach (var fila in filas) tabla.Rows.Add(idFederalCarga, fila.NumeroFila, Valor(fila, "id_ci"), Valor(fila, "ntra_ci"), Valor(fila, "fha_de_ini"), Valor(fila, "hra_de_ini"), Valor(fila, "rmen_de_hchos"), "PENDIENTE", true);
+        foreach (var fila in filas)
+            tabla.Rows.Add(idFederalCarga, fila.NumeroFila, Valor(fila, "id_ci"), Valor(fila, "ntra_ci"), Valor(fila, "fha_de_ini"), Valor(fila, "hra_de_ini"), Valor(fila, "rmen_de_hchos"), "PENDIENTE", true);
         await EjecutarBulkAsync(connection, transaction, tabla, "dbo.federal_carga_tmp_carpeta");
     }
 
-    private static async Task GuardarTmpDelitosAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, List<ArchivoFila> filas)
+    private static async Task GuardarTmpDelitosAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        List<ArchivoFila> filas)
     {
         var tabla = CrearTablaStaging(["id_ci", "id_delito", "dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "id_ent_hchos", "id_mun_hchos", "id_loc_hchos", "nom_loc_hchos", "id_col_hchos", "nom_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos"]);
-        foreach (var fila in filas) tabla.Rows.Add(new object[] { idFederalCarga, fila.NumeroFila }.Concat(new[] { "id_ci", "id_delito", "dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "id_ent_hchos", "id_mun_hchos", "id_loc_hchos", "nom_loc_hchos", "id_col_hchos", "nom_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos" }.Select(x => (object)Valor(fila, x))).Concat(new object[] { "PENDIENTE", true }).ToArray());
+        foreach (var fila in filas)
+            tabla.Rows.Add(new object[]
+            {
+                idFederalCarga,
+                fila.NumeroFila
+            }.Concat(new[]
+            {
+                "id_ci",
+                "id_delito",
+                "dto",
+                "moda_dto",
+                "forma_acc",
+                "fha_de_hchos",
+                "hra_de_hchos",
+                "emto_com_dto",
+                "grdo_cons",
+                "clasf_de_dto",
+                "id_ent_hchos",
+                "id_mun_hchos",
+                "id_loc_hchos",
+                "nom_loc_hchos",
+                "id_col_hchos",
+                "nom_col_hchos",
+                "cp",
+                "coord_x",
+                "coord_y",
+                "dom_hchos"
+            }.Select(x => (object)Valor(fila, x))).Concat(new object[]
+            {
+                "PENDIENTE",
+                true
+            }).ToArray());
         await EjecutarBulkAsync(connection, transaction, tabla, "dbo.federal_carga_tmp_delito");
     }
 
-    private static async Task GuardarTmpVictimasAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, List<ArchivoFila> filas)
+    private static async Task GuardarTmpVictimasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        List<ArchivoFila> filas)
     {
-        var columnas = new[] { "id_ci", "id_delito", "id_vicf", "id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional", "nombre_vicfem", "primer_apellido_vicfem", "segundo_apellido_vicfem", "curp_vicfem" };
+        var columnas = new[]
+        {
+            "id_ci",
+            "id_delito",
+            "id_vicf",
+            "id_tv",
+            "id_tpm",
+            "sexo",
+            "genero",
+            "pob",
+            "disc",
+            "fha_nac",
+            "edad",
+            "nacional",
+            "nombre_vicfem",
+            "primer_apellido_vicfem",
+            "segundo_apellido_vicfem",
+            "curp_vicfem"
+        };
         var tabla = CrearTablaStaging(columnas);
-        foreach (var fila in filas) tabla.Rows.Add(new object[] { idFederalCarga, fila.NumeroFila }.Concat(columnas.Select(x => (object)Valor(fila, x == "primer_apellido_vicfem" ? "1apellido_vicfem" : x == "segundo_apellido_vicfem" ? "2apellido_vicfem" : x))).Concat(new object[] { "PENDIENTE", true }).ToArray());
+        foreach (var fila in filas)
+            tabla.Rows.Add(new object[]
+            {
+                idFederalCarga,
+                fila.NumeroFila
+            }.Concat(columnas.Select(x => (object)Valor(fila, x == "primer_apellido_vicfem" ? "1apellido_vicfem" : x == "segundo_apellido_vicfem" ? "2apellido_vicfem" : x))).Concat(new object[]
+            {
+                "PENDIENTE",
+                true
+            }).ToArray());
         await EjecutarBulkAsync(connection, transaction, tabla, "dbo.federal_carga_tmp_victima");
     }
 
@@ -212,7 +307,8 @@ public partial class FederalActualizacionRepository : IFederalActualizacionRepos
         var tabla = new DataTable();
         tabla.Columns.Add("id_federal_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
-        foreach (var columna in columnas) tabla.Columns.Add(columna, typeof(string));
+        foreach (var columna in columnas)
+            tabla.Columns.Add(columna, typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
         return tabla;
@@ -220,14 +316,36 @@ public partial class FederalActualizacionRepository : IFederalActualizacionRepos
 
     private static async Task EjecutarBulkAsync(SqlConnection connection, SqlTransaction transaction, DataTable tabla, string destino)
     {
-        using var bulk = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction) { DestinationTableName = destino };
-        foreach (DataColumn columna in tabla.Columns) bulk.ColumnMappings.Add(columna.ColumnName, columna.ColumnName);
+        using var bulk = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
+        {
+            DestinationTableName = destino
+        };
+        foreach (DataColumn columna in tabla.Columns)
+            bulk.ColumnMappings.Add(columna.ColumnName, columna.ColumnName);
         await bulk.WriteToServerAsync(tabla);
     }
 
-    private static string Valor(ArchivoFila fila, string columna) => fila.Columnas.TryGetValue(columna, out var valor) && !string.IsNullOrWhiteSpace(valor) ? valor.Trim() : string.Empty;
-
-    private static string ObtenerNombreMes(int mes) => mes switch { 1 => "Enero", 2 => "Febrero", 3 => "Marzo", 4 => "Abril", 5 => "Mayo", 6 => "Junio", 7 => "Julio", 8 => "Agosto", 9 => "Septiembre", 10 => "Octubre", 11 => "Noviembre", 12 => "Diciembre", _ => mes.ToString("00") };
-
-    private static ConfirmarCargaResponse Respuesta(bool esValido, string codigoReferencia, string estado, string mensaje) => new() { EsValido = esValido, CodigoReferencia = codigoReferencia, Estado = estado, Mensaje = mensaje };
+    private static string Valor(ArchivoFila fila,
+        string columna) => fila.Columnas.TryGetValue(columna, out var valor) && !string.IsNullOrWhiteSpace(valor) ? valor.Trim() : string.Empty;
+    private static string ObtenerNombreMes(int mes) => mes switch    {
+        1 => "Enero",
+        2 => "Febrero",
+        3 => "Marzo",
+        4 => "Abril",
+        5 => "Mayo",
+        6 => "Junio",
+        7 => "Julio",
+        8 => "Agosto",
+        9 => "Septiembre",
+        10 => "Octubre",
+        11 => "Noviembre",
+        12 => "Diciembre",
+        _ => mes.ToString("00")};
+    private static ConfirmarCargaResponse Respuesta(bool esValido, string codigoReferencia, string estado, string mensaje) => new()
+    {
+        EsValido = esValido,
+        CodigoReferencia = codigoReferencia,
+        Estado = estado,
+        Mensaje = mensaje
+    };
 }

@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class EditarUsuarioSemanalRequest
 {
     public string Usuario { get; set; } = string.Empty;

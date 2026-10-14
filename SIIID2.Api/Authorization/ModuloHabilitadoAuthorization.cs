@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authorization;
 using SIIID2.Api.Data;
 
 namespace SIIID2.Api.Authorization;
-
 public sealed class ModuloHabilitadoRequirement : IAuthorizationRequirement
 {
     public string ClaveModulo { get; }
@@ -12,16 +11,15 @@ public sealed class ModuloHabilitadoRequirement : IAuthorizationRequirement
     public ModuloHabilitadoRequirement(string claveModulo) => ClaveModulo = claveModulo;
 }
 
+// Reconsulta acceso y estado del módulo en la base: el JWT no basta para mantener permisos vigentes.
 public sealed class ModuloHabilitadoHandler : AuthorizationHandler<ModuloHabilitadoRequirement>
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public ModuloHabilitadoHandler(IDbConnectionFactory dbConnectionFactory) => _dbConnectionFactory = dbConnectionFactory;
-
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, ModuloHabilitadoRequirement requirement)
     {
-        if (context.User.Identity?.IsAuthenticated != true ||
-            !int.TryParse(context.User.FindFirstValue(ClaimTypes.NameIdentifier), out var idUsuario))
+        if(context.User.Identity?.IsAuthenticated != true
+            || !int.TryParse(context.User.FindFirstValue(ClaimTypes.NameIdentifier), out var idUsuario))
         {
             return;
         }
@@ -50,15 +48,9 @@ public sealed class ModuloHabilitadoHandler : AuthorizationHandler<ModuloHabilit
                   AND (r.rol = N'SUPER_USUARIO' OR um.id_usuario IS NOT NULL)
                   AND (@ClaveModulo <> N'FEDERAL' OR r.rol <> N'CONSULTA' OR u.id_entidad_federativa IS NULL)
             ) THEN 1 ELSE 0 END AS bit);";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var habilitado = await connection.ExecuteScalarAsync<bool>(sql, new
-        {
-            IdUsuario = idUsuario,
-            ClaveModulo = requirement.ClaveModulo
-        });
-
-        if (habilitado) context.Succeed(requirement);
+        var habilitado = await connection.ExecuteScalarAsync<bool>(sql, new { IdUsuario = idUsuario, ClaveModulo = requirement.ClaveModulo });
+        if(habilitado)
+            context.Succeed(requirement);
     }
 }

@@ -2,11 +2,9 @@
 using Microsoft.Data.SqlClient;
 
 namespace SIIID2.Api.Data;
-
 public class SqlServerConnectionFactory : IDbConnectionFactory
 {
     private readonly string _connectionString;
-
     public SqlServerConnectionFactory(IConfiguration configuration)
     {
         // Lee la cadena de conexión desde appsettings.json.

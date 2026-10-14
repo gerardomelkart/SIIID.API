@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class SemanalCargaAcuseBloque
 {
     public int AnioSemana { get; set; }

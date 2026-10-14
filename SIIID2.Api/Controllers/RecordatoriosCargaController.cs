@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Mvc;
 using SIIID2.Api.Data;
 
 namespace SIIID2.Api.Controllers;
-
 [ApiController]
 [Authorize]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -15,22 +14,18 @@ public class RecordatoriosCargaController : ControllerBase
 {
     private const string RolEnlaceEstatal = "ENLACE_ESTATAL";
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public RecordatoriosCargaController(IDbConnectionFactory dbConnectionFactory) => _dbConnectionFactory = dbConnectionFactory;
-
     [Authorize(Policy = "MODULO_MENSUAL")]
     [HttpGet("mensual")]
     public async Task<IActionResult> ObtenerMensual()
     {
-        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
-
+        if(!ObtenerIdUsuario(out var idUsuario))
+            return TokenSinUsuario();
         var usuario = await ObtenerUsuarioAsync(idUsuario, "MENSUAL");
-
-        if (!DebeMostrarRecordatorio(usuario)) return Ok(SinPendiente());
-
+        if(!DebeMostrarRecordatorio(usuario))
+            return Ok(SinPendiente());
         var fechaActual = ObtenerFechaActual();
         var corte = new DateTime(fechaActual.Year, fechaActual.Month, 1).AddMonths(-1);
-
         const string sql = @"
         SELECT CONVERT
         (
@@ -56,20 +51,11 @@ public class RecordatoriosCargaController : ControllerBase
                 ELSE 0
             END
         );";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var cargaEnviada = await connection.QuerySingleAsync<bool>(sql, new
-        {
-            usuario!.IdEntidadFederativa,
-            AnioCorte = corte.Year,
-            MesCorte = corte.Month
-        });
-
-        if (cargaEnviada) return Ok(SinPendiente());
-
+        var cargaEnviada = await connection.QuerySingleAsync<bool>(sql, new { usuario!.IdEntidadFederativa, AnioCorte = corte.Year, MesCorte = corte.Month });
+        if(cargaEnviada)
+            return Ok(SinPendiente());
         var periodo = $"{ObtenerNombreMes(corte.Month)} de {corte.Year}";
-
         return Ok(new RecordatorioCargaResponse
         {
             HayPendiente = true,
@@ -83,18 +69,16 @@ public class RecordatoriosCargaController : ControllerBase
     [HttpGet("semanal")]
     public async Task<IActionResult> ObtenerSemanal()
     {
-        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
-
+        if(!ObtenerIdUsuario(out var idUsuario))
+            return TokenSinUsuario();
         var usuario = await ObtenerUsuarioAsync(idUsuario, "SEMANAL");
-
-        if (!DebeMostrarRecordatorio(usuario)) return Ok(SinPendiente());
-
+        if(!DebeMostrarRecordatorio(usuario))
+            return Ok(SinPendiente());
         var fechaActual = ObtenerFechaActual();
         var diasDesdeLunes = ((int)fechaActual.DayOfWeek + 6) % 7;
         var lunesActual = fechaActual.AddDays(-diasDesdeLunes);
         var fechaInicio = lunesActual.AddDays(-7);
         var fechaFin = fechaInicio.AddDays(6);
-
         const string sql = @"
         WITH delitos_habilitados AS
         (
@@ -243,21 +227,12 @@ public class RecordatoriosCargaController : ControllerBase
         ORDER BY
             habilitado.orden,
             habilitado.clave2;";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var delitos = (await connection.QueryAsync<string>(sql, new
-        {
-            usuario!.IdEntidadFederativa,
-            FechaInicioSemana = fechaInicio,
-            FechaFinSemana = fechaFin
-        })).ToList();
-
-        if (delitos.Count == 0) return Ok(SinPendiente());
-
+        var delitos = (await connection.QueryAsync<string>(sql, new { usuario!.IdEntidadFederativa, FechaInicioSemana = fechaInicio, FechaFinSemana = fechaFin })).ToList();
+        if(delitos.Count == 0)
+            return Ok(SinPendiente());
         var periodo = FormatearRango(fechaInicio, fechaFin);
         var detalleDelitos = $" para: {string.Join(", ", delitos)}";
-
         return Ok(new RecordatorioCargaResponse
         {
             HayPendiente = true,
@@ -272,15 +247,13 @@ public class RecordatoriosCargaController : ControllerBase
     [HttpGet("federal")]
     public async Task<IActionResult> ObtenerFederal()
     {
-        if (!ObtenerIdUsuario(out var idUsuario)) return TokenSinUsuario();
-
+        if(!ObtenerIdUsuario(out var idUsuario))
+            return TokenSinUsuario();
         var usuario = await ObtenerUsuarioAsync(idUsuario, "FEDERAL");
-
-        if (usuario == null || !usuario.HabilitaCarga || !string.Equals(usuario.Rol, RolEnlaceEstatal, StringComparison.OrdinalIgnoreCase)) return Ok(SinPendiente());
-
+        if(usuario == null || !usuario.HabilitaCarga || !string.Equals(usuario.Rol, RolEnlaceEstatal, StringComparison.OrdinalIgnoreCase))
+            return Ok(SinPendiente());
         var fechaActual = ObtenerFechaActual();
         var corte = new DateTime(fechaActual.Year, fechaActual.Month, 1).AddMonths(-1);
-
         const string sql = @"
         SELECT CONVERT
         (
@@ -306,19 +279,11 @@ public class RecordatoriosCargaController : ControllerBase
                 ELSE 0
             END
         );";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var cargaEnviada = await connection.QuerySingleAsync<bool>(sql, new
-        {
-            AnioCorte = corte.Year,
-            MesCorte = corte.Month
-        });
-
-        if (cargaEnviada) return Ok(SinPendiente());
-
+        var cargaEnviada = await connection.QuerySingleAsync<bool>(sql, new { AnioCorte = corte.Year, MesCorte = corte.Month });
+        if(cargaEnviada)
+            return Ok(SinPendiente());
         var periodo = $"{ObtenerNombreMes(corte.Month)} de {corte.Year}";
-
         return Ok(new RecordatorioCargaResponse
         {
             HayPendiente = true,
@@ -350,35 +315,24 @@ public class RecordatoriosCargaController : ControllerBase
            AND modulo.activo = 1
         WHERE u.id_usuario = @IdUsuario
           AND u.activo = 1;";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<RecordatorioCargaUsuarioInfo>(sql, new
-        {
-            IdUsuario = idUsuario,
-            ClaveModulo = claveModulo
-        });
+        return await connection.QueryFirstOrDefaultAsync<RecordatorioCargaUsuarioInfo>(sql, new { IdUsuario = idUsuario, ClaveModulo = claveModulo });
     }
 
     private static bool DebeMostrarRecordatorio(RecordatorioCargaUsuarioInfo? usuario)
     {
-        return usuario != null &&
-               usuario.HabilitaCarga &&
-               usuario.IdEntidadFederativa.HasValue &&
-               usuario.IdEntidadFederativa.Value > 0 &&
-               string.Equals(usuario.Rol, RolEnlaceEstatal, StringComparison.OrdinalIgnoreCase);
+        return usuario != null && usuario.HabilitaCarga && usuario.IdEntidadFederativa.HasValue && usuario.IdEntidadFederativa.Value > 0 && string.Equals(usuario.Rol, RolEnlaceEstatal, StringComparison.OrdinalIgnoreCase);
     }
 
     private static RecordatorioCargaResponse SinPendiente() => new();
-
     private static string FormatearRango(DateTime fechaInicio, DateTime fechaFin)
     {
-        if (fechaInicio.Year == fechaFin.Year && fechaInicio.Month == fechaFin.Month)
+        if(fechaInicio.Year == fechaFin.Year && fechaInicio.Month == fechaFin.Month)
         {
             return $"del {fechaInicio.Day} al {fechaFin.Day} de {ObtenerNombreMes(fechaFin.Month)} de {fechaFin.Year}";
         }
 
-        if (fechaInicio.Year == fechaFin.Year)
+        if(fechaInicio.Year == fechaFin.Year)
         {
             return $"del {fechaInicio.Day} de {ObtenerNombreMes(fechaInicio.Month)} al {fechaFin.Day} de {ObtenerNombreMes(fechaFin.Month)} de {fechaFin.Year}";
         }
@@ -387,17 +341,21 @@ public class RecordatoriosCargaController : ControllerBase
     }
 
     private static string ObtenerNombreMes(int mes) => CultureInfo.GetCultureInfo("es-MX").DateTimeFormat.GetMonthName(mes);
-
     private static DateTime ObtenerFechaActual()
     {
         var zonaHoraria = ObtenerZonaHoraria();
-
         return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zonaHoraria).Date;
     }
 
     private static TimeZoneInfo ObtenerZonaHoraria()
     {
-        foreach (var idZonaHoraria in new[] { "America/Mexico_City", "Central Standard Time (Mexico)" })
+        foreach (var idZonaHoraria in new[]
+        {
+            "America/Mexico_City",
+            "Central Standard Time (Mexico)"
+        }
+
+        )
         {
             try
             {
@@ -415,16 +373,9 @@ public class RecordatoriosCargaController : ControllerBase
     }
 
     private bool ObtenerIdUsuario(out int idUsuario) => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out idUsuario);
-
     private IActionResult TokenSinUsuario()
     {
-        return Unauthorized(new
-        {
-            esValido = false,
-            codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-            mensaje = "El token no contiene un id de usuario válido.",
-            traceId = HttpContext.TraceIdentifier
-        });
+        return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
     }
 
     private sealed class RecordatorioCargaUsuarioInfo

@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class ActualizacionDiferenciaRegistro
 {
     public string TipoMovimiento { get; set; } = string.Empty;

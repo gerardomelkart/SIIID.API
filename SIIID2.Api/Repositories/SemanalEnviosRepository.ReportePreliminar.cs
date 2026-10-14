@@ -4,11 +4,14 @@ using SIIID2.Api.Models;
 using System.Globalization;
 
 namespace SIIID2.Api.Repositories;
-
 // Selección y exportación preliminar por periodo, delito y alcance del usuario.
 public partial class SemanalEnviosRepository : ISemanalEnviosRepository
 {
-    public async Task<List<SemanalReportePreliminarEntidadItem>> ObtenerEntidadesReportePreliminarAsync(int anioCorte, int mesCorte, string modoReporte, int? idEntidadFederativa, int? idUsuarioCarga)
+    public async Task<List<SemanalReportePreliminarEntidadItem>> ObtenerEntidadesReportePreliminarAsync(int anioCorte,
+        int mesCorte,
+        string modoReporte,
+        int? idEntidadFederativa,
+        int? idUsuarioCarga)
     {
         var sql = "WITH " + SqlPendientesReportePreliminar + @",
         fuente AS
@@ -84,23 +87,16 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
             ef.nombre
 OPTION (RECOMPILE);
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
         var fechaInicio = new DateTime(anioCorte, mesCorte, 1);
-
-        return (await connection.QueryAsync<SemanalReportePreliminarEntidadItem>(sql, new
-        {
-            AnioCorte = anioCorte,
-            MesCorte = mesCorte,
-            FechaInicio = fechaInicio,
-            FechaFinExclusiva = fechaInicio.AddMonths(1),
-            ModoReporte = modoReporte,
-            IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga
-        }, commandTimeout: 300)).ToList();
+        return (await connection.QueryAsync<SemanalReportePreliminarEntidadItem>(sql, new { AnioCorte = anioCorte, MesCorte = mesCorte, FechaInicio = fechaInicio, FechaFinExclusiva = fechaInicio.AddMonths(1), ModoReporte = modoReporte, IdEntidadFederativa = idEntidadFederativa, IdUsuarioCarga = idUsuarioCarga }, commandTimeout: 300)).ToList();
     }
 
-    public async Task<List<SemanalReportePreliminarDelitoItem>> ObtenerDelitosReportePreliminarAsync(int anioCorte, int mesCorte, string modoReporte, int? idEntidadFederativa, int? idUsuarioCarga)
+    public async Task<List<SemanalReportePreliminarDelitoItem>> ObtenerDelitosReportePreliminarAsync(int anioCorte,
+        int mesCorte,
+        string modoReporte,
+        int? idEntidadFederativa,
+        int? idUsuarioCarga)
     {
         var sql = "WITH " + SqlPendientesReportePreliminar + @",
         fuente AS
@@ -178,23 +174,17 @@ OPTION (RECOMPILE);
             cd.delito
 OPTION (RECOMPILE);
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
         var fechaInicio = new DateTime(anioCorte, mesCorte, 1);
-
-        return (await connection.QueryAsync<SemanalReportePreliminarDelitoItem>(sql, new
-        {
-            AnioCorte = anioCorte,
-            MesCorte = mesCorte,
-            FechaInicio = fechaInicio,
-            FechaFinExclusiva = fechaInicio.AddMonths(1),
-            ModoReporte = modoReporte,
-            IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga
-        }, commandTimeout: 300)).ToList();
+        return (await connection.QueryAsync<SemanalReportePreliminarDelitoItem>(sql, new { AnioCorte = anioCorte, MesCorte = mesCorte, FechaInicio = fechaInicio, FechaFinExclusiva = fechaInicio.AddMonths(1), ModoReporte = modoReporte, IdEntidadFederativa = idEntidadFederativa, IdUsuarioCarga = idUsuarioCarga }, commandTimeout: 300)).ToList();
     }
 
-    public Task<List<IDictionary<string, object?>>> ObtenerCarpetasReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, string modoReporte, int? idEntidadFederativa, int? idUsuarioCarga)
+    public Task<List<IDictionary<string, object?>>> ObtenerCarpetasReportePreliminarAsync(int anioCorte,
+        int mesCorte,
+        int idDelito,
+        string modoReporte,
+        int? idEntidadFederativa,
+        int? idUsuarioCarga)
     {
         var sql = "WITH " + SqlPendientesReportePreliminar + @",
         fuente AS
@@ -301,11 +291,15 @@ OPTION (RECOMPILE);
             id_ci
 OPTION (RECOMPILE);
         ";
-
         return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, modoReporte, idEntidadFederativa, idUsuarioCarga);
     }
 
-    public Task<List<IDictionary<string, object?>>> ObtenerDelitosReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, string modoReporte, int? idEntidadFederativa, int? idUsuarioCarga)
+    public Task<List<IDictionary<string, object?>>> ObtenerDelitosReportePreliminarAsync(int anioCorte,
+        int mesCorte,
+        int idDelito,
+        string modoReporte,
+        int? idEntidadFederativa,
+        int? idUsuarioCarga)
     {
         var sql = "WITH " + SqlPendientesReportePreliminar + @",
         fuente AS
@@ -455,11 +449,15 @@ OPTION (RECOMPILE);
             id_delito
 OPTION (RECOMPILE);
         ";
-
         return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, modoReporte, idEntidadFederativa, idUsuarioCarga);
     }
 
-    public Task<List<IDictionary<string, object?>>> ObtenerVictimasReportePreliminarAsync(int anioCorte, int mesCorte, int idDelito, string modoReporte, int? idEntidadFederativa, int? idUsuarioCarga)
+    public Task<List<IDictionary<string, object?>>> ObtenerVictimasReportePreliminarAsync(int anioCorte,
+        int mesCorte,
+        int idDelito,
+        string modoReporte,
+        int? idEntidadFederativa,
+        int? idUsuarioCarga)
     {
         var sql = "WITH " + SqlPendientesReportePreliminar + @",
         fuente AS
@@ -588,29 +586,20 @@ OPTION (RECOMPILE);
             id_vicf
 OPTION (RECOMPILE);
         ";
-
         return QueryDictionaryReportePreliminarAsync(sql, anioCorte, mesCorte, idDelito, modoReporte, idEntidadFederativa, idUsuarioCarga);
     }
 
-    private async Task<List<IDictionary<string, object?>>> QueryDictionaryReportePreliminarAsync(string sql, int anioCorte, int mesCorte, int idDelito, string modoReporte, int? idEntidadFederativa, int? idUsuarioCarga)
+    private async Task<List<IDictionary<string, object?>>> QueryDictionaryReportePreliminarAsync(string sql,
+        int anioCorte,
+        int mesCorte,
+        int idDelito,
+        string modoReporte,
+        int? idEntidadFederativa,
+        int? idUsuarioCarga)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
         var fechaInicio = new DateTime(anioCorte, mesCorte, 1);
-
-        var filas = await connection.QueryAsync(sql, new
-        {
-            AnioCorte = anioCorte,
-            MesCorte = mesCorte,
-            FechaInicio = fechaInicio,
-            FechaFinExclusiva = fechaInicio.AddMonths(1),
-            IdDelito = idDelito,
-            ModoReporte = modoReporte,
-            IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga
-        }, commandTimeout: 300);
-
+        var filas = await connection.QueryAsync(sql, new { AnioCorte = anioCorte, MesCorte = mesCorte, FechaInicio = fechaInicio, FechaFinExclusiva = fechaInicio.AddMonths(1), IdDelito = idDelito, ModoReporte = modoReporte, IdEntidadFederativa = idEntidadFederativa, IdUsuarioCarga = idUsuarioCarga }, commandTimeout: 300);
         return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
     }
-
-
 }

@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class SemanalEnvioBloqueItem
 {
     public long IdSemanalCarga { get; set; }

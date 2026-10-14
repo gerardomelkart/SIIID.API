@@ -5,257 +5,88 @@ using ClosedXML.Excel;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Readers;
-
+// Homologa encabezados de Excel/CSV y mantiene el número de fila para ubicar errores de la carga.
 public class BanciArchivoReader : IBanciArchivoReader
 {
     private readonly IArchivoReader _archivoReader;
-
     private const long TamanioMaximoBytes = 50L * 1024L * 1024L;
-
     internal static readonly string[] ColumnasCarpetas = ["entidad", "id_ci", "ntra_ci", "fha_de_ini", "hra_de_ini", "rmen_de_hchos", "no_banci"];
-
-    internal static readonly string[] ColumnasDelitos =
-    [
-        "entidad",
-        "ntra_ci",
-        "id_ci",
-        "id_delito",
-        "dto",
-        "moda_dto",
-        "forma_acc",
-        "fha_de_hchos",
-        "hra_de_hchos",
-        "emto_com_dto",
-        "grdo_cons",
-        "clasf_de_dto",
-        "nom_ent_hchos",
-        "id_ent_hchos",
-        "nom_mun_hchos",
-        "id_mun_hchos",
-        "nom_loc_hchos",
-        "id_loc_hchos",
-        "nom_col_hchos",
-        "id_col_hchos",
-        "cp",
-        "coord_x",
-        "coord_y",
-        "dom_hchos"
-    ];
-
+    internal static readonly string[] ColumnasDelitos = ["entidad", "ntra_ci", "id_ci", "id_delito", "dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "nom_ent_hchos", "id_ent_hchos", "nom_mun_hchos", "id_mun_hchos", "nom_loc_hchos", "id_loc_hchos", "nom_col_hchos", "id_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos"];
     internal static readonly string[] ColumnasVictimas = ["entidad", "ntra_ci", "id_ci", "id_delito", "id_vicf", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional", "fub", "pro_apellido", "sdo_apellido", "nomb", "entidad_nacimiento", "estado_migratorio", "curp", "rfc", "localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "constitutiva_delito", "motivo_desaparicion", "acciones_busqueda", "obs"];
-
-    private static readonly HashSet<string> ColumnasFecha =
-    [
-        "fha_de_ini",
-        "fha_de_hchos",
-        "fha_nac",
-        "fecha_ultimo_contacto",
-        "fecha_localizacion"
-    ];
-
-    private static readonly HashSet<string> ColumnasHora =
-    [
-        "hra_de_ini",
-        "hra_de_hchos",
-        "hora_ultimo_contacto"
-    ];
-
-    private static readonly Dictionary<string, string> AliasCarpetas =
-        CrearMapaAlias(
-            ColumnasCarpetas,
-            ("fha_ini", "fha_de_ini"),
-            ("fecha_inicio", "fha_de_ini"),
-            ("hra_ini", "hra_de_ini"),
-            ("hora_inicio", "hra_de_ini"),
-            ("orden_de_aprehension", "ord_apreh"),
-            ("flagracia", "fgran"),
-            ("flagrancia", "fgran"),
-            ("citacion", "ctaon"),
-            ("total_de_vinculaciones_a_proceso", "td_v_ap"),
-            ("procedimiento_abreviado", "proc_abrev"),
-            ("pro_abrev", "proc_abrev"),
-            ("juicio_oral", "juc_oral"),
-            ("total_de_sentencias_condenatorias", "td_sen_con"),
-            ("td_sec_con", "td_sen_con"),
-            ("total", "no_ejer_acc_pnal"),
-            ("tota", "otra"),
-            ("derivacion_por_incompetencia", "dic")
-        );
-
-    private static readonly Dictionary<string, string> AliasDelitos =
-        CrearMapaAlias(
-            ColumnasDelitos,
-            ("fecha_hechos", "fha_de_hchos"),
-            ("hora_hechos", "hra_de_hchos"),
-            ("forma_accion", "forma_acc"),
-            ("clasificacion_delito", "clasf_de_dto")
-        );
-
-    internal static readonly Dictionary<string, string> AliasVictimas =
-        CrearMapaAlias(
-            ColumnasVictimas,
-            ("folio_rnpdno", "fub"),
-            ("folio_rnpdo", "fub"),
-            ("id_victima", "id_vicf"),
-            ("id_ci2", "id_ci"),
-            ("nacionalidad", "nacional"),
-            ("nombre", "nomb"),
-            ("nombres", "nomb"),
-            ("primer_apellido", "pro_apellido"),
-            ("segundo_apellido", "sdo_apellido"),
-            ("estado_migratorio2", "estado_migratorio"),
-            ("lugar_ultimo_contaco", "lugar_ultimo_contacto"),
-            ("fecha_localizacion_victima", "fecha_localizacion"),
-            ("senas_tatuaje_datos_identificaci_n", "senas_tatuaje_datos_identificacion"),
-            ("senas_tatuajes_datos_identificacion", "senas_tatuaje_datos_identificacion"),
-            ("senas_tatujes_datos_identificacion", "senas_tatuaje_datos_identificacion"),
-            ("acciones_empendidas_para_su_busqueda", "acciones_busqueda"),
-            ("acciones_emprendidas_para_su_busqueda", "acciones_busqueda"),
-            ("observaciones", "obs")
-        );
-
+    private static readonly HashSet<string> ColumnasFecha = ["fha_de_ini", "fha_de_hchos", "fha_nac", "fecha_ultimo_contacto", "fecha_localizacion"];
+    private static readonly HashSet<string> ColumnasHora = ["hra_de_ini", "hra_de_hchos", "hora_ultimo_contacto"];
+    private static readonly Dictionary<string, string> AliasCarpetas = CrearMapaAlias(ColumnasCarpetas, ("fha_ini", "fha_de_ini"), ("fecha_inicio", "fha_de_ini"), ("hra_ini", "hra_de_ini"), ("hora_inicio", "hra_de_ini"), ("orden_de_aprehension", "ord_apreh"), ("flagracia", "fgran"), ("flagrancia", "fgran"), ("citacion", "ctaon"), ("total_de_vinculaciones_a_proceso", "td_v_ap"), ("procedimiento_abreviado", "proc_abrev"), ("pro_abrev", "proc_abrev"), ("juicio_oral", "juc_oral"), ("total_de_sentencias_condenatorias", "td_sen_con"), ("td_sec_con", "td_sen_con"), ("total", "no_ejer_acc_pnal"), ("tota", "otra"), ("derivacion_por_incompetencia", "dic"));
+    private static readonly Dictionary<string, string> AliasDelitos = CrearMapaAlias(ColumnasDelitos, ("fecha_hechos", "fha_de_hchos"), ("hora_hechos", "hra_de_hchos"), ("forma_accion", "forma_acc"), ("clasificacion_delito", "clasf_de_dto"));
+    internal static readonly Dictionary<string, string> AliasVictimas = CrearMapaAlias(ColumnasVictimas, ("folio_rnpdno", "fub"), ("folio_rnpdo", "fub"), ("id_victima", "id_vicf"), ("id_ci2", "id_ci"), ("nacionalidad", "nacional"), ("nombre", "nomb"), ("nombres", "nomb"), ("primer_apellido", "pro_apellido"), ("segundo_apellido", "sdo_apellido"), ("estado_migratorio2", "estado_migratorio"), ("lugar_ultimo_contaco", "lugar_ultimo_contacto"), ("fecha_localizacion_victima", "fecha_localizacion"), ("senas_tatuaje_datos_identificaci_n", "senas_tatuaje_datos_identificacion"), ("senas_tatuajes_datos_identificacion", "senas_tatuaje_datos_identificacion"), ("senas_tatujes_datos_identificacion", "senas_tatuaje_datos_identificacion"), ("acciones_empendidas_para_su_busqueda", "acciones_busqueda"), ("acciones_emprendidas_para_su_busqueda", "acciones_busqueda"), ("observaciones", "obs"));
     internal static readonly string[] ColumnasActualizacion = ["localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "constitutiva_delito", "motivo_desaparicion", "acciones_busqueda", "obs"];
     private static bool EsColumnaOpcional(string columna) => columna is "entidad" or "no_banci" or "id_ci" or "id_delito" or "id_vicf" || ColumnasActualizacion.Contains(columna);
-
     public BanciArchivoReader(IArchivoReader archivoReader)
     {
         _archivoReader = archivoReader;
     }
 
-    public async Task<BanciLecturaArchivosResultado> LeerAsync(
-        BanciCargaArchivosRequest request)
+    public async Task<BanciLecturaArchivosResultado> LeerAsync(BanciCargaArchivosRequest request)
     {
         var resultado = new BanciLecturaArchivosResultado();
-
         var tieneLibro = request.ArchivoLibro != null;
-
         var tieneArchivoCarpetas = request.ArchivoCarpetas != null;
         var tieneArchivoDelitos = request.ArchivoDelitos != null;
         var tieneArchivoVictimas = request.ArchivoVictimas != null;
-
-        var cantidadSeparados =
-            Convert.ToInt32(tieneArchivoCarpetas) +
-            Convert.ToInt32(tieneArchivoDelitos) +
-            Convert.ToInt32(tieneArchivoVictimas);
-
-        if (tieneLibro && cantidadSeparados > 0)
+        var cantidadSeparados = Convert.ToInt32(tieneArchivoCarpetas) + Convert.ToInt32(tieneArchivoDelitos) + Convert.ToInt32(tieneArchivoVictimas);
+        if(tieneLibro && cantidadSeparados > 0)
         {
-            resultado.Errores.Add(ErrorGeneral(
-                "BANCI_MODALIDAD_AMBIGUA",
-                "Debe enviar un solo Excel con tres pestañas o tres archivos separados, pero no ambas modalidades al mismo tiempo."));
-
+            resultado.Errores.Add(ErrorGeneral("BANCI_MODALIDAD_AMBIGUA", "Debe enviar un solo Excel con tres pestañas o tres archivos separados, pero no ambas modalidades al mismo tiempo."));
             return resultado;
         }
 
-        if (!tieneLibro && cantidadSeparados == 0)
+        if(!tieneLibro && cantidadSeparados == 0)
         {
-            resultado.Errores.Add(ErrorGeneral(
-                "BANCI_SIN_ARCHIVOS",
-                "Debe enviar un Excel con las pestañas CI, Delitos y Victimas, o bien los tres archivos separados."));
-
+            resultado.Errores.Add(ErrorGeneral("BANCI_SIN_ARCHIVOS", "Debe enviar un Excel con las pestañas CI, Delitos y Victimas, o bien los tres archivos separados."));
             return resultado;
         }
 
-        if (!tieneLibro && cantidadSeparados != 3)
+        if(!tieneLibro && cantidadSeparados != 3)
         {
-            resultado.Errores.Add(ErrorGeneral(
-                "BANCI_ARCHIVOS_INCOMPLETOS",
-                "Para la modalidad de archivos separados debe enviar Carpetas, Delitos y Víctimas."));
-
+            resultado.Errores.Add(ErrorGeneral("BANCI_ARCHIVOS_INCOMPLETOS", "Para la modalidad de archivos separados debe enviar Carpetas, Delitos y Víctimas."));
             return resultado;
         }
 
-        if (tieneLibro)
+        if(tieneLibro)
         {
             resultado.ModalidadIngreso = "UN_EXCEL_TRES_HOJAS";
-
-            ValidarArchivoBase(
-                request.ArchivoLibro!,
-                permitirCsv: false,
-                resultado.Errores);
-
-            if (resultado.Errores.Count > 0)
+            ValidarArchivoBase(request.ArchivoLibro!, permitirCsv: false, resultado.Errores);
+            if(resultado.Errores.Count > 0)
             {
                 return resultado;
             }
 
-            await LeerLibroAsync(
-                request.ArchivoLibro!,
-                resultado);
-
+            await LeerLibroAsync(request.ArchivoLibro!, resultado);
             return resultado;
         }
 
         resultado.ModalidadIngreso = "TRES_ARCHIVOS";
-
-        ValidarArchivoBase(
-            request.ArchivoCarpetas!,
-            permitirCsv: true,
-            resultado.Errores);
-
-        ValidarArchivoBase(
-            request.ArchivoDelitos!,
-            permitirCsv: true,
-            resultado.Errores);
-
-        ValidarArchivoBase(
-            request.ArchivoVictimas!,
-            permitirCsv: true,
-            resultado.Errores);
-
-        if (resultado.Errores.Count > 0)
+        ValidarArchivoBase(request.ArchivoCarpetas!, permitirCsv: true, resultado.Errores);
+        ValidarArchivoBase(request.ArchivoDelitos!, permitirCsv: true, resultado.Errores);
+        ValidarArchivoBase(request.ArchivoVictimas!, permitirCsv: true, resultado.Errores);
+        if(resultado.Errores.Count > 0)
         {
             return resultado;
         }
 
-        resultado.Carpetas = await LeerArchivoIndividualAsync(
-            request.ArchivoCarpetas!,
-            "CARPETA",
-            ColumnasCarpetas,
-            AliasCarpetas,
-            ["ntra_ci", "fha_de_ini"],
-            resultado.Errores);
-
-        resultado.Delitos = await LeerArchivoIndividualAsync(
-            request.ArchivoDelitos!,
-            "DELITO",
-            ColumnasDelitos,
-            AliasDelitos,
-            ["ntra_ci", "clasf_de_dto"],
-            resultado.Errores);
-
-        resultado.Victimas = await LeerArchivoIndividualAsync(
-            request.ArchivoVictimas!,
-            "VICTIMA",
-            ColumnasVictimas,
-            AliasVictimas,
-            ["ntra_ci"],
-            resultado.Errores);
-
+        resultado.Carpetas = await LeerArchivoIndividualAsync(request.ArchivoCarpetas!, "CARPETA", ColumnasCarpetas, AliasCarpetas, ["ntra_ci", "fha_de_ini"], resultado.Errores);
+        resultado.Delitos = await LeerArchivoIndividualAsync(request.ArchivoDelitos!, "DELITO", ColumnasDelitos, AliasDelitos, ["ntra_ci", "clasf_de_dto"], resultado.Errores);
+        resultado.Victimas = await LeerArchivoIndividualAsync(request.ArchivoVictimas!, "VICTIMA", ColumnasVictimas, AliasVictimas, ["ntra_ci"], resultado.Errores);
         return resultado;
     }
 
-    private async Task LeerLibroAsync(
-        IFormFile archivo,
-        BanciLecturaArchivosResultado resultado)
+    private async Task LeerLibroAsync(IFormFile archivo, BanciLecturaArchivosResultado resultado)
     {
         await using var stream = archivo.OpenReadStream();
-
         using var workbook = new XLWorkbook(stream);
-
-        var hojaCarpetas = BuscarHoja(
-            workbook,
-            ["ci", "carpetas", "carpeta"]);
-
-        var hojaDelitos = BuscarHoja(
-            workbook,
-            ["delitos", "delito"]);
-
-        var hojaVictimas = BuscarHoja(
-            workbook,
-            ["victimas", "victima"]);
-
-        if (hojaCarpetas == null)
+        var hojaCarpetas = BuscarHoja(workbook, ["ci", "carpetas", "carpeta"]);
+        var hojaDelitos = BuscarHoja(workbook, ["delitos", "delito"]);
+        var hojaVictimas = BuscarHoja(workbook, ["victimas", "victima"]);
+        if(hojaCarpetas == null)
         {
             resultado.Errores.Add(new BanciCargaValidacionError
             {
@@ -266,7 +97,7 @@ public class BanciArchivoReader : IBanciArchivoReader
             });
         }
 
-        if (hojaDelitos == null)
+        if(hojaDelitos == null)
         {
             resultado.Errores.Add(new BanciCargaValidacionError
             {
@@ -277,7 +108,7 @@ public class BanciArchivoReader : IBanciArchivoReader
             });
         }
 
-        if (hojaVictimas == null)
+        if(hojaVictimas == null)
         {
             resultado.Errores.Add(new BanciCargaValidacionError
             {
@@ -288,60 +119,30 @@ public class BanciArchivoReader : IBanciArchivoReader
             });
         }
 
-        if (resultado.Errores.Count > 0)
+        if(resultado.Errores.Count > 0)
         {
             return;
         }
 
-        resultado.Carpetas = LeerHojaExcel(
-            archivo.FileName,
-            hojaCarpetas!,
-            "CARPETA",
-            ColumnasCarpetas,
-            AliasCarpetas,
-            ["ntra_ci", "fha_de_ini"],
-            resultado.Errores);
-
-        resultado.Delitos = LeerHojaExcel(
-            archivo.FileName,
-            hojaDelitos!,
-            "DELITO",
-            ColumnasDelitos,
-            AliasDelitos,
-            ["ntra_ci", "clasf_de_dto"],
-            resultado.Errores);
-
-        resultado.Victimas = LeerHojaExcel(
-            archivo.FileName,
-            hojaVictimas!,
-            "VICTIMA",
-            ColumnasVictimas,
-            AliasVictimas,
-            ["ntra_ci"],
-            resultado.Errores);
+        resultado.Carpetas = LeerHojaExcel(archivo.FileName, hojaCarpetas!, "CARPETA", ColumnasCarpetas, AliasCarpetas, ["ntra_ci", "fha_de_ini"], resultado.Errores);
+        resultado.Delitos = LeerHojaExcel(archivo.FileName, hojaDelitos!, "DELITO", ColumnasDelitos, AliasDelitos, ["ntra_ci", "clasf_de_dto"], resultado.Errores);
+        resultado.Victimas = LeerHojaExcel(archivo.FileName, hojaVictimas!, "VICTIMA", ColumnasVictimas, AliasVictimas, ["ntra_ci"], resultado.Errores);
     }
 
-    private async Task<List<ArchivoFila>> LeerArchivoIndividualAsync(
-        IFormFile archivo,
+    private async Task<List<ArchivoFila>> LeerArchivoIndividualAsync(IFormFile archivo,
         string tipo,
         IReadOnlyCollection<string> columnasEsperadas,
         IReadOnlyDictionary<string, string> alias,
         IReadOnlyCollection<string> clavesMinimas,
         List<BanciCargaValidacionError> errores)
     {
-        var extension = Path
-            .GetExtension(archivo.FileName)
-            .ToLowerInvariant();
-
-        if (extension == ".xlsx")
+        var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
+        if(extension == ".xlsx")
         {
             await using var stream = archivo.OpenReadStream();
-
             using var workbook = new XLWorkbook(stream);
-
             var worksheet = workbook.Worksheets.FirstOrDefault();
-
-            if (worksheet == null)
+            if(worksheet == null)
             {
                 errores.Add(new BanciCargaValidacionError
                 {
@@ -349,46 +150,24 @@ public class BanciArchivoReader : IBanciArchivoReader
                     Codigo = $"BANCI_{tipo}_SIN_HOJA",
                     Mensaje = $"El archivo {archivo.FileName} no contiene una hoja de datos."
                 });
-
-                return [];
+                return[];
             }
 
-            return LeerHojaExcel(
-                archivo.FileName,
-                worksheet,
-                tipo,
-                columnasEsperadas,
-                alias,
-                clavesMinimas,
-                errores);
+            return LeerHojaExcel(archivo.FileName, worksheet, tipo, columnasEsperadas, alias, clavesMinimas, errores);
         }
 
         var encabezados = await _archivoReader.LeerEncabezadosAsync(archivo);
-
-        var mapaEncabezados = ConstruirMapaEncabezadosCsv(
-            archivo.FileName,
-            tipo,
-            encabezados,
-            columnasEsperadas,
-            alias,
-            clavesMinimas,
-            errores);
-
-        if (errores.Count > 0)
+        var mapaEncabezados = ConstruirMapaEncabezadosCsv(archivo.FileName, tipo, encabezados, columnasEsperadas, alias, clavesMinimas, errores);
+        if(errores.Count > 0)
         {
-            return [];
+            return[];
         }
 
         var filasOriginales = await _archivoReader.LeerAsync(archivo);
-
-        return RemapearFilas(
-            filasOriginales,
-            columnasEsperadas,
-            mapaEncabezados);
+        return RemapearFilas(filasOriginales, columnasEsperadas, mapaEncabezados);
     }
 
-    private static List<ArchivoFila> LeerHojaExcel(
-        string nombreArchivo,
+    private static List<ArchivoFila> LeerHojaExcel(string nombreArchivo,
         IXLWorksheet worksheet,
         string tipo,
         IReadOnlyCollection<string> columnasEsperadas,
@@ -397,14 +176,10 @@ public class BanciArchivoReader : IBanciArchivoReader
         List<BanciCargaValidacionError> errores)
     {
         var filas = new List<ArchivoFila>();
-
         var primeraFilaUsada = worksheet.FirstRowUsed();
         var ultimaFilaUsada = worksheet.LastRowUsed();
         var ultimaColumnaUsada = worksheet.LastColumnUsed();
-
-        if (primeraFilaUsada == null ||
-            ultimaFilaUsada == null ||
-            ultimaColumnaUsada == null)
+        if(primeraFilaUsada == null || ultimaFilaUsada == null || ultimaColumnaUsada == null)
         {
             errores.Add(new BanciCargaValidacionError
             {
@@ -413,19 +188,11 @@ public class BanciArchivoReader : IBanciArchivoReader
                 Codigo = $"BANCI_{tipo}_HOJA_VACIA",
                 Mensaje = $"La hoja {worksheet.Name} está vacía."
             });
-
             return filas;
         }
 
-        var filaEncabezado = EncontrarFilaEncabezado(
-            worksheet,
-            primeraFilaUsada.RowNumber(),
-            ultimaFilaUsada.RowNumber(),
-            ultimaColumnaUsada.ColumnNumber(),
-            alias,
-            clavesMinimas);
-
-        if (!filaEncabezado.HasValue)
+        var filaEncabezado = EncontrarFilaEncabezado(worksheet, primeraFilaUsada.RowNumber(), ultimaFilaUsada.RowNumber(), ultimaColumnaUsada.ColumnNumber(), alias, clavesMinimas);
+        if(!filaEncabezado.HasValue)
         {
             errores.Add(new BanciCargaValidacionError
             {
@@ -434,57 +201,32 @@ public class BanciArchivoReader : IBanciArchivoReader
                 Codigo = $"BANCI_{tipo}_ENCABEZADO_NO_ENCONTRADO",
                 Mensaje = $"No fue posible localizar la fila de encabezados oficiales en la hoja {worksheet.Name}."
             });
-
             return filas;
         }
 
-        var mapaColumnas = ConstruirMapaColumnasExcel(
-            nombreArchivo,
-            worksheet,
-            tipo,
-            filaEncabezado.Value,
-            ultimaColumnaUsada.ColumnNumber(),
-            columnasEsperadas,
-            alias,
-            errores);
-
-        if (errores.Any(x =>
-                x.Archivo == nombreArchivo &&
-                x.Hoja == worksheet.Name))
+        var mapaColumnas = ConstruirMapaColumnasExcel(nombreArchivo, worksheet, tipo, filaEncabezado.Value, ultimaColumnaUsada.ColumnNumber(), columnasEsperadas, alias, errores);
+        if(errores.Any(x => x.Archivo == nombreArchivo && x.Hoja == worksheet.Name))
         {
             return filas;
         }
 
-        for (var row = filaEncabezado.Value + 1;
-             row <= ultimaFilaUsada.RowNumber();
-             row++)
+        for(var row = filaEncabezado.Value + 1; row <= ultimaFilaUsada.RowNumber(); row++)
         {
             var fila = new ArchivoFila
             {
                 NumeroFila = row
             };
-
             var tieneDatoOficial = false;
-
             foreach (var columna in columnasEsperadas)
             {
                 string? valor = null;
-
-                var coincidencia = mapaColumnas
-                    .FirstOrDefault(x =>
-                        string.Equals(
-                            x.Value,
-                            columna,
-                            StringComparison.OrdinalIgnoreCase));
-
-                if (coincidencia.Key > 0)
+                var coincidencia = mapaColumnas.FirstOrDefault(x => string.Equals(x.Value, columna, StringComparison.OrdinalIgnoreCase));
+                if(coincidencia.Key > 0)
                 {
-                    valor = ObtenerValorCelda(
-                        columna,
-                        worksheet.Cell(row, coincidencia.Key));
+                    valor = ObtenerValorCelda(columna, worksheet.Cell(row, coincidencia.Key));
                 }
 
-                if (!string.IsNullOrWhiteSpace(valor))
+                if(!string.IsNullOrWhiteSpace(valor))
                 {
                     tieneDatoOficial = true;
                 }
@@ -492,7 +234,7 @@ public class BanciArchivoReader : IBanciArchivoReader
                 fila.Columnas[columna] = valor;
             }
 
-            if (tieneDatoOficial)
+            if(tieneDatoOficial)
             {
                 filas.Add(fila);
             }
@@ -501,60 +243,37 @@ public class BanciArchivoReader : IBanciArchivoReader
         return filas;
     }
 
-    private static int? EncontrarFilaEncabezado(
-        IXLWorksheet worksheet,
+    private static int? EncontrarFilaEncabezado(IXLWorksheet worksheet,
         int primeraFila,
         int ultimaFila,
         int ultimaColumna,
         IReadOnlyDictionary<string, string> alias,
         IReadOnlyCollection<string> clavesMinimas)
     {
-        var hastaFila = Math.Min(
-            ultimaFila,
-            primeraFila + 199);
-
+        var hastaFila = Math.Min(ultimaFila, primeraFila + 199);
         int? mejorFila = null;
         var mejorPuntaje = -1;
-
-        for (var row = primeraFila;
-             row <= hastaFila;
-             row++)
+        for(var row = primeraFila; row <= hastaFila; row++)
         {
-            var columnasEncontradas =
-                new HashSet<string>(
-                    StringComparer.OrdinalIgnoreCase);
-
-            for (var col = 1;
-                 col <= ultimaColumna;
-                 col++)
+            var columnasEncontradas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for(var col = 1; col <= ultimaColumna; col++)
             {
-                var texto = worksheet
-                    .Cell(row, col)
-                    .GetString();
-
-                var normalizado =
-                    NormalizarNombreColumna(texto);
-
-                if (alias.TryGetValue(
-                        normalizado,
-                        out var canonico))
+                var texto = worksheet.Cell(row, col).GetString();
+                var normalizado = NormalizarNombreColumna(texto);
+                if(alias.TryGetValue(normalizado, out var canonico))
                 {
                     columnasEncontradas.Add(canonico);
                 }
             }
 
-            if (!clavesMinimas.All(
-                    columnasEncontradas.Contains))
+            if(!clavesMinimas.All(columnasEncontradas.Contains))
             {
                 continue;
             }
 
-            if (columnasEncontradas.Count >
-                mejorPuntaje)
+            if(columnasEncontradas.Count > mejorPuntaje)
             {
-                mejorPuntaje =
-                    columnasEncontradas.Count;
-
+                mejorPuntaje = columnasEncontradas.Count;
                 mejorFila = row;
             }
         }
@@ -562,8 +281,7 @@ public class BanciArchivoReader : IBanciArchivoReader
         return mejorFila;
     }
 
-    private static Dictionary<int, string> ConstruirMapaColumnasExcel(
-        string nombreArchivo,
+    private static Dictionary<int, string> ConstruirMapaColumnasExcel(string nombreArchivo,
         IXLWorksheet worksheet,
         string tipo,
         int filaEncabezado,
@@ -572,32 +290,18 @@ public class BanciArchivoReader : IBanciArchivoReader
         IReadOnlyDictionary<string, string> alias,
         List<BanciCargaValidacionError> errores)
     {
-        var mapa =
-            new Dictionary<int, string>();
-
-        var canonicosEncontrados =
-            new Dictionary<string, int>(
-                StringComparer.OrdinalIgnoreCase);
-
-        for (var col = 1;
-             col <= ultimaColumna;
-             col++)
+        var mapa = new Dictionary<int, string>();
+        var canonicosEncontrados = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for(var col = 1; col <= ultimaColumna; col++)
         {
-            var encabezado = worksheet
-                .Cell(filaEncabezado, col)
-                .GetString();
-
-            var normalizado =
-                NormalizarNombreColumna(encabezado);
-
-            if (!alias.TryGetValue(
-                    normalizado,
-                    out var canonico))
+            var encabezado = worksheet.Cell(filaEncabezado, col).GetString();
+            var normalizado = NormalizarNombreColumna(encabezado);
+            if(!alias.TryGetValue(normalizado, out var canonico))
             {
                 continue;
             }
 
-            if (canonicosEncontrados.ContainsKey(canonico))
+            if(canonicosEncontrados.ContainsKey(canonico))
             {
                 errores.Add(new BanciCargaValidacionError
                 {
@@ -608,7 +312,6 @@ public class BanciArchivoReader : IBanciArchivoReader
                     Codigo = $"BANCI_{tipo}_COLUMNA_DUPLICADA",
                     Mensaje = $"La columna oficial {canonico} aparece más de una vez en la hoja {worksheet.Name}."
                 });
-
                 continue;
             }
 
@@ -618,7 +321,7 @@ public class BanciArchivoReader : IBanciArchivoReader
 
         foreach (var columna in columnasEsperadas)
         {
-            if (canonicosEncontrados.ContainsKey(columna) || EsColumnaOpcional(columna))
+            if(canonicosEncontrados.ContainsKey(columna) || EsColumnaOpcional(columna))
             {
                 continue;
             }
@@ -637,8 +340,7 @@ public class BanciArchivoReader : IBanciArchivoReader
         return mapa;
     }
 
-    private static Dictionary<string, string> ConstruirMapaEncabezadosCsv(
-        string nombreArchivo,
+    private static Dictionary<string, string> ConstruirMapaEncabezadosCsv(string nombreArchivo,
         string tipo,
         IReadOnlyCollection<string> encabezados,
         IReadOnlyCollection<string> columnasEsperadas,
@@ -646,27 +348,17 @@ public class BanciArchivoReader : IBanciArchivoReader
         IReadOnlyCollection<string> clavesMinimas,
         List<BanciCargaValidacionError> errores)
     {
-        var mapa =
-            new Dictionary<string, string>(
-                StringComparer.OrdinalIgnoreCase);
-
-        var canonicos =
-            new HashSet<string>(
-                StringComparer.OrdinalIgnoreCase);
-
+        var mapa = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var canonicos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var encabezado in encabezados)
         {
-            var normalizado =
-                NormalizarNombreColumna(encabezado);
-
-            if (!alias.TryGetValue(
-                    normalizado,
-                    out var canonico))
+            var normalizado = NormalizarNombreColumna(encabezado);
+            if(!alias.TryGetValue(normalizado, out var canonico))
             {
                 continue;
             }
 
-            if (!canonicos.Add(canonico))
+            if(!canonicos.Add(canonico))
             {
                 errores.Add(new BanciCargaValidacionError
                 {
@@ -675,14 +367,13 @@ public class BanciArchivoReader : IBanciArchivoReader
                     Codigo = $"BANCI_{tipo}_COLUMNA_DUPLICADA",
                     Mensaje = $"La columna oficial {canonico} aparece más de una vez."
                 });
-
                 continue;
             }
 
             mapa[encabezado] = canonico;
         }
 
-        if (!clavesMinimas.All(canonicos.Contains))
+        if(!clavesMinimas.All(canonicos.Contains))
         {
             errores.Add(new BanciCargaValidacionError
             {
@@ -694,7 +385,7 @@ public class BanciArchivoReader : IBanciArchivoReader
 
         foreach (var columna in columnasEsperadas)
         {
-            if (canonicos.Contains(columna) || EsColumnaOpcional(columna))
+            if(canonicos.Contains(columna) || EsColumnaOpcional(columna))
             {
                 continue;
             }
@@ -711,46 +402,29 @@ public class BanciArchivoReader : IBanciArchivoReader
         return mapa;
     }
 
-    private static List<ArchivoFila> RemapearFilas(
-        IReadOnlyCollection<ArchivoFila> filasOriginales,
+    private static List<ArchivoFila> RemapearFilas(IReadOnlyCollection<ArchivoFila> filasOriginales,
         IReadOnlyCollection<string> columnasEsperadas,
         IReadOnlyDictionary<string, string> mapaEncabezados)
     {
-        var filas =
-            new List<ArchivoFila>();
-
+        var filas = new List<ArchivoFila>();
         foreach (var original in filasOriginales)
         {
             var fila = new ArchivoFila
             {
                 NumeroFila = original.NumeroFila
             };
-
             var tieneDato = false;
-
             foreach (var columna in columnasEsperadas)
             {
                 string? valor = null;
-
-                var encabezadoOriginal =
-                    mapaEncabezados
-                        .FirstOrDefault(x =>
-                            string.Equals(
-                                x.Value,
-                                columna,
-                                StringComparison.OrdinalIgnoreCase))
-                        .Key;
-
-                if (!string.IsNullOrWhiteSpace(encabezadoOriginal))
+                var encabezadoOriginal = mapaEncabezados.FirstOrDefault(x => string.Equals(x.Value, columna, StringComparison.OrdinalIgnoreCase)).Key;
+                if(!string.IsNullOrWhiteSpace(encabezadoOriginal))
                 {
-                    original.Columnas.TryGetValue(
-                        encabezadoOriginal,
-                        out valor);
+                    original.Columnas.TryGetValue(encabezadoOriginal, out valor);
                 }
 
                 valor = valor?.Trim();
-
-                if (!string.IsNullOrWhiteSpace(valor))
+                if(!string.IsNullOrWhiteSpace(valor))
                 {
                     tieneDato = true;
                 }
@@ -758,7 +432,7 @@ public class BanciArchivoReader : IBanciArchivoReader
                 fila.Columnas[columna] = valor;
             }
 
-            if (tieneDato)
+            if(tieneDato)
             {
                 filas.Add(fila);
             }
@@ -767,20 +441,12 @@ public class BanciArchivoReader : IBanciArchivoReader
         return filas;
     }
 
-    private static IXLWorksheet? BuscarHoja(
-        XLWorkbook workbook,
-        IReadOnlyCollection<string> nombres)
+    private static IXLWorksheet? BuscarHoja(XLWorkbook workbook, IReadOnlyCollection<string> nombres)
     {
         foreach (var worksheet in workbook.Worksheets)
         {
-            var nombre =
-                NormalizarNombreColumna(worksheet.Name);
-
-            if (nombres.Any(x =>
-                    string.Equals(
-                        nombre,
-                        NormalizarNombreColumna(x),
-                        StringComparison.OrdinalIgnoreCase)))
+            var nombre = NormalizarNombreColumna(worksheet.Name);
+            if(nombres.Any(x => string.Equals(nombre, NormalizarNombreColumna(x), StringComparison.OrdinalIgnoreCase)))
             {
                 return worksheet;
             }
@@ -789,41 +455,28 @@ public class BanciArchivoReader : IBanciArchivoReader
         return null;
     }
 
-    private static string? ObtenerValorCelda(
-        string columna,
-        IXLCell celda)
+    private static string? ObtenerValorCelda(string columna, IXLCell celda)
     {
-        if (celda.IsEmpty())
+        if(celda.IsEmpty())
         {
             return null;
         }
 
-        if (ColumnasFecha.Contains(columna))
+        if(ColumnasFecha.Contains(columna))
         {
-            if (celda.DataType == XLDataType.DateTime)
+            if(celda.DataType == XLDataType.DateTime)
             {
-                return celda
-                    .GetDateTime()
-                    .ToString(
-                        "dd/MM/yyyy",
-                        CultureInfo.InvariantCulture);
+                return celda.GetDateTime().ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
             }
 
-            if (celda.DataType == XLDataType.Number)
+            if(celda.DataType == XLDataType.Number)
             {
-                var numero =
-                    celda.GetDouble();
-
-                if (numero > 0 &&
-                    numero < 100000)
+                var numero = celda.GetDouble();
+                if(numero > 0 && numero < 100000)
                 {
                     try
                     {
-                        return DateTime
-                            .FromOADate(numero)
-                            .ToString(
-                                "dd/MM/yyyy",
-                                CultureInfo.InvariantCulture);
+                        return DateTime.FromOADate(numero).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
                     }
                     catch
                     {
@@ -832,39 +485,26 @@ public class BanciArchivoReader : IBanciArchivoReader
             }
         }
 
-        if (ColumnasHora.Contains(columna))
+        if(ColumnasHora.Contains(columna))
         {
-            if (celda.DataType == XLDataType.TimeSpan)
+            if(celda.DataType == XLDataType.TimeSpan)
             {
-                return celda
-                    .GetTimeSpan()
-                    .ToString(@"hh\:mm\:ss");
+                return celda.GetTimeSpan().ToString(@"hh\:mm\:ss");
             }
 
-            if (celda.DataType == XLDataType.DateTime)
+            if(celda.DataType == XLDataType.DateTime)
             {
-                return celda
-                    .GetDateTime()
-                    .ToString(
-                        "HH:mm:ss",
-                        CultureInfo.InvariantCulture);
+                return celda.GetDateTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
             }
 
-            if (celda.DataType == XLDataType.Number)
+            if(celda.DataType == XLDataType.Number)
             {
-                var numero =
-                    celda.GetDouble();
-
-                if (numero >= 0 &&
-                    numero < 1)
+                var numero = celda.GetDouble();
+                if(numero >= 0 && numero < 1)
                 {
                     try
                     {
-                        return DateTime
-                            .FromOADate(numero)
-                            .ToString(
-                                "HH:mm:ss",
-                                CultureInfo.InvariantCulture);
+                        return DateTime.FromOADate(numero).ToString("HH:mm:ss", CultureInfo.InvariantCulture);
                     }
                     catch
                     {
@@ -873,20 +513,13 @@ public class BanciArchivoReader : IBanciArchivoReader
             }
         }
 
-        var valor =
-            celda.GetFormattedString();
-
-        return string.IsNullOrWhiteSpace(valor)
-            ? null
-            : valor.Trim();
+        var valor = celda.GetFormattedString();
+        return string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
     }
 
-    private static void ValidarArchivoBase(
-        IFormFile archivo,
-        bool permitirCsv,
-        List<BanciCargaValidacionError> errores)
+    private static void ValidarArchivoBase(IFormFile archivo, bool permitirCsv, List<BanciCargaValidacionError> errores)
     {
-        if (archivo.Length == 0)
+        if(archivo.Length == 0)
         {
             errores.Add(new BanciCargaValidacionError
             {
@@ -894,11 +527,10 @@ public class BanciArchivoReader : IBanciArchivoReader
                 Codigo = "BANCI_ARCHIVO_VACIO",
                 Mensaje = $"El archivo {archivo.FileName} está vacío."
             });
-
             return;
         }
 
-        if (archivo.Length > TamanioMaximoBytes)
+        if(archivo.Length > TamanioMaximoBytes)
         {
             errores.Add(new BanciCargaValidacionError
             {
@@ -908,89 +540,52 @@ public class BanciArchivoReader : IBanciArchivoReader
             });
         }
 
-        var extension = Path
-            .GetExtension(archivo.FileName)
-            .ToLowerInvariant();
-
-        var permitido =
-            extension == ".xlsx" ||
-            (permitirCsv && extension == ".csv");
-
-        if (!permitido)
+        var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
+        var permitido = extension == ".xlsx" || (permitirCsv && extension == ".csv");
+        if(!permitido)
         {
             errores.Add(new BanciCargaValidacionError
             {
                 Archivo = archivo.FileName,
                 Codigo = "BANCI_EXTENSION_NO_PERMITIDA",
-                Mensaje = permitirCsv
-                    ? "Sólo se permiten archivos .xlsx o .csv."
-                    : "Para la modalidad de un solo archivo se requiere un archivo .xlsx."
+                Mensaje = permitirCsv ? "Sólo se permiten archivos .xlsx o .csv." : "Para la modalidad de un solo archivo se requiere un archivo .xlsx."
             });
         }
     }
 
-    private static Dictionary<string, string> CrearMapaAlias(
-        IEnumerable<string> columnas,
+    private static Dictionary<string, string> CrearMapaAlias(IEnumerable<string> columnas,
         params (string Alias, string Canonico)[] adicionales)
     {
-        var resultado =
-            new Dictionary<string, string>(
-                StringComparer.OrdinalIgnoreCase);
-
+        var resultado = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var columna in columnas)
         {
-            resultado[NormalizarNombreColumna(columna)] =
-                columna;
+            resultado[NormalizarNombreColumna(columna)] = columna;
         }
 
         foreach (var adicional in adicionales)
         {
-            resultado[NormalizarNombreColumna(adicional.Alias)] =
-                adicional.Canonico;
+            resultado[NormalizarNombreColumna(adicional.Alias)] = adicional.Canonico;
         }
 
         return resultado;
     }
 
-    private static string NormalizarNombreColumna(
-        string? columna)
+    private static string NormalizarNombreColumna(string? columna)
     {
-        if (string.IsNullOrWhiteSpace(columna))
+        if(string.IsNullOrWhiteSpace(columna))
         {
             return string.Empty;
         }
 
-        var texto = columna
-            .Trim()
-            .ToLowerInvariant()
-            .Normalize(NormalizationForm.FormD);
-
-        var caracteres =
-            texto
-                .Where(c =>
-                    CharUnicodeInfo.GetUnicodeCategory(c) !=
-                    UnicodeCategory.NonSpacingMark)
-                .ToArray();
-
-        texto = new string(caracteres)
-            .Normalize(NormalizationForm.FormC);
-
-        texto = Regex.Replace(
-            texto,
-            @"[^a-z0-9]+",
-            "_");
-
-        texto = Regex.Replace(
-            texto,
-            @"_+",
-            "_");
-
+        var texto = columna.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var caracteres = texto.Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray();
+        texto = new string (caracteres).Normalize(NormalizationForm.FormC);
+        texto = Regex.Replace(texto, @"[^a-z0-9]+", "_");
+        texto = Regex.Replace(texto, @"_+", "_");
         return texto.Trim('_');
     }
 
-    private static BanciCargaValidacionError ErrorGeneral(
-        string codigo,
-        string mensaje)
+    private static BanciCargaValidacionError ErrorGeneral(string codigo, string mensaje)
     {
         return new BanciCargaValidacionError
         {

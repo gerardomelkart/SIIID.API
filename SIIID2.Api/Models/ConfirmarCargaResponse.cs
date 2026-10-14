@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class ConfirmarCargaResponse
 {
     public bool EsValido { get; set; }

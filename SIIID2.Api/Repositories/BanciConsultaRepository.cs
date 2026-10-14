@@ -5,11 +5,13 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class BanciConsultaRepository : IBanciConsultaRepository
 {
     private readonly IDbConnectionFactory _factory;
-    public BanciConsultaRepository(IDbConnectionFactory factory) { _factory = factory; }
+    public BanciConsultaRepository(IDbConnectionFactory factory)
+    {
+        _factory = factory;
+    }
 
     public async Task<BanciConsultaOpciones> ObtenerOpcionesAsync(int? idEntidadAlcance, int? usuarioFederal = null)
     {
@@ -40,8 +42,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
         var hasta = filtro.Mes.HasValue ? desde.AddMonths(1) : desde.AddYears(1);
         var busqueda = filtro.Busqueda?.Trim();
         // LIKE literal: los comodines escritos por el usuario no amplían la consulta.
-        var patron = string.IsNullOrEmpty(busqueda) ? null : "%" + busqueda
-            .Replace("~", "~~").Replace("%", "~%").Replace("_", "~_").Replace("[", "~[") + "%";
+        var patron = string.IsNullOrEmpty(busqueda) ? null : "%" + busqueda.Replace("~", "~~").Replace("%", "~%").Replace("_", "~_").Replace("[", "~[") + "%";
         using var connection = _factory.CrearConexion();
         using var resultados = await connection.QueryMultipleAsync("""
             SELECT c.id_banci_carpeta_investigacion, c.id_entidad_federativa, c.id_ci, c.ntra_ci, c.no_banci, c.fha_de_ini
@@ -88,17 +89,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
 
             DROP TABLE #BanciConsultaPagina;
             DROP TABLE #BanciConsultaFiltrada;
-            """, new
-        {
-            UsuarioFederal = usuarioFederal,
-            Alcance = idEntidadAlcance,
-            Entidad = filtro.IdEntidadFederativa,
-            Desde = desde,
-            Hasta = hasta,
-            Busqueda = patron,
-            Omitir = (filtro.Pagina - 1) * filtro.TamanoPagina,
-            Tamano = filtro.TamanoPagina
-        }, commandTimeout: 120);
+            """, new { UsuarioFederal = usuarioFederal, Alcance = idEntidadAlcance, Entidad = filtro.IdEntidadFederativa, Desde = desde, Hasta = hasta, Busqueda = patron, Omitir = (filtro.Pagina - 1) * filtro.TamanoPagina, Tamano = filtro.TamanoPagina }, commandTimeout: 120);
         var respuesta = await resultados.ReadSingleAsync<BanciConsultaResultado>();
         respuesta.Pagina = filtro.Pagina;
         respuesta.TamanoPagina = filtro.TamanoPagina;
@@ -111,8 +102,7 @@ public class BanciConsultaRepository : IBanciConsultaRepository
         var desde = new DateTime(filtro.Anio, filtro.Mes ?? 1, 1);
         var hasta = filtro.Mes.HasValue ? desde.AddMonths(1) : desde.AddYears(1);
         var busqueda = filtro.Busqueda?.Trim();
-        var patron = string.IsNullOrEmpty(busqueda) ? null : "%" + busqueda
-            .Replace("~", "~~").Replace("%", "~%").Replace("_", "~_").Replace("[", "~[") + "%";
+        var patron = string.IsNullOrEmpty(busqueda) ? null : "%" + busqueda.Replace("~", "~~").Replace("%", "~%").Replace("_", "~_").Replace("[", "~[") + "%";
         using var connection = _factory.CrearConexion();
         // Exportación completa del filtro: sin OFFSET y sin consultas por cada carpeta.
         using var reader = await connection.ExecuteReaderAsync("""
@@ -174,22 +164,18 @@ public class BanciConsultaRepository : IBanciConsultaRepository
             ORDER BY c.id_entidad_federativa, c.id_ci, d.id_delito, v.id_vicf;
 
             DROP TABLE #BanciExcel;
-            """, new
-        {
-            UsuarioFederal = usuarioFederal,
-            Alcance = idEntidadAlcance,
-            Entidad = filtro.IdEntidadFederativa,
-            Desde = desde,
-            Hasta = hasta,
-            Busqueda = patron
-        }, commandTimeout: 300);
+            """, new { UsuarioFederal = usuarioFederal, Alcance = idEntidadAlcance, Entidad = filtro.IdEntidadFederativa, Desde = desde, Hasta = hasta, Busqueda = patron }, commandTimeout: 300);
         var datos = new DataSet();
         try
         {
             datos.Load(reader, LoadOption.OverwriteChanges, "Carpetas", "Delitos", "Victimas");
             return datos;
         }
-        catch { datos.Dispose(); throw; }
+        catch
+        {
+            datos.Dispose();
+            throw;
+        }
     }
 
     public async Task<BanciConsultaDetalle?> ObtenerDetalleAsync(long idCarpeta, int? idEntidadAlcance, int? usuarioFederal = null)
@@ -248,30 +234,37 @@ public class BanciConsultaRepository : IBanciConsultaRepository
               AND (@Alcance IS NULL OR c.id_entidad_federativa = @Alcance) AND (@UsuarioFederal IS NULL OR ISNULL(c.id_usuario_reporte_federal,0)=@UsuarioFederal)
             ORDER BY v.id_banci_delito, v.id_banci_victima;
             """, new { IdCarpeta = idCarpeta, UsuarioFederal = usuarioFederal, Alcance = idEntidadAlcance }, commandTimeout: 120);
-
         var carpeta = (await resultados.ReadAsync()).SingleOrDefault();
-        if (carpeta == null) return null;
-        var detalle = new BanciConsultaDetalle { Carpeta = Campos((IDictionary<string, object>)carpeta) };
+        if(carpeta == null)
+            return null;
+        var detalle = new BanciConsultaDetalle
+        {
+            Carpeta = Campos((IDictionary<string, object>)carpeta)
+        };
         var delitos = new Dictionary<long, BanciConsultaDelito>();
         foreach (IDictionary<string, object> fila in await resultados.ReadAsync())
         {
-            var delito = new BanciConsultaDelito { Id = Convert.ToInt64(fila["_Id"]), Campos = Campos(fila) };
+            var delito = new BanciConsultaDelito
+            {
+                Id = Convert.ToInt64(fila["_Id"]),
+                Campos = Campos(fila)
+            };
             delitos.Add(delito.Id, delito);
             detalle.Delitos.Add(delito);
         }
+
         foreach (IDictionary<string, object> fila in await resultados.ReadAsync())
         {
-            if (delitos.TryGetValue(Convert.ToInt64(fila["_IdDelito"]), out var delito))
+            if(delitos.TryGetValue(Convert.ToInt64(fila["_IdDelito"]), out var delito))
                 delito.Victimas.Add(Campos(fila));
         }
+
         return detalle;
     }
 
-    private static List<BanciCampoConsulta> Campos(IDictionary<string, object> fila) => fila
-        .Where(x => !x.Key.StartsWith('_'))
-        .Select(x => new BanciCampoConsulta
-        {
-            Nombre = x.Key,
-            Valor = x.Value is null or DBNull ? null : Convert.ToString(x.Value, CultureInfo.InvariantCulture)
-        }).ToList();
+    private static List<BanciCampoConsulta> Campos(IDictionary<string, object> fila) => fila.Where(x => !x.Key.StartsWith('_')).Select(x => new BanciCampoConsulta
+    {
+        Nombre = x.Key,
+        Valor = x.Value is null or DBNull ? null : Convert.ToString(x.Value, CultureInfo.InvariantCulture)
+    }).ToList();
 }

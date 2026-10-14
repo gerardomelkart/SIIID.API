@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class UsuarioListadoItem
 {
     public int IdUsuario { get; set; }

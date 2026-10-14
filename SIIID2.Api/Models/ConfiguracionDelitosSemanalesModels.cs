@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class ConfiguracionModalidadSemanalItem
 {
     public int IdBienJuridico { get; set; }

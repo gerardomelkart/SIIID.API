@@ -4,11 +4,14 @@ using SIIID2.Api.Models;
 using System.Globalization;
 
 namespace SIIID2.Api.Repositories;
-
 // Agregación estatal de delitos semanales; respeta el corte y los bloques originales.
 public partial class SemanalEnviosRepository : ISemanalEnviosRepository
 {
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte, int? idEntidadFederativa, int? idUsuarioCarga, string modoPlano, int mesUltimoCorte)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte,
+        int? idEntidadFederativa,
+        int? idUsuarioCarga,
+        string modoPlano,
+        int mesUltimoCorte)
     {
         var sql = @"
             WITH periodos_carga AS
@@ -331,8 +334,6 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
             m.modalidad_delito_sabana
         OPTION (RECOMPILE);
         ";
-
         return await QueryDictionarySabanaAsync(sql, anioCorte, idEntidadFederativa, idUsuarioCarga, modoPlano, mesUltimoCorte);
     }
-
 }

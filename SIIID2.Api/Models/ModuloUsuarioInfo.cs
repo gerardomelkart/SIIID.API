@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class ModuloUsuarioInfo
 {
     public int IdModulo { get; set; }

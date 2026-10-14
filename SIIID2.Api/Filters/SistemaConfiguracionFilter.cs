@@ -8,7 +8,6 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Services;
 
 namespace SIIID2.Api.Filters;
-
 public sealed class SistemaConfiguracionFilter(SistemaConfiguracionService config, IDbConnectionFactory factory) : IAsyncActionFilter
 {
     private static readonly Dictionary<string, (string Modulo, string Tipo)> Flujos = new()
@@ -27,37 +26,70 @@ public sealed class SistemaConfiguracionFilter(SistemaConfiguracionService confi
     private static object? Propiedad(object? valor, string nombre) => valor?.GetType().GetProperty(nombre)?.GetValue(valor);
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        if (context.ActionDescriptor is not ControllerActionDescriptor accion) { await next(); return; }
+        if(context.ActionDescriptor is not ControllerActionDescriptor accion)
+        {
+            await next();
+            return;
+        }
+
         var politica = context.HttpContext.GetEndpoint()?.Metadata.GetOrderedMetadata<IAuthorizeData>().Select(p => p.Policy).FirstOrDefault(p => p?.StartsWith("MODULO_", StringComparison.Ordinal) == true);
-        if (politica != null)
+        if(politica != null)
         {
             using var acceso = factory.CrearConexion();
-            if (!await acceso.ExecuteScalarAsync<bool>("SELECT CAST(CASE WHEN EXISTS (SELECT 1 FROM dbo.catalogo_modulo WHERE clave = @Modulo AND activo = 1) THEN 1 ELSE 0 END AS BIT);", new { Modulo = politica["MODULO_".Length..] }))
+            if(!await acceso.ExecuteScalarAsync<bool>("SELECT CAST(CASE WHEN EXISTS (SELECT 1 FROM dbo.catalogo_modulo WHERE clave = @Modulo AND activo = 1) THEN 1 ELSE 0 END AS BIT);", new { Modulo = politica["MODULO_".Length..] }))
             {
-                context.Result = new ObjectResult(new { codigo = "MODULO_DESACTIVADO", mensaje = "El módulo está desactivado. Actualice sus accesos." }) { StatusCode = 403 };
+                context.Result = new ObjectResult(new { codigo = "MODULO_DESACTIVADO", mensaje = "El módulo está desactivado. Actualice sus accesos." })
+                {
+                    StatusCode = 403
+                };
                 return;
             }
         }
-        if (!int.TryParse(context.HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuario)) { await next(); return; }
-        var escritura = HttpMethods.IsPost(context.HttpContext.Request.Method) || HttpMethods.IsPut(context.HttpContext.Request.Method) || HttpMethods.IsDelete(context.HttpContext.Request.Method) || HttpMethods.IsPatch(context.HttpContext.Request.Method);
-        if (escritura && accion.ControllerName.EndsWith("Usuarios", StringComparison.Ordinal) && context.ActionArguments.TryGetValue("idUsuario", out var destino) && destino is int id && await config.EsCuentaProtegidaAsync(id))
+
+        if(!int.TryParse(context.HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuario))
         {
-            context.Result = new ObjectResult(new { mensaje = "Esta cuenta administra el sistema y no se puede modificar desde la administración ordinaria de usuarios." }) { StatusCode = 403 };
+            await next();
             return;
         }
+
+        var escritura = HttpMethods.IsPost(context.HttpContext.Request.Method) || HttpMethods.IsPut(context.HttpContext.Request.Method) || HttpMethods.IsDelete(context.HttpContext.Request.Method) || HttpMethods.IsPatch(context.HttpContext.Request.Method);
+        if(escritura
+            && accion.ControllerName.EndsWith("Usuarios", StringComparison.Ordinal)
+            && context.ActionArguments.TryGetValue("idUsuario", out var destino)
+            && destino is int id
+            && await config.EsCuentaProtegidaAsync(id))
+        {
+            context.Result = new ObjectResult(new { mensaje = "Esta cuenta administra el sistema y no se puede modificar desde la administración ordinaria de usuarios." })
+            {
+                StatusCode = 403
+            };
+            return;
+        }
+
         var administrativa = accion.ActionName == "Aprobar";
-        if (!Flujos.TryGetValue(accion.ControllerName, out var flujo) || !escritura || !(accion.ActionName.StartsWith("Validar", StringComparison.Ordinal) || accion.ActionName.StartsWith("Confirmar", StringComparison.Ordinal) || administrativa)) { await next(); return; }
+        if(!Flujos.TryGetValue(accion.ControllerName, out var flujo)
+            || !escritura
+            || !(accion.ActionName.StartsWith("Validar", StringComparison.Ordinal)
+            || accion.ActionName.StartsWith("Confirmar", StringComparison.Ordinal)
+            || administrativa))
+        {
+            await next();
+            return;
+        }
+
         using var bloqueo = await config.BloquearLecturaAsync();
         await config.CargarAsync();
-        if (!config.Modulos.Any(m => m.Clave == flujo.Modulo && m.Activo)) { context.Result = new ObjectResult(new { mensaje = "El módulo está desactivado." }) { StatusCode = 403 }; return; }
-        var confirmar =
-            administrativa ||
-            accion.ActionName.StartsWith(
-                "Confirmar",
-                StringComparison.Ordinal);
+        if(!config.Modulos.Any(m => m.Clave == flujo.Modulo && m.Activo))
+        {
+            context.Result = new ObjectResult(new { mensaje = "El módulo está desactivado." })
+            {
+                StatusCode = 403
+            };
+            return;
+        }
 
+        var confirmar = administrativa || accion.ActionName.StartsWith("Confirmar", StringComparison.Ordinal);
         using var db = factory.CrearConexion();
-
         /*
             IMPORTANTE:
 
@@ -81,43 +113,37 @@ public sealed class SistemaConfiguracionFilter(SistemaConfiguracionService confi
             No vuelve a ejecutar las demás reglas de los archivos.
         */
         var resultado = await next();
-        if (resultado.Exception is BanciCruceException cruce)
+        if(resultado.Exception is BanciCruceException cruce)
         {
             resultado.ExceptionHandled = true;
-            resultado.Result = new BadRequestObjectResult(new SIIID2.Api.Models.CargaValidacionResponse { Mensaje = cruce.Message, Errores = cruce.Errores });
+            resultado.Result = new BadRequestObjectResult(new SIIID2.Api.Models.CargaValidacionResponse
+            {
+                Mensaje = cruce.Message,
+                Errores = cruce.Errores
+            });
             return;
         }
-
 
         /*
             Confirmaciones y aprobaciones no generan una nueva versión
             de validación. Solamente las acciones Validar exitosas
             registran la configuración con la que fueron evaluadas.
         */
-        if (
-            confirmar ||
-            resultado.Exception != null ||
-            resultado.Result is not ObjectResult respuesta ||
-            (respuesta.StatusCode ?? 200) >= 400
-        )
+        if(confirmar
+            || resultado.Exception != null
+            || resultado.Result is not ObjectResult respuesta
+            || (respuesta.StatusCode ?? 200) >= 400)
         {
             return;
         }
 
-        var referencia =
-            Convert.ToString(
-                Propiedad(
-                    respuesta.Value,
-                    "CodigoReferencia"))
-            ?? "";
-
-        if (string.IsNullOrWhiteSpace(referencia))
+        var referencia = Convert.ToString(Propiedad(respuesta.Value, "CodigoReferencia")) ?? "";
+        if(string.IsNullOrWhiteSpace(referencia))
         {
             return;
         }
 
-        await db.ExecuteAsync(
-                                """
+        await db.ExecuteAsync("""
                         INSERT dbo.sistema_validacion_configuracion
                         (
                             modulo,
@@ -141,14 +167,6 @@ public sealed class SistemaConfiguracionFilter(SistemaConfiguracionService confi
                               AND tipo = @Tipo
                               AND referencia = @Referencia
                         );
-                        """,
-            new
-            {
-                Modulo = flujo.Modulo,
-                Tipo = flujo.Tipo,
-                Referencia = referencia,
-                Usuario = usuario,
-                Version = config.Version
-            });
+                        """, new { Modulo = flujo.Modulo, Tipo = flujo.Tipo, Referencia = referencia, Usuario = usuario, Version = config.Version });
     }
 }

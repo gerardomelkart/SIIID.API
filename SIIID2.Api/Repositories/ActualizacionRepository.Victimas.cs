@@ -7,11 +7,13 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace SIIID2.Api.Repositories;
-
 // Movimientos de víctimas; todas las escrituras utilizan la transacción del coordinador.
 public partial class ActualizacionRepository : IActualizacionRepository
 {
-    private async Task InsertarHistoricoVictimasModificadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
+    private async Task InsertarHistoricoVictimasModificadasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCargaActualizacion,
+        int idUsuarioConfirmacion)
     {
         var sql = @"
         ;WITH carga_actualizacion AS (
@@ -172,12 +174,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
             activo
         FROM victimas_modificadas;
     ";
-
-        await connection.ExecuteAsync(sql, new
-        {
-            IdCargaActualizacion = idCargaActualizacion,
-            IdUsuarioConfirmacion = idUsuarioConfirmacion
-        }, transaction);
+        await connection.ExecuteAsync(sql, new { IdCargaActualizacion = idCargaActualizacion, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
     private async Task ActualizarVictimasModificadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion)
@@ -304,14 +301,13 @@ public partial class ActualizacionRepository : IActualizacionRepository
                 OR ISNULL(vi.curp_vicfem, '') <> ISNULL(vt.curp_vicfem, '')
               );
     ";
-
-        await connection.ExecuteAsync(sql, new
-        {
-            IdCargaActualizacion = idCargaActualizacion
-        }, transaction);
+        await connection.ExecuteAsync(sql, new { IdCargaActualizacion = idCargaActualizacion }, transaction);
     }
 
-    private async Task InsertarVictimasNuevasActualizacionAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
+    private async Task InsertarVictimasNuevasActualizacionAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCargaActualizacion,
+        int idUsuarioConfirmacion)
     {
         var sql = @"
         ;WITH carga_actualizacion AS (
@@ -430,15 +426,13 @@ public partial class ActualizacionRepository : IActualizacionRepository
                   AND vi.activo = 1
           );
     ";
-
-        await connection.ExecuteAsync(sql, new
-        {
-            IdCargaActualizacion = idCargaActualizacion,
-            IdUsuarioConfirmacion = idUsuarioConfirmacion
-        }, transaction);
+        await connection.ExecuteAsync(sql, new { IdCargaActualizacion = idCargaActualizacion, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
-    private async Task InsertarHistoricoVictimasEliminadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
+    private async Task InsertarHistoricoVictimasEliminadasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCargaActualizacion,
+        int idUsuarioConfirmacion)
     {
         var sql = @"
         ;WITH carga_actualizacion AS (
@@ -541,12 +535,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
             activo
         FROM victimas_eliminadas;
     ";
-
-        await connection.ExecuteAsync(sql, new
-        {
-            IdCargaActualizacion = idCargaActualizacion,
-            IdUsuarioConfirmacion = idUsuarioConfirmacion
-        }, transaction);
+        await connection.ExecuteAsync(sql, new { IdCargaActualizacion = idCargaActualizacion, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
     private async Task DesactivarVictimasEliminadasAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion)
@@ -604,11 +593,6 @@ public partial class ActualizacionRepository : IActualizacionRepository
         WHERE vi.activo = 1
           AND vt.id_vicf IS NULL;
     ";
-
-        await connection.ExecuteAsync(sql, new
-        {
-            IdCargaActualizacion = idCargaActualizacion
-        }, transaction);
+        await connection.ExecuteAsync(sql, new { IdCargaActualizacion = idCargaActualizacion }, transaction);
     }
-
 }

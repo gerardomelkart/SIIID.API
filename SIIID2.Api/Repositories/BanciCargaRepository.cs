@@ -6,11 +6,10 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
+// Persiste cargas BANCI y consulta los catálogos activos; la integración se decide en un paso posterior.
 public class BanciCargaRepository : IBanciCargaRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public BanciCargaRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
@@ -94,7 +93,6 @@ public class BanciCargaRepository : IBanciCargaRepository
           AND u.activo = 1
           AND (r.rol = N'SUPER_USUARIO' OR um.id_usuario IS NOT NULL);
         """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.QueryFirstOrDefaultAsync<BanciUsuarioCargaInfo>(sql, new { IdUsuario = idUsuario });
     }
@@ -124,29 +122,20 @@ public class BanciCargaRepository : IBanciCargaRepository
                 ELSE 4
             END;
         """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.ExecuteScalarAsync<int?>(sql, new { ValorOriginal = valor });
     }
 
-    public async Task<long> GuardarCargaValidadaAsync(
-        int idUsuarioCarga,
+    public async Task<long> GuardarCargaValidadaAsync(int idUsuarioCarga,
         int idEntidadFederativa,
         string codigoReferencia,
         string modalidadIngreso,
         BanciLecturaArchivosResultado lectura,
         BanciCargaValidacionResponse validacion)
     {
-        using var connection =
-            (SqlConnection)_dbConnectionFactory
-                .CrearConexion();
-
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
-        using var transaction =
-            (SqlTransaction)await connection
-                .BeginTransactionAsync();
-
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
         try
         {
             var folios = lectura.Carpetas.Where(f => !string.IsNullOrWhiteSpace(Valor(f, "no_banci"))).Select(f => new { id_ci = Valor(f, "id_ci"), no_banci = Valor(f, "no_banci") });
@@ -157,36 +146,12 @@ public class BanciCargaRepository : IBanciCargaRepository
                         WHERE c.id_entidad_federativa = @Entidad AND c.id_ci = f.id_ci AND c.no_banci = f.no_banci)
                 ) THEN 1 ELSE 0 END);
                 """, new { Folios = JsonSerializer.Serialize(folios), Entidad = idEntidadFederativa }, transaction);
-            if (folioInvalido) throw new ArgumentException("NO_BANCI se genera para carpetas nuevas. Si se informa para una carpeta existente, debe coincidir con su folio registrado.");
-            var idBanciCarga =
-                await CrearCargaAsync(
-                    connection,
-                    transaction,
-                    idUsuarioCarga,
-                    idEntidadFederativa,
-                    codigoReferencia,
-                    modalidadIngreso,
-                    lectura,
-                    validacion);
-
-            await GuardarCarpetasAsync(
-                connection,
-                transaction,
-                idBanciCarga,
-                lectura.Carpetas);
-
-            await GuardarDelitosAsync(
-                connection,
-                transaction,
-                idBanciCarga,
-                lectura.Delitos);
-
-            await GuardarVictimasAsync(
-                connection,
-                transaction,
-                idBanciCarga,
-                lectura.Victimas);
-
+            if(folioInvalido)
+                throw new ArgumentException("NO_BANCI se genera para carpetas nuevas. Si se informa para una carpeta existente, debe coincidir con su folio registrado.");
+            var idBanciCarga = await CrearCargaAsync(connection, transaction, idUsuarioCarga, idEntidadFederativa, codigoReferencia, modalidadIngreso, lectura, validacion);
+            await GuardarCarpetasAsync(connection, transaction, idBanciCarga, lectura.Carpetas);
+            await GuardarDelitosAsync(connection, transaction, idBanciCarga, lectura.Delitos);
+            await GuardarVictimasAsync(connection, transaction, idBanciCarga, lectura.Victimas);
             await GuardarObservacionesAsync(connection, transaction, idBanciCarga, validacion.Advertencias);
             await connection.ExecuteAsync("""
                 INSERT INTO dbo.banci_carga_bitacora_estado
@@ -194,14 +159,12 @@ public class BanciCargaRepository : IBanciCargaRepository
                 VALUES (@IdBanciCarga, NULL, N'VALIDADO_PENDIENTE', @IdUsuario,
                     N'Validación terminada. Pendiente de decisión del usuario que cargó los archivos.');
                 """, new { IdBanciCarga = idBanciCarga, IdUsuario = idUsuarioCarga }, transaction);
-
             await transaction.CommitAsync();
-
             return idBanciCarga;
         }
         catch
         {
-            if (transaction.Connection != null)
+            if(transaction.Connection != null)
             {
                 await transaction.RollbackAsync();
             }
@@ -210,8 +173,7 @@ public class BanciCargaRepository : IBanciCargaRepository
         }
     }
 
-    private static async Task<long> CrearCargaAsync(
-        SqlConnection connection,
+    private static async Task<long> CrearCargaAsync(SqlConnection connection,
         SqlTransaction transaction,
         int idUsuarioCarga,
         int idEntidadFederativa,
@@ -263,53 +225,24 @@ public class BanciCargaRepository : IBanciCargaRepository
                 1
             );
             """;
-
-        return await connection
-            .ExecuteScalarAsync<long>(
-                sql,
-                new
-                {
-                    IdUsuarioCarga = idUsuarioCarga,
-                    IdEntidadFederativa = idEntidadFederativa,
-                    CodigoReferencia = codigoReferencia,
-                    ModalidadIngreso = modalidadIngreso,
-                    TotalCarpetas = lectura.Carpetas.Count,
-                    TotalDelitos = lectura.Delitos.Count,
-                    TotalVictimas = lectura.Victimas.Count,
-                    TotalAdvertencias = validacion.Advertencias.Count
-                },
-                transaction);
+        return await connection.ExecuteScalarAsync<long>(sql, new { IdUsuarioCarga = idUsuarioCarga, IdEntidadFederativa = idEntidadFederativa, CodigoReferencia = codigoReferencia, ModalidadIngreso = modalidadIngreso, TotalCarpetas = lectura.Carpetas.Count, TotalDelitos = lectura.Delitos.Count, TotalVictimas = lectura.Victimas.Count, TotalAdvertencias = validacion.Advertencias.Count }, transaction);
     }
 
-    private static async Task GuardarCarpetasAsync(
-        SqlConnection connection,
+    private static async Task GuardarCarpetasAsync(SqlConnection connection,
         SqlTransaction transaction,
         long idBanciCarga,
         IReadOnlyCollection<ArchivoFila> filas)
     {
-        if (filas.Count == 0)
+        if(filas.Count == 0)
         {
             return;
         }
 
         var tabla = new DataTable();
-
-        tabla.Columns.Add(
-            "id_banci_carga",
-            typeof(long));
-
-        tabla.Columns.Add(
-            "id_banci_carga_archivo",
-            typeof(long));
-
-        tabla.Columns.Add(
-            "nombre_hoja",
-            typeof(string));
-
-        tabla.Columns.Add(
-            "numero_fila",
-            typeof(int));
-
+        tabla.Columns.Add("id_banci_carga", typeof(long));
+        tabla.Columns.Add("id_banci_carga_archivo", typeof(long));
+        tabla.Columns.Add("nombre_hoja", typeof(string));
+        tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("entidad", typeof(string));
         tabla.Columns.Add("id_ci", typeof(string));
         tabla.Columns.Add("ntra_ci", typeof(string));
@@ -327,86 +260,32 @@ public class BanciCargaRepository : IBanciCargaRepository
         tabla.Columns.Add("no_ejer_acc_pnal", typeof(string));
         tabla.Columns.Add("otra", typeof(string));
         tabla.Columns.Add("dic", typeof(string));
-
-        tabla.Columns.Add(
-            "estado",
-            typeof(string));
-
-        tabla.Columns.Add(
-            "fecha_procesamiento",
-            typeof(DateTime));
-
-        tabla.Columns.Add(
-            "activo",
-            typeof(bool));
-
+        tabla.Columns.Add("estado", typeof(string));
+        tabla.Columns.Add("fecha_procesamiento", typeof(DateTime));
+        tabla.Columns.Add("activo", typeof(bool));
         foreach (var fila in filas)
         {
-            tabla.Rows.Add(
-                idBanciCarga,
-                DBNull.Value,
-                DBNull.Value,
-                fila.NumeroFila ?? 0,
-                Db(Valor(fila, "entidad")),
-                Db(Valor(fila, "id_ci")),
-                Db(Valor(fila, "ntra_ci")),
-                Db(Valor(fila, "no_banci")),
-                Db(Valor(fila, "fha_de_ini")),
-                Db(Valor(fila, "hra_de_ini")),
-                Db(Valor(fila, "rmen_de_hchos")),
-                Db(Valor(fila, "ord_apreh")),
-                Db(Valor(fila, "fgran")),
-                Db(Valor(fila, "ctaon")),
-                Db(Valor(fila, "td_v_ap")),
-                Db(Valor(fila, "proc_abrev")),
-                Db(Valor(fila, "juc_oral")),
-                Db(Valor(fila, "td_sen_con")),
-                Db(Valor(fila, "no_ejer_acc_pnal")),
-                Db(Valor(fila, "otra")),
-                Db(Valor(fila, "dic")),
-                "PENDIENTE",
-                DBNull.Value,
-                true);
+            tabla.Rows.Add(idBanciCarga, DBNull.Value, DBNull.Value, fila.NumeroFila ?? 0, Db(Valor(fila, "entidad")), Db(Valor(fila, "id_ci")), Db(Valor(fila, "ntra_ci")), Db(Valor(fila, "no_banci")), Db(Valor(fila, "fha_de_ini")), Db(Valor(fila, "hra_de_ini")), Db(Valor(fila, "rmen_de_hchos")), Db(Valor(fila, "ord_apreh")), Db(Valor(fila, "fgran")), Db(Valor(fila, "ctaon")), Db(Valor(fila, "td_v_ap")), Db(Valor(fila, "proc_abrev")), Db(Valor(fila, "juc_oral")), Db(Valor(fila, "td_sen_con")), Db(Valor(fila, "no_ejer_acc_pnal")), Db(Valor(fila, "otra")), Db(Valor(fila, "dic")), "PENDIENTE", DBNull.Value, true);
         }
 
-
-
-        await BulkCopyAsync(
-            connection,
-            transaction,
-            tabla,
-            "dbo.banci_carga_tmp_carpeta");
+        await BulkCopyAsync(connection, transaction, tabla, "dbo.banci_carga_tmp_carpeta");
     }
 
-    private static async Task GuardarDelitosAsync(
-        SqlConnection connection,
+    private static async Task GuardarDelitosAsync(SqlConnection connection,
         SqlTransaction transaction,
         long idBanciCarga,
         IReadOnlyCollection<ArchivoFila> filas)
     {
-        if (filas.Count == 0)
+        if(filas.Count == 0)
         {
             return;
         }
 
         var tabla = new DataTable();
-
-        tabla.Columns.Add(
-            "id_banci_carga",
-            typeof(long));
-
-        tabla.Columns.Add(
-            "id_banci_carga_archivo",
-            typeof(long));
-
-        tabla.Columns.Add(
-            "nombre_hoja",
-            typeof(string));
-
-        tabla.Columns.Add(
-            "numero_fila",
-            typeof(int));
-
+        tabla.Columns.Add("id_banci_carga", typeof(long));
+        tabla.Columns.Add("id_banci_carga_archivo", typeof(long));
+        tabla.Columns.Add("nombre_hoja", typeof(string));
+        tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("entidad", typeof(string));
         tabla.Columns.Add("id_ci", typeof(string));
         tabla.Columns.Add("id_delito", typeof(string));
@@ -430,90 +309,32 @@ public class BanciCargaRepository : IBanciCargaRepository
         tabla.Columns.Add("coord_x", typeof(string));
         tabla.Columns.Add("coord_y", typeof(string));
         tabla.Columns.Add("dom_hchos", typeof(string));
-
-        tabla.Columns.Add(
-            "estado",
-            typeof(string));
-
-        tabla.Columns.Add(
-            "fecha_procesamiento",
-            typeof(DateTime));
-
-        tabla.Columns.Add(
-            "activo",
-            typeof(bool));
-
+        tabla.Columns.Add("estado", typeof(string));
+        tabla.Columns.Add("fecha_procesamiento", typeof(DateTime));
+        tabla.Columns.Add("activo", typeof(bool));
         foreach (var fila in filas)
         {
-            tabla.Rows.Add(
-                idBanciCarga,
-                DBNull.Value,
-                DBNull.Value,
-                fila.NumeroFila ?? 0,
-                Db(Valor(fila, "entidad")),
-                Db(Valor(fila, "id_ci")),
-                Db(Valor(fila, "id_delito")),
-                Db(Valor(fila, "dto")),
-                Db(Valor(fila, "moda_dto")),
-                Db(Valor(fila, "forma_acc")),
-                Db(Valor(fila, "fha_de_hchos")),
-                Db(Valor(fila, "hra_de_hchos")),
-                Db(Valor(fila, "emto_com_dto")),
-                Db(Valor(fila, "grdo_cons")),
-                Db(Valor(fila, "clasf_de_dto")),
-                Db(Valor(fila, "nom_ent_hchos")),
-                Db(Valor(fila, "id_ent_hchos")),
-                Db(Valor(fila, "nom_mun_hchos")),
-                Db(Valor(fila, "id_mun_hchos")),
-                Db(Valor(fila, "nom_loc_hchos")),
-                Db(Valor(fila, "id_loc_hchos")),
-                Db(Valor(fila, "nom_col_hchos")),
-                Db(Valor(fila, "id_col_hchos")),
-                Db(Valor(fila, "cp")),
-                Db(Valor(fila, "coord_x")),
-                Db(Valor(fila, "coord_y")),
-                Db(Valor(fila, "dom_hchos")),
-                "PENDIENTE",
-                DBNull.Value,
-                true);
+            tabla.Rows.Add(idBanciCarga, DBNull.Value, DBNull.Value, fila.NumeroFila ?? 0, Db(Valor(fila, "entidad")), Db(Valor(fila, "id_ci")), Db(Valor(fila, "id_delito")), Db(Valor(fila, "dto")), Db(Valor(fila, "moda_dto")), Db(Valor(fila, "forma_acc")), Db(Valor(fila, "fha_de_hchos")), Db(Valor(fila, "hra_de_hchos")), Db(Valor(fila, "emto_com_dto")), Db(Valor(fila, "grdo_cons")), Db(Valor(fila, "clasf_de_dto")), Db(Valor(fila, "nom_ent_hchos")), Db(Valor(fila, "id_ent_hchos")), Db(Valor(fila, "nom_mun_hchos")), Db(Valor(fila, "id_mun_hchos")), Db(Valor(fila, "nom_loc_hchos")), Db(Valor(fila, "id_loc_hchos")), Db(Valor(fila, "nom_col_hchos")), Db(Valor(fila, "id_col_hchos")), Db(Valor(fila, "cp")), Db(Valor(fila, "coord_x")), Db(Valor(fila, "coord_y")), Db(Valor(fila, "dom_hchos")), "PENDIENTE", DBNull.Value, true);
         }
 
-        await BulkCopyAsync(
-            connection,
-            transaction,
-            tabla,
-            "dbo.banci_carga_tmp_delito");
+        await BulkCopyAsync(connection, transaction, tabla, "dbo.banci_carga_tmp_delito");
     }
 
-    private static async Task GuardarVictimasAsync(
-        SqlConnection connection,
+    private static async Task GuardarVictimasAsync(SqlConnection connection,
         SqlTransaction transaction,
         long idBanciCarga,
         IReadOnlyCollection<ArchivoFila> filas)
     {
-        if (filas.Count == 0)
+        if(filas.Count == 0)
         {
             return;
         }
 
         var tabla = new DataTable();
-
-        tabla.Columns.Add(
-            "id_banci_carga",
-            typeof(long));
-
-        tabla.Columns.Add(
-            "id_banci_carga_archivo",
-            typeof(long));
-
-        tabla.Columns.Add(
-            "nombre_hoja",
-            typeof(string));
-
-        tabla.Columns.Add(
-            "numero_fila",
-            typeof(int));
-
+        tabla.Columns.Add("id_banci_carga", typeof(long));
+        tabla.Columns.Add("id_banci_carga_archivo", typeof(long));
+        tabla.Columns.Add("nombre_hoja", typeof(string));
+        tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("entidad", typeof(string));
         tabla.Columns.Add("id_ci", typeof(string));
         tabla.Columns.Add("id_delito", typeof(string));
@@ -550,81 +371,24 @@ public class BanciCargaRepository : IBanciCargaRepository
         tabla.Columns.Add("fue_delito", typeof(string));
         tabla.Columns.Add("delito", typeof(string));
         tabla.Columns.Add("obs", typeof(string));
-
-        tabla.Columns.Add(
-            "estado",
-            typeof(string));
-
-        tabla.Columns.Add(
-            "fecha_procesamiento",
-            typeof(DateTime));
-
-        tabla.Columns.Add(
-            "activo",
-            typeof(bool));
-
+        tabla.Columns.Add("estado", typeof(string));
+        tabla.Columns.Add("fecha_procesamiento", typeof(DateTime));
+        tabla.Columns.Add("activo", typeof(bool));
         foreach (var fila in filas)
         {
-            tabla.Rows.Add(
-                idBanciCarga,
-                DBNull.Value,
-                DBNull.Value,
-                fila.NumeroFila ?? 0,
-                Db(Valor(fila, "entidad")),
-                Db(Valor(fila, "id_ci")),
-                Db(Valor(fila, "id_delito")),
-                Db(Valor(fila, "id_vicf")),
-                Db(Valor(fila, "id_tv")),
-                Db(Valor(fila, "id_tpm")),
-                Db(Valor(fila, "sexo")),
-                Db(Valor(fila, "genero")),
-                Db(Valor(fila, "pob")),
-                Db(Valor(fila, "disc")),
-                Db(Valor(fila, "fha_nac")),
-                Db(Valor(fila, "edad")),
-                Db(Valor(fila, "nacional")),
-                DBNull.Value, // El No_BANCI enviado nunca se almacena ni sustituye el existente.
-                Db(Valor(fila, "folio_fotovolante")),
-                Db(Valor(fila, "fub")),
-                Db(Valor(fila, "pro_apellido")),
-                Db(Valor(fila, "sdo_apellido")),
-                Db(Valor(fila, "nomb")),
-                Db(Valor(fila, "entidad_nacimiento")),
-                Db(Valor(fila, "estado_migratorio")),
-                Db(Valor(fila, "curp")),
-                Db(Valor(fila, "rfc")),
-                Db(Valor(fila, "fecha_ultimo_contacto")),
-                Db(Valor(fila, "hora_ultimo_contacto")),
-                Db(Valor(fila, "entidad_visto")),
-                Db(Valor(fila, "municipio_visto")),
-                Db(Valor(fila, "lugar_ultimo_contacto")),
-                Db(Valor(fila, "senas_tatuaje_datos_identificacion")),
-                Db(Valor(fila, "localizado_o_no_localizado")),
-                Db(Valor(fila, "con_o_sin_vida")),
-                Db(Valor(fila, "fecha_localizacion")),
-                Db(Valor(fila, "voluntaria")),
-                Db(Valor(fila, "fue_delito")),
-                Db(Valor(fila, "delito")),
-                Db(Valor(fila, "obs")),
-                "PENDIENTE",
-                DBNull.Value,
-                true);
+            tabla.Rows.Add(idBanciCarga, DBNull.Value, DBNull.Value, fila.NumeroFila ?? 0, Db(Valor(fila, "entidad")), Db(Valor(fila, "id_ci")), Db(Valor(fila, "id_delito")), Db(Valor(fila, "id_vicf")), Db(Valor(fila, "id_tv")), Db(Valor(fila, "id_tpm")), Db(Valor(fila, "sexo")), Db(Valor(fila, "genero")), Db(Valor(fila, "pob")), Db(Valor(fila, "disc")), Db(Valor(fila, "fha_nac")), Db(Valor(fila, "edad")), Db(Valor(fila, "nacional")), DBNull.Value, // El No_BANCI enviado nunca se almacena ni sustituye el existente.
+ Db(Valor(fila, "folio_fotovolante")), Db(Valor(fila, "fub")), Db(Valor(fila, "pro_apellido")), Db(Valor(fila, "sdo_apellido")), Db(Valor(fila, "nomb")), Db(Valor(fila, "entidad_nacimiento")), Db(Valor(fila, "estado_migratorio")), Db(Valor(fila, "curp")), Db(Valor(fila, "rfc")), Db(Valor(fila, "fecha_ultimo_contacto")), Db(Valor(fila, "hora_ultimo_contacto")), Db(Valor(fila, "entidad_visto")), Db(Valor(fila, "municipio_visto")), Db(Valor(fila, "lugar_ultimo_contacto")), Db(Valor(fila, "senas_tatuaje_datos_identificacion")), Db(Valor(fila, "localizado_o_no_localizado")), Db(Valor(fila, "con_o_sin_vida")), Db(Valor(fila, "fecha_localizacion")), Db(Valor(fila, "voluntaria")), Db(Valor(fila, "fue_delito")), Db(Valor(fila, "delito")), Db(Valor(fila, "obs")), "PENDIENTE", DBNull.Value, true);
         }
 
-        await BulkCopyAsync(
-            connection,
-            transaction,
-            tabla,
-            "dbo.banci_carga_tmp_victima");
+        await BulkCopyAsync(connection, transaction, tabla, "dbo.banci_carga_tmp_victima");
     }
 
-    private static async Task GuardarObservacionesAsync(
-        SqlConnection connection,
+    private static async Task GuardarObservacionesAsync(SqlConnection connection,
         SqlTransaction transaction,
         long idBanciCarga,
         IReadOnlyCollection<BanciCargaValidacionError> observaciones)
     {
-        if (observaciones.Count == 0)
+        if(observaciones.Count == 0)
         {
             return;
         }
@@ -655,23 +419,9 @@ public class BanciCargaRepository : IBanciCargaRepository
                 1
             );
             """;
-
         foreach (var observacion in observaciones)
         {
-            await connection.ExecuteAsync(
-                sql,
-                new
-                {
-                    IdBanciCarga = idBanciCarga,
-                    TipoRegistro = ObtenerTipoRegistro(
-                        observacion.Archivo),
-                    observacion.NumeroFila,
-                    observacion.Campo,
-                    observacion.Valor,
-                    observacion.Codigo,
-                    observacion.Mensaje
-                },
-                transaction);
+            await connection.ExecuteAsync(sql, new { IdBanciCarga = idBanciCarga, TipoRegistro = ObtenerTipoRegistro(observacion.Archivo), observacion.NumeroFila, observacion.Campo, observacion.Valor, observacion.Codigo, observacion.Mensaje }, transaction);
         }
     }
 
@@ -699,24 +449,19 @@ public class BanciCargaRepository : IBanciCargaRepository
               WHERE um.id_usuario = u.id_usuario AND um.activo = 1 AND um.habilitado = 1
                 AND m.clave = N'BANCI' AND m.activo = 1))
         """;
-
     public async Task<IReadOnlyList<BanciCargaValidacionResponse>> ObtenerPendientesAsync(int idUsuario)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-        var cargas = await connection.QueryAsync<BanciCargaValidacionResponse>(
-            ConsultaCarga + " AND c.estado = N'VALIDADO_PENDIENTE' ORDER BY c.id_banci_carga DESC;",
-            new { IdUsuario = idUsuario });
+        var cargas = await connection.QueryAsync<BanciCargaValidacionResponse>(ConsultaCarga + " AND c.estado = N'VALIDADO_PENDIENTE' ORDER BY c.id_banci_carga DESC;", new { IdUsuario = idUsuario });
         return cargas.ToList();
     }
 
     public async Task<BanciCargaValidacionResponse?> ObtenerCargaAsync(string codigoReferencia, int idUsuario)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-        var carga = await connection.QuerySingleOrDefaultAsync<BanciCargaValidacionResponse>(
-            ConsultaCarga + " AND c.codigo_referencia = @CodigoReferencia;",
-            new { IdUsuario = idUsuario, CodigoReferencia = codigoReferencia });
-        if (carga == null) return null;
-
+        var carga = await connection.QuerySingleOrDefaultAsync<BanciCargaValidacionResponse>(ConsultaCarga + " AND c.codigo_referencia = @CodigoReferencia;", new { IdUsuario = idUsuario, CodigoReferencia = codigoReferencia });
+        if(carga == null)
+            return null;
         carga.Advertencias = (await connection.QueryAsync<BanciCargaValidacionError>("""
             SELECT CASE tipo_registro WHEN N'CARPETA' THEN N'carpetas'
                        WHEN N'DELITO' THEN N'delitos' WHEN N'VICTIMA' THEN N'victimas'
@@ -727,8 +472,7 @@ public class BanciCargaRepository : IBanciCargaRepository
             WHERE id_banci_carga = @IdBanciCarga AND activo = 1 AND severidad = N'ADVERTENCIA'
             ORDER BY tipo_registro, numero_fila, campo, codigo;
             """, new { carga.IdBanciCarga })).ToList();
-        carga.Mensaje = carga.Estado switch
-        {
+        carga.Mensaje = carga.Estado switch        {
             "VALIDADO_PENDIENTE" => "Carga pendiente de su decisión. Todavía no se han integrado datos definitivos.",
             "RECHAZADO_VALIDACION" => "Carga rechazada. No se integraron datos definitivos.",
             "PROCESADO" or "PROCESADO_CON_ADVERTENCIAS" => "Carga integrada. Los totales corresponden al resultado guardado.",
@@ -740,7 +484,8 @@ public class BanciCargaRepository : IBanciCargaRepository
 
     public async Task CompletarVistaPreviaAsync(BanciCargaValidacionResponse carga, int idUsuario)
     {
-        if (carga.Estado != "VALIDADO_PENDIENTE") return;
+        if(carga.Estado != "VALIDADO_PENDIENTE")
+            return;
         try
         {
             using var connection = _dbConnectionFactory.CrearConexion();
@@ -754,8 +499,7 @@ public class BanciCargaRepository : IBanciCargaRepository
         {
             // Conservar la referencia validada aunque falle la consulta; jamás aceptar sin huella.
             carga.VistaPrevia = null;
-            carga.Mensaje = ex.Number switch
-            {
+            carga.Mensaje = ex.Number switch            {
                 52424 => "La carpeta ya existe. La carga inicial sólo registra carpetas nuevas; rechace esta carga pendiente. No se sobrescribió información.",
                 52610 or 52611 or 52612 => ex.Message + " Rechace esta carga pendiente y vuelva a validar.",
                 _ => "La carga sigue registrada. No fue posible obtener la vista previa; actualice el estado antes de aceptar. Si persiste, solicite revisar la instalación BANCI."
@@ -763,27 +507,26 @@ public class BanciCargaRepository : IBanciCargaRepository
         }
     }
 
-    public async Task<BanciCargaValidacionResponse> ConfirmarCargaAsync(string codigoReferencia, bool aceptar, int idUsuario, string? huellaVistaPrevia = null)
+    public async Task<BanciCargaValidacionResponse> ConfirmarCargaAsync(string codigoReferencia,
+        bool aceptar,
+        int idUsuario,
+        string? huellaVistaPrevia = null)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
         var carga = await ObtenerCargaAsync(codigoReferencia, idUsuario) ?? throw new UnauthorizedAccessException("La carga no está disponible para este usuario.");
         // El procedimiento controla la transacción, bloqueo, autorización e idempotencia.
         // No envolver esta llamada en otra transacción ni invocar directamente procesar_carga.
-        var fila = await connection.QuerySingleAsync(
-            carga.VersionFormato >= 2 ? "dbo.sp_banci_confirmar_carga_v2" : "dbo.sp_banci_confirmar_carga",
-            new { CodigoReferencia = codigoReferencia, Aceptar = aceptar, IdUsuario = idUsuario, HuellaVistaPrevia = huellaVistaPrevia },
-            commandTimeout: 300, commandType: CommandType.StoredProcedure);
-
+        var fila = await connection.QuerySingleAsync(carga.VersionFormato >= 2 ? "dbo.sp_banci_confirmar_carga_v2" : "dbo.sp_banci_confirmar_carga", new { CodigoReferencia = codigoReferencia, Aceptar = aceptar, IdUsuario = idUsuario, HuellaVistaPrevia = huellaVistaPrevia }, commandTimeout: 300, commandType: CommandType.StoredProcedure);
         // Mapeo explícito: no alterar la configuración global de Dapper de los otros módulos.
         return new BanciCargaValidacionResponse
         {
             IdBanciCarga = (long)fila.id_banci_carga,
             CodigoReferencia = (string)fila.codigo_referencia,
             Estado = (string)fila.estado,
-            AceptadaUsuario = (bool?)fila.aceptada_usuario,
+            AceptadaUsuario = (bool? )fila.aceptada_usuario,
             YaResuelta = (bool)fila.ya_resuelta,
-            IdUsuarioConfirmacion = (int?)fila.id_usuario_confirmacion,
-            FechaConfirmacion = (DateTime?)fila.fecha_confirmacion,
+            IdUsuarioConfirmacion = (int? )fila.id_usuario_confirmacion,
+            FechaConfirmacion = (DateTime? )fila.fecha_confirmacion,
             TotalCarpetas = (int)fila.total_carpetas,
             TotalDelitos = (int)fila.total_delitos,
             TotalVictimas = (int)fila.total_victimas,
@@ -795,30 +538,17 @@ public class BanciCargaRepository : IBanciCargaRepository
         };
     }
 
-    private static async Task BulkCopyAsync(
-        SqlConnection connection,
-        SqlTransaction transaction,
-        DataTable tabla,
-        string tablaDestino)
+    private static async Task BulkCopyAsync(SqlConnection connection, SqlTransaction transaction, DataTable tabla, string tablaDestino)
     {
-        using var bulk =
-            new SqlBulkCopy(
-                connection,
-                SqlBulkCopyOptions.CheckConstraints |
-                SqlBulkCopyOptions.KeepNulls |
-                SqlBulkCopyOptions.TableLock,
-                transaction)
-            {
-                DestinationTableName = tablaDestino,
-                BatchSize = 5000,
-                BulkCopyTimeout = 300
-            };
-
+        using var bulk = new SqlBulkCopy(connection, SqlBulkCopyOptions.CheckConstraints | SqlBulkCopyOptions.KeepNulls | SqlBulkCopyOptions.TableLock, transaction)
+        {
+            DestinationTableName = tablaDestino,
+            BatchSize = 5000,
+            BulkCopyTimeout = 300
+        };
         foreach (DataColumn columna in tabla.Columns)
         {
-            bulk.ColumnMappings.Add(
-                columna.ColumnName,
-                columna.ColumnName);
+            bulk.ColumnMappings.Add(columna.ColumnName, columna.ColumnName);
         }
 
         await bulk.WriteToServerAsync(tabla);
@@ -826,22 +556,17 @@ public class BanciCargaRepository : IBanciCargaRepository
 
     private static string Valor(ArchivoFila fila, string columna)
     {
-        return fila.Columnas.TryGetValue(columna, out var valor)
-            ? valor?.Trim() ?? string.Empty
-            : string.Empty;
+        return fila.Columnas.TryGetValue(columna, out var valor) ? valor?.Trim() ?? string.Empty : string.Empty;
     }
 
     private static object Db(string valor)
     {
-        return string.IsNullOrWhiteSpace(valor)
-            ? DBNull.Value
-            : valor;
+        return string.IsNullOrWhiteSpace(valor) ? DBNull.Value : valor;
     }
 
     private static string ObtenerTipoRegistro(string archivo)
     {
-        return archivo.Trim().ToLowerInvariant() switch
-        {
+        return archivo.Trim().ToLowerInvariant() switch        {
             "carpetas" or "carpeta" => "CARPETA",
             "delitos" or "delito" => "DELITO",
             "victimas" or "victima" => "VICTIMA",

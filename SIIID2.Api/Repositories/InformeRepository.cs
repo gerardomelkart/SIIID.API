@@ -3,12 +3,10 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 // Coordinación y dependencias compartidas; las operaciones están separadas en archivos parciales.
 public partial class InformeRepository : IInformeRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public InformeRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
@@ -28,21 +26,18 @@ public partial class InformeRepository : IInformeRepository
           AND c.anio_corte BETWEEN 2000 AND 2100
         ORDER BY c.anio_corte DESC, c.mes_corte DESC;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var periodos = (await connection.QueryAsync<InformePeriodoItem>(sql, new
-        {
-            EsSuperUsuario = esSuperUsuario,
-            IdEntidadFederativaUsuario = idEntidadFederativaUsuario
-        })).ToList();
-
-        foreach (var periodo in periodos) periodo.Corte = $"{ObtenerNombreMes(periodo.MesCorte)} {periodo.AnioCorte}";
-
+        var periodos = (await connection.QueryAsync<InformePeriodoItem>(sql, new { EsSuperUsuario = esSuperUsuario, IdEntidadFederativaUsuario = idEntidadFederativaUsuario })).ToList();
+        foreach (var periodo in periodos)
+            periodo.Corte = $"{ObtenerNombreMes(periodo.MesCorte)} {periodo.AnioCorte}";
         return periodos;
     }
 
-    public async Task<List<InformeEnvioItem>> ObtenerEnviosAsync(bool esSuperUsuario, int? idEntidadFederativaUsuario, int? idEntidadFederativa, int? mesCorte, int? anioCorte)
+    public async Task<List<InformeEnvioItem>> ObtenerEnviosAsync(bool esSuperUsuario,
+        int? idEntidadFederativaUsuario,
+        int? idEntidadFederativa,
+        int? mesCorte,
+        int? anioCorte)
     {
         // Obtiene el último envío confirmado por entidad y periodo.
         // Considera tanto carga inicial confirmada como actualizaciones confirmadas.
@@ -121,48 +116,32 @@ public partial class InformeRepository : IInformeRepository
     ORDER BY ef.nombre, e.anio_corte DESC, e.mes_corte DESC
     OPTION (RECOMPILE);
 ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var envios = await connection.QueryAsync<InformeEnvioItem>(sql, new
+        var envios = await connection.QueryAsync<InformeEnvioItem>(sql, new { EsSuperUsuario = esSuperUsuario, IdEntidadFederativaUsuario = idEntidadFederativaUsuario, IdEntidadFederativa = esSuperUsuario ? idEntidadFederativa : null, MesCorte = mesCorte, AnioCorte = anioCorte });
+        return envios.Select(x =>
         {
-            EsSuperUsuario = esSuperUsuario,
-            IdEntidadFederativaUsuario = idEntidadFederativaUsuario,
-            IdEntidadFederativa = esSuperUsuario ? idEntidadFederativa : null,
-            MesCorte = mesCorte,
-            AnioCorte = anioCorte
-        });
-
-        return envios
-            .Select(x =>
+            x.FechaEnvioTexto = x.FechaEnvio.ToString("dd-MM-yyyy");
+            x.Corte = $"{ObtenerNombreMes(x.MesCorte)} {x.AnioCorte}";
+            x.EsConfirmado = string.Equals(x.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) || string.Equals(x.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
+            x.EstadoTexto = ObtenerEstadoEnvioTexto(x.Estado, x.TipoCarga);
+            if(x.EsConfirmado)
             {
-                x.FechaEnvioTexto = x.FechaEnvio.ToString("dd-MM-yyyy");
-                x.Corte = $"{ObtenerNombreMes(x.MesCorte)} {x.AnioCorte}";
+                x.EndpointAcuse = ObtenerEndpointAcuse(x.TipoCarga, x.CodigoReferencia);
+                x.EndpointExcel = $"/api/informes/envios/{x.CodigoReferencia}/archivos";
+            }
+            else
+            {
+                x.EndpointAcuse = ObtenerEndpointAcusePrevio(x.TipoCarga, x.CodigoReferencia);
+                x.EndpointExcel = $"/api/informes/envios/{x.CodigoReferencia}/archivos";
+            }
 
-                x.EsConfirmado =
-                    string.Equals(x.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(x.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
-
-                x.EstadoTexto = ObtenerEstadoEnvioTexto(x.Estado, x.TipoCarga);
-
-                if (x.EsConfirmado)
-                {
-                    x.EndpointAcuse = ObtenerEndpointAcuse(x.TipoCarga, x.CodigoReferencia);
-                    x.EndpointExcel = $"/api/informes/envios/{x.CodigoReferencia}/archivos";
-                }
-                else
-                {
-                    x.EndpointAcuse = ObtenerEndpointAcusePrevio(x.TipoCarga, x.CodigoReferencia);
-                    x.EndpointExcel = $"/api/informes/envios/{x.CodigoReferencia}/archivos";
-                }
-
-                return x;
-            }).ToList();
+            return x;
+        }).ToList();
     }
 
     private static string ObtenerEndpointAcuse(string tipoCarga, string codigoReferencia)
     {
-        if (string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
+        if(string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
         {
             return $"/api/actualizaciones/{codigoReferencia}/acuse-confirmado";
         }
@@ -172,31 +151,20 @@ public partial class InformeRepository : IInformeRepository
 
     private static string ObtenerEstadoEnvioTexto(string estado, string tipoCarga)
     {
-        var estadoNormalizado = (estado ?? string.Empty)
-            .Trim()
-            .ToUpperInvariant();
-
-        var esActualizacion = string.Equals(
-            tipoCarga,
-            "ACTUALIZACION",
-            StringComparison.OrdinalIgnoreCase);
-
+        var estadoNormalizado = (estado ?? string.Empty).Trim().ToUpperInvariant();
+        var esActualizacion = string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
         var sufijo = esActualizacion ? "actualización" : "carga";
-
-        return estadoNormalizado switch
-        {
+        return estadoNormalizado switch        {
             "CONFIRMADO" => $"Confirmado {sufijo}",
             "CONFIRMADO_ACTUALIZACION" => $"Confirmado {sufijo}",
             "PENDIENTE_APROBACION" => "Pendiente de aprobación",
             "VALIDADO_PENDIENTE" => $"Pendiente {sufijo}",
-            _ => estadoNormalizado.Replace("_", " ")
-        };
+            _ => estadoNormalizado.Replace("_", " ")};
     }
 
     private static string ObtenerNombreMes(int mes)
     {
-        return mes switch
-        {
+        return mes switch        {
             1 => "Enero",
             2 => "Febrero",
             3 => "Marzo",
@@ -235,13 +203,8 @@ public partial class InformeRepository : IInformeRepository
           AND c.activo = 1
           AND c.estado NOT LIKE 'RECHAZADO%';
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<InformeArchivoCargaInfo>(sql, new
-        {
-            CodigoReferencia = codigoReferencia
-        });
+        return await connection.QueryFirstOrDefaultAsync<InformeArchivoCargaInfo>(sql, new { CodigoReferencia = codigoReferencia });
     }
 
     public async Task<List<IDictionary<string, object?>>> ObtenerCarpetasConfirmadasPeriodoAsync(InformeArchivoCargaInfo carga)
@@ -279,7 +242,6 @@ public partial class InformeRepository : IInformeRepository
         ORDER BY
             ci.identificador_carpeta_fiscalia;
     ";
-
         return await QueryDictionaryAsync(sql, carga);
     }
 
@@ -359,7 +321,6 @@ public partial class InformeRepository : IInformeRepository
             ci.identificador_carpeta_fiscalia,
             d.identificador_delito_fiscalia;
     ";
-
         return await QueryDictionaryAsync(sql, carga);
     }
 
@@ -427,48 +388,25 @@ public partial class InformeRepository : IInformeRepository
             d.identificador_delito_fiscalia,
             v.identificador_victima_fiscalia;
     ";
-
         return await QueryDictionaryAsync(sql, carga);
     }
 
     private async Task<List<IDictionary<string, object?>>> QueryDictionaryAsync(string sql, InformeArchivoCargaInfo carga)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var filas = await connection.QueryAsync(sql, new
-        {
-            carga.IdEntidadFederativa,
-            carga.MesCorte,
-            carga.AnioCorte
-        });
-
-        return filas
-            .Select(fila => ((IDictionary<string, object?>)fila)
-                .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase))
-            .Cast<IDictionary<string, object?>>()
-            .ToList();
+        var filas = await connection.QueryAsync(sql, new { carga.IdEntidadFederativa, carga.MesCorte, carga.AnioCorte });
+        return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
     }
 
-    private async Task<List<IDictionary<string, object?>>> QueryDictionaryAnioAsync(string sql, int anioCorte, int? idEntidadFederativa = null, string modoPlano = "CONFIRMADO", int mesUltimoCorte = 0)
+    private async Task<List<IDictionary<string, object?>>> QueryDictionaryAnioAsync(string sql,
+        int anioCorte,
+        int? idEntidadFederativa = null,
+        string modoPlano = "CONFIRMADO",
+        int mesUltimoCorte = 0)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var filas = await connection.QueryAsync(
-            sql,
-            new
-            {
-                AnioCorte = anioCorte,
-                IdEntidadFederativa = idEntidadFederativa,
-                ModoPlano = modoPlano,
-                MesUltimoCorte = mesUltimoCorte
-            },
-            commandTimeout: 300);
-
-        return filas
-            .Select(fila => ((IDictionary<string, object?>)fila)
-                .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase))
-            .Cast<IDictionary<string, object?>>()
-            .ToList();
+        var filas = await connection.QueryAsync(sql, new { AnioCorte = anioCorte, IdEntidadFederativa = idEntidadFederativa, ModoPlano = modoPlano, MesUltimoCorte = mesUltimoCorte }, commandTimeout: 300);
+        return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
     }
 
     public async Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int? mesCorte, int? anioCorte)
@@ -593,31 +531,15 @@ public partial class InformeRepository : IInformeRepository
         periodo.mes_corte DESC,
         periodo.entidad_federativa;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var reporte = await connection.QueryAsync<InformeReporteCargaItem>(sql, new
+        var reporte = await connection.QueryAsync<InformeReporteCargaItem>(sql, new { IdEntidadFederativa = idEntidadFederativa, MesCorte = mesCorte, AnioCorte = anioCorte });
+        return reporte.Select(x =>
         {
-            IdEntidadFederativa = idEntidadFederativa,
-            MesCorte = mesCorte,
-            AnioCorte = anioCorte
-        });
-
-        return reporte
-            .Select(x =>
-            {
-                x.Corte = $"{ObtenerNombreMes(x.MesCorte)} {x.AnioCorte}";
-
-                x.FechaCargaActualizacionTexto = x.FechaCargaActualizacion.HasValue
-                    ? x.FechaCargaActualizacion.Value.ToString("yyyy-MM-dd HH:mm:ss")
-                    : string.Empty;
-
-                x.FechaAprobacionTexto = x.FechaAprobacion.HasValue
-                    ? x.FechaAprobacion.Value.ToString("yyyy-MM-dd HH:mm:ss")
-                    : string.Empty;
-
-                return x;
-            }).ToList();
+            x.Corte = $"{ObtenerNombreMes(x.MesCorte)} {x.AnioCorte}";
+            x.FechaCargaActualizacionTexto = x.FechaCargaActualizacion.HasValue ? x.FechaCargaActualizacion.Value.ToString("yyyy-MM-dd HH:mm:ss") : string.Empty;
+            x.FechaAprobacionTexto = x.FechaAprobacion.HasValue ? x.FechaAprobacion.Value.ToString("yyyy-MM-dd HH:mm:ss") : string.Empty;
+            return x;
+        }).ToList();
     }
 
     public async Task<InformeSabanaFirma> ObtenerFirmaSabanaAsync(int anioCorte, int? idEntidadFederativa = null)
@@ -668,19 +590,13 @@ public partial class InformeRepository : IInformeRepository
         GROUP BY
             uc.MesUltimoCorte;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QuerySingleAsync<InformeSabanaFirma>(sql, new
-        {
-            AnioCorte = anioCorte,
-            IdEntidadFederativa = idEntidadFederativa
-        });
+        return await connection.QuerySingleAsync<InformeSabanaFirma>(sql, new { AnioCorte = anioCorte, IdEntidadFederativa = idEntidadFederativa });
     }
 
     private static string ObtenerEndpointAcusePrevio(string tipoCarga, string codigoReferencia)
     {
-        if (string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
+        if(string.Equals(tipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
         {
             return $"/api/actualizaciones/{codigoReferencia}/acuse";
         }
@@ -702,7 +618,6 @@ public partial class InformeRepository : IInformeRepository
           AND c.activo = 1
         ORDER BY c.numero_fila;
     ";
-
         return await QueryDictionaryCargaAsync(sql, idCarga);
     }
 
@@ -742,7 +657,6 @@ public partial class InformeRepository : IInformeRepository
           AND d.activo = 1
         ORDER BY d.numero_fila;
     ";
-
         return await QueryDictionaryCargaAsync(sql, idCarga);
     }
 
@@ -771,20 +685,13 @@ public partial class InformeRepository : IInformeRepository
           AND v.activo = 1
         ORDER BY v.numero_fila;
     ";
-
         return await QueryDictionaryCargaAsync(sql, idCarga);
     }
 
     private async Task<List<IDictionary<string, object?>>> QueryDictionaryCargaAsync(string sql, long idCarga)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-
         var filas = await connection.QueryAsync(sql, new { IdCarga = idCarga });
-
-        return filas
-            .Select(fila => ((IDictionary<string, object?>)fila)
-                .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase))
-            .Cast<IDictionary<string, object?>>()
-            .ToList();
+        return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
     }
 }

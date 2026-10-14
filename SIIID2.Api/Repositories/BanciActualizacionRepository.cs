@@ -5,10 +5,11 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public sealed class BanciActualizacionRepository(IDbConnectionFactory factory)
 {
-    public async Task<IReadOnlyList<BanciVictimaIdentificada>> ResolverAsync(int usuario, int entidad, IEnumerable<Dictionary<string, string?>> filas)
+    public async Task<IReadOnlyList<BanciVictimaIdentificada>> ResolverAsync(int usuario,
+        int entidad,
+        IEnumerable<Dictionary<string, string?>> filas)
     {
         using var connection = factory.CrearConexion();
         // Sólo se llama después de verificar permiso de modificación y entidad en el servicio.
@@ -29,7 +30,11 @@ public sealed class BanciActualizacionRepository(IDbConnectionFactory factory)
             """, new { Usuario = usuario, Entidad = entidad, Datos = JsonSerializer.Serialize(filas) }, commandTimeout: 300)).AsList();
     }
 
-    public async Task<BanciActualizacionResultado> PrepararAsync(int usuario, int entidad, string origen, List<Dictionary<string, string?>> datos, List<BanciCargaValidacionError> advertencias)
+    public async Task<BanciActualizacionResultado> PrepararAsync(int usuario,
+        int entidad,
+        string origen,
+        List<Dictionary<string, string?>> datos,
+        List<BanciCargaValidacionError> advertencias)
     {
         using var connection = factory.CrearConexion();
         var resultado = await connection.QuerySingleAsync<BanciActualizacionSql>("dbo.sp_banci_preparar_actualizacion_v2", new { IdUsuario = usuario, IdEntidad = entidad, Origen = origen, DatosJson = JsonSerializer.Serialize(datos), AdvertenciasJson = JsonSerializer.Serialize(advertencias) }, commandType: CommandType.StoredProcedure, commandTimeout: 300);
@@ -46,7 +51,13 @@ public sealed class BanciActualizacionRepository(IDbConnectionFactory factory)
     {
         using var connection = factory.CrearConexion();
         var resultado = await connection.QuerySingleAsync("dbo.sp_banci_confirmar_actualizacion_v2", new { CodigoReferencia = referencia, IdUsuario = usuario, request.Aceptar, request.HuellaVistaPrevia, request.AceptarAdvertencias }, commandType: CommandType.StoredProcedure, commandTimeout: 300);
-        return new { codigoReferencia = (Guid)resultado.CodigoReferencia, estado = (string)resultado.Estado, yaResuelta = (bool)resultado.YaResuelta, totalCambios = (int?)resultado.TotalCambios };
+        return new
+        {
+            codigoReferencia = (Guid)resultado.CodigoReferencia,
+            estado = (string)resultado.Estado,
+            yaResuelta = (bool)resultado.YaResuelta,
+            totalCambios = (int? )resultado.TotalCambios
+        };
     }
 
     public async Task<object> BuscarAsync(int usuario, string texto, int? entidad, int pagina, int tamano)
@@ -54,7 +65,13 @@ public sealed class BanciActualizacionRepository(IDbConnectionFactory factory)
         using var connection = factory.CrearConexion();
         var filas = (await connection.QueryAsync("dbo.sp_banci_buscar_victimas_v2", new { IdUsuario = usuario, Texto = texto, IdEntidad = entidad, Pagina = pagina, Tamano = tamano }, commandType: CommandType.StoredProcedure, commandTimeout: 120)).AsList();
         var datos = filas.Select(f => ((IDictionary<string, object>)f).Where(p => p.Key != "Total" && p.Key != "version_banci").ToDictionary(p => p.Key, p => p.Value)).ToList();
-        return new { total = filas.Count == 0 ? 0L : (long)filas[0].Total, pagina, tamanoPagina = tamano, victimas = datos };
+        return new
+        {
+            total = filas.Count == 0 ? 0L : (long)filas[0].Total,
+            pagina,
+            tamanoPagina = tamano,
+            victimas = datos
+        };
     }
 
     public async Task<object> EstadosAsync(int usuario, int? entidadAlcance, Guid? referencia = null)

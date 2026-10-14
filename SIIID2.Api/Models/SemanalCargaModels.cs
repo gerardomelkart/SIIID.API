@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class SemanalCargaValidacionRequest
 {
     public IFormFile? Carpetas { get; set; }

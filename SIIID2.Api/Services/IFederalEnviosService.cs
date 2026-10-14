@@ -1,7 +1,6 @@
 ﻿using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Services;
-
 public interface IFederalEnviosService
 {
     Task<List<InformePeriodoItem>> ObtenerPeriodosAsync(int idUsuarioConsulta);
@@ -9,6 +8,5 @@ public interface IFederalEnviosService
     Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? mesCorte, int? anioCorte);
     Task<InformeArchivoZipResponse> GenerarZipArchivosAsync(int idUsuarioConsulta, string codigoReferencia);
     Task<InformeArchivoZipResponse> GenerarZipAcusesAsync(int idUsuarioConsulta, int? mesCorte, int anioCorte);
-
     Task<InformeArchivoZipResponse> GenerarZipSabanasAsync(int idUsuarioConsulta, int anioCorte, string? tipoSabana, string? modoPlano);
 }

@@ -4,11 +4,9 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class UsuarioRepository : IUsuarioRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public UsuarioRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
@@ -35,13 +33,8 @@ public class UsuarioRepository : IUsuarioRepository
               AND u.activo = 1
               AND r.activo = 1;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<UsuarioCargaInfo>(sql, new
-        {
-            IdUsuario = idUsuario
-        });
+        return await connection.QueryFirstOrDefaultAsync<UsuarioCargaInfo>(sql, new { IdUsuario = idUsuario });
     }
 
     public async Task<UsuarioAuthInfo?> ObtenerUsuarioAuthAsync(string usuario)
@@ -95,23 +88,15 @@ public class UsuarioRepository : IUsuarioRepository
 
         ORDER BY IdModulo;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        using var resultado = await connection.QueryMultipleAsync(sql, new
-        {
-            Usuario = usuario.Trim()
-        });
-
+        using var resultado = await connection.QueryMultipleAsync(sql, new { Usuario = usuario.Trim() });
         var usuarioAuth = await resultado.ReadFirstOrDefaultAsync<UsuarioAuthInfo>();
-
-        if (usuarioAuth == null)
+        if(usuarioAuth == null)
         {
             return null;
         }
 
         usuarioAuth.Modulos = (await resultado.ReadAsync<ModuloUsuarioInfo>()).ToList();
-
         return usuarioAuth;
     }
 
@@ -163,14 +148,8 @@ public class UsuarioRepository : IUsuarioRepository
             ef.nombre,
             u.usuario;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var usuarios = await connection.QueryAsync<UsuarioListadoItem>(sql, new
-        {
-            IncluirInactivos = incluirInactivos
-        });
-
+        var usuarios = await connection.QueryAsync<UsuarioListadoItem>(sql, new { IncluirInactivos = incluirInactivos });
         return usuarios.ToList();
     }
 
@@ -219,16 +198,14 @@ public class UsuarioRepository : IUsuarioRepository
            AND ums.id_modulo = ms.id_modulo
         WHERE u.id_usuario = @IdUsuario;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<UsuarioDetalle>(sql, new
-        {
-            IdUsuario = idUsuario
-        });
+        return await connection.QueryFirstOrDefaultAsync<UsuarioDetalle>(sql, new { IdUsuario = idUsuario });
     }
 
-    public async Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioAsync(string usuario, string correoElectronico, string? rfc, string? curp)
+    public async Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioAsync(string usuario,
+        string correoElectronico,
+        string? rfc,
+        string? curp)
     {
         // Regresa todos los campos duplicados encontrados.
         // Esto permite informar al front todos los problemas en una sola respuesta.
@@ -281,17 +258,8 @@ public class UsuarioRepository : IUsuarioRepository
             WHERE curp = @Curp
         );
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var errores = await connection.QueryAsync<UsuarioValidacionError>(sql, new
-        {
-            Usuario = usuario.Trim(),
-            CorreoElectronico = correoElectronico.Trim(),
-            Rfc = NormalizarIdentificadorOpcional(rfc),
-            Curp = NormalizarIdentificadorOpcional(curp)
-        });
-
+        var errores = await connection.QueryAsync<UsuarioValidacionError>(sql, new { Usuario = usuario.Trim(), CorreoElectronico = correoElectronico.Trim(), Rfc = NormalizarIdentificadorOpcional(rfc), Curp = NormalizarIdentificadorOpcional(curp) });
         return errores.ToList();
     }
 
@@ -303,13 +271,8 @@ public class UsuarioRepository : IUsuarioRepository
             WHERE rol = @Rol
               AND activo = 1;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<int?>(sql, new
-        {
-            Rol = rol.Trim().ToUpperInvariant()
-        });
+        return await connection.QueryFirstOrDefaultAsync<int?>(sql, new { Rol = rol.Trim().ToUpperInvariant() });
     }
 
     public async Task<bool> ExisteEntidadActivaAsync(int idEntidadFederativa)
@@ -320,14 +283,8 @@ public class UsuarioRepository : IUsuarioRepository
             WHERE id_entidad_federativa = @IdEntidadFederativa
               AND activo = 1;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var total = await connection.ExecuteScalarAsync<int>(sql, new
-        {
-            IdEntidadFederativa = idEntidadFederativa
-        });
-
+        var total = await connection.ExecuteScalarAsync<int>(sql, new { IdEntidadFederativa = idEntidadFederativa });
         return total > 0;
     }
 
@@ -335,11 +292,8 @@ public class UsuarioRepository : IUsuarioRepository
     {
         // Inserta usuario y permisos en una sola transacción.
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
-
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             var sqlUsuario = @"
@@ -383,26 +337,7 @@ public class UsuarioRepository : IUsuarioRepository
                                 1
                             );
             ";
-
-            var idUsuario = await connection.ExecuteScalarAsync<int>(
-                sqlUsuario,
-                new
-                {
-                    Usuario = request.Usuario.Trim(),
-                    Password = passwordHash,
-                    Nombre = request.Nombre.Trim(),
-                    PrimerApellido = request.PrimerApellido.Trim(),
-                    SegundoApellido = string.IsNullOrWhiteSpace(request.SegundoApellido) ? null : request.SegundoApellido.Trim(),
-                    CorreoElectronico = request.CorreoElectronico.Trim(),
-                    Rfc = NormalizarIdentificadorOpcional(request.Rfc),
-                    Curp = NormalizarIdentificadorOpcional(request.Curp),
-                    TelefonoContacto = string.IsNullOrWhiteSpace(request.TelefonoContacto) ? null : request.TelefonoContacto.Trim(),
-                    IdEntidadFederativa = request.IdEntidadFederativa,
-                    IdUsuarioAlta = idUsuarioAlta,
-                    IdRol = idRol
-                },
-                transaction);
-
+            var idUsuario = await connection.ExecuteScalarAsync<int>(sqlUsuario, new { Usuario = request.Usuario.Trim(), Password = passwordHash, Nombre = request.Nombre.Trim(), PrimerApellido = request.PrimerApellido.Trim(), SegundoApellido = string.IsNullOrWhiteSpace(request.SegundoApellido) ? null : request.SegundoApellido.Trim(), CorreoElectronico = request.CorreoElectronico.Trim(), Rfc = NormalizarIdentificadorOpcional(request.Rfc), Curp = NormalizarIdentificadorOpcional(request.Curp), TelefonoContacto = string.IsNullOrWhiteSpace(request.TelefonoContacto) ? null : request.TelefonoContacto.Trim(), IdEntidadFederativa = request.IdEntidadFederativa, IdUsuarioAlta = idUsuarioAlta, IdRol = idRol }, transaction);
             var sqlPermisos = @"
                 INSERT INTO habilita_carga_modificacion (
                     habilita_carga,
@@ -417,22 +352,10 @@ public class UsuarioRepository : IUsuarioRepository
                     1
                 );
             ";
-
-            await connection.ExecuteAsync(
-                sqlPermisos,
-                new
-                {
-                    request.HabilitaCarga,
-                    request.HabilitaModificacion,
-                    IdUsuario = idUsuario
-                },
-                transaction);
-
+            await connection.ExecuteAsync(sqlPermisos, new { request.HabilitaCarga, request.HabilitaModificacion, IdUsuario = idUsuario }, transaction);
             await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.AdministraDelitosSemanal, idUsuarioAlta);
-
             await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
-
             return idUsuario;
         }
         catch
@@ -450,14 +373,8 @@ public class UsuarioRepository : IUsuarioRepository
         WHERE id_usuario = @IdUsuario
           AND activo = 1;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var total = await connection.ExecuteScalarAsync<int>(sql, new
-        {
-            IdUsuario = idUsuario
-        });
-
+        var total = await connection.ExecuteScalarAsync<int>(sql, new { IdUsuario = idUsuario });
         return total > 0;
     }
 
@@ -472,12 +389,15 @@ public class UsuarioRepository : IUsuarioRepository
         WHERE u.activo = 1
           AND r.rol = N'SUPER_USUARIO';
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.ExecuteScalarAsync<int>(sql);
     }
 
-    public async Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioEdicionAsync(int idUsuario, string usuario, string correoElectronico, string? rfc, string? curp)
+    public async Task<List<UsuarioValidacionError>> ObtenerDuplicadosUsuarioEdicionAsync(int idUsuario,
+        string usuario,
+        string correoElectronico,
+        string? rfc,
+        string? curp)
     {
         // Regresa todos los duplicados encontrados,
         // excluyendo al propio usuario que se está editando.
@@ -534,30 +454,21 @@ public class UsuarioRepository : IUsuarioRepository
               AND id_usuario <> @IdUsuario
         );
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var errores = await connection.QueryAsync<UsuarioValidacionError>(sql, new
-        {
-            IdUsuario = idUsuario,
-            Usuario = usuario.Trim(),
-            CorreoElectronico = correoElectronico.Trim(),
-            Rfc = NormalizarIdentificadorOpcional(rfc),
-            Curp = NormalizarIdentificadorOpcional(curp)
-        });
-
+        var errores = await connection.QueryAsync<UsuarioValidacionError>(sql, new { IdUsuario = idUsuario, Usuario = usuario.Trim(), CorreoElectronico = correoElectronico.Trim(), Rfc = NormalizarIdentificadorOpcional(rfc), Curp = NormalizarIdentificadorOpcional(curp) });
         return errores.ToList();
     }
 
-    public async Task EditarUsuarioAsync(int idUsuario, EditarUsuarioRequest request, int idRol, string? passwordHash, int idUsuarioModificacion)
+    public async Task EditarUsuarioAsync(int idUsuario,
+        EditarUsuarioRequest request,
+        int idRol,
+        string? passwordHash,
+        int idUsuarioModificacion)
     {
         // Edita usuario y permisos en una sola transacción.
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
-
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             var sqlUsuario = @"
@@ -587,27 +498,7 @@ public class UsuarioRepository : IUsuarioRepository
             WHERE id_usuario = @IdUsuario
               AND activo = 1;
         ";
-
-            await connection.ExecuteAsync(
-                sqlUsuario,
-                new
-                {
-                    IdUsuario = idUsuario,
-                    Usuario = request.Usuario.Trim(),
-                    Nombre = request.Nombre.Trim(),
-                    PrimerApellido = request.PrimerApellido.Trim(),
-                    SegundoApellido = string.IsNullOrWhiteSpace(request.SegundoApellido) ? null : request.SegundoApellido.Trim(),
-                    CorreoElectronico = request.CorreoElectronico.Trim(),
-                    Rfc = NormalizarIdentificadorOpcional(request.Rfc),
-                    Curp = NormalizarIdentificadorOpcional(request.Curp),
-                    TelefonoContacto = string.IsNullOrWhiteSpace(request.TelefonoContacto) ? null : request.TelefonoContacto.Trim(),
-                    IdEntidadFederativa = request.IdEntidadFederativa,
-                    IdRol = idRol,
-                    IdUsuarioModificacion = idUsuarioModificacion,
-                    PasswordHash = passwordHash
-                },
-                transaction);
-
+            await connection.ExecuteAsync(sqlUsuario, new { IdUsuario = idUsuario, Usuario = request.Usuario.Trim(), Nombre = request.Nombre.Trim(), PrimerApellido = request.PrimerApellido.Trim(), SegundoApellido = string.IsNullOrWhiteSpace(request.SegundoApellido) ? null : request.SegundoApellido.Trim(), CorreoElectronico = request.CorreoElectronico.Trim(), Rfc = NormalizarIdentificadorOpcional(request.Rfc), Curp = NormalizarIdentificadorOpcional(request.Curp), TelefonoContacto = string.IsNullOrWhiteSpace(request.TelefonoContacto) ? null : request.TelefonoContacto.Trim(), IdEntidadFederativa = request.IdEntidadFederativa, IdRol = idRol, IdUsuarioModificacion = idUsuarioModificacion, PasswordHash = passwordHash }, transaction);
             var sqlPermisos = @"
             IF EXISTS (
                 SELECT 1
@@ -637,19 +528,8 @@ public class UsuarioRepository : IUsuarioRepository
                 );
             END
         ";
-
-            await connection.ExecuteAsync(
-                sqlPermisos,
-                new
-                {
-                    IdUsuario = idUsuario,
-                    request.HabilitaCarga,
-                    request.HabilitaModificacion
-                },
-                transaction);
-
+            await connection.ExecuteAsync(sqlPermisos, new { IdUsuario = idUsuario, request.HabilitaCarga, request.HabilitaModificacion }, transaction);
             await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.AdministraDelitosSemanal, idUsuarioModificacion);
-
             await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
         }
@@ -660,12 +540,15 @@ public class UsuarioRepository : IUsuarioRepository
         }
     }
 
-    public async Task EditarUsuarioSemanalAsync(int idUsuario, EditarUsuarioSemanalRequest request, int idRol, string? passwordHash, int idUsuarioModificacion)
+    public async Task EditarUsuarioSemanalAsync(int idUsuario,
+        EditarUsuarioSemanalRequest request,
+        int idRol,
+        string? passwordHash,
+        int idUsuarioModificacion)
     {
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             var sqlUsuario = @"
@@ -687,24 +570,7 @@ public class UsuarioRepository : IUsuarioRepository
             WHERE id_usuario = @IdUsuario
               AND activo = 1;
         ";
-
-            await connection.ExecuteAsync(sqlUsuario, new
-            {
-                IdUsuario = idUsuario,
-                Usuario = request.Usuario.Trim(),
-                Nombre = request.Nombre.Trim(),
-                PrimerApellido = request.PrimerApellido.Trim(),
-                SegundoApellido = string.IsNullOrWhiteSpace(request.SegundoApellido) ? null : request.SegundoApellido.Trim(),
-                CorreoElectronico = request.CorreoElectronico.Trim(),
-                Rfc = NormalizarIdentificadorOpcional(request.Rfc),
-                Curp = NormalizarIdentificadorOpcional(request.Curp),
-                TelefonoContacto = string.IsNullOrWhiteSpace(request.TelefonoContacto) ? null : request.TelefonoContacto.Trim(),
-                IdEntidadFederativa = request.IdEntidadFederativa,
-                IdRol = idRol,
-                IdUsuarioModificacion = idUsuarioModificacion,
-                PasswordHash = passwordHash
-            }, transaction);
-
+            await connection.ExecuteAsync(sqlUsuario, new { IdUsuario = idUsuario, Usuario = request.Usuario.Trim(), Nombre = request.Nombre.Trim(), PrimerApellido = request.PrimerApellido.Trim(), SegundoApellido = string.IsNullOrWhiteSpace(request.SegundoApellido) ? null : request.SegundoApellido.Trim(), CorreoElectronico = request.CorreoElectronico.Trim(), Rfc = NormalizarIdentificadorOpcional(request.Rfc), Curp = NormalizarIdentificadorOpcional(request.Curp), TelefonoContacto = string.IsNullOrWhiteSpace(request.TelefonoContacto) ? null : request.TelefonoContacto.Trim(), IdEntidadFederativa = request.IdEntidadFederativa, IdRol = idRol, IdUsuarioModificacion = idUsuarioModificacion, PasswordHash = passwordHash }, transaction);
             var sqlSemanal = @"
             DECLARE @IdModuloSemanal TINYINT =
             (
@@ -764,16 +630,7 @@ public class UsuarioRepository : IUsuarioRepository
                 );
             END;
         ";
-
-            await connection.ExecuteAsync(sqlSemanal, new
-            {
-                IdUsuario = idUsuario,
-                request.HabilitaSemanal,
-                request.HabilitaCargaSemanal,
-                request.AdministraDelitosSemanal,
-                IdUsuarioModificacion = idUsuarioModificacion
-            }, transaction);
-
+            await connection.ExecuteAsync(sqlSemanal, new { IdUsuario = idUsuario, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.AdministraDelitosSemanal, IdUsuarioModificacion = idUsuarioModificacion }, transaction);
             await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
         }
@@ -845,28 +702,16 @@ public class UsuarioRepository : IUsuarioRepository
             );
         END;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        await connection.ExecuteAsync(sql, new
-        {
-            IdUsuario = idUsuario,
-            request.HabilitaSemanal,
-            request.HabilitaCargaSemanal,
-            request.AdministraDelitosSemanal,
-            IdUsuarioModificacion = idUsuarioModificacion
-        });
+        await connection.ExecuteAsync(sql, new { IdUsuario = idUsuario, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.AdministraDelitosSemanal, IdUsuarioModificacion = idUsuarioModificacion });
     }
 
     public async Task DesactivarUsuarioAsync(int idUsuario, int idUsuarioModificacion)
     {
         // Baja lógica. No se elimina físicamente para conservar auditoría.
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
-
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             var sql = @"
@@ -889,16 +734,7 @@ public class UsuarioRepository : IUsuarioRepository
                 id_usuario_modificacion = @IdUsuarioModificacion
             WHERE id_usuario = @IdUsuario;
         ";
-
-            await connection.ExecuteAsync(
-                sql,
-                new
-                {
-                    IdUsuario = idUsuario,
-                    IdUsuarioModificacion = idUsuarioModificacion
-                },
-                transaction);
-
+            await connection.ExecuteAsync(sql, new { IdUsuario = idUsuario, IdUsuarioModificacion = idUsuarioModificacion }, transaction);
             await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
         }
@@ -964,14 +800,8 @@ public class UsuarioRepository : IUsuarioRepository
           AND um.habilitado = 1
           AND um.activo = 1;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.ExecuteScalarAsync<int>(sql, new
-        {
-            HabilitaCarga = habilitaCarga,
-            HabilitaModificacion = habilitaModificacion
-        });
+        return await connection.ExecuteScalarAsync<int>(sql, new { HabilitaCarga = habilitaCarga, HabilitaModificacion = habilitaModificacion });
     }
 
     public async Task<bool> ExisteUsuarioAsync(int idUsuario)
@@ -982,14 +812,8 @@ public class UsuarioRepository : IUsuarioRepository
         FROM usuario
         WHERE id_usuario = @IdUsuario;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var total = await connection.ExecuteScalarAsync<int>(sql, new
-        {
-            IdUsuario = idUsuario
-        });
-
+        var total = await connection.ExecuteScalarAsync<int>(sql, new { IdUsuario = idUsuario });
         return total > 0;
     }
 
@@ -998,11 +822,8 @@ public class UsuarioRepository : IUsuarioRepository
         // Reactiva usuario y permisos en una sola transacción.
         // No cambia contraseña, rol, entidad ni datos personales.
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
-
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             var sqlUsuario = @"
@@ -1012,16 +833,7 @@ public class UsuarioRepository : IUsuarioRepository
                 id_usuario_modificacion = @IdUsuarioModificacion
             WHERE id_usuario = @IdUsuario;
         ";
-
-            await connection.ExecuteAsync(
-                sqlUsuario,
-                new
-                {
-                    IdUsuario = idUsuario,
-                    IdUsuarioModificacion = idUsuarioModificacion
-                },
-                transaction);
-
+            await connection.ExecuteAsync(sqlUsuario, new { IdUsuario = idUsuario, IdUsuarioModificacion = idUsuarioModificacion }, transaction);
             var sqlPermisos = @"
             IF EXISTS (
                 SELECT 1
@@ -1051,19 +863,8 @@ public class UsuarioRepository : IUsuarioRepository
                 );
             END
         ";
-
-            await connection.ExecuteAsync(
-                sqlPermisos,
-                new
-                {
-                    IdUsuario = idUsuario,
-                    request.HabilitaCarga,
-                    request.HabilitaModificacion
-                },
-                transaction);
-
+            await connection.ExecuteAsync(sqlPermisos, new { IdUsuario = idUsuario, request.HabilitaCarga, request.HabilitaModificacion }, transaction);
             await GuardarPermisosModularesAsync(connection, transaction, idUsuario, request.HabilitaMensual, request.HabilitaCarga, request.HabilitaModificacion, null, null, null, idUsuarioModificacion);
-
             await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
         }
@@ -1079,7 +880,6 @@ public class UsuarioRepository : IUsuarioRepository
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             var sql = @"
@@ -1204,16 +1004,7 @@ public class UsuarioRepository : IUsuarioRepository
                 );
             END;
         ";
-
-            await connection.ExecuteAsync(sql, new
-            {
-                IdUsuario = idUsuario,
-                request.HabilitaSemanal,
-                request.HabilitaCargaSemanal,
-                request.AdministraDelitosSemanal,
-                IdUsuarioModificacion = idUsuarioModificacion
-            }, transaction);
-
+            await connection.ExecuteAsync(sql, new { IdUsuario = idUsuario, request.HabilitaSemanal, request.HabilitaCargaSemanal, request.AdministraDelitosSemanal, IdUsuarioModificacion = idUsuarioModificacion }, transaction);
             await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, idUsuario);
             await transaction.CommitAsync();
         }
@@ -1235,15 +1026,8 @@ public class UsuarioRepository : IUsuarioRepository
         WHERE id_usuario = @IdUsuario
           AND activo = 1;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<UsuarioPasswordInfo>(
-            sql,
-            new
-            {
-                IdUsuario = idUsuario
-            });
+        return await connection.QueryFirstOrDefaultAsync<UsuarioPasswordInfo>(sql, new { IdUsuario = idUsuario });
     }
 
     public async Task<bool?> ObtenerRequiereCambioPasswordAsync(int idUsuario)
@@ -1254,15 +1038,8 @@ public class UsuarioRepository : IUsuarioRepository
         WHERE id_usuario = @IdUsuario
           AND activo = 1;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<bool?>(
-            sql,
-            new
-            {
-                IdUsuario = idUsuario
-            });
+        return await connection.QueryFirstOrDefaultAsync<bool?>(sql, new { IdUsuario = idUsuario });
     }
 
     public async Task<bool> ActualizarPasswordPropioAsync(int idUsuario, string passwordHash)
@@ -1276,21 +1053,21 @@ public class UsuarioRepository : IUsuarioRepository
         WHERE id_usuario = @IdUsuario
           AND activo = 1;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var registrosAfectados = await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdUsuario = idUsuario,
-                PasswordHash = passwordHash
-            });
-
+        var registrosAfectados = await connection.ExecuteAsync(sql, new { IdUsuario = idUsuario, PasswordHash = passwordHash });
         return registrosAfectados > 0;
     }
 
-    private static async Task GuardarPermisosModularesAsync(SqlConnection connection, SqlTransaction transaction, int idUsuario, bool habilitaMensual, bool habilitaCargaMensual, bool habilitaModificacionMensual, bool? habilitaSemanal, bool? habilitaCargaSemanal, bool? administraDelitosSemanal, int idUsuarioModificacion)
+    private static async Task GuardarPermisosModularesAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        int idUsuario,
+        bool habilitaMensual,
+        bool habilitaCargaMensual,
+        bool habilitaModificacionMensual,
+        bool? habilitaSemanal,
+        bool? habilitaCargaSemanal,
+        bool? administraDelitosSemanal,
+        int idUsuarioModificacion)
     {
         var sql = @"
         DECLARE @IdModuloMensual TINYINT =
@@ -1404,18 +1181,7 @@ public class UsuarioRepository : IUsuarioRepository
             );
         END;
     ";
-
-        await connection.ExecuteAsync(sql, new
-        {
-            IdUsuario = idUsuario,
-            HabilitaMensual = habilitaMensual,
-            HabilitaCargaMensual = habilitaCargaMensual,
-            HabilitaModificacionMensual = habilitaModificacionMensual,
-            HabilitaSemanal = habilitaSemanal,
-            HabilitaCargaSemanal = habilitaCargaSemanal,
-            AdministraDelitosSemanal = administraDelitosSemanal,
-            IdUsuarioModificacion = idUsuarioModificacion
-        }, transaction);
+        await connection.ExecuteAsync(sql, new { IdUsuario = idUsuario, HabilitaMensual = habilitaMensual, HabilitaCargaMensual = habilitaCargaMensual, HabilitaModificacionMensual = habilitaModificacionMensual, HabilitaSemanal = habilitaSemanal, HabilitaCargaSemanal = habilitaCargaSemanal, AdministraDelitosSemanal = administraDelitosSemanal, IdUsuarioModificacion = idUsuarioModificacion }, transaction);
     }
 
     private static string? NormalizarIdentificadorOpcional(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim().ToUpperInvariant();

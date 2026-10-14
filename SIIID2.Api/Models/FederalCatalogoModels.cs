@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class FederalCatalogoResumen
 {
     public int BienesJuridicos { get; set; }

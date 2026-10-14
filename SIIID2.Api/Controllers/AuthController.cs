@@ -5,13 +5,11 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 
 namespace SIIID2.Api.Controllers;
-
 [ApiController]
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
-
     public AuthController(IAuthService authService)
     {
         _authService = authService;
@@ -23,8 +21,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var resultado = await _authService.LoginAsync(request);
-
-        if (!resultado.EsValido)
+        if(!resultado.EsValido)
         {
             return Unauthorized(resultado);
         }
@@ -37,8 +34,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> CambiarPassword([FromBody] CambiarPasswordRequest request)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuario))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuario))
         {
             return Unauthorized(new CambiarPasswordResponse
             {
@@ -48,11 +44,8 @@ public class AuthController : ControllerBase
             });
         }
 
-        var resultado = await _authService.CambiarPasswordAsync(
-            idUsuario,
-            request);
-
-        if (!resultado.EsValido)
+        var resultado = await _authService.CambiarPasswordAsync(idUsuario, request);
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }

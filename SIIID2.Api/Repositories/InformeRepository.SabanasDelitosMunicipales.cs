@@ -3,11 +3,13 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 // Sábana municipal de delitos; no mezclar el grano municipal con el estatal.
 public partial class InformeRepository : IInformeRepository
 {
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte, int? idEntidadFederativa, string modoPlano, int mesUltimoCorte)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte,
+        int? idEntidadFederativa,
+        string modoPlano,
+        int mesUltimoCorte)
     {
         var sql = @"
             WITH pendientes_rankeadas AS (
@@ -281,8 +283,6 @@ public partial class InformeRepository : IInformeRepository
             m.clave_municipio_compuesta
         OPTION (RECOMPILE);
         ";
-
         return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa, modoPlano, mesUltimoCorte);
     }
-
 }

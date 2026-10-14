@@ -1,3 +1,4 @@
+// Mantiene el flujo Federal separado y utiliza sus catálogos de delito, conservando las validaciones compartidas.
 using System.Globalization;
 using System.Text;
 using SIIID2.Api.Models;
@@ -6,7 +7,6 @@ using SIIID2.Api.Repositories;
 using SIIID2.Api.Validators;
 
 namespace SIIID2.Api.Services;
-
 public class FederalCargaArchivosService : IFederalCargaArchivosService
 {
     private readonly BanciCruceService _cruce;
@@ -21,11 +21,20 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
     private readonly CatalogosValidator _catalogosValidator;
     private readonly IFederalCargaRepository _federalCargaRepository;
     private readonly IFederalArchivosOriginalesService _archivosOriginalesService;
-
     private readonly string[] _extensionesPermitidas = [".csv", ".xlsx"];
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
-
-    public FederalCargaArchivosService(BanciCruceService cruce, SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, FeminicidioRenapoValidator feminicidioRenapoValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, IFederalCargaRepository federalCargaRepository, IFederalArchivosOriginalesService archivosOriginalesService)
+    public FederalCargaArchivosService(BanciCruceService cruce,
+        SistemaConfiguracionService config,
+        IArchivoReader archivoReader,
+        CarpetasValidator carpetasValidator,
+        DelitosValidator delitosValidator,
+        VictimasValidator victimasValidator,
+        FeminicidioVictimaValidator feminicidioVictimaValidator,
+        FeminicidioRenapoValidator feminicidioRenapoValidator,
+        CargaIntegridadValidator cargaIntegridadValidator,
+        CatalogosValidator catalogosValidator,
+        IFederalCargaRepository federalCargaRepository,
+        IFederalArchivosOriginalesService archivosOriginalesService)
     {
         _cruce = cruce;
         _config = config;
@@ -43,37 +52,53 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
 
     public async Task<CargaValidacionResponse> ValidarArchivosAsync(IFormCollection form, int idUsuarioCarga)
     {
-        var response = new CargaValidacionResponse { CodigoReferencia = GenerarCodigoReferencia() };
+        var response = new CargaValidacionResponse
+        {
+            CodigoReferencia = GenerarCodigoReferencia()
+        };
         try
         {
             return await ValidarOperacionAsync(form, idUsuarioCarga, response);
         }
         catch (FederalOperacionPeriodoSql.ConflictoException ex)
         {
-            response.Errores.Add(new CargaValidacionError { Archivo = "general", Codigo = "FEDERAL_CONFLICTO_PERIODO", DescripcionResumen = "Operación federal en conflicto", Mensaje = ex.Message });
-            response.ResumenValidacion.Add(new CargaValidacionResumenItem { Archivo = "general", Codigo = "FEDERAL_CONFLICTO_PERIODO", Descripcion = "Operación federal en conflicto", TotalRegistros = 1, EsError = true });
+            response.Errores.Add(new CargaValidacionError
+            {
+                Archivo = "general",
+                Codigo = "FEDERAL_CONFLICTO_PERIODO",
+                DescripcionResumen = "Operación federal en conflicto",
+                Mensaje = ex.Message
+            });
+            response.ResumenValidacion.Add(new CargaValidacionResumenItem
+            {
+                Archivo = "general",
+                Codigo = "FEDERAL_CONFLICTO_PERIODO",
+                Descripcion = "Operación federal en conflicto",
+                TotalRegistros = 1,
+                EsError = true
+            });
             response.Mensaje = ex.Message;
             return response;
         }
     }
 
-    private async Task<CargaValidacionResponse> ValidarOperacionAsync(IFormCollection form, int idUsuarioCarga, CargaValidacionResponse response)
+    private async Task<CargaValidacionResponse> ValidarOperacionAsync(IFormCollection form,
+        int idUsuarioCarga,
+        CargaValidacionResponse response)
     {
         var usuarioCarga = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioCarga);
-
-        if (usuarioCarga == null)
+        if(usuarioCarga == null)
         {
             return RespuestaUsuarioInvalido(idUsuarioCarga);
         }
 
-        if (!usuarioCarga.HabilitaCarga)
+        if(!usuarioCarga.HabilitaCarga)
         {
             return RespuestaUsuarioSinPermiso(usuarioCarga);
         }
 
         var archivos = form.Files;
-
-        if (archivos == null || archivos.Count == 0)
+        if(archivos == null || archivos.Count == 0)
         {
             response.Errores.Add(new CargaValidacionError
             {
@@ -82,35 +107,30 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
                 DescripcionResumen = "No se recibieron archivos",
                 Mensaje = "Debe enviar los archivos federales de carpetas, delitos y víctimas."
             });
-
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
         }
 
         var listaArchivos = archivos.ToList();
-
-        foreach (var archivo in listaArchivos) ValidarArchivoBase(archivo, response.Errores);
-
+        foreach (var archivo in listaArchivos)
+            ValidarArchivoBase(archivo, response.Errores);
         var archivoCarpetas = BuscarArchivoPorNombre(listaArchivos, "carpeta");
         var archivoDelitos = BuscarArchivoPorNombre(listaArchivos, "delito");
         var archivoVictimas = BuscarArchivoPorNombre(listaArchivos, "victima");
-
         ValidarArchivoEsperado(archivoCarpetas, "carpetas", "carpeta", response.Errores);
         ValidarArchivoEsperado(archivoDelitos, "delitos", "delito", response.Errores);
         ValidarArchivoEsperado(archivoVictimas, "victimas", "victima", response.Errores);
         ValidarDuplicadosPorTipo(listaArchivos, "carpeta", "carpetas", response.Errores);
         ValidarDuplicadosPorTipo(listaArchivos, "delito", "delitos", response.Errores);
         ValidarDuplicadosPorTipo(listaArchivos, "victima", "victimas", response.Errores);
-
-        if (response.Errores.Count > 0)
+        if(response.Errores.Count > 0)
         {
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
         }
 
         var erroresEstructura = await ValidarEstructuraArchivosAsync(archivoCarpetas!, archivoDelitos!, archivoVictimas!);
-
-        if (erroresEstructura.Count > 0)
+        if(erroresEstructura.Count > 0)
         {
             response.Errores.AddRange(erroresEstructura);
             FinalizarRespuesta(response, 0, 0, 0);
@@ -120,18 +140,14 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         var filasCarpetas = await _archivoReader.LeerAsync(archivoCarpetas!);
         var filasDelitos = await _archivoReader.LeerAsync(archivoDelitos!);
         var filasVictimas = await _archivoReader.LeerAsync(archivoVictimas!);
-
         response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas));
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
         response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
-
         var advertenciasPendientes = new List<CargaValidacionError>();
-
-        if (response.Errores.Count == 0)
+        if(response.Errores.Count == 0)
         {
             var erroresIntegridad = _cargaIntegridadValidator.Validar(filasCarpetas, filasDelitos, filasVictimas);
-
-            if (usuarioCarga.EsSuperUsuario)
+            if(usuarioCarga.EsSuperUsuario)
             {
                 advertenciasPendientes.AddRange(erroresIntegridad.Where(x => x.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO"));
                 erroresIntegridad = erroresIntegridad.Where(x => x.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO").ToList();
@@ -143,25 +159,26 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         response.Errores.AddRange(await _catalogosValidator.ValidarFederalAsync(filasCarpetas, filasDelitos, filasVictimas));
         var coordenadasMunicipio = await _catalogosValidator.ValidarCoordenadasConfiguradasAsync(filasDelitos, "FEDERAL", _config);
         response.Errores.AddRange(coordenadasMunicipio.Errores);
-        if (coordenadasMunicipio.Advertencia is not null) response.Advertencias.Add(coordenadasMunicipio.Advertencia);
-        if (response.Errores.Count == 0 && _config.Activa("FEDERAL", "FEMINICIDIO_DATOS_ADICIONALES"))
+        if(coordenadasMunicipio.Advertencia is not null)
+            response.Advertencias.Add(coordenadasMunicipio.Advertencia);
+        if(response.Errores.Count == 0 && _config.Activa("FEDERAL", "FEMINICIDIO_DATOS_ADICIONALES"))
         {
             var local = _feminicidioVictimaValidator.Validar(filasDelitos, filasVictimas);
-            response.Errores.AddRange(local.Errores); advertenciasPendientes.AddRange(local.Advertencias);
-            if (response.Errores.Count == 0)
+            response.Errores.AddRange(local.Errores);
+            advertenciasPendientes.AddRange(local.Advertencias);
+            if(response.Errores.Count == 0)
             {
                 var renapo = await _feminicidioRenapoValidator.ValidarAsync(filasDelitos, filasVictimas, modulo: "FEDERAL");
-                response.Errores.AddRange(renapo.Errores); advertenciasPendientes.AddRange(renapo.Advertencias);
+                response.Errores.AddRange(renapo.Errores);
+                advertenciasPendientes.AddRange(renapo.Advertencias);
             }
         }
 
-
         var mesCorte = ObtenerMesCorteDesdeCarpetas(filasCarpetas);
         var anioCorte = ObtenerAnioCorteDesdeCarpetas(filasCarpetas);
-
-        if (response.Errores.Count == 0)
+        if(response.Errores.Count == 0)
         {
-            if (await _federalCargaRepository.ExisteCargaConfirmadaAsync(mesCorte, anioCorte))
+            if(await _federalCargaRepository.ExisteCargaConfirmadaAsync(mesCorte, anioCorte))
             {
                 response.Errores.Add(new CargaValidacionError
                 {
@@ -174,26 +191,22 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
             else
             {
                 var cargaPendiente = await _federalCargaRepository.ObtenerCodigoCargaPendienteAsync(mesCorte, anioCorte);
-
-                if (cargaPendiente != null)
+                if(cargaPendiente != null)
                 {
                     var enRevisionAdministrativa = string.Equals(cargaPendiente.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
-
                     response.Errores.Add(new CargaValidacionError
                     {
                         Archivo = "general",
                         Valor = cargaPendiente.CodigoReferencia,
                         Codigo = enRevisionAdministrativa ? "FEDERAL_CARGA_PENDIENTE_APROBACION" : "FEDERAL_CARGA_PENDIENTE_EXISTENTE",
                         DescripcionResumen = enRevisionAdministrativa ? "Carga federal en revisión administrativa" : "Ya existe carga federal pendiente",
-                        Mensaje = enRevisionAdministrativa
-                            ? $"Ya existe una carga federal en revisión administrativa para el periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {cargaPendiente.CodigoReferencia}."
-                            : $"Ya existe una carga federal validada pendiente de confirmar para el periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {cargaPendiente.CodigoReferencia}."
+                        Mensaje = enRevisionAdministrativa ? $"Ya existe una carga federal en revisión administrativa para el periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {cargaPendiente.CodigoReferencia}." : $"Ya existe una carga federal validada pendiente de confirmar para el periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {cargaPendiente.CodigoReferencia}."
                     });
                 }
             }
         }
 
-        if (response.Errores.Count == 0)
+        if(response.Errores.Count == 0)
         {
             response.Advertencias.AddRange(advertenciasPendientes);
             response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(filasDelitos, _config.Activa("FEDERAL", "COORDENADAS_FORMATO_RANGO"), _config.Activa("FEDERAL", "COORDENADAS_SIN_INFORMACION"), _config.Activa("FEDERAL", "COORDENADAS_CONCENTRACION")));
@@ -201,31 +214,31 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         }
 
         FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
-
-        if (response.Errores.Any(x => x.Codigo is "FEDERAL_CARGA_PERIODO_YA_CONFIRMADO" or "FEDERAL_CARGA_PENDIENTE_EXISTENTE" or "FEDERAL_CARGA_PENDIENTE_APROBACION")) return response;
-
-        if (response.EsValido) await _config.PrepararFeminicidioAsync(filasVictimas, 0, mesCorte, anioCorte, false, "FEDERAL");
-
-        if (response.Errores.Count == 0)
+        if(response.Errores.Any(x => x.Codigo is "FEDERAL_CARGA_PERIODO_YA_CONFIRMADO" or "FEDERAL_CARGA_PENDIENTE_EXISTENTE" or "FEDERAL_CARGA_PENDIENTE_APROBACION"))
+            return response;
+        if(response.EsValido)
+            await _config.PrepararFeminicidioAsync(filasVictimas, 0, mesCorte, anioCorte, false, "FEDERAL");
+        if(response.Errores.Count == 0)
             response.Errores.AddRange(await _cruce.ValidarFederalAsync(idUsuarioCarga, mesCorte, anioCorte, new(filasCarpetas, filasDelitos, filasVictimas)));
-        if (response.Errores.Any(e => e.Codigo.StartsWith("BANCI_", StringComparison.Ordinal)))
+        if(response.Errores.Any(e => e.Codigo.StartsWith("BANCI_", StringComparison.Ordinal)))
         {
             FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
             return response;
         }
+
         var estadoCarga = response.EsValido ? "VALIDADO_PENDIENTE" : "RECHAZADO_VALIDACION";
         var mensajeError = response.EsValido ? null : $"La información federal contiene errores de validación. Total de errores: {response.Errores.Count}.";
-
         await _federalCargaRepository.GuardarIntentoCargaAsync(idUsuarioCarga, response.CodigoReferencia, mesCorte, anioCorte, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count, estadoCarga, mensajeError, response.Advertencias, filasCarpetas, filasDelitos, filasVictimas);
         await _archivosOriginalesService.GuardarAsync(idUsuarioCarga, response.CodigoReferencia, "CARGA_INICIAL", mesCorte, anioCorte, archivoCarpetas!, archivoDelitos!, archivoVictimas!);
-
         return response;
     }
 
     private static CargaValidacionResponse RespuestaUsuarioInvalido(int idUsuarioCarga)
     {
-        var response = new CargaValidacionResponse { CodigoReferencia = GenerarCodigoReferencia() };
-
+        var response = new CargaValidacionResponse
+        {
+            CodigoReferencia = GenerarCodigoReferencia()
+        };
         response.Errores.Add(new CargaValidacionError
         {
             Archivo = "general",
@@ -236,15 +249,16 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
             DescripcionResumen = "Usuario federal no habilitado",
             Mensaje = "El usuario autenticado no existe, está inactivo o no tiene habilitado el módulo FEDERAL."
         });
-
         FinalizarRespuesta(response, 0, 0, 0);
         return response;
     }
 
     private static CargaValidacionResponse RespuestaUsuarioSinPermiso(UsuarioCargaInfo usuarioCarga)
     {
-        var response = new CargaValidacionResponse { CodigoReferencia = GenerarCodigoReferencia() };
-
+        var response = new CargaValidacionResponse
+        {
+            CodigoReferencia = GenerarCodigoReferencia()
+        };
         response.Errores.Add(new CargaValidacionError
         {
             Archivo = "general",
@@ -255,14 +269,13 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
             DescripcionResumen = "Usuario sin permiso de carga federal",
             Mensaje = "El usuario autenticado no tiene habilitada la carga de información federal."
         });
-
         FinalizarRespuesta(response, 0, 0, 0);
         return response;
     }
 
     private void ValidarArchivoBase(IFormFile archivo, List<CargaValidacionError> errores)
     {
-        if (archivo.Length == 0)
+        if(archivo.Length == 0)
         {
             errores.Add(new CargaValidacionError
             {
@@ -273,7 +286,7 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
             });
         }
 
-        if (archivo.Length > TamanioMaximoBytes)
+        if(archivo.Length > TamanioMaximoBytes)
         {
             errores.Add(new CargaValidacionError
             {
@@ -285,8 +298,7 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         }
 
         var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
-
-        if (!_extensionesPermitidas.Contains(extension))
+        if(!_extensionesPermitidas.Contains(extension))
         {
             errores.Add(new CargaValidacionError
             {
@@ -301,14 +313,16 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
     private static IFormFile? BuscarArchivoPorNombre(List<IFormFile> archivos, string palabraEsperada)
     {
         var palabraNormalizada = NormalizarTexto(palabraEsperada);
-
         return archivos.FirstOrDefault(archivo => NormalizarTexto(Path.GetFileNameWithoutExtension(archivo.FileName)).Contains(palabraNormalizada));
     }
 
-    private static void ValidarArchivoEsperado(IFormFile? archivo, string tipoArchivo, string palabraEsperada, List<CargaValidacionError> errores)
+    private static void ValidarArchivoEsperado(IFormFile? archivo,
+        string tipoArchivo,
+        string palabraEsperada,
+        List<CargaValidacionError> errores)
     {
-        if (archivo != null) return;
-
+        if(archivo != null)
+            return;
         errores.Add(new CargaValidacionError
         {
             Archivo = tipoArchivo,
@@ -318,13 +332,15 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         });
     }
 
-    private static void ValidarDuplicadosPorTipo(List<IFormFile> archivos, string palabraEsperada, string tipoArchivo, List<CargaValidacionError> errores)
+    private static void ValidarDuplicadosPorTipo(List<IFormFile> archivos,
+        string palabraEsperada,
+        string tipoArchivo,
+        List<CargaValidacionError> errores)
     {
         var palabraNormalizada = NormalizarTexto(palabraEsperada);
         var coincidencias = archivos.Count(archivo => NormalizarTexto(Path.GetFileNameWithoutExtension(archivo.FileName)).Contains(palabraNormalizada));
-
-        if (coincidencias <= 1) return;
-
+        if(coincidencias <= 1)
+            return;
         errores.Add(new CargaValidacionError
         {
             Archivo = tipoArchivo,
@@ -334,26 +350,28 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         });
     }
 
-    private async Task<List<CargaValidacionError>> ValidarEstructuraArchivosAsync(IFormFile archivoCarpetas, IFormFile archivoDelitos, IFormFile archivoVictimas)
+    private async Task<List<CargaValidacionError>> ValidarEstructuraArchivosAsync(IFormFile archivoCarpetas,
+        IFormFile archivoDelitos,
+        IFormFile archivoVictimas)
     {
         var errores = new List<CargaValidacionError>();
-
         await ValidarColumnasObligatoriasArchivoAsync(archivoCarpetas, "carpetas", _carpetasValidator.ColumnasObligatorias, errores);
         await ValidarColumnasObligatoriasArchivoAsync(archivoDelitos, "delitos", _delitosValidator.ColumnasObligatorias, errores);
         await ValidarColumnasObligatoriasArchivoAsync(archivoVictimas, "victimas", _victimasValidator.ColumnasObligatorias, errores);
-
         return errores;
     }
 
-    private async Task ValidarColumnasObligatoriasArchivoAsync(IFormFile archivo, string nombreArchivo, IReadOnlyCollection<string> columnasObligatorias, List<CargaValidacionError> errores)
+    private async Task ValidarColumnasObligatoriasArchivoAsync(IFormFile archivo,
+        string nombreArchivo,
+        IReadOnlyCollection<string> columnasObligatorias,
+        List<CargaValidacionError> errores)
     {
         var encabezados = await _archivoReader.LeerEncabezadosAsync(archivo);
         var columnasArchivo = encabezados.Where(x => !string.IsNullOrWhiteSpace(x)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-
         foreach (var columna in columnasObligatorias)
         {
-            if (columnasArchivo.Contains(columna)) continue;
-
+            if(columnasArchivo.Contains(columna))
+                continue;
             errores.Add(new CargaValidacionError
             {
                 Archivo = nombreArchivo,
@@ -370,37 +388,49 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
     private static void FinalizarRespuesta(CargaValidacionResponse response, int totalCarpetas, int totalDelitos, int totalVictimas)
     {
         response.ResumenValidacion = ConstruirResumenValidacion(response.Errores.Concat(response.Advertencias).ToList(), totalCarpetas, totalDelitos, totalVictimas);
-
-        response.Mensaje = response.EsValido
-            ? response.Advertencias.Count > 0
-                ? "La información federal fue validada con advertencias. Revise las advertencias antes de continuar."
-                : "La información federal fue validada correctamente. Puede continuar con el acuse previo."
-            : "La información federal contiene errores de validación.";
+        response.Mensaje = response.EsValido ? response.Advertencias.Count > 0 ? "La información federal fue validada con advertencias. Revise las advertencias antes de continuar." : "La información federal fue validada correctamente. Puede continuar con el acuse previo." : "La información federal contiene errores de validación.";
     }
 
-    private static List<CargaValidacionResumenItem> ConstruirResumenValidacion(List<CargaValidacionError> errores, int totalCarpetas, int totalDelitos, int totalVictimas)
+    private static List<CargaValidacionResumenItem> ConstruirResumenValidacion(List<CargaValidacionError> errores,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas)
     {
         var resumen = new List<CargaValidacionResumenItem>
         {
-            new() { Archivo = "carpetas", Codigo = "CARPETAS_TOTAL_REGISTROS", Descripcion = "Total de registros en el archivo de carpetas", TotalRegistros = totalCarpetas, EsError = false },
-            new() { Archivo = "delitos", Codigo = "DELITOS_TOTAL_REGISTROS", Descripcion = "Total de registros en el archivo de delitos", TotalRegistros = totalDelitos, EsError = false },
-            new() { Archivo = "victimas", Codigo = "VICTIMAS_TOTAL_REGISTROS", Descripcion = "Total de registros en el archivo de víctimas", TotalRegistros = totalVictimas, EsError = false }
-        };
-
-        resumen.AddRange(errores
-            .Where(x => !string.IsNullOrWhiteSpace(x.Codigo) && !string.IsNullOrWhiteSpace(x.DescripcionResumen))
-            .GroupBy(x => new { x.Archivo, x.Codigo, x.DescripcionResumen })
-            .Select(x => new CargaValidacionResumenItem
+            new()
             {
-                Archivo = x.Key.Archivo,
-                Codigo = x.Key.Codigo,
-                Descripcion = x.Key.DescripcionResumen,
-                TotalRegistros = x.Count(),
-                EsError = true
-            })
-            .OrderBy(x => x.Archivo)
-            .ThenBy(x => x.Codigo));
-
+                Archivo = "carpetas",
+                Codigo = "CARPETAS_TOTAL_REGISTROS",
+                Descripcion = "Total de registros en el archivo de carpetas",
+                TotalRegistros = totalCarpetas,
+                EsError = false
+            },
+            new()
+            {
+                Archivo = "delitos",
+                Codigo = "DELITOS_TOTAL_REGISTROS",
+                Descripcion = "Total de registros en el archivo de delitos",
+                TotalRegistros = totalDelitos,
+                EsError = false
+            },
+            new()
+            {
+                Archivo = "victimas",
+                Codigo = "VICTIMAS_TOTAL_REGISTROS",
+                Descripcion = "Total de registros en el archivo de víctimas",
+                TotalRegistros = totalVictimas,
+                EsError = false
+            }
+        };
+        resumen.AddRange(errores.Where(x => !string.IsNullOrWhiteSpace(x.Codigo) && !string.IsNullOrWhiteSpace(x.DescripcionResumen)).GroupBy(x => new { x.Archivo, x.Codigo, x.DescripcionResumen }).Select(x => new CargaValidacionResumenItem
+        {
+            Archivo = x.Key.Archivo,
+            Codigo = x.Key.Codigo,
+            Descripcion = x.Key.DescripcionResumen,
+            TotalRegistros = x.Count(),
+            EsError = true
+        }).OrderBy(x => x.Archivo).ThenBy(x => x.Codigo));
         return resumen;
     }
 
@@ -421,21 +451,22 @@ public class FederalCargaArchivosService : IFederalCargaArchivosService
         foreach (var fila in filasCarpetas)
         {
             fila.Columnas.TryGetValue("fha_de_ini", out var valor);
-
-            if (string.IsNullOrWhiteSpace(valor)) continue;
-            if (DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out var fecha)) return fecha.Date;
-            if (DateTime.TryParse(valor, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fechaInvariante)) return fechaInvariante.Date;
+            if(string.IsNullOrWhiteSpace(valor))
+                continue;
+            if(DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out var fecha))
+                return fecha.Date;
+            if(DateTime.TryParse(valor, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fechaInvariante))
+                return fechaInvariante.Date;
         }
 
         return null;
     }
 
     private static string GenerarCodigoReferencia() => Guid.NewGuid().ToString("N")[..13].ToLowerInvariant();
-
     private static string NormalizarTexto(string texto)
     {
         var textoNormalizado = texto.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
         var caracteres = textoNormalizado.Where(x => CharUnicodeInfo.GetUnicodeCategory(x) != UnicodeCategory.NonSpacingMark).ToArray();
-        return new string(caracteres).Normalize(NormalizationForm.FormC);
+        return new string (caracteres).Normalize(NormalizationForm.FormC);
     }
 }

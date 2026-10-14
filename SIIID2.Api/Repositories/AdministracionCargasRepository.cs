@@ -3,11 +3,9 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class AdministracionCargasRepository : IAdministracionCargasRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public AdministracionCargasRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
@@ -60,7 +58,6 @@ public class AdministracionCargasRepository : IAdministracionCargasRepository
                 c.fecha_validacion ASC,
                 c.id_carga ASC;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
         var registros = await connection.QueryAsync<CargaPendienteAdministracionItem>(sql);
         return registros.ToList();
@@ -111,7 +108,6 @@ public class AdministracionCargasRepository : IAdministracionCargasRepository
               AND c.estado = 'PENDIENTE_APROBACION'
               AND c.activo = 1;
         ";
-
         const string sqlAdvertencias = @"
             SELECT
                 ca.id_carga_advertencia AS IdCargaAdvertencia,
@@ -133,14 +129,14 @@ public class AdministracionCargasRepository : IAdministracionCargasRepository
                 ca.numero_fila,
                 ca.id_carga_advertencia;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-        var carga = await connection.QueryFirstOrDefaultAsync<CargaPendienteAdministracionDetalle>(sqlCarga, new{CodigoReferencia = codigoReferencia});
-        if (carga == null)
+        var carga = await connection.QueryFirstOrDefaultAsync<CargaPendienteAdministracionDetalle>(sqlCarga, new { CodigoReferencia = codigoReferencia });
+        if(carga == null)
         {
             return null;
         }
-        var advertencias = await connection.QueryAsync<CargaAdvertenciaAdministracionItem>(sqlAdvertencias, new {carga.IdCarga});
+
+        var advertencias = await connection.QueryAsync<CargaAdvertenciaAdministracionItem>(sqlAdvertencias, new { carga.IdCarga });
         carga.Advertencias = advertencias.ToList();
         return carga;
     }
@@ -156,10 +152,8 @@ public class AdministracionCargasRepository : IAdministracionCargasRepository
         WHERE c.codigo_referencia = @CodigoReferencia
           AND c.activo = 1;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<CargaReferenciaAdministracionInfo>(sql, new {CodigoReferencia = codigoReferencia});
+        return await connection.QueryFirstOrDefaultAsync<CargaReferenciaAdministracionInfo>(sql, new { CodigoReferencia = codigoReferencia });
     }
 
     public async Task<List<IDictionary<string, object?>>> ObtenerCarpetasPendientesAsync(long idCarga)
@@ -176,7 +170,6 @@ public class AdministracionCargasRepository : IAdministracionCargasRepository
           AND c.activo = 1
         ORDER BY c.numero_fila;
         ";
-
         return await QueryDictionaryAsync(sql, idCarga);
     }
 
@@ -216,7 +209,6 @@ public class AdministracionCargasRepository : IAdministracionCargasRepository
           AND d.activo = 1
         ORDER BY d.numero_fila;
         ";
-
         return await QueryDictionaryAsync(sql, idCarga);
     }
 
@@ -245,19 +237,13 @@ public class AdministracionCargasRepository : IAdministracionCargasRepository
           AND v.activo = 1
         ORDER BY v.numero_fila;
     ";
-
         return await QueryDictionaryAsync(sql, idCarga);
     }
 
     private async Task<List<IDictionary<string, object?>>> QueryDictionaryAsync(string sql, long idCarga)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-
         var filas = await connection.QueryAsync(sql, new { IdCarga = idCarga });
-
-        return filas
-            .Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase))
-            .Cast<IDictionary<string, object?>>()
-            .ToList();
+        return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
     }
 }

@@ -2,7 +2,6 @@
 using SIIID2.Api.Readers;
 
 namespace SIIID2.Api.Validators;
-
 public class BanciMetodologiaValidator
 {
     public (List<BanciCargaValidacionError> Errores, List<BanciCargaValidacionError> Advertencias) Validar(BanciLecturaArchivosResultado lectura)
@@ -11,25 +10,50 @@ public class BanciMetodologiaValidator
         var advertencias = new List<BanciCargaValidacionError>();
         foreach (var fila in lectura.Carpetas)
         {
-            if (SinDato(Valor(fila, "ntra_ci"))) errores.Add(Error(fila, "carpetas", "ntra_ci", "BANCI_NTRA_CI_OBLIGATORIO", "NTRA_CI es obligatorio."));
-            if (Valor(fila, "no_banci").Length > 40) errores.Add(Error(fila, "carpetas", "no_banci", "BANCI_FOLIO_INVALIDO", "NO_BANCI supera 40 caracteres; se genera al integrar una carpeta nueva."));
+            if(SinDato(Valor(fila, "ntra_ci")))
+                errores.Add(Error(fila, "carpetas", "ntra_ci", "BANCI_NTRA_CI_OBLIGATORIO", "NTRA_CI es obligatorio."));
+            if(Valor(fila, "no_banci").Length > 40)
+                errores.Add(Error(fila, "carpetas", "no_banci", "BANCI_FOLIO_INVALIDO", "NO_BANCI supera 40 caracteres; se genera al integrar una carpeta nueva."));
         }
+
         foreach (var fila in lectura.Victimas)
         {
             // POB y DISC se validan contra sus catálogos compartidos activos, no contra 0/1 locales.
             foreach (var campo in BanciArchivoReader.ColumnasActualizacion)
             {
-                if (!string.IsNullOrWhiteSpace(Valor(fila, campo))) advertencias.Add(Error(fila, "victimas", campo, "BANCI_CAMPO_SOLO_ACTUALIZACION", $"{campo} no se integrará en la carga inicial; captúrelo en Actualización de víctimas."));
+                if(!string.IsNullOrWhiteSpace(Valor(fila, campo)))
+                    advertencias.Add(Error(fila, "victimas", campo, "BANCI_CAMPO_SOLO_ACTUALIZACION", $"{campo} no se integrará en la carga inicial; captúrelo en Actualización de víctimas."));
                 fila.Columnas[campo] = null;
             }
+
             fila.Columnas["localizado_o_no_localizado"] = "1";
-            foreach (var (campo, longitud) in new[] { ("fub", 250), ("pro_apellido", 250), ("sdo_apellido", 250), ("nomb", 500), ("entidad_nacimiento", 250), ("estado_migratorio", 500), ("rfc", 13) })
-                if (Valor(fila, campo).Length > longitud) errores.Add(Error(fila, "victimas", campo, "BANCI_LONGITUD_INVALIDA", $"{campo} permite hasta {longitud} caracteres."));
+            foreach (var(campo, longitud)in new[]
+            {
+                ("fub", 250),
+                ("pro_apellido", 250),
+                ("sdo_apellido", 250),
+                ("nomb", 500),
+                ("entidad_nacimiento", 250),
+                ("estado_migratorio", 500),
+                ("rfc", 13)
+            }
+
+            )
+                if(Valor(fila, campo).Length > longitud)
+                    errores.Add(Error(fila, "victimas", campo, "BANCI_LONGITUD_INVALIDA", $"{campo} permite hasta {longitud} caracteres."));
         }
+
         return (errores, advertencias);
     }
 
-    private static bool SinDato(string valor) => string.IsNullOrWhiteSpace(valor) || valor.ToUpperInvariant() is "ND" or "N/D" or "NO DISPONIBLE";
+    private static bool SinDato(string valor) => string.IsNullOrWhiteSpace(valor) || valor.ToUpperInvariant()is "ND" or "N/D" or "NO DISPONIBLE";
     private static string Valor(ArchivoFila fila, string campo) => fila.Columnas.GetValueOrDefault(campo)?.Trim() ?? "";
-    private static BanciCargaValidacionError Error(ArchivoFila fila, string archivo, string campo, string codigo, string mensaje) => new() { Archivo = archivo, NumeroFila = fila.NumeroFila, Campo = campo, Codigo = codigo, Mensaje = mensaje };
+    private static BanciCargaValidacionError Error(ArchivoFila fila, string archivo, string campo, string codigo, string mensaje) => new()
+    {
+        Archivo = archivo,
+        NumeroFila = fila.NumeroFila,
+        Campo = campo,
+        Codigo = codigo,
+        Mensaje = mensaje
+    };
 }

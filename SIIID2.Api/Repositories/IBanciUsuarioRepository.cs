@@ -1,7 +1,6 @@
 ﻿using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public interface IBanciUsuarioRepository
 {
     Task<List<BanciUsuarioDetalle>> ObtenerUsuariosAsync(bool incluirInactivos);

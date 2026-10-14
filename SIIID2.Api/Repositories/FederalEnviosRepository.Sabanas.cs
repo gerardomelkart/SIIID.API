@@ -1,68 +1,40 @@
-﻿using Dapper;
+﻿// Consultas de sábanas Federal: aplicar el alcance autorizado y los filtros de período antes de exportar.
+using Dapper;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public partial class FederalEnviosRepository
 {
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(
-        int anioCorte,
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte,
         string modoPlano,
         int mesUltimoCorte)
     {
         var sql = ConstruirSqlSabanaDelitos(false);
-
-        return await QueryDictionaryAsync(sql, new
-        {
-            AnioCorte = anioCorte,
-            ModoPlano = modoPlano,
-            MesUltimoCorte = mesUltimoCorte
-        });
+        return await QueryDictionaryAsync(sql, new { AnioCorte = anioCorte, ModoPlano = modoPlano, MesUltimoCorte = mesUltimoCorte });
     }
 
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(
-        int anioCorte,
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalDelitosAsync(int anioCorte,
         string modoPlano,
         int mesUltimoCorte)
     {
         var sql = ConstruirSqlSabanaDelitos(true);
-
-        return await QueryDictionaryAsync(sql, new
-        {
-            AnioCorte = anioCorte,
-            ModoPlano = modoPlano,
-            MesUltimoCorte = mesUltimoCorte
-        });
+        return await QueryDictionaryAsync(sql, new { AnioCorte = anioCorte, ModoPlano = modoPlano, MesUltimoCorte = mesUltimoCorte });
     }
 
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalVictimasAsync(
-        int anioCorte,
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalVictimasAsync(int anioCorte,
         string modoPlano,
         int mesUltimoCorte)
     {
         var sql = ConstruirSqlSabanaVictimas(false);
-
-        return await QueryDictionaryAsync(sql, new
-        {
-            AnioCorte = anioCorte,
-            ModoPlano = modoPlano,
-            MesUltimoCorte = mesUltimoCorte
-        });
+        return await QueryDictionaryAsync(sql, new { AnioCorte = anioCorte, ModoPlano = modoPlano, MesUltimoCorte = mesUltimoCorte });
     }
 
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(
-        int anioCorte,
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(int anioCorte,
         string modoPlano,
         int mesUltimoCorte)
     {
         var sql = ConstruirSqlSabanaMunicipalVictimas();
-
-        return await QueryDictionaryAsync(sql, new
-        {
-            AnioCorte = anioCorte,
-            ModoPlano = modoPlano,
-            MesUltimoCorte = mesUltimoCorte
-        });
+        return await QueryDictionaryAsync(sql, new { AnioCorte = anioCorte, ModoPlano = modoPlano, MesUltimoCorte = mesUltimoCorte });
     }
 
     public async Task<InformeSabanaFirma> ObtenerFirmaSabanaAsync(int anioCorte)
@@ -123,93 +95,61 @@ public partial class FederalEnviosRepository
                 ON 1 = 1
             GROUP BY uc.MesUltimoCorte;
             """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QuerySingleAsync<InformeSabanaFirma>(sql, new
-        {
-            AnioCorte = anioCorte
-        });
+        return await connection.QuerySingleAsync<InformeSabanaFirma>(sql, new { AnioCorte = anioCorte });
     }
 
     private static string ConstruirSqlSabanaDelitos(bool municipal)
     {
-        var matrizMunicipioSelect = municipal
-            ? """
+        var matrizMunicipioSelect = municipal ? """
                 ,
                 TRY_CONVERT(int, CONCAT(
                     TRY_CONVERT(int, ef.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 )) AS clave_municipio_compuesta,
                 mun.nombre AS municipio
-              """
-            : string.Empty;
-
-        var matrizMunicipioJoin = municipal
-            ? """
+              """ : string.Empty;
+        var matrizMunicipioJoin = municipal ? """
                 INNER JOIN dbo.catalogo_municipio mun
                     ON mun.id_entidad_federativa = ef.id_entidad_federativa
                    AND mun.activo = 1
-              """
-            : string.Empty;
-
-        var conteoMunicipioSelect = municipal
-            ? """
+              """ : string.Empty;
+        var conteoMunicipioSelect = municipal ? """
                 ,
                 TRY_CONVERT(int, CONCAT(
                     TRY_CONVERT(int, efh.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 )) AS clave_municipio_compuesta
-              """
-            : string.Empty;
-
-        var conteoMunicipioJoin = municipal
-            ? """
+              """ : string.Empty;
+        var conteoMunicipioJoin = municipal ? """
                 INNER JOIN dbo.catalogo_municipio mun
                     ON mun.id_municipio = fd.id_municipio
                    AND mun.id_entidad_federativa = efh.id_entidad_federativa
                    AND mun.activo = 1
-              """
-            : string.Empty;
-
-        var conteoMunicipioGroup = municipal
-            ? """
+              """ : string.Empty;
+        var conteoMunicipioGroup = municipal ? """
                 ,
                 TRY_CONVERT(int, CONCAT(
                     TRY_CONVERT(int, efh.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 ))
-              """
-            : string.Empty;
-
-        var salidaMunicipio = municipal
-            ? """
+              """ : string.Empty;
+        var salidaMunicipio = municipal ? """
                 m.clave_municipio_compuesta AS [Cve. Municipio],
                 m.municipio AS [Municipio],
-              """
-            : string.Empty;
-
-        var enlaceMunicipio = municipal
-            ? """
+              """ : string.Empty;
+        var enlaceMunicipio = municipal ? """
                AND c.clave_municipio_compuesta = m.clave_municipio_compuesta
-              """
-            : string.Empty;
-
-        var grupoMunicipio = municipal
-            ? """
+              """ : string.Empty;
+        var grupoMunicipio = municipal ? """
                 ,
                 m.clave_municipio_compuesta,
                 m.municipio
-              """
-            : string.Empty;
-
-        var ordenMunicipio = municipal
-            ? """
+              """ : string.Empty;
+        var ordenMunicipio = municipal ? """
                 ,
                 m.clave_municipio_compuesta
-              """
-            : string.Empty;
-
+              """ : string.Empty;
         return $"""
             WITH pendientes_rankeadas AS
             (
@@ -459,82 +399,55 @@ public partial class FederalEnviosRepository
 
     private static string ConstruirSqlSabanaVictimas(bool municipal)
     {
-        var matrizMunicipioSelect = municipal
-            ? """
+        var matrizMunicipioSelect = municipal ? """
                 ,
                 TRY_CONVERT(int, CONCAT(
                     TRY_CONVERT(int, ef.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 )) AS clave_municipio_compuesta,
                 mun.nombre AS municipio
-              """
-            : string.Empty;
-
-        var matrizMunicipioJoin = municipal
-            ? """
+              """ : string.Empty;
+        var matrizMunicipioJoin = municipal ? """
                 INNER JOIN dbo.catalogo_municipio mun
                     ON mun.id_entidad_federativa = ef.id_entidad_federativa
                    AND mun.activo = 1
-              """
-            : string.Empty;
-
-        var conteoMunicipioSelect = municipal
-            ? """
+              """ : string.Empty;
+        var conteoMunicipioSelect = municipal ? """
                 ,
                 TRY_CONVERT(int, CONCAT(
                     TRY_CONVERT(int, efh.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 )) AS clave_municipio_compuesta
-              """
-            : string.Empty;
-
-        var conteoMunicipioJoin = municipal
-            ? """
+              """ : string.Empty;
+        var conteoMunicipioJoin = municipal ? """
                 INNER JOIN dbo.catalogo_municipio mun
                     ON mun.id_municipio = fv.id_municipio
                    AND mun.id_entidad_federativa = efh.id_entidad_federativa
                    AND mun.activo = 1
-              """
-            : string.Empty;
-
-        var conteoMunicipioGroup = municipal
-            ? """
+              """ : string.Empty;
+        var conteoMunicipioGroup = municipal ? """
                 ,
                 TRY_CONVERT(int, CONCAT(
                     TRY_CONVERT(int, efh.clave),
                     RIGHT('000' + CONVERT(varchar(3), TRY_CONVERT(int, mun.clave)), 3)
                 ))
-              """
-            : string.Empty;
-
-        var salidaMunicipio = municipal
-            ? """
+              """ : string.Empty;
+        var salidaMunicipio = municipal ? """
                 m.clave_municipio_compuesta AS [Cve. Municipio],
                 m.municipio AS [Municipio],
-              """
-            : string.Empty;
-
-        var enlaceMunicipio = municipal
-            ? """
+              """ : string.Empty;
+        var enlaceMunicipio = municipal ? """
                AND c.clave_municipio_compuesta = m.clave_municipio_compuesta
-              """
-            : string.Empty;
-
-        var grupoMunicipio = municipal
-            ? """
+              """ : string.Empty;
+        var grupoMunicipio = municipal ? """
                 ,
                 m.clave_municipio_compuesta,
                 m.municipio
-              """
-            : string.Empty;
-
-        var ordenMunicipio = municipal
-            ? """
+              """ : string.Empty;
+        var ordenMunicipio = municipal ? """
                 ,
                 m.clave_municipio_compuesta
-              """
-            : string.Empty;
-
+              """ : string.Empty;
         return $"""
             WITH pendientes_rankeadas AS
             (

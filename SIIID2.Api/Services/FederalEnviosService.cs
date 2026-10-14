@@ -5,7 +5,6 @@ using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Services;
-
 public partial class FederalEnviosService : IFederalEnviosService
 {
     private readonly IFederalEnviosRepository _federalEnviosRepository;
@@ -13,9 +12,7 @@ public partial class FederalEnviosService : IFederalEnviosService
     private readonly IFederalAcusePdfService _acusePdfService;
     private readonly IMemoryCache _cache;
     private readonly ILogger<FederalEnviosService> _logger;
-
-    public FederalEnviosService(
-        IFederalEnviosRepository federalEnviosRepository,
+    public FederalEnviosService(IFederalEnviosRepository federalEnviosRepository,
         IFederalCargaRepository federalCargaRepository,
         IFederalAcusePdfService acusePdfService,
         IMemoryCache cache,
@@ -31,51 +28,49 @@ public partial class FederalEnviosService : IFederalEnviosService
     public async Task<List<InformePeriodoItem>> ObtenerPeriodosAsync(int idUsuarioConsulta)
     {
         var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
-        if (usuario == null) return [];
-
+        if(usuario == null)
+            return[];
         return await _federalEnviosRepository.ObtenerPeriodosAsync();
     }
 
     public async Task<List<InformeEnvioItem>> ObtenerEnviosAsync(int idUsuarioConsulta, int? mesCorte, int? anioCorte)
     {
         var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
-        if (usuario == null) return [];
-
+        if(usuario == null)
+            return[];
         return await _federalEnviosRepository.ObtenerEnviosAsync(mesCorte, anioCorte);
     }
 
     public async Task<List<InformeReporteCargaItem>> ObtenerReporteCargasAsync(int idUsuarioConsulta, int? mesCorte, int? anioCorte)
     {
         var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
-        if (usuario == null) throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal.");
-        if (!usuario.EsSuperUsuario) throw new UnauthorizedAccessException("Solo un SUPER_USUARIO puede consultar el reporte de cargas.");
-
-        if (mesCorte.HasValue && (mesCorte.Value < 1 || mesCorte.Value > 12)) return [];
-        if (anioCorte.HasValue && (anioCorte.Value < 2000 || anioCorte.Value > 2100)) return [];
-
+        if(usuario == null)
+            throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal.");
+        if(!usuario.EsSuperUsuario)
+            throw new UnauthorizedAccessException("Solo un SUPER_USUARIO puede consultar el reporte de cargas.");
+        if(mesCorte.HasValue && (mesCorte.Value < 1 || mesCorte.Value > 12))
+            return[];
+        if(anioCorte.HasValue && (anioCorte.Value < 2000 || anioCorte.Value > 2100))
+            return[];
         return await _federalEnviosRepository.ObtenerReporteCargasAsync(mesCorte, anioCorte);
     }
 
     public async Task<InformeArchivoZipResponse> GenerarZipArchivosAsync(int idUsuarioConsulta, string codigoReferencia)
     {
         var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
-        if (usuario == null) throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal.");
-
+        if(usuario == null)
+            throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal.");
         var codigo = (codigoReferencia ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(codigo)) throw new InvalidOperationException("Debe indicar el código de referencia.");
-
+        if(string.IsNullOrWhiteSpace(codigo))
+            throw new InvalidOperationException("Debe indicar el código de referencia.");
         var carga = await _federalEnviosRepository.ObtenerCargaParaArchivosAsync(codigo);
-        if (carga == null) throw new KeyNotFoundException("No se encontró el envío Federal solicitado.");
-
-        var esConfirmada =
-            string.Equals(carga.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(carga.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
-
+        if(carga == null)
+            throw new KeyNotFoundException("No se encontró el envío Federal solicitado.");
+        var esConfirmada = string.Equals(carga.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) || string.Equals(carga.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
         List<IDictionary<string, object?>> carpetas;
         List<IDictionary<string, object?>> delitos;
         List<IDictionary<string, object?>> victimas;
-
-        if (esConfirmada)
+        if(esConfirmada)
         {
             carpetas = await _federalEnviosRepository.ObtenerCarpetasConfirmadasPeriodoAsync(carga.MesCorte, carga.AnioCorte);
             delitos = await _federalEnviosRepository.ObtenerDelitosConfirmadosPeriodoAsync(carga.MesCorte, carga.AnioCorte);
@@ -83,18 +78,16 @@ public partial class FederalEnviosService : IFederalEnviosService
         }
         else
         {
-            if (!carga.TieneStagingDisponible) throw new InvalidOperationException("El envío Federal ya no conserva archivos temporales disponibles.");
-
+            if(!carga.TieneStagingDisponible)
+                throw new InvalidOperationException("El envío Federal ya no conserva archivos temporales disponibles.");
             carpetas = await _federalEnviosRepository.ObtenerCarpetasStagingAsync(carga.IdCarga);
             delitos = await _federalEnviosRepository.ObtenerDelitosStagingAsync(carga.IdCarga);
             victimas = await _federalEnviosRepository.ObtenerVictimasStagingAsync(carga.IdCarga);
         }
 
-        if (carpetas.Count == 0 && delitos.Count == 0 && victimas.Count == 0)
+        if(carpetas.Count == 0 && delitos.Count == 0 && victimas.Count == 0)
             throw new InvalidOperationException("No existen registros disponibles para reconstruir los archivos del envío Federal.");
-
         using var zipStream = new MemoryStream();
-
         using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
         {
             AgregarExcelAlZip(archive, "carpetas.xlsx", "carpetas", carpetas);
@@ -105,54 +98,38 @@ public partial class FederalEnviosService : IFederalEnviosService
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = $"ARCHIVOS_FEDERAL_{carga.MesCorte:00}_{carga.AnioCorte}_{codigo}.zip"
-        };
+            NombreArchivo = $"ARCHIVOS_FEDERAL_{carga.MesCorte:00}_{carga.AnioCorte}_{codigo}.zip"};
     }
 
     public async Task<InformeArchivoZipResponse> GenerarZipAcusesAsync(int idUsuarioConsulta, int? mesCorte, int anioCorte)
     {
-        if (mesCorte.HasValue && (mesCorte.Value < 1 || mesCorte.Value > 12)) throw new InvalidOperationException("El mes de corte no es válido.");
-        if (anioCorte < 2000 || anioCorte > 2100) throw new InvalidOperationException("El año de corte no es válido.");
-
+        if(mesCorte.HasValue && (mesCorte.Value < 1 || mesCorte.Value > 12))
+            throw new InvalidOperationException("El mes de corte no es válido.");
+        if(anioCorte < 2000 || anioCorte > 2100)
+            throw new InvalidOperationException("El año de corte no es válido.");
         var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
-        if (usuario == null) throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal.");
-
+        if(usuario == null)
+            throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal.");
         var envios = await _federalEnviosRepository.ObtenerEnviosAsync(mesCorte, anioCorte);
-
-        var enviosConAcuse = envios
-            .Where(x =>
-                (string.Equals(x.TipoCarga, "CARGA_INICIAL", StringComparison.OrdinalIgnoreCase) &&
-                 (x.Estado is "VALIDADO_PENDIENTE" or "PENDIENTE_APROBACION" or "CONFIRMADO")) ||
-                (string.Equals(x.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) &&
-                 (x.Estado is "VALIDADO_PENDIENTE_ACTUALIZACION" or "PENDIENTE_APROBACION" or "CONFIRMADO_ACTUALIZACION")))
-            .ToList();
-
+        var enviosConAcuse = envios.Where(x => (string.Equals(x.TipoCarga, "CARGA_INICIAL", StringComparison.OrdinalIgnoreCase) && (x.Estado is "VALIDADO_PENDIENTE" or "PENDIENTE_APROBACION" or "CONFIRMADO")) || (string.Equals(x.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) && (x.Estado is "VALIDADO_PENDIENTE_ACTUALIZACION" or "PENDIENTE_APROBACION" or "CONFIRMADO_ACTUALIZACION"))).ToList();
         var periodo = mesCorte.HasValue ? $"{ObtenerNombreMes(mesCorte.Value)} de {anioCorte}" : $"el año {anioCorte}";
-
-        if (enviosConAcuse.Count == 0)
+        if(enviosConAcuse.Count == 0)
             throw new InvalidOperationException($"No existen acuses federales disponibles para {periodo}.");
-
         using var zipStream = new MemoryStream();
-
         using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
         {
             foreach (var envio in enviosConAcuse)
             {
                 var esActualizacion = string.Equals(envio.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
                 var esConfirmado = envio.Estado is "CONFIRMADO" or "CONFIRMADO_ACTUALIZACION";
-
-                var pdf = (esActualizacion, esConfirmado) switch
-                {
+                var pdf = (esActualizacion, esConfirmado) switch                {
                     (true, true) => await _acusePdfService.GenerarAcuseConfirmadoActualizacionAsync(envio.CodigoReferencia, idUsuarioConsulta),
                     (true, false) => await _acusePdfService.GenerarAcusePrevioActualizacionAsync(envio.CodigoReferencia, idUsuarioConsulta),
                     (false, true) => await _acusePdfService.GenerarAcuseConfirmadoAsync(envio.CodigoReferencia, idUsuarioConsulta),
-                    _ => await _acusePdfService.GenerarAcusePrevioAsync(envio.CodigoReferencia, idUsuarioConsulta)
-                };
-
+                    _ => await _acusePdfService.GenerarAcusePrevioAsync(envio.CodigoReferencia, idUsuarioConsulta)};
                 var tipoDocumento = esConfirmado ? "ACUSE" : "INFORME_PREVIO";
                 var sufijoActualizacion = esActualizacion ? "_ACTUALIZACION" : string.Empty;
                 var entry = archive.CreateEntry($"FGR_{tipoDocumento}{sufijoActualizacion}_{envio.CodigoReferencia}.pdf", CompressionLevel.Fastest);
-
                 await using var entryStream = entry.Open();
                 await entryStream.WriteAsync(pdf);
             }
@@ -161,21 +138,19 @@ public partial class FederalEnviosService : IFederalEnviosService
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = mesCorte.HasValue
-                ? $"ACUSES_FEDERAL_{NormalizarNombreArchivo(ObtenerNombreMes(mesCorte.Value))}_{anioCorte}.zip"
-                : $"ACUSES_FEDERAL_{anioCorte}.zip"
-        };
+            NombreArchivo = mesCorte.HasValue ? $"ACUSES_FEDERAL_{NormalizarNombreArchivo(ObtenerNombreMes(mesCorte.Value))}_{anioCorte}.zip" : $"ACUSES_FEDERAL_{anioCorte}.zip"};
     }
 
-    private static void AgregarExcelAlZip(ZipArchive archive, string nombreArchivo, string nombreHoja, List<IDictionary<string, object?>> filas)
+    private static void AgregarExcelAlZip(ZipArchive archive,
+        string nombreArchivo,
+        string nombreHoja,
+        List<IDictionary<string, object?>> filas)
     {
         var entry = archive.CreateEntry(nombreArchivo, CompressionLevel.Fastest);
-
         using var entryStream = entry.Open();
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add(nombreHoja);
-
-        if (filas.Count == 0)
+        if(filas.Count == 0)
         {
             worksheet.Cell(1, 1).Value = "Sin registros";
             workbook.SaveAs(entryStream);
@@ -183,21 +158,19 @@ public partial class FederalEnviosService : IFederalEnviosService
         }
 
         var columnas = filas.First().Keys.ToList();
-
-        for (var columna = 0; columna < columnas.Count; columna++)
+        for(var columna = 0; columna < columnas.Count; columna++)
         {
             worksheet.Cell(1, columna + 1).Value = columnas[columna];
             worksheet.Cell(1, columna + 1).Style.Font.Bold = true;
             worksheet.Column(columna + 1).Width = columnas[columna] is "rmen_de_hchos" or "dom_hchos" ? 40 : 18;
         }
 
-        for (var fila = 0; fila < filas.Count; fila++)
+        for(var fila = 0; fila < filas.Count; fila++)
         {
-            for (var columna = 0; columna < columnas.Count; columna++)
+            for(var columna = 0; columna < columnas.Count; columna++)
             {
                 var nombreColumna = columnas[columna];
                 filas[fila].TryGetValue(nombreColumna, out var valor);
-
                 worksheet.Cell(fila + 2, columna + 1).Style.NumberFormat.Format = "@";
                 worksheet.Cell(fila + 2, columna + 1).Value = valor?.ToString() ?? string.Empty;
             }
@@ -209,8 +182,7 @@ public partial class FederalEnviosService : IFederalEnviosService
 
     private static string ObtenerNombreMes(int mes)
     {
-        return mes switch
-        {
+        return mes switch        {
             1 => "Enero",
             2 => "Febrero",
             3 => "Marzo",
@@ -223,34 +195,54 @@ public partial class FederalEnviosService : IFederalEnviosService
             10 => "Octubre",
             11 => "Noviembre",
             12 => "Diciembre",
-            _ => mes.ToString("00")
-        };
+            _ => mes.ToString("00")};
     }
 
     private static string NormalizarNombreArchivo(string valor)
     {
-        if (string.IsNullOrWhiteSpace(valor)) return string.Empty;
-
+        if(string.IsNullOrWhiteSpace(valor))
+            return string.Empty;
         valor = valor.Trim().ToUpperInvariant();
-
         foreach (var reemplazo in new Dictionary<char, char>
         {
-            { 'Á', 'A' },
-            { 'É', 'E' },
-            { 'Í', 'I' },
-            { 'Ó', 'O' },
-            { 'Ú', 'U' },
-            { 'Ü', 'U' },
-            { 'Ñ', 'N' }
-        })
+            {
+                'Á',
+                'A'
+            },
+            {
+                'É',
+                'E'
+            },
+            {
+                'Í',
+                'I'
+            },
+            {
+                'Ó',
+                'O'
+            },
+            {
+                'Ú',
+                'U'
+            },
+            {
+                'Ü',
+                'U'
+            },
+            {
+                'Ñ',
+                'N'
+            }
+        }
+
+        )
         {
             valor = valor.Replace(reemplazo.Key, reemplazo.Value);
         }
 
-        valor = new string(valor.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
-
-        while (valor.Contains("__")) valor = valor.Replace("__", "_");
-
+        valor = new string (valor.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
+        while(valor.Contains("__"))
+            valor = valor.Replace("__", "_");
         return valor.Trim('_');
     }
 }

@@ -3,11 +3,9 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class AcuseRepository : IAcuseRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public AcuseRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
@@ -53,13 +51,8 @@ public class AcuseRepository : IAcuseRepository
         WHERE c.codigo_referencia = @CodigoReferencia
           AND c.activo = 1;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QueryFirstOrDefaultAsync<CargaAcuseInfo>(sql, new
-        {
-            CodigoReferencia = codigoReferencia
-        });
+        return await connection.QueryFirstOrDefaultAsync<CargaAcuseInfo>(sql, new { CodigoReferencia = codigoReferencia });
     }
 
     public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idCarga)
@@ -131,14 +124,8 @@ public class AcuseRepository : IAcuseRepository
             OrdenClave3,
             Orden;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var resumen = await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
-        {
-            IdCarga = idCarga
-        });
-
+        var resumen = await connection.QueryAsync<CargaAcuseResumenItem>(sql, new { IdCarga = idCarga });
         return resumen.ToList();
     }
 
@@ -209,14 +196,8 @@ public class AcuseRepository : IAcuseRepository
             OrdenClave3,
             Orden;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var resumen = await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
-        {
-            IdCarga = idCarga
-        });
-
+        var resumen = await connection.QueryAsync<CargaAcuseResumenItem>(sql, new { IdCarga = idCarga });
         return resumen.ToList();
     }
 
@@ -228,7 +209,6 @@ public class AcuseRepository : IAcuseRepository
         //
         // Por eso se obtiene el periodo de la actualización y se toman las versiones activas vigentes
         // de carpetas, delitos y víctimas para ese corte completo.
-
         var sql = @"
             DECLARE @IdEntidadFederativa TINYINT;
             DECLARE @MesCorte TINYINT;
@@ -354,17 +334,8 @@ public class AcuseRepository : IAcuseRepository
                 Orden
             OPTION (RECOMPILE);
             ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var resumen = await connection.QueryAsync<CargaAcuseResumenItem>(
-            sql,
-            new
-            {
-                IdCargaActualizacion = idCargaActualizacion
-            },
-            commandTimeout: 180);
-
+        var resumen = await connection.QueryAsync<CargaAcuseResumenItem>(sql, new { IdCargaActualizacion = idCargaActualizacion }, commandTimeout: 180);
         return resumen.ToList();
     }
 }

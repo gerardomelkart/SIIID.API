@@ -1,7 +1,6 @@
 ﻿using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public interface ISemanalAdministracionCargasRepository
 {
     Task<List<SemanalCargaPendienteAdministracionItem>> ObtenerPendientesAsync();

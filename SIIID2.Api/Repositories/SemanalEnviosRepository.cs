@@ -4,7 +4,6 @@ using SIIID2.Api.Models;
 using System.Globalization;
 
 namespace SIIID2.Api.Repositories;
-
 // Coordinación y dependencias compartidas; las operaciones están separadas en archivos parciales.
 public partial class SemanalEnviosRepository : ISemanalEnviosRepository
 {
@@ -103,12 +102,11 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
             FROM pendientes_rankeadas
             WHERE rn = 1
         )";
-
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public SemanalEnviosRepository(IDbConnectionFactory dbConnectionFactory) => _dbConnectionFactory = dbConnectionFactory;
-
-    public async Task<SemanalEnviosOpcionesResponse> ObtenerOpcionesEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta, int? idEntidadFederativa = null)
+    public async Task<SemanalEnviosOpcionesResponse> ObtenerOpcionesEnviosAsync(bool esSuperUsuario,
+        int idUsuarioConsulta,
+        int? idEntidadFederativa = null)
     {
         const string sql = @"
         SET NOCOUNT ON;
@@ -187,15 +185,8 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
 
         DROP TABLE #Opciones;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-        using var resultados = await connection.QueryMultipleAsync(sql, new
-        {
-            EsSuperUsuario = esSuperUsuario,
-            IdUsuarioConsulta = idUsuarioConsulta,
-            IdEntidadFederativa = idEntidadFederativa
-        });
-
+        using var resultados = await connection.QueryMultipleAsync(sql, new { EsSuperUsuario = esSuperUsuario, IdUsuarioConsulta = idUsuarioConsulta, IdEntidadFederativa = idEntidadFederativa });
         return new SemanalEnviosOpcionesResponse
         {
             Periodos = (await resultados.ReadAsync<SemanalEnvioPeriodoOpcionItem>()).ToList(),
@@ -203,7 +194,16 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
         };
     }
 
-    public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(bool esSuperUsuario, int idUsuarioConsulta, int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte, int? anioSemana, int? numeroSemana, string? tipoCarga, string? estado)
+    public async Task<List<SemanalEnvioItem>> ObtenerEnviosAsync(bool esSuperUsuario,
+        int idUsuarioConsulta,
+        int? idEntidadFederativa,
+        int? idUsuarioCarga,
+        int? anioCorte,
+        int? mesCorte,
+        int? anioSemana,
+        int? numeroSemana,
+        string? tipoCarga,
+        string? estado)
     {
         const string sql = @"
     SET NOCOUNT ON;
@@ -471,38 +471,25 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
     DROP TABLE #CargasVisibles;
     DROP TABLE #PeriodosVisibles;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-        using var resultados = await connection.QueryMultipleAsync(sql, new
-        {
-            EsSuperUsuario = esSuperUsuario,
-            IdUsuarioConsulta = idUsuarioConsulta,
-            IdEntidadFederativa = esSuperUsuario ? idEntidadFederativa : null,
-            IdUsuarioCarga = esSuperUsuario ? idUsuarioCarga : null,
-            AnioCorte = anioCorte,
-            MesCorte = mesCorte,
-            AnioSemana = anioSemana,
-            NumeroSemana = numeroSemana,
-            TipoCarga = tipoCarga,
-            Estado = estado
-        });
-
+        using var resultados = await connection.QueryMultipleAsync(sql, new { EsSuperUsuario = esSuperUsuario, IdUsuarioConsulta = idUsuarioConsulta, IdEntidadFederativa = esSuperUsuario ? idEntidadFederativa : null, IdUsuarioCarga = esSuperUsuario ? idUsuarioCarga : null, AnioCorte = anioCorte, MesCorte = mesCorte, AnioSemana = anioSemana, NumeroSemana = numeroSemana, TipoCarga = tipoCarga, Estado = estado });
         var cargas = (await resultados.ReadAsync<SemanalEnvioItem>()).ToList();
         var bloques = (await resultados.ReadAsync<SemanalEnvioBloqueItem>()).ToList();
         var periodos = (await resultados.ReadAsync<SemanalEnvioPeriodoItem>()).ToList();
         var delitos = (await resultados.ReadAsync<SemanalCargaDelitoItem>()).ToList();
-
-        if (cargas.Count == 0) return cargas;
-
+        if(cargas.Count == 0)
+            return cargas;
         var bloquesPorCarga = bloques.GroupBy(x => x.IdSemanalCarga).ToDictionary(x => x.Key, x => x.ToList());
         var periodosPorCarga = periodos.GroupBy(x => x.IdSemanalCarga).ToDictionary(x => x.Key, x => x.ToList());
         var delitosPorCarga = delitos.GroupBy(x => x.IdSemanalCarga).ToDictionary(x => x.Key, x => x.Select(y => y.Delito).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
-
         foreach (var carga in cargas)
         {
-            if (bloquesPorCarga.TryGetValue(carga.IdSemanalCarga, out var bloquesCarga)) carga.Bloques = bloquesCarga;
-            if (periodosPorCarga.TryGetValue(carga.IdSemanalCarga, out var periodosCarga)) carga.Periodos = periodosCarga;
-            if (delitosPorCarga.TryGetValue(carga.IdSemanalCarga, out var delitosCarga)) carga.Delitos = delitosCarga;
+            if(bloquesPorCarga.TryGetValue(carga.IdSemanalCarga, out var bloquesCarga))
+                carga.Bloques = bloquesCarga;
+            if(periodosPorCarga.TryGetValue(carga.IdSemanalCarga, out var periodosCarga))
+                carga.Periodos = periodosCarga;
+            if(delitosPorCarga.TryGetValue(carga.IdSemanalCarga, out var delitosCarga))
+                carga.Delitos = delitosCarga;
         }
 
         return cargas;
@@ -530,7 +517,6 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
               AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
               AND sc.activo = 1;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.QueryFirstOrDefaultAsync<SemanalEnvioReferenciaInfo>(sql, new { CodigoReferencia = codigoReferencia });
     }
@@ -609,33 +595,19 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
                 MAX(COALESCE(fecha_confirmacion, fecha_validacion)) AS UltimaFechaMovimiento
             FROM cargas_relevantes;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QuerySingleAsync<InformeSabanaFirma>(sql, new
-        {
-            AnioCorte = anioCorte,
-            IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga
-        });
+        return await connection.QuerySingleAsync<InformeSabanaFirma>(sql, new { AnioCorte = anioCorte, IdEntidadFederativa = idEntidadFederativa, IdUsuarioCarga = idUsuarioCarga });
     }
 
-    private async Task<List<IDictionary<string, object?>>> QueryDictionarySabanaAsync(string sql, int anioCorte, int? idEntidadFederativa, int? idUsuarioCarga, string modoPlano, int mesUltimoCorte)
+    private async Task<List<IDictionary<string, object?>>> QueryDictionarySabanaAsync(string sql,
+        int anioCorte,
+        int? idEntidadFederativa,
+        int? idUsuarioCarga,
+        string modoPlano,
+        int mesUltimoCorte)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var filas = await connection.QueryAsync(sql, new
-        {
-            AnioCorte = anioCorte,
-            IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga,
-            ModoPlano = modoPlano,
-            MesUltimoCorte = mesUltimoCorte
-        }, commandTimeout: 300);
-
-        return filas
-            .Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase))
-            .Cast<IDictionary<string, object?>>()
-            .ToList();
+        var filas = await connection.QueryAsync(sql, new { AnioCorte = anioCorte, IdEntidadFederativa = idEntidadFederativa, IdUsuarioCarga = idUsuarioCarga, ModoPlano = modoPlano, MesUltimoCorte = mesUltimoCorte }, commandTimeout: 300);
+        return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
     }
 }

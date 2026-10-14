@@ -2,7 +2,6 @@
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Validators;
-
 public class DelitosValidator
 {
     public string NombreArchivo => "delitos";
@@ -34,15 +33,13 @@ public class DelitosValidator
         "coord_y",
         "dom_hchos"
     };
-
     public IReadOnlyCollection<string> ColumnasObligatorias => _columnasObligatorias;
 
     public List<CargaValidacionError> Validar(List<ArchivoFila> filas, bool camposBanciOpcionales = false)
     {
         var errores = new List<CargaValidacionError>();
-
         // Si no hay filas, el archivo no tiene registros útiles.
-        if (filas.Count == 0)
+        if(filas.Count == 0)
         {
             errores.Add(new CargaValidacionError
             {
@@ -55,124 +52,51 @@ public class DelitosValidator
                 DescripcionResumen = "Total de registros en el archivo de delitos",
                 Mensaje = "El archivo de delitos no contiene registros para validar."
             });
-
             return errores;
         }
 
         // Primero validamos que existan las columnas esperadas.
         ValidarColumnasObligatorias(filas, errores);
-
         // Si faltan columnas, ya no seguimos validando filas.
-        if (errores.Count > 0)
+        if(errores.Count > 0)
             return errores;
-
         // Validamos duplicidad compuesta según la documentación del sistema anterior.
         ValidarDuplicidadCompuesta(filas, errores);
-
         foreach (var fila in filas)
         {
             // Identificadores base.
-            ValidarTextoObligatorio(
-                fila,
-                "id_ci",
-                errores,
-                250,
-                "DELITOS_ID_CI_SIN_INFORMACION",
-                "\"ID_CI\" sin información");
-
-            ValidarTextoObligatorio(
-                fila,
-                "id_delito",
-                errores,
-                250,
-                "DELITOS_ID_DELITO_SIN_INFORMACION",
-                "\"ID_DELITO\" sin información");
-
+            ValidarTextoObligatorio(fila, "id_ci", errores, 250, "DELITOS_ID_CI_SIN_INFORMACION", "\"ID_CI\" sin información");
+            ValidarTextoObligatorio(fila, "id_delito", errores, 250, "DELITOS_ID_DELITO_SIN_INFORMACION", "\"ID_DELITO\" sin información");
             // Descripción del delito y modalidad.
-            ValidarTextoObligatorio(
-                fila,
-                "dto",
-                errores,
-                2000,
-                "DELITOS_DTO_SIN_INFORMACION",
-                "Falta la descripción del delito");
-
+            ValidarTextoObligatorio(fila, "dto", errores, 2000, "DELITOS_DTO_SIN_INFORMACION", "Falta la descripción del delito");
             // BANCI permite omitir modalidad. Cuando se informa, mantiene la validación de longitud.
-            if (!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "moda_dto")))
-                ValidarTextoObligatorio(
-                    fila,
-                    "moda_dto",
-                    errores,
-                    2000,
-                    "DELITOS_MODA_DTO_SIN_INFORMACION",
-                    "Falta la descripción de la modalidad del delito");
-
+            if(!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "moda_dto")))
+                ValidarTextoObligatorio(fila, "moda_dto", errores, 2000, "DELITOS_MODA_DTO_SIN_INFORMACION", "Falta la descripción de la modalidad del delito");
             // Claves numéricas de catálogos.
             // La existencia real contra catálogo se validará después con base de datos.
-            if (!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "forma_acc")))
-                ValidarEnteroObligatorio(
-                    fila,
-                    "forma_acc",
-                    errores,
-                    "DELITOS_FORMA_ACC_SIN_INFORMACION",
-                    "Clave de forma de acción sin información");
-
-            if (!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "emto_com_dto")))
-                ValidarEnteroObligatorio(
-                    fila,
-                    "emto_com_dto",
-                    errores,
-                    "DELITOS_EMTO_COM_DTO_SIN_INFORMACION",
-                    "Clave de elemento de comisión sin información");
-
-            ValidarEnteroObligatorio(
-                fila,
-                "grdo_cons",
-                errores,
-                "DELITOS_GRDO_CONS_SIN_INFORMACION",
-                "Clave de grado de consumación sin información");
-
+            if(!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "forma_acc")))
+                ValidarEnteroObligatorio(fila, "forma_acc", errores, "DELITOS_FORMA_ACC_SIN_INFORMACION", "Clave de forma de acción sin información");
+            if(!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "emto_com_dto")))
+                ValidarEnteroObligatorio(fila, "emto_com_dto", errores, "DELITOS_EMTO_COM_DTO_SIN_INFORMACION", "Clave de elemento de comisión sin información");
+            ValidarEnteroObligatorio(fila, "grdo_cons", errores, "DELITOS_GRDO_CONS_SIN_INFORMACION", "Clave de grado de consumación sin información");
             // CLASF_DE_DTO no es entero.
             // Viene como clave tipo 7.01.02, 3.01, 5.01, etc.
-            ValidarTextoObligatorio(
-                fila,
-                "clasf_de_dto",
-                errores,
-                20,
-                "DELITOS_CLASF_DE_DTO_SIN_INFORMACION",
-                "Clave de clasificación del delito sin información");
-
+            ValidarTextoObligatorio(fila, "clasf_de_dto", errores, 20, "DELITOS_CLASF_DE_DTO_SIN_INFORMACION", "Clave de clasificación del delito sin información");
             // Fecha y hora de hechos.
             // La fecha de hechos puede venir vacía; si viene informada, debe ser válida.
             ValidarFechaHechosOpcional(fila, "fha_de_hchos", errores);
-
             // La hora puede venir vacía, pero si viene debe ser válida.
             ValidarHoraOpcional(fila, "hra_de_hchos", errores);
-
             // Geografía.
             // ID_ENT_HCHOS e ID_MUN_HCHOS sí son numéricos.
-            ValidarEnteroObligatorio(
-                fila,
-                "id_ent_hchos",
-                errores,
-                "DELITOS_ID_ENT_HCHOS_SIN_INFORMACION",
-                "Clave de entidad federativa sin información");
-
-            ValidarEnteroObligatorio(
-                fila,
-                "id_mun_hchos",
-                errores,
-                "DELITOS_ID_MUN_HCHOS_SIN_INFORMACION",
-                "Clave de municipio sin información");
-
+            ValidarEnteroObligatorio(fila, "id_ent_hchos", errores, "DELITOS_ID_ENT_HCHOS_SIN_INFORMACION", "Clave de entidad federativa sin información");
+            ValidarEnteroObligatorio(fila, "id_mun_hchos", errores, "DELITOS_ID_MUN_HCHOS_SIN_INFORMACION", "Clave de municipio sin información");
             // ID_LOC_HCHOS puede venir vacío.
             // No participa en la validación geográfica de las coordenadas.
             ValidarTextoOpcional(fila, "id_loc_hchos", errores);
-
             // CP no es obligatorio.
             // Si viene vacío, en ceros o inválido, no bloqueamos la carga.
             ValidarCodigoPostalOpcional(fila, "cp", errores);
-
             // Campos descriptivos/opcionales.
             // De momento no bloquean la carga porque lo fuerte se resolverá por claves/catálogos.
             ValidarTextoOpcional(fila, "nom_ent_hchos", errores);
@@ -186,66 +110,36 @@ public class DelitosValidator
         return errores;
     }
 
-    public List<CargaValidacionError> ValidarAdvertencias(List<ArchivoFila> filas, bool formatoRango = false, bool sinInformacion = false, bool concentracion = false)
+    public List<CargaValidacionError> ValidarAdvertencias(List<ArchivoFila> filas,
+        bool formatoRango = false,
+        bool sinInformacion = false,
+        bool concentracion = false)
     {
         var advertencias = new List<CargaValidacionError>();
-
-
         foreach (var fila in filas)
         {
-            if (formatoRango) ValidarCoordenadaOpcional(
-                fila,
-                "coord_x",
-                advertencias,
-                minimo: -118,
-                maximo: -86,
-                codigoFormato: "DELITOS_COORD_X_FORMATO_INCORRECTO_ADVERTENCIA",
-                codigoRango: "DELITOS_COORD_X_FUERA_RANGO_ADVERTENCIA",
-                descripcionFormato: "Formato coordenada X incorrecto",
-                descripcionRango: "Coordenada X fuera de rango");
-
-            if (formatoRango) ValidarCoordenadaOpcional(
-                fila,
-                "coord_y",
-                advertencias,
-                minimo: 13,
-                maximo: 34,
-                codigoFormato: "DELITOS_COORD_Y_FORMATO_INCORRECTO_ADVERTENCIA",
-                codigoRango: "DELITOS_COORD_Y_FUERA_RANGO_ADVERTENCIA",
-                descripcionFormato: "Formato coordenada Y incorrecto",
-                descripcionRango: "Coordenada Y fuera de rango");
-
-            if (sinInformacion) ValidarCoordenadaSinInformacion(
-                fila,
-                "coord_x",
-                advertencias,
-                "DELITOS_COORD_X_SIN_INFORMACION_ADVERTENCIA",
-                "Coordenada X sin información");
-
-            if (sinInformacion) ValidarCoordenadaSinInformacion(
-                fila,
-                "coord_y",
-                advertencias,
-                "DELITOS_COORD_Y_SIN_INFORMACION_ADVERTENCIA",
-                "Coordenada Y sin información");
+            if(formatoRango)
+                ValidarCoordenadaOpcional(fila, "coord_x", advertencias, minimo: -118, maximo: -86, codigoFormato: "DELITOS_COORD_X_FORMATO_INCORRECTO_ADVERTENCIA", codigoRango: "DELITOS_COORD_X_FUERA_RANGO_ADVERTENCIA", descripcionFormato: "Formato coordenada X incorrecto", descripcionRango: "Coordenada X fuera de rango");
+            if(formatoRango)
+                ValidarCoordenadaOpcional(fila, "coord_y", advertencias, minimo: 13, maximo: 34, codigoFormato: "DELITOS_COORD_Y_FORMATO_INCORRECTO_ADVERTENCIA", codigoRango: "DELITOS_COORD_Y_FUERA_RANGO_ADVERTENCIA", descripcionFormato: "Formato coordenada Y incorrecto", descripcionRango: "Coordenada Y fuera de rango");
+            if(sinInformacion)
+                ValidarCoordenadaSinInformacion(fila, "coord_x", advertencias, "DELITOS_COORD_X_SIN_INFORMACION_ADVERTENCIA", "Coordenada X sin información");
+            if(sinInformacion)
+                ValidarCoordenadaSinInformacion(fila, "coord_y", advertencias, "DELITOS_COORD_Y_SIN_INFORMACION_ADVERTENCIA", "Coordenada Y sin información");
         }
 
-        if (concentracion) ValidarConcentracionMismoPunto(filas, advertencias);
-
+        if(concentracion)
+            ValidarConcentracionMismoPunto(filas, advertencias);
         return advertencias;
     }
 
     private void ValidarColumnasObligatorias(List<ArchivoFila> filas, List<CargaValidacionError> errores)
     {
         // Obtenemos todas las columnas que llegaron en el archivo.
-        var columnasArchivo = filas
-            .SelectMany(f => f.Columnas.Keys)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
+        var columnasArchivo = filas.SelectMany(f => f.Columnas.Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var columna in _columnasObligatorias)
         {
-            if (!columnasArchivo.Contains(columna))
+            if(!columnasArchivo.Contains(columna))
             {
                 errores.Add(new CargaValidacionError
                 {
@@ -266,283 +160,204 @@ public class DelitosValidator
     {
         // Regla del sistema anterior:
         // ID_CI + ID_DELITO + MODA_DTO + FORMA_ACC + GRDO_CONS + CLASF_DE_DTO
-        var gruposDuplicados = filas
-            .Select(fila => new
-            {
-                Fila = fila,
-                IdCi = ObtenerValor(fila, "id_ci")?.Trim(),
-                IdDelito = ObtenerValor(fila, "id_delito")?.Trim(),
-                ModaDto = ObtenerValor(fila, "moda_dto")?.Trim(),
-                FormaAcc = ObtenerValor(fila, "forma_acc")?.Trim(),
-                GrdoCons = ObtenerValor(fila, "grdo_cons")?.Trim(),
-                ClasfDeDto = ObtenerValor(fila, "clasf_de_dto")?.Trim()
-            })
-            .Where(x =>
-                !string.IsNullOrWhiteSpace(x.IdCi) &&
-                !string.IsNullOrWhiteSpace(x.IdDelito) &&
-                !string.IsNullOrWhiteSpace(x.ModaDto) &&
-                !string.IsNullOrWhiteSpace(x.FormaAcc) &&
-                !string.IsNullOrWhiteSpace(x.GrdoCons) &&
-                !string.IsNullOrWhiteSpace(x.ClasfDeDto))
-            .GroupBy(x =>
-                $"{x.IdCi}|{x.IdDelito}|{x.ModaDto}|{x.FormaAcc}|{x.GrdoCons}|{x.ClasfDeDto}",
-                StringComparer.OrdinalIgnoreCase)
-            .Where(g => g.Count() > 1);
-
+        var gruposDuplicados = filas.Select(fila => new { Fila = fila, IdCi = ObtenerValor(fila, "id_ci")?.Trim(), IdDelito = ObtenerValor(fila, "id_delito")?.Trim(), ModaDto = ObtenerValor(fila, "moda_dto")?.Trim(), FormaAcc = ObtenerValor(fila, "forma_acc")?.Trim(), GrdoCons = ObtenerValor(fila, "grdo_cons")?.Trim(), ClasfDeDto = ObtenerValor(fila, "clasf_de_dto")?.Trim() }).Where(x => !string.IsNullOrWhiteSpace(x.IdCi) && !string.IsNullOrWhiteSpace(x.IdDelito) && !string.IsNullOrWhiteSpace(x.ModaDto) && !string.IsNullOrWhiteSpace(x.FormaAcc) && !string.IsNullOrWhiteSpace(x.GrdoCons) && !string.IsNullOrWhiteSpace(x.ClasfDeDto)).GroupBy(x => $"{x.IdCi}|{x.IdDelito}|{x.ModaDto}|{x.FormaAcc}|{x.GrdoCons}|{x.ClasfDeDto}", StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1);
         foreach (var grupo in gruposDuplicados)
         {
             var filasDuplicadas = string.Join(", ", grupo.Select(x => x.Fila.NumeroFila));
-
             foreach (var item in grupo)
             {
-                AgregarError(
-                    errores,
-                    item.Fila,
-                    "id_ci+id_delito+moda_dto+forma_acc+grdo_cons+clasf_de_dto",
-                    "DELITOS_DUPLICIDAD_COMPUESTA",
-                    "Registros duplicados por combinación de campos",
-                    "Existe duplicidad compuesta en el archivo de delitos. " +
-                    "La combinación ID_CI + ID_DELITO + MODA_DTO + FORMA_ACC + GRDO_CONS + CLASF_DE_DTO se repite. " +
-                    $"Filas: {filasDuplicadas}.");
+                AgregarError(errores, item.Fila, "id_ci+id_delito+moda_dto+forma_acc+grdo_cons+clasf_de_dto", "DELITOS_DUPLICIDAD_COMPUESTA", "Registros duplicados por combinación de campos", "Existe duplicidad compuesta en el archivo de delitos. " + "La combinación ID_CI + ID_DELITO + MODA_DTO + FORMA_ACC + GRDO_CONS + CLASF_DE_DTO se repite. " + $"Filas: {filasDuplicadas}.");
             }
         }
     }
 
-    private void ValidarTextoObligatorio(ArchivoFila fila, string columna, List<CargaValidacionError> errores, int longitudMaxima, string codigo, string descripcionResumen)
+    private void ValidarTextoObligatorio(ArchivoFila fila,
+        string columna,
+        List<CargaValidacionError> errores,
+        int longitudMaxima,
+        string codigo,
+        string descripcionResumen)
     {
         var valor = ObtenerValor(fila, columna);
-
-        if (string.IsNullOrWhiteSpace(valor))
+        if(string.IsNullOrWhiteSpace(valor))
         {
-            AgregarError(
-                errores,
-                fila,
-                columna,
-                codigo,
-                descripcionResumen,
-                $"El campo {columna} es obligatorio.");
-
+            AgregarError(errores, fila, columna, codigo, descripcionResumen, $"El campo {columna} es obligatorio.");
             return;
         }
 
-        if (valor.Length > longitudMaxima)
+        if(valor.Length > longitudMaxima)
         {
-            AgregarError(
-                errores,
-                fila,
-                columna,
-                $"{codigo}_LONGITUD_EXCEDIDA",
-                $"{descripcionResumen} con longitud excedida",
-                $"El campo {columna} excede la longitud máxima permitida de {longitudMaxima} caracteres.");
+            AgregarError(errores, fila, columna, $"{codigo}_LONGITUD_EXCEDIDA", $"{descripcionResumen} con longitud excedida", $"El campo {columna} excede la longitud máxima permitida de {longitudMaxima} caracteres.");
         }
     }
 
     private void ValidarTextoOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
-
-        if (string.IsNullOrWhiteSpace(valor))
+        if(string.IsNullOrWhiteSpace(valor))
             return;
-
-        // Campo opcional. Por ahora no se valida longitud.
+    // Campo opcional. Por ahora no se valida longitud.
     }
 
-    private void ValidarEnteroObligatorio(ArchivoFila fila, string columna, List<CargaValidacionError> errores, string codigoVacio, string descripcionVacio)
+    private void ValidarEnteroObligatorio(ArchivoFila fila,
+        string columna,
+        List<CargaValidacionError> errores,
+        string codigoVacio,
+        string descripcionVacio)
     {
         var valor = ObtenerValor(fila, columna);
-
-        if (string.IsNullOrWhiteSpace(valor))
+        if(string.IsNullOrWhiteSpace(valor))
         {
-            AgregarError(
-                errores,
-                fila,
-                columna,
-                codigoVacio,
-                descripcionVacio,
-                $"El campo {columna} es obligatorio.");
-
+            AgregarError(errores, fila, columna, codigoVacio, descripcionVacio, $"El campo {columna} es obligatorio.");
             return;
         }
 
-        if (!long.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+        if(!long.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
         {
-            AgregarError(
-                errores,
-                fila,
-                columna,
-                $"{codigoVacio}_FORMATO_INCORRECTO",
-                $"{descripcionVacio} con formato incorrecto",
-                $"El campo {columna} debe ser un número entero.");
+            AgregarError(errores, fila, columna, $"{codigoVacio}_FORMATO_INCORRECTO", $"{descripcionVacio} con formato incorrecto", $"El campo {columna} debe ser un número entero.");
         }
     }
 
     private void ValidarCodigoPostalOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
-
         // El CP puede venir vacío.
-        if (string.IsNullOrWhiteSpace(valor))
+        if(string.IsNullOrWhiteSpace(valor))
         {
             return;
         }
 
         valor = valor.Trim();
-
         // Algunas entidades mandan 0, 00, 00000, etc.
         // Como CP no es obligatorio, se trata como "sin información".
-        if (valor.All(c => c == '0'))
+        if(valor.All(c => c == '0'))
         {
             return;
         }
 
         // Si no tiene 5 dígitos, se ignora por ahora.
         // Después, al mapear a base, se podrá tratar como NULL.
-        if (valor.Length != 5)
+        if(valor.Length != 5)
         {
             return;
         }
 
         // Si trae letras u otros caracteres, se ignora por ahora.
-        if (!valor.All(char.IsDigit))
+        if(!valor.All(char.IsDigit))
         {
             return;
         }
-        // Si llegó aquí, el CP tiene 5 dígitos y es utilizable.
+    // Si llegó aquí, el CP tiene 5 dígitos y es utilizable.
     }
 
     private void ValidarFechaHechosOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
-
         // La fecha de hechos puede venir vacía.
-        if (string.IsNullOrWhiteSpace(valor))
+        if(string.IsNullOrWhiteSpace(valor))
         {
             return;
         }
 
-        if (!IntentarConvertirFecha(valor, out var fechaHechos))
+        if(!IntentarConvertirFecha(valor, out var fechaHechos))
         {
-            AgregarError(
-                errores,
-                fila,
-                columna,
-                "DELITOS_FHA_DE_HCHOS_FORMATO_INCORRECTO",
-                "Fecha de hechos con formato incorrecto",
-                $"El campo {columna} no pudo interpretarse como una fecha válida.");
+            AgregarError(errores, fila, columna, "DELITOS_FHA_DE_HCHOS_FORMATO_INCORRECTO", "Fecha de hechos con formato incorrecto", $"El campo {columna} no pudo interpretarse como una fecha válida.");
             return;
         }
 
         var hoy = FechaRangoValidator.Hoy();
-        if (!FechaRangoValidator.EsValida(fechaHechos, hoy))
+        if(!FechaRangoValidator.EsValida(fechaHechos, hoy))
         {
-            AgregarError(errores, fila, columna, "DELITOS_FHA_DE_HCHOS_FUERA_DE_RANGO",
-                "Fecha de hechos fuera de rango", FechaRangoValidator.Mensaje(columna, hoy));
+            AgregarError(errores, fila, columna, "DELITOS_FHA_DE_HCHOS_FUERA_DE_RANGO", "Fecha de hechos fuera de rango", FechaRangoValidator.Mensaje(columna, hoy));
         }
     }
 
     private void ValidarHoraOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores)
     {
         var valor = ObtenerValor(fila, columna);
-
         // La hora puede venir vacía.
-        if (string.IsNullOrWhiteSpace(valor))
+        if(string.IsNullOrWhiteSpace(valor))
         {
             return;
         }
 
-        if (!IntentarConvertirHora(valor, out _))
+        if(!IntentarConvertirHora(valor, out _))
         {
-            AgregarError(
-                errores,
-                fila,
-                columna,
-                "DELITOS_HRA_DE_HCHOS_FORMATO_INCORRECTO",
-                "Hora de hechos con formato incorrecto",
-                $"El campo {columna} no pudo interpretarse como una hora válida.");
+            AgregarError(errores, fila, columna, "DELITOS_HRA_DE_HCHOS_FORMATO_INCORRECTO", "Hora de hechos con formato incorrecto", $"El campo {columna} no pudo interpretarse como una hora válida.");
         }
     }
 
-    private void ValidarCoordenadaOpcional(ArchivoFila fila, string columna, List<CargaValidacionError> errores, decimal minimo, decimal maximo, string codigoFormato, string codigoRango, string descripcionFormato, string descripcionRango)
+    private void ValidarCoordenadaOpcional(ArchivoFila fila,
+        string columna,
+        List<CargaValidacionError> errores,
+        decimal minimo,
+        decimal maximo,
+        string codigoFormato,
+        string codigoRango,
+        string descripcionFormato,
+        string descripcionRango)
     {
         var valor = ObtenerValor(fila, columna);
         // La coordenada puede venir vacía.
-        if (string.IsNullOrWhiteSpace(valor))
+        if(string.IsNullOrWhiteSpace(valor))
         {
             return;
         }
 
         valor = valor.Trim();
-
         // Si viene solo en ceros, lo tratamos como "sin información".
-        if (valor.All(c => c == '0' || c == '.' || c == ',' || c == '-'))
+        if(valor.All(c => c == '0' || c == '.' || c == ',' || c == '-'))
         {
             return;
         }
 
-        if (!IntentarConvertirDecimal(valor, out var coordenada))
+        if(!IntentarConvertirDecimal(valor, out var coordenada))
         {
-            AgregarError(
-                errores,
-                fila,
-                columna,
-                codigoFormato,
-                descripcionFormato,
-                $"El campo {columna} debe ser un número decimal válido.");
-
+            AgregarError(errores, fila, columna, codigoFormato, descripcionFormato, $"El campo {columna} debe ser un número decimal válido.");
             return;
         }
 
-        if (coordenada < minimo || coordenada > maximo)
+        if(coordenada < minimo || coordenada > maximo)
         {
-            AgregarError(
-                errores,
-                fila,
-                columna,
-                codigoRango,
-                descripcionRango,
-                $"El campo {columna} debe estar entre {minimo} y {maximo}.");
+            AgregarError(errores, fila, columna, codigoRango, descripcionRango, $"El campo {columna} debe estar entre {minimo} y {maximo}.");
         }
     }
 
-    private void ValidarCoordenadaSinInformacion(ArchivoFila fila, string columna, List<CargaValidacionError> advertencias, string codigo, string descripcionResumen)
+    private void ValidarCoordenadaSinInformacion(ArchivoFila fila,
+        string columna,
+        List<CargaValidacionError> advertencias,
+        string codigo,
+        string descripcionResumen)
     {
         var valor = ObtenerValor(fila, columna);
-
-        if (!EsCoordenadaSinInformacion(valor)) return;
-
-        AgregarError(
-            advertencias,
-            fila,
-            columna,
-            codigo,
-            descripcionResumen,
-            $"El campo {columna} está vacío o tiene valor 0. La carga puede continuar, pero debe revisar la información.");
+        if(!EsCoordenadaSinInformacion(valor))
+            return;
+        AgregarError(advertencias, fila, columna, codigo, descripcionResumen, $"El campo {columna} está vacío o tiene valor 0. La carga puede continuar, pero debe revisar la información.");
     }
 
     private bool EsCoordenadaSinInformacion(string? valor)
     {
-        if (string.IsNullOrWhiteSpace(valor)) return true;
-
+        if(string.IsNullOrWhiteSpace(valor))
+            return true;
         valor = valor.Trim();
-
         return valor.All(c => c == '0' || c == '.' || c == ',' || c == '-');
     }
 
     private void ValidarConcentracionMismoPunto(List<ArchivoFila> filas, List<CargaValidacionError> advertencias)
     {
         var puntos = new List<(ArchivoFila Fila, decimal CoordenadaX, decimal CoordenadaY)>();
-
         foreach (var fila in filas)
         {
             var valorX = ObtenerValor(fila, "coord_x");
             var valorY = ObtenerValor(fila, "coord_y");
-
-            if (EsCoordenadaSinInformacion(valorX) ||
-                EsCoordenadaSinInformacion(valorY) ||
-                !IntentarConvertirDecimal(valorX!, out var coordenadaX) ||
-                !IntentarConvertirDecimal(valorY!, out var coordenadaY) ||
-                coordenadaX < -118 || coordenadaX > -86 ||
-                coordenadaY < 13 || coordenadaY > 34)
+            if(EsCoordenadaSinInformacion(valorX)
+                || EsCoordenadaSinInformacion(valorY)
+                || !IntentarConvertirDecimal(valorX!, out var coordenadaX)
+                || !IntentarConvertirDecimal(valorY!, out var coordenadaY)
+                || coordenadaX < -118
+                || coordenadaX > -86
+                || coordenadaY < 13
+                || coordenadaY > 34)
             {
                 continue;
             }
@@ -569,9 +384,7 @@ public class DelitosValidator
     private bool IntentarConvertirFecha(string valor, out DateTime fecha)
     {
         fecha = default;
-
         valor = valor.Trim();
-
         // Las fechas textuales de los archivos se interpretan en formato mexicano.
         // Ejemplo:
         // 04/02/2026 = 4 de febrero de 2026
@@ -580,23 +393,17 @@ public class DelitosValidator
         // ambiguas se interpreten como mes/día/año.
         var formatos = new[]
         {
-        "dd/MM/yyyy",
-        "d/M/yyyy",
-        "dd-MM-yyyy",
-        "d-M-yyyy",
-        "yyyy-MM-dd",
-        "yyyy/MM/dd",
-        "yyyyMMdd"
-    };
-
+            "dd/MM/yyyy",
+            "d/M/yyyy",
+            "dd-MM-yyyy",
+            "d-M-yyyy",
+            "yyyy-MM-dd",
+            "yyyy/MM/dd",
+            "yyyyMMdd"
+        };
         foreach (var formato in formatos)
         {
-            if (DateTime.TryParseExact(
-                    valor,
-                    formato,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out var fechaParseada))
+            if(DateTime.TryParseExact(valor, formato, CultureInfo.InvariantCulture, DateTimeStyles.None, out var fechaParseada))
             {
                 fecha = fechaParseada.Date;
                 return true;
@@ -604,20 +411,16 @@ public class DelitosValidator
         }
 
         // Intento general con cultura mexicana.
-        if (DateTime.TryParse(
-                valor,
-                new CultureInfo("es-MX"),
-                DateTimeStyles.None,
-                out var fechaMx))
+        if(DateTime.TryParse(valor, new CultureInfo("es-MX"), DateTimeStyles.None, out var fechaMx))
         {
             fecha = fechaMx.Date;
             return true;
         }
 
         // Soporte para fechas como número serial de Excel.
-        if (double.TryParse(valor, NumberStyles.Any, CultureInfo.InvariantCulture, out var numeroExcel))
+        if(double.TryParse(valor, NumberStyles.Any, CultureInfo.InvariantCulture, out var numeroExcel))
         {
-            if (numeroExcel > 0 && numeroExcel < 60000)
+            if(numeroExcel > 0 && numeroExcel < 60000)
             {
                 try
                 {
@@ -626,15 +429,15 @@ public class DelitosValidator
                 }
                 catch
                 {
-                    // Si no se puede convertir, se ignora.
+                // Si no se puede convertir, se ignora.
                 }
             }
         }
 
         // Soporte para número serial de Excel con cultura mexicana.
-        if (double.TryParse(valor, NumberStyles.Any, new CultureInfo("es-MX"), out var numeroExcelMx))
+        if(double.TryParse(valor, NumberStyles.Any, new CultureInfo("es-MX"), out var numeroExcelMx))
         {
-            if (numeroExcelMx > 0 && numeroExcelMx < 60000)
+            if(numeroExcelMx > 0 && numeroExcelMx < 60000)
             {
                 try
                 {
@@ -643,7 +446,7 @@ public class DelitosValidator
                 }
                 catch
                 {
-                    // Si no se puede convertir, se ignora.
+                // Si no se puede convertir, se ignora.
                 }
             }
         }
@@ -655,7 +458,6 @@ public class DelitosValidator
     {
         hora = default;
         valor = valor.Trim();
-
         var formatos = new[]
         {
             @"hh\:mm\:ss",
@@ -667,29 +469,28 @@ public class DelitosValidator
             "HH:mm",
             "H:mm"
         };
-
         foreach (var formato in formatos)
         {
-            if (TimeSpan.TryParseExact(valor, formato, CultureInfo.InvariantCulture, out var horaParseada) &&
-                horaParseada >= TimeSpan.Zero &&
-                horaParseada < TimeSpan.FromDays(1))
+            if(TimeSpan.TryParseExact(valor, formato, CultureInfo.InvariantCulture, out var horaParseada)
+                && horaParseada >= TimeSpan.Zero
+                && horaParseada < TimeSpan.FromDays(1))
             {
                 hora = horaParseada;
                 return true;
             }
         }
 
-        if (double.TryParse(valor.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var numeroExcel))
+        if(double.TryParse(valor.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var numeroExcel))
         {
-            if (numeroExcel < 0 || numeroExcel >= 1) return false;
-
+            if(numeroExcel < 0 || numeroExcel >= 1)
+                return false;
             hora = TimeSpan.FromDays(numeroExcel);
             return true;
         }
 
-        if (TimeSpan.TryParse(valor, CultureInfo.InvariantCulture, out var horaGeneral) &&
-            horaGeneral >= TimeSpan.Zero &&
-            horaGeneral < TimeSpan.FromDays(1))
+        if(TimeSpan.TryParse(valor, CultureInfo.InvariantCulture, out var horaGeneral)
+            && horaGeneral >= TimeSpan.Zero
+            && horaGeneral < TimeSpan.FromDays(1))
         {
             hora = horaGeneral;
             return true;
@@ -701,15 +502,11 @@ public class DelitosValidator
     private bool IntentarConvertirDecimal(string valor, out decimal numero)
     {
         numero = default;
-
         valor = valor.Trim();
-
-        if (decimal.TryParse(valor, NumberStyles.Any, CultureInfo.InvariantCulture, out numero))
+        if(decimal.TryParse(valor, NumberStyles.Any, CultureInfo.InvariantCulture, out numero))
             return true;
-
-        if (decimal.TryParse(valor, NumberStyles.Any, new CultureInfo("es-MX"), out numero))
+        if(decimal.TryParse(valor, NumberStyles.Any, new CultureInfo("es-MX"), out numero))
             return true;
-
         return false;
     }
 
@@ -719,10 +516,14 @@ public class DelitosValidator
         return valor;
     }
 
-    private void AgregarError(List<CargaValidacionError> errores, ArchivoFila fila, string columna, string codigo, string descripcionResumen, string mensaje)
+    private void AgregarError(List<CargaValidacionError> errores,
+        ArchivoFila fila,
+        string columna,
+        string codigo,
+        string descripcionResumen,
+        string mensaje)
     {
         fila.Columnas.TryGetValue(columna, out var valor);
-
         errores.Add(new CargaValidacionError
         {
             Archivo = NombreArchivo,

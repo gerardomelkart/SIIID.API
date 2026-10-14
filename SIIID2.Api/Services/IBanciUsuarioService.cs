@@ -1,7 +1,6 @@
 ﻿using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Services;
-
 public interface IBanciUsuarioService
 {
     Task<List<BanciUsuarioDetalle>> ObtenerUsuariosAsync(int idAdministrador, bool incluirInactivos);

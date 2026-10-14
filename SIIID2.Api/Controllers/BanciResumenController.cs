@@ -6,7 +6,6 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Services;
 
 namespace SIIID2.Api.Controllers;
-
 /// <summary>Acuse de registros asociados a una carga BANCI V2 ya integrada.
 /// Restringido a quien registró la carga y tiene acceso BANCI vigente.</summary>
 [ApiController]
@@ -17,7 +16,6 @@ public sealed class BanciResumenController : ControllerBase
 {
     private readonly IBanciCargaService _cargas;
     private readonly IDbConnectionFactory _factory;
-
     public BanciResumenController(IBanciCargaService cargas, IDbConnectionFactory factory)
     {
         _cargas = cargas;
@@ -28,7 +26,8 @@ public sealed class BanciResumenController : ControllerBase
     public async Task<IActionResult> Acuse(string codigoReferencia)
     {
         var resumen = await Resumen(codigoReferencia);
-        if (resumen is not OkObjectResult { Value: List<BanciResumenRegistro> filas }) return resumen;
+        if(resumen is not OkObjectResult { Value: List<BanciResumenRegistro> filas })
+            return resumen;
         var bytes = BanciAcusePdf.Generar(filas, codigoReferencia);
         var entidad = string.Concat((filas.FirstOrDefault()?.Entidad ?? "entidad").Select(c => char.IsLetterOrDigit(c) ? c : '_'));
         var fecha = filas.FirstOrDefault()?.FechaIntegracion;
@@ -38,18 +37,16 @@ public sealed class BanciResumenController : ControllerBase
     [HttpGet("{codigoReferencia}/resumen")]
     public async Task<IActionResult> Resumen(string codigoReferencia)
     {
-        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var idUsuario))
+        if(!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var idUsuario))
             return Unauthorized(new { mensaje = "La sesión no tiene un usuario válido." });
-        if (string.IsNullOrWhiteSpace(codigoReferencia) || codigoReferencia.Length > 50)
+        if(string.IsNullOrWhiteSpace(codigoReferencia) || codigoReferencia.Length > 50)
             return BadRequest(new { mensaje = "La referencia no es válida." });
-
         // La consulta ya verifica autoría, entidad y acceso vigente; no exponer acuses ajenos.
         var carga = await _cargas.ObtenerCargaAsync(codigoReferencia, idUsuario);
-        if (carga is null) return NotFound(new { mensaje = "La carga no está disponible para este usuario." });
-        if (carga.VersionFormato < 2 ||
-            carga.Estado is not ("PROCESADO" or "PROCESADO_CON_ADVERTENCIAS"))
+        if(carga is null)
+            return NotFound(new { mensaje = "La carga no está disponible para este usuario." });
+        if(carga.VersionFormato < 2 || carga.Estado is not ("PROCESADO" or "PROCESADO_CON_ADVERTENCIAS"))
             return Conflict(new { mensaje = "El resumen únicamente se emite para una carga BANCI integrada." });
-
         using var connection = _factory.CrearConexion();
         // El folio se lee de las tablas definitivas. Las tablas tmp sólo fijan qué llaves
         // pertenecieron a ESTA operación. No mostrar CURP ni datos personales ajenos al acuse.
@@ -89,18 +86,11 @@ public sealed class BanciResumenController : ControllerBase
               AND carga.estado IN (N'PROCESADO', N'PROCESADO_CON_ADVERTENCIAS')
             ORDER BY IdCi, IdDelito, IdVicf;
             """;
-        var filas = (await connection.QueryAsync<BanciResumenRegistro>(sql,
-            new { carga.IdBanciCarga, IdUsuario = idUsuario }, commandTimeout: 120)).ToList();
-
+        var filas = (await connection.QueryAsync<BanciResumenRegistro>(sql, new { carga.IdBanciCarga, IdUsuario = idUsuario }, commandTimeout: 120)).ToList();
         // Si el mantenimiento ya eliminó los archivos temporales o una llave dejó de existir,
         // nunca presentar un acuse incompleto como si fuera el resultado definitivo.
-        if (filas.Count != carga.TotalVictimas || filas.Any(f => string.IsNullOrWhiteSpace(f.NoBanci)))
-            return Conflict(new
-            {
-                mensaje = "No se pudo reconstruir el acuse completo desde los registros actuales. " +
-                "No se entregará un resumen parcial; consulte la carga y sus identificadores en BANCI."
-            });
-
+        if(filas.Count != carga.TotalVictimas || filas.Any(f => string.IsNullOrWhiteSpace(f.NoBanci)))
+            return Conflict(new { mensaje = "No se pudo reconstruir el acuse completo desde los registros actuales. " + "No se entregará un resumen parcial; consulte la carga y sus identificadores en BANCI." });
         return Ok(filas);
     }
 

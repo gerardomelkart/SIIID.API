@@ -5,7 +5,6 @@ using SIIID2.Api.Models;
 using SIIID2.Api.Services;
 
 namespace SIIID2.Api.Controllers;
-
 [ApiController]
 [Authorize(Policy = "MODULO_MENSUAL")]
 [Authorize(Roles = "SUPER_USUARIO")]
@@ -13,7 +12,6 @@ namespace SIIID2.Api.Controllers;
 public class AdministracionCargasController : ControllerBase
 {
     private readonly IAdministracionCargasService _administracionService;
-
     public AdministracionCargasController(IAdministracionCargasService administracionService)
     {
         _administracionService = administracionService;
@@ -22,33 +20,27 @@ public class AdministracionCargasController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> ObtenerPendientes()
     {
-        if (!ObtenerIdUsuario(out var idUsuario))
+        if(!ObtenerIdUsuario(out var idUsuario))
         {
             return TokenSinUsuario();
         }
 
         var registros = await _administracionService.ObtenerPendientesAsync(idUsuario);
-
-        return Ok( new {esValido = true, total = registros.Count, registros});
+        return Ok(new { esValido = true, total = registros.Count, registros });
     }
 
     [HttpGet("{codigoReferencia}")]
     public async Task<IActionResult> ObtenerDetalle(string codigoReferencia)
     {
-        if (!ObtenerIdUsuario(out var idUsuario))
+        if(!ObtenerIdUsuario(out var idUsuario))
         {
             return TokenSinUsuario();
         }
 
         var detalle = await _administracionService.ObtenerDetalleAsync(idUsuario, codigoReferencia);
-
-        if (detalle != null)
+        if(detalle != null)
         {
-            return Ok(new
-            {
-                esValido = true,
-                detalle
-            });
+            return Ok(new { esValido = true, detalle });
         }
 
         /*
@@ -56,50 +48,34 @@ public class AdministracionCargasController : ControllerBase
             la carga existe pero ya fue aprobada o rechazada.
         */
         var referencia = await _administracionService.ObtenerReferenciaAsync(idUsuario, codigoReferencia);
-
-        if (referencia == null)
+        if(referencia == null)
         {
-            return NotFound(new
-            {
-                esValido = false,
-                codigo = "CARGA_NO_ENCONTRADA",
-                codigoReferencia,
-                mensaje = "No se encontro una carga con ese codigo de referencia."
-            });
+            return NotFound(new { esValido = false, codigo = "CARGA_NO_ENCONTRADA", codigoReferencia, mensaje = "No se encontro una carga con ese codigo de referencia." });
         }
 
-        return Conflict(new
-        {
-            esValido = false,
-            codigo = "CARGA_NO_PENDIENTE",
-            codigoReferencia = referencia.CodigoReferencia,
-            tipoCarga = referencia.TipoCarga,
-            estado = referencia.Estado,
-            mensaje = $"La carga ya no se encuentra pendiente de aprobacion. Estado actual: {referencia.Estado}."
-        });
+        return Conflict(new { esValido = false, codigo = "CARGA_NO_PENDIENTE", codigoReferencia = referencia.CodigoReferencia, tipoCarga = referencia.TipoCarga, estado = referencia.Estado, mensaje = $"La carga ya no se encuentra pendiente de aprobacion. Estado actual: {referencia.Estado}." });
     }
 
     [HttpPost("{codigoReferencia}/aprobar")]
     public async Task<IActionResult> Aprobar(string codigoReferencia)
     {
-        if (!ObtenerIdUsuario(out var idUsuario))
+        if(!ObtenerIdUsuario(out var idUsuario))
         {
             return TokenSinUsuario();
         }
 
         var resultado = await _administracionService.AprobarAsync(idUsuario, codigoReferencia);
-
-        if (resultado.EsValido)
+        if(resultado.EsValido)
         {
             return Ok(resultado);
         }
 
-        if (resultado.Estado == "NO_ENCONTRADA")
+        if(resultado.Estado == "NO_ENCONTRADA")
         {
             return NotFound(resultado);
         }
 
-        if (EsCargaYaResuelta(resultado.Estado))
+        if(EsCargaYaResuelta(resultado.Estado))
         {
             return Conflict(resultado);
         }
@@ -110,24 +86,23 @@ public class AdministracionCargasController : ControllerBase
     [HttpPost("{codigoReferencia}/rechazar")]
     public async Task<IActionResult> Rechazar(string codigoReferencia, [FromBody] RechazarCargaAdministracionRequest request)
     {
-        if (!ObtenerIdUsuario(out var idUsuario))
+        if(!ObtenerIdUsuario(out var idUsuario))
         {
             return TokenSinUsuario();
         }
 
         var resultado = await _administracionService.RechazarAsync(idUsuario, codigoReferencia, request.Motivo);
-
-        if (resultado.EsValido)
+        if(resultado.EsValido)
         {
             return Ok(resultado);
         }
 
-        if (resultado.Estado == "NO_ENCONTRADA")
+        if(resultado.Estado == "NO_ENCONTRADA")
         {
             return NotFound(resultado);
         }
 
-        if (EsCargaYaResuelta(resultado.Estado))
+        if(EsCargaYaResuelta(resultado.Estado))
         {
             return Conflict(resultado);
         }
@@ -137,39 +112,24 @@ public class AdministracionCargasController : ControllerBase
 
     private bool ObtenerIdUsuario(out int idUsuario)
     {
-        var idUsuarioClaim = User.FindFirstValue( ClaimTypes.NameIdentifier);
-
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return int.TryParse(idUsuarioClaim, out idUsuario);
     }
 
     private IActionResult TokenSinUsuario()
     {
-        return Unauthorized(new {esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-            mensaje = "El token no contiene un id de usuario valido.", traceId =  HttpContext.TraceIdentifier });
+        return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario valido.", traceId = HttpContext.TraceIdentifier });
     }
 
     private static bool EsCargaYaResuelta(string? estado)
     {
-        return string.Equals(
-                   estado,
-                   "CONFIRMADO",
-                   StringComparison.OrdinalIgnoreCase)
-               ||
-               string.Equals(
-                   estado,
-                   "CONFIRMADO_ACTUALIZACION",
-                   StringComparison.OrdinalIgnoreCase)
-               ||
-               string.Equals(
-                   estado,
-                   "RECHAZADO_ADMIN",
-                   StringComparison.OrdinalIgnoreCase);
+        return string.Equals(estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) || string.Equals(estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase) || string.Equals(estado, "RECHAZADO_ADMIN", StringComparison.OrdinalIgnoreCase);
     }
 
     [HttpGet("{codigoReferencia}/archivos")]
     public async Task<IActionResult> DescargarArchivos(string codigoReferencia)
     {
-        if (!ObtenerIdUsuario(out var idUsuario))
+        if(!ObtenerIdUsuario(out var idUsuario))
         {
             return TokenSinUsuario();
         }
@@ -181,25 +141,11 @@ public class AdministracionCargasController : ControllerBase
         }
         catch (KeyNotFoundException ex)
         {
-            return NotFound(new
-            {
-                esValido = false,
-                codigo = "CARGA_NO_ENCONTRADA",
-                codigoReferencia,
-                mensaje = ex.Message
-            });
+            return NotFound(new { esValido = false, codigo = "CARGA_NO_ENCONTRADA", codigoReferencia, mensaje = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
-            return Conflict(new
-            {
-                esValido = false,
-                codigo = "CARGA_NO_PENDIENTE",
-                codigoReferencia,
-                mensaje = ex.Message
-            });
+            return Conflict(new { esValido = false, codigo = "CARGA_NO_PENDIENTE", codigoReferencia, mensaje = ex.Message });
         }
     }
-
-
 }

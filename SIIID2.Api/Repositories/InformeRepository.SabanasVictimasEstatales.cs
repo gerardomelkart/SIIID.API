@@ -3,11 +3,13 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 // Conteo estatal de registros de víctima, desagregado por sexo y edad.
 public partial class InformeRepository : IInformeRepository
 {
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalVictimasAsync(int anioCorte, int? idEntidadFederativa, string modoPlano, int mesUltimoCorte)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalVictimasAsync(int anioCorte,
+        int? idEntidadFederativa,
+        string modoPlano,
+        int mesUltimoCorte)
     {
         var sql = @"
                     WITH pendientes_rankeadas AS (
@@ -344,8 +346,6 @@ public partial class InformeRepository : IInformeRepository
             m.orden_rango
         OPTION (RECOMPILE);
         ";
-
         return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa, modoPlano, mesUltimoCorte);
     }
-
 }

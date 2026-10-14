@@ -3,11 +3,13 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 // Sábana estatal de delitos: conserva clasificación, alcance y modos del SQL original.
 public partial class InformeRepository : IInformeRepository
 {
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte, int? idEntidadFederativa, string modoPlano, int mesUltimoCorte)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaEstatalDelitosAsync(int anioCorte,
+        int? idEntidadFederativa,
+        string modoPlano,
+        int mesUltimoCorte)
     {
         var sql = @"
                WITH pendientes_rankeadas AS (
@@ -256,8 +258,6 @@ public partial class InformeRepository : IInformeRepository
             m.modalidad_delito_sabana
         OPTION (RECOMPILE);
         ";
-
         return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa, modoPlano, mesUltimoCorte);
     }
-
 }

@@ -3,13 +3,10 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class SemanalAdministracionCargasRepository : ISemanalAdministracionCargasRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public SemanalAdministracionCargasRepository(IDbConnectionFactory dbConnectionFactory) => _dbConnectionFactory = dbConnectionFactory;
-
     public async Task<List<SemanalCargaPendienteAdministracionItem>> ObtenerPendientesAsync()
     {
         const string sql = @"
@@ -95,17 +92,15 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
                 bloque.anio_corte,
                 bloque.mes_corte;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
         using var resultados = await connection.QueryMultipleAsync(sql);
-
         var cargas = (await resultados.ReadAsync<SemanalCargaPendienteAdministracionItem>()).ToList();
         var bloques = (await resultados.ReadAsync<SemanalCargaBloqueAdministracionItem>()).ToList();
         var bloquesPorCarga = bloques.GroupBy(x => x.IdSemanalCarga).ToDictionary(x => x.Key, x => x.ToList());
-
         foreach (var carga in cargas)
         {
-            if (bloquesPorCarga.TryGetValue(carga.IdSemanalCarga, out var bloquesCarga)) carga.Bloques = bloquesCarga;
+            if(bloquesPorCarga.TryGetValue(carga.IdSemanalCarga, out var bloquesCarga))
+                carga.Bloques = bloquesCarga;
         }
 
         return cargas;
@@ -167,7 +162,6 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
               AND sc.estado = N'PENDIENTE_APROBACION'
               AND sc.activo = 1;
         ";
-
         const string sqlAdvertencias = @"
             SELECT
                 sca.id_semanal_carga_advertencia AS IdSemanalCargaAdvertencia,
@@ -189,7 +183,6 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
                 sca.numero_fila,
                 sca.id_semanal_carga_advertencia;
         ";
-
         const string sqlBloques = @"
             SELECT
                 bloque.id_semanal_carga AS IdSemanalCarga,
@@ -213,17 +206,16 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
                 bloque.anio_corte,
                 bloque.mes_corte;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
         var carga = await connection.QueryFirstOrDefaultAsync<SemanalCargaPendienteAdministracionDetalle>(sqlCarga, new { CodigoReferencia = codigoReferencia });
-
-        if (carga == null) return null;
-        var parametros = new { carga.IdSemanalCarga };
-
+        if(carga == null)
+            return null;
+        var parametros = new
+        {
+            carga.IdSemanalCarga
+        };
         carga.Advertencias = (await connection.QueryAsync<SemanalCargaAdvertenciaAdministracionItem>(sqlAdvertencias, parametros)).ToList();
         carga.Bloques = (await connection.QueryAsync<SemanalCargaBloqueAdministracionItem>(sqlBloques, parametros)).ToList();
-
         return carga;
     }
 
@@ -239,7 +231,6 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
               AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
               AND sc.activo = 1;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.QueryFirstOrDefaultAsync<SemanalCargaReferenciaAdministracionInfo>(sql, new { CodigoReferencia = codigoReferencia });
     }
@@ -261,7 +252,6 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
               AND c.activo = 1
             ORDER BY c.numero_fila;
         ";
-
         return QueryDictionaryAsync(sql, idSemanalCarga);
     }
 
@@ -301,7 +291,6 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
               AND d.activo = 1
             ORDER BY d.numero_fila;
         ";
-
         return QueryDictionaryAsync(sql, idSemanalCarga);
     }
 
@@ -326,19 +315,13 @@ public class SemanalAdministracionCargasRepository : ISemanalAdministracionCarga
               AND v.activo = 1
             ORDER BY v.numero_fila;
         ";
-
         return QueryDictionaryAsync(sql, idSemanalCarga);
     }
 
     private async Task<List<IDictionary<string, object?>>> QueryDictionaryAsync(string sql, long idSemanalCarga)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-
         var filas = await connection.QueryAsync(sql, new { IdSemanalCarga = idSemanalCarga });
-
-        return filas
-            .Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase))
-            .Cast<IDictionary<string, object?>>()
-            .ToList();
+        return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
     }
 }

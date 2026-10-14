@@ -1,7 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
 namespace SIIID2.Api.Models;
-
 public class SemanalCargaBloqueAdministracionItem
 {
     public long IdSemanalCarga { get; set; }

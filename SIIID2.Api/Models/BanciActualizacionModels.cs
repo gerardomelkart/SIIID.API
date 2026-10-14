@@ -2,23 +2,31 @@
 using System.Text.Json;
 
 namespace SIIID2.Api.Models;
-
 public class BanciActualizacionRequest
 {
-    [Range(1, 32)] public int? IdEntidadFederativa { get; set; }
-    [Required] public Dictionary<string, string?> Datos { get; set; } = [];
+    [Range(1, 32)]
+    public int? IdEntidadFederativa { get; set; }
+
+    [Required]
+    public Dictionary<string, string?> Datos { get; set; } = [];
 }
 
 public class BanciActualizacionArchivoRequest
 {
-    [Range(1, 32)] public int? IdEntidadFederativa { get; set; }
-    [Required] public IFormFile Archivo { get; set; } = null!;
+    [Range(1, 32)]
+    public int? IdEntidadFederativa { get; set; }
+
+    [Required]
+    public IFormFile Archivo { get; set; } = null !;
 }
 
 public class BanciActualizacionConfirmacion
 {
-    [Required] public bool? Aceptar { get; set; }
-    [StringLength(64)] public string? HuellaVistaPrevia { get; set; }
+    [Required]
+    public bool? Aceptar { get; set; }
+
+    [StringLength(64)]
+    public string? HuellaVistaPrevia { get; set; }
     public bool AceptarAdvertencias { get; set; }
 }
 
@@ -42,7 +50,16 @@ internal class BanciActualizacionSql
     public string CambiosJson { get; set; } = "[]";
     public string DatosPropuestosJson { get; set; } = "[]";
     public string AdvertenciasJson { get; set; } = "[]";
-    public BanciActualizacionResultado Resultado() => new() { CodigoReferencia = CodigoReferencia, Estado = Estado, Huella = Huella, Cambios = JsonSerializer.Deserialize<JsonElement>(CambiosJson), DatosPropuestos = JsonSerializer.Deserialize<JsonElement>(DatosPropuestosJson), Advertencias = JsonSerializer.Deserialize<List<BanciCargaValidacionError>>(AdvertenciasJson) ?? [] };
+
+    public BanciActualizacionResultado Resultado() => new()
+    {
+        CodigoReferencia = CodigoReferencia,
+        Estado = Estado,
+        Huella = Huella,
+        Cambios = JsonSerializer.Deserialize<JsonElement>(CambiosJson),
+        DatosPropuestos = JsonSerializer.Deserialize<JsonElement>(DatosPropuestosJson),
+        Advertencias = JsonSerializer.Deserialize<List<BanciCargaValidacionError>>(AdvertenciasJson) ?? []
+    };
 }
 
 public class BanciVictimaIdentificada

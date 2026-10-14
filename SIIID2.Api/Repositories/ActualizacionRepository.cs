@@ -7,7 +7,6 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace SIIID2.Api.Repositories;
-
 // Coordinación y dependencias compartidas; las operaciones están separadas en archivos parciales.
 public partial class ActualizacionRepository : IActualizacionRepository
 {
@@ -27,15 +26,15 @@ public partial class ActualizacionRepository : IActualizacionRepository
     private class DuplicadoActivoValidacion
     {
         public string Seccion { get; set; } = string.Empty;
-
         public int TotalGruposDuplicados { get; set; }
     }
 
     private readonly IDbConnectionFactory _dbConnectionFactory;
     private readonly BanciCruceService _cruce;
     private readonly ILogger<ActualizacionRepository> _logger;
-
-    public ActualizacionRepository(BanciCruceService cruce, IDbConnectionFactory dbConnectionFactory, ILogger<ActualizacionRepository> logger)
+    public ActualizacionRepository(BanciCruceService cruce,
+        IDbConnectionFactory dbConnectionFactory,
+        ILogger<ActualizacionRepository> logger)
     {
         _dbConnectionFactory = dbConnectionFactory;
         _cruce = cruce;
@@ -44,225 +43,128 @@ public partial class ActualizacionRepository : IActualizacionRepository
 
     public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(string codigoReferencia, bool aceptar, int idUsuarioConfirmacion)
     {
-        using var connection =
-            (SqlConnection)_dbConnectionFactory.CrearConexion();
-
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
-        using var transaction =
-            (SqlTransaction)await connection.BeginTransactionAsync();
-
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
         try
         {
-            var carga = await ObtenerActualizacionConfirmacionAsync(
-                connection,
-                transaction,
-                codigoReferencia,
-                idUsuarioConfirmacion);
-
-            if (carga == null)
+            var carga = await ObtenerActualizacionConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioConfirmacion);
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = "NO_ENCONTRADA",
-                    Mensaje =
-                        "No se encontro una actualizacion valida para continuar."
+                    Mensaje = "No se encontro una actualizacion valida para continuar."
                 };
             }
 
-            if (!string.Equals(
-                    carga.Estado,
-                    "VALIDADO_PENDIENTE_ACTUALIZACION",
-                    StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, "VALIDADO_PENDIENTE_ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "La actualizacion no se encuentra en estado VALIDADO_PENDIENTE_ACTUALIZACION."
+                    Mensaje = "La actualizacion no se encuentra en estado VALIDADO_PENDIENTE_ACTUALIZACION."
                 };
             }
 
-            if (carga.IdUsuarioCarga != idUsuarioConfirmacion)
+            if(carga.IdUsuarioCarga != idUsuarioConfirmacion)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "Solo el usuario que realizo la actualizacion puede aceptar o rechazar esta validacion."
+                    Mensaje = "Solo el usuario que realizo la actualizacion puede aceptar o rechazar esta validacion."
                 };
             }
 
-            if (carga.FechaExpiracion.HasValue &&
-                carga.FechaExpiracion.Value < DateTime.Now)
+            if(carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
             {
-                await ActualizarActualizacionExpiradaAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga);
-
-                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga,
-                    estadoAnterior: carga.Estado,
-                    estadoNuevo: "EXPIRADO_ACTUALIZACION",
-                    idUsuario: null,
-                    comentario:
-                        "La actualizacion expiro antes de que el usuario tomara una decision.");
-
+                await ActualizarActualizacionExpiradaAsync(connection, transaction, carga.IdCarga);
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: carga.Estado, estadoNuevo: "EXPIRADO_ACTUALIZACION", idUsuario: null, comentario: "La actualizacion expiro antes de que el usuario tomara una decision.");
                 await transaction.CommitAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = "EXPIRADO_ACTUALIZACION",
-                    Mensaje =
-                        "La actualizacion ya expiro. Debe validar nuevamente los archivos."
+                    Mensaje = "La actualizacion ya expiro. Debe validar nuevamente los archivos."
                 };
             }
 
-            if (!carga.HabilitaModificacion)
+            if(!carga.HabilitaModificacion)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "El usuario no tiene habilitada la modificacion de informacion."
+                    Mensaje = "El usuario no tiene habilitada la modificacion de informacion."
                 };
             }
 
-            if (!carga.EsSuperUsuario &&
-                carga.IdEntidadFederativaUsuario.HasValue &&
-                carga.IdEntidadFederativaCarga.HasValue &&
-                carga.IdEntidadFederativaUsuario.Value !=
-                carga.IdEntidadFederativaCarga.Value)
+            if(!carga.EsSuperUsuario
+                && carga.IdEntidadFederativaUsuario.HasValue
+                && carga.IdEntidadFederativaCarga.HasValue
+                && carga.IdEntidadFederativaUsuario.Value != carga.IdEntidadFederativaCarga.Value)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "El usuario no puede procesar actualizaciones de otra entidad federativa."
+                    Mensaje = "El usuario no puede procesar actualizaciones de otra entidad federativa."
                 };
             }
 
-            if (!aceptar)
+            if(!aceptar)
             {
-                await RechazarActualizacionAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga,
-                    idUsuarioConfirmacion);
-
-                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga,
-                    estadoAnterior: carga.Estado,
-                    estadoNuevo: "RECHAZADO_VALIDACION_ACTUALIZACION",
-                    idUsuario: idUsuarioConfirmacion,
-                    comentario:
-                        "La actualizacion fue rechazada por el usuario despues de revisar el acuse previo, las diferencias y las validaciones.");
-
+                await RechazarActualizacionAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: carga.Estado, estadoNuevo: "RECHAZADO_VALIDACION_ACTUALIZACION", idUsuario: idUsuarioConfirmacion, comentario: "La actualizacion fue rechazada por el usuario despues de revisar el acuse previo, las diferencias y las validaciones.");
                 await transaction.CommitAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = true,
                     CodigoReferencia = codigoReferencia,
                     Estado = "RECHAZADO_VALIDACION_ACTUALIZACION",
-                    Mensaje =
-                        "La actualizacion fue rechazada correctamente."
+                    Mensaje = "La actualizacion fue rechazada correctamente."
                 };
             }
 
-            await CargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioConfirmacion);
-
-            if (!carga.EsSuperUsuario)
+            await CargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
+            if(!carga.EsSuperUsuario)
             {
-                await EnviarActualizacionAprobacionAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga);
-
-                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                    connection,
-                    transaction,
-                    carga.IdCarga,
-                    estadoAnterior: carga.Estado,
-                    estadoNuevo: "PENDIENTE_APROBACION",
-                    idUsuario: idUsuarioConfirmacion,
-                    comentario:
-                        "El enlace estatal acepto la actualizacion y la envio a revision administrativa.");
-
+                await EnviarActualizacionAprobacionAsync(connection, transaction, carga.IdCarga);
+                await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: carga.Estado, estadoNuevo: "PENDIENTE_APROBACION", idUsuario: idUsuarioConfirmacion, comentario: "El enlace estatal acepto la actualizacion y la envio a revision administrativa.");
                 await transaction.CommitAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = true,
                     CodigoReferencia = codigoReferencia,
                     Estado = "PENDIENTE_APROBACION",
-                    Mensaje =
-                        "La actualizacion fue enviada correctamente a revision administrativa."
+                    Mensaje = "La actualizacion fue enviada correctamente a revision administrativa."
                 };
             }
 
-            await AplicarActualizacionCompletaAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioConfirmacion);
-
-            await ConfirmarActualizacionFinalAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioConfirmacion);
-
-            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                estadoAnterior: carga.Estado,
-                estadoNuevo: "CONFIRMADO_ACTUALIZACION",
-                idUsuario: idUsuarioConfirmacion,
-                comentario:
-                    "Actualizacion realizada y confirmada directamente por un superusuario.");
-
+            await AplicarActualizacionCompletaAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
+            await ConfirmarActualizacionFinalAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: carga.Estado, estadoNuevo: "CONFIRMADO_ACTUALIZACION", idUsuario: idUsuarioConfirmacion, comentario: "Actualizacion realizada y confirmada directamente por un superusuario.");
             await transaction.CommitAsync();
-
             return new ConfirmarCargaResponse
             {
                 EsValido = true,
                 CodigoReferencia = codigoReferencia,
                 Estado = "CONFIRMADO_ACTUALIZACION",
-                Mensaje =
-                    "La actualizacion fue confirmada correctamente."
+                Mensaje = "La actualizacion fue confirmada correctamente."
             };
         }
         catch
@@ -272,7 +174,10 @@ public partial class ActualizacionRepository : IActualizacionRepository
         }
     }
 
-    private async Task<ActualizacionConfirmacionInfo?> ObtenerActualizacionConfirmacionAsync(SqlConnection connection, SqlTransaction transaction, string codigoReferencia, int idUsuarioConfirmacion)
+    private async Task<ActualizacionConfirmacionInfo?> ObtenerActualizacionConfirmacionAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        string codigoReferencia,
+        int idUsuarioConfirmacion)
     {
         var sql = @"
         SELECT
@@ -299,77 +204,50 @@ public partial class ActualizacionRepository : IActualizacionRepository
               AND c.tipo_carga = 'ACTUALIZACION'
               AND c.activo = 1;
         ";
-
-        return await connection.QueryFirstOrDefaultAsync<ActualizacionConfirmacionInfo>(
-            sql,
-            new
-            {
-                CodigoReferencia = codigoReferencia,
-                IdUsuarioConfirmacion = idUsuarioConfirmacion
-            },
-            transaction);
+        return await connection.QueryFirstOrDefaultAsync<ActualizacionConfirmacionInfo>(sql, new { CodigoReferencia = codigoReferencia, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
     public async Task<ConfirmarCargaResponse> AprobarActualizacionPendienteAsync(string codigoReferencia, int idUsuarioAprobacion)
     {
-        using var connection =
-            (SqlConnection)_dbConnectionFactory.CrearConexion();
-
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
-        using var transaction =
-            (SqlTransaction)await connection.BeginTransactionAsync();
-
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
         try
         {
-            var carga = await ObtenerActualizacionConfirmacionAsync(
-                connection,
-                transaction,
-                codigoReferencia,
-                idUsuarioAprobacion);
-
-            if (carga == null)
+            var carga = await ObtenerActualizacionConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioAprobacion);
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = "NO_ENCONTRADA",
-                    Mensaje =
-                        "No se encontro la actualizacion pendiente."
+                    Mensaje = "No se encontro la actualizacion pendiente."
                 };
             }
 
-            if (!carga.EsSuperUsuario)
+            if(!carga.EsSuperUsuario)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "Solo un superusuario puede aprobar actualizaciones."
+                    Mensaje = "Solo un superusuario puede aprobar actualizaciones."
                 };
             }
 
-            if (!string.Equals(
-                    carga.Estado,
-                    "PENDIENTE_APROBACION",
-                    StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "La actualizacion ya no se encuentra pendiente de aprobacion."
+                    Mensaje = "La actualizacion ya no se encuentra pendiente de aprobacion."
                 };
             }
 
@@ -378,41 +256,20 @@ public partial class ActualizacionRepository : IActualizacionRepository
                 conservan como responsable al usuario que envio
                 la actualizacion.
             */
-            await AplicarActualizacionCompletaAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                carga.IdUsuarioCarga);
-
+            await AplicarActualizacionCompletaAsync(connection, transaction, carga.IdCarga, carga.IdUsuarioCarga);
             /*
                 La aprobacion final queda registrada a nombre
                 del superusuario administrador.
             */
-            await ConfirmarActualizacionFinalAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioAprobacion);
-
-            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                estadoAnterior: "PENDIENTE_APROBACION",
-                estadoNuevo: "CONFIRMADO_ACTUALIZACION",
-                idUsuario: idUsuarioAprobacion,
-                comentario:
-                    "La actualizacion fue aprobada por el superusuario.");
-
+            await ConfirmarActualizacionFinalAsync(connection, transaction, carga.IdCarga, idUsuarioAprobacion);
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: "PENDIENTE_APROBACION", estadoNuevo: "CONFIRMADO_ACTUALIZACION", idUsuario: idUsuarioAprobacion, comentario: "La actualizacion fue aprobada por el superusuario.");
             await transaction.CommitAsync();
-
             return new ConfirmarCargaResponse
             {
                 EsValido = true,
                 CodigoReferencia = codigoReferencia,
                 Estado = "CONFIRMADO_ACTUALIZACION",
-                Mensaje =
-                    "La actualizacion fue aprobada y aplicada correctamente."
+                Mensaje = "La actualizacion fue aprobada y aplicada correctamente."
             };
         }
         catch
@@ -422,94 +279,61 @@ public partial class ActualizacionRepository : IActualizacionRepository
         }
     }
 
-    public async Task<ConfirmarCargaResponse> RechazarActualizacionPendienteAsync(string codigoReferencia, int idUsuarioRechazo, string motivo)
+    public async Task<ConfirmarCargaResponse> RechazarActualizacionPendienteAsync(string codigoReferencia,
+        int idUsuarioRechazo,
+        string motivo)
     {
-        using var connection =
-            (SqlConnection)_dbConnectionFactory.CrearConexion();
-
+        using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
-        using var transaction =
-            (SqlTransaction)await connection.BeginTransactionAsync();
-
+        using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
         try
         {
-            var carga = await ObtenerActualizacionConfirmacionAsync(
-                connection,
-                transaction,
-                codigoReferencia,
-                idUsuarioRechazo);
-
-            if (carga == null)
+            var carga = await ObtenerActualizacionConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioRechazo);
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = "NO_ENCONTRADA",
-                    Mensaje =
-                        "No se encontro la actualizacion pendiente."
+                    Mensaje = "No se encontro la actualizacion pendiente."
                 };
             }
 
-            if (!carga.EsSuperUsuario)
+            if(!carga.EsSuperUsuario)
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "Solo un superusuario puede rechazar actualizaciones."
+                    Mensaje = "Solo un superusuario puede rechazar actualizaciones."
                 };
             }
 
-            if (!string.Equals(
-                    carga.Estado,
-                    "PENDIENTE_APROBACION",
-                    StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
-
                 return new ConfirmarCargaResponse
                 {
                     EsValido = false,
                     CodigoReferencia = codigoReferencia,
                     Estado = carga.Estado,
-                    Mensaje =
-                        "La actualizacion ya no se encuentra pendiente de aprobacion."
+                    Mensaje = "La actualizacion ya no se encuentra pendiente de aprobacion."
                 };
             }
 
-            await RechazarActualizacionAdministracionAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                idUsuarioRechazo,
-                motivo);
-
-            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                connection,
-                transaction,
-                carga.IdCarga,
-                estadoAnterior: "PENDIENTE_APROBACION",
-                estadoNuevo: "RECHAZADO_ADMIN",
-                idUsuario: idUsuarioRechazo,
-                comentario: motivo);
-
+            await RechazarActualizacionAdministracionAsync(connection, transaction, carga.IdCarga, idUsuarioRechazo, motivo);
+            await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: "PENDIENTE_APROBACION", estadoNuevo: "RECHAZADO_ADMIN", idUsuario: idUsuarioRechazo, comentario: motivo);
             await transaction.CommitAsync();
-
             return new ConfirmarCargaResponse
             {
                 EsValido = true,
                 CodigoReferencia = codigoReferencia,
                 Estado = "RECHAZADO_ADMIN",
-                Mensaje =
-                    "La actualizacion fue rechazada por el administrador."
+                Mensaje = "La actualizacion fue rechazada por el administrador."
             };
         }
         catch
@@ -519,7 +343,10 @@ public partial class ActualizacionRepository : IActualizacionRepository
         }
     }
 
-    private async Task RechazarActualizacionAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
+    private async Task RechazarActualizacionAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        int idUsuarioConfirmacion)
     {
         var sql = @"
         UPDATE carga
@@ -544,15 +371,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                IdUsuarioConfirmacion = idUsuarioConfirmacion
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
     private async Task ActualizarActualizacionExpiradaAsync(SqlConnection connection, SqlTransaction transaction, long idCarga)
@@ -578,17 +397,14 @@ public partial class ActualizacionRepository : IActualizacionRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga }, transaction);
     }
 
-    private static async Task RechazarActualizacionAdministracionAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioRechazo, string motivo)
+    private static async Task RechazarActualizacionAdministracionAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        int idUsuarioRechazo,
+        string motivo)
     {
         const string sql = @"
         UPDATE dbo.carga
@@ -616,16 +432,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                IdUsuarioRechazo = idUsuarioRechazo,
-                Motivo = motivo
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioRechazo = idUsuarioRechazo, Motivo = motivo }, transaction);
     }
 
     private async Task ValidarDuplicadosActivosPeriodoAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion)
@@ -724,155 +531,65 @@ public partial class ActualizacionRepository : IActualizacionRepository
             COUNT(1) AS TotalGruposDuplicados
         FROM duplicados_victimas;
     ";
-
-        var duplicados = (await connection.QueryAsync<DuplicadoActivoValidacion>(
-                sql,
-                new
-                {
-                    IdCargaActualizacion = idCargaActualizacion
-                },
-                transaction))
-            .Where(x => x.TotalGruposDuplicados > 0)
-            .ToList();
-
-        if (duplicados.Count == 0)
+        var duplicados = (await connection.QueryAsync<DuplicadoActivoValidacion>(sql, new { IdCargaActualizacion = idCargaActualizacion }, transaction)).Where(x => x.TotalGruposDuplicados > 0).ToList();
+        if(duplicados.Count == 0)
         {
             return;
         }
 
-        var detalle = string.Join(
-            ", ",
-            duplicados.Select(x => $"{x.Seccion}: {x.TotalGruposDuplicados}"));
-
-        throw new InvalidOperationException(
-            $"La actualización no puede confirmarse porque dejaría registros activos duplicados en el periodo. Detalle: {detalle}.");
+        var detalle = string.Join(", ", duplicados.Select(x => $"{x.Seccion}: {x.TotalGruposDuplicados}"));
+        throw new InvalidOperationException($"La actualización no puede confirmarse porque dejaría registros activos duplicados en el periodo. Detalle: {detalle}.");
     }
 
     // Orden intencional: guardar versiones previas antes de actualizar; desactivar hijos antes de padres.
     // Todas las etapas comparten la transacción recibida; no confirmar por separado dentro de un parcial.
-    private async Task AplicarActualizacionCompletaAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion, int idUsuarioConfirmacion)
+    private async Task AplicarActualizacionCompletaAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCargaActualizacion,
+        int idUsuarioConfirmacion)
     {
         var relojTotal = Stopwatch.StartNew();
-
-        await EjecutarPasoActualizacionAsync(
-            "InsertarHistoricoCarpetasModificadas",
-            idCargaActualizacion,
-            () => InsertarHistoricoCarpetasModificadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "ActualizarCarpetasModificadas",
-            idCargaActualizacion,
-            () => ActualizarCarpetasModificadasAsync(connection, transaction, idCargaActualizacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "InsertarCarpetasNuevasActualizacion",
-            idCargaActualizacion,
-            () => InsertarCarpetasNuevasActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "InsertarHistoricoDelitosModificados",
-            idCargaActualizacion,
-            () => InsertarHistoricoDelitosModificadosAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "ActualizarDelitosModificados",
-            idCargaActualizacion,
-            () => ActualizarDelitosModificadosAsync(connection, transaction, idCargaActualizacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "InsertarDelitosNuevosActualizacion",
-            idCargaActualizacion,
-            () => InsertarDelitosNuevosActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "InsertarHistoricoVictimasModificadas",
-            idCargaActualizacion,
-            () => InsertarHistoricoVictimasModificadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "ActualizarVictimasModificadas",
-            idCargaActualizacion,
-            () => ActualizarVictimasModificadasAsync(connection, transaction, idCargaActualizacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "InsertarVictimasNuevasActualizacion",
-            idCargaActualizacion,
-            () => InsertarVictimasNuevasActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "InsertarHistoricoVictimasEliminadas",
-            idCargaActualizacion,
-            () => InsertarHistoricoVictimasEliminadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "DesactivarVictimasEliminadas",
-            idCargaActualizacion,
-            () => DesactivarVictimasEliminadasAsync(connection, transaction, idCargaActualizacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "InsertarHistoricoDelitosEliminados",
-            idCargaActualizacion,
-            () => InsertarHistoricoDelitosEliminadosAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "DesactivarDelitosEliminados",
-            idCargaActualizacion,
-            () => DesactivarDelitosEliminadosAsync(connection, transaction, idCargaActualizacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "InsertarHistoricoCarpetasEliminadas",
-            idCargaActualizacion,
-            () => InsertarHistoricoCarpetasEliminadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
-
-        await EjecutarPasoActualizacionAsync(
-            "DesactivarCarpetasEliminadas",
-            idCargaActualizacion,
-            () => DesactivarCarpetasEliminadasAsync(connection, transaction, idCargaActualizacion));
-
-        await EjecutarPasoActualizacionAsync(
-             "ValidarDuplicadosActivosPeriodo",
-             idCargaActualizacion,
-             () => ValidarDuplicadosActivosPeriodoAsync(connection, transaction, idCargaActualizacion));
-
+        await EjecutarPasoActualizacionAsync("InsertarHistoricoCarpetasModificadas", idCargaActualizacion, () => InsertarHistoricoCarpetasModificadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+        await EjecutarPasoActualizacionAsync("ActualizarCarpetasModificadas", idCargaActualizacion, () => ActualizarCarpetasModificadasAsync(connection, transaction, idCargaActualizacion));
+        await EjecutarPasoActualizacionAsync("InsertarCarpetasNuevasActualizacion", idCargaActualizacion, () => InsertarCarpetasNuevasActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+        await EjecutarPasoActualizacionAsync("InsertarHistoricoDelitosModificados", idCargaActualizacion, () => InsertarHistoricoDelitosModificadosAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+        await EjecutarPasoActualizacionAsync("ActualizarDelitosModificados", idCargaActualizacion, () => ActualizarDelitosModificadosAsync(connection, transaction, idCargaActualizacion));
+        await EjecutarPasoActualizacionAsync("InsertarDelitosNuevosActualizacion", idCargaActualizacion, () => InsertarDelitosNuevosActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+        await EjecutarPasoActualizacionAsync("InsertarHistoricoVictimasModificadas", idCargaActualizacion, () => InsertarHistoricoVictimasModificadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+        await EjecutarPasoActualizacionAsync("ActualizarVictimasModificadas", idCargaActualizacion, () => ActualizarVictimasModificadasAsync(connection, transaction, idCargaActualizacion));
+        await EjecutarPasoActualizacionAsync("InsertarVictimasNuevasActualizacion", idCargaActualizacion, () => InsertarVictimasNuevasActualizacionAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+        await EjecutarPasoActualizacionAsync("InsertarHistoricoVictimasEliminadas", idCargaActualizacion, () => InsertarHistoricoVictimasEliminadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+        await EjecutarPasoActualizacionAsync("DesactivarVictimasEliminadas", idCargaActualizacion, () => DesactivarVictimasEliminadasAsync(connection, transaction, idCargaActualizacion));
+        await EjecutarPasoActualizacionAsync("InsertarHistoricoDelitosEliminados", idCargaActualizacion, () => InsertarHistoricoDelitosEliminadosAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+        await EjecutarPasoActualizacionAsync("DesactivarDelitosEliminados", idCargaActualizacion, () => DesactivarDelitosEliminadosAsync(connection, transaction, idCargaActualizacion));
+        await EjecutarPasoActualizacionAsync("InsertarHistoricoCarpetasEliminadas", idCargaActualizacion, () => InsertarHistoricoCarpetasEliminadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
+        await EjecutarPasoActualizacionAsync("DesactivarCarpetasEliminadas", idCargaActualizacion, () => DesactivarCarpetasEliminadasAsync(connection, transaction, idCargaActualizacion));
+        await EjecutarPasoActualizacionAsync("ValidarDuplicadosActivosPeriodo", idCargaActualizacion, () => ValidarDuplicadosActivosPeriodoAsync(connection, transaction, idCargaActualizacion));
         relojTotal.Stop();
-
-        _logger.LogInformation(
-            "PERFORMANCE_ACTUALIZACION_TOTAL idCargaActualizacion={IdCargaActualizacion} tiempoMs={TiempoMs}",
-            idCargaActualizacion,
-            relojTotal.ElapsedMilliseconds);
+        _logger.LogInformation("PERFORMANCE_ACTUALIZACION_TOTAL idCargaActualizacion={IdCargaActualizacion} tiempoMs={TiempoMs}", idCargaActualizacion, relojTotal.ElapsedMilliseconds);
     }
 
     private async Task EjecutarPasoActualizacionAsync(string nombrePaso, long idCargaActualizacion, Func<Task> accion)
     {
         var reloj = Stopwatch.StartNew();
-
         try
         {
             await accion();
-
             reloj.Stop();
-
-            _logger.LogInformation(
-                "PERFORMANCE_ACTUALIZACION_PASO idCargaActualizacion={IdCargaActualizacion} paso={Paso} tiempoMs={TiempoMs}",
-                idCargaActualizacion,
-                nombrePaso,
-                reloj.ElapsedMilliseconds);
+            _logger.LogInformation("PERFORMANCE_ACTUALIZACION_PASO idCargaActualizacion={IdCargaActualizacion} paso={Paso} tiempoMs={TiempoMs}", idCargaActualizacion, nombrePaso, reloj.ElapsedMilliseconds);
         }
         catch
         {
             reloj.Stop();
-
-            _logger.LogError(
-                "PERFORMANCE_ACTUALIZACION_ERROR idCargaActualizacion={IdCargaActualizacion} paso={Paso} tiempoMs={TiempoMs}",
-                idCargaActualizacion,
-                nombrePaso,
-                reloj.ElapsedMilliseconds);
-
+            _logger.LogError("PERFORMANCE_ACTUALIZACION_ERROR idCargaActualizacion={IdCargaActualizacion} paso={Paso} tiempoMs={TiempoMs}", idCargaActualizacion, nombrePaso, reloj.ElapsedMilliseconds);
             throw;
         }
     }
 
-    private async Task ConfirmarActualizacionFinalAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioConfirmacion)
+    private async Task ConfirmarActualizacionFinalAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        int idUsuarioConfirmacion)
     {
         await _cruce.ConfirmarAsync(connection, transaction, idCarga);
         var sql = @"
@@ -898,16 +615,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
-
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                IdUsuarioConfirmacion = idUsuarioConfirmacion
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
     private static async Task EnviarActualizacionAprobacionAsync(SqlConnection connection, SqlTransaction transaction, long idCarga)
@@ -934,14 +642,6 @@ public partial class ActualizacionRepository : IActualizacionRepository
             fecha_procesamiento = NULL
         WHERE id_carga = @IdCarga;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga }, transaction);
     }
-
 }

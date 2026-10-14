@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class SemanalCargaDiferenciasInfo
 {
     public long IdSemanalCarga { get; set; }

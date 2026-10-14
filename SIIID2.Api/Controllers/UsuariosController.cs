@@ -5,13 +5,11 @@ using SIIID2.Api.Models;
 using SIIID2.Api.Services;
 
 namespace SIIID2.Api.Controllers;
-
 [ApiController]
 [Route("api/usuarios")]
 public class UsuariosController : ControllerBase
 {
     private readonly IUsuarioService _usuarioService;
-
     public UsuariosController(IUsuarioService usuarioService)
     {
         _usuarioService = usuarioService;
@@ -25,33 +23,19 @@ public class UsuariosController : ControllerBase
     public async Task<IActionResult> ObtenerUsuarios([FromQuery] bool incluirInactivos = false)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
         var resultadoPermiso = await _usuarioService.ValidarSuperUsuarioAsync(idUsuarioConsulta);
-
-        if (!resultadoPermiso.EsValido)
+        if(!resultadoPermiso.EsValido)
         {
             return StatusCode(StatusCodes.Status403Forbidden, resultadoPermiso);
         }
 
         var usuarios = await _usuarioService.ObtenerUsuariosAsync(incluirInactivos);
-
-        return Ok(new
-        {
-            esValido = true,
-            total = usuarios.Count,
-            usuarios
-        });
+        return Ok(new { esValido = true, total = usuarios.Count, usuarios });
     }
 
     // Obtiene el detalle de un usuario para edición.
@@ -61,28 +45,19 @@ public class UsuariosController : ControllerBase
     public async Task<IActionResult> ObtenerUsuarioDetalle(int idUsuario)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioConsulta))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
         var resultadoPermiso = await _usuarioService.ValidarSuperUsuarioAsync(idUsuarioConsulta);
-
-        if (!resultadoPermiso.EsValido)
+        if(!resultadoPermiso.EsValido)
         {
             return StatusCode(StatusCodes.Status403Forbidden, resultadoPermiso);
         }
 
         var resultado = await _usuarioService.ObtenerUsuarioDetalleAsync(idUsuario);
-
-        if (!resultado.EsValido)
+        if(!resultado.EsValido)
         {
             return NotFound(resultado);
         }
@@ -97,23 +72,13 @@ public class UsuariosController : ControllerBase
     public async Task<IActionResult> CrearUsuario([FromBody] CrearUsuarioRequest request)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioAlta))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioAlta))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
-        var resultado = await _usuarioService.CrearUsuarioAsync(
-            request,
-            idUsuarioAlta);
-
-        if (!resultado.EsValido)
+        var resultado = await _usuarioService.CrearUsuarioAsync(request, idUsuarioAlta);
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
@@ -128,28 +93,19 @@ public class UsuariosController : ControllerBase
     public async Task<IActionResult> CrearUsuarioSemanal([FromBody] CrearUsuarioSemanalRequest request)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioAlta))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioAlta))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
         var resultado = await _usuarioService.CrearUsuarioSemanalAsync(request, idUsuarioAlta);
-
-        if (!resultado.EsValido)
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
 
         return Ok(resultado);
     }
-
 
     // Edita un usuario existente.
     // Si nuevaPassword viene vacía o null, conserva la contraseña actual.
@@ -159,24 +115,13 @@ public class UsuariosController : ControllerBase
     public async Task<IActionResult> EditarUsuario(int idUsuario, [FromBody] EditarUsuarioRequest request)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
-        var resultado = await _usuarioService.EditarUsuarioAsync(
-            idUsuario,
-            request,
-            idUsuarioModificacion);
-
-        if (!resultado.EsValido)
+        var resultado = await _usuarioService.EditarUsuarioAsync(idUsuario, request, idUsuarioModificacion);
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
@@ -190,28 +135,19 @@ public class UsuariosController : ControllerBase
     public async Task<IActionResult> EditarUsuarioSemanal(int idUsuario, [FromBody] EditarUsuarioSemanalRequest request)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
         var resultado = await _usuarioService.EditarUsuarioSemanalAsync(idUsuario, request, idUsuarioModificacion);
-
-        if (!resultado.EsValido)
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
 
         return Ok(resultado);
     }
-
 
     // Actualiza exclusivamente los permisos del módulo semanal.
     // Ejemplo: PUT /api/usuarios/3/permisos-semanales
@@ -220,21 +156,13 @@ public class UsuariosController : ControllerBase
     public async Task<IActionResult> ActualizarPermisosSemanales(int idUsuario, [FromBody] ActualizarPermisosSemanalesRequest request)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
         var resultado = await _usuarioService.ActualizarPermisosSemanalesAsync(idUsuario, request, idUsuarioModificacion);
-
-        if (!resultado.EsValido)
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
@@ -250,23 +178,13 @@ public class UsuariosController : ControllerBase
     public async Task<IActionResult> DesactivarUsuario(int idUsuario)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
-        var resultado = await _usuarioService.DesactivarUsuarioAsync(
-            idUsuario,
-            idUsuarioModificacion);
-
-        if (!resultado.EsValido)
+        var resultado = await _usuarioService.DesactivarUsuarioAsync(idUsuario, idUsuarioModificacion);
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
@@ -281,23 +199,13 @@ public class UsuariosController : ControllerBase
     public async Task<IActionResult> ActualizarPermisosGlobales([FromBody] PermisosGlobalesUsuariosRequest request)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
-        var resultado = await _usuarioService.ActualizarPermisosGlobalesAsync(
-            request,
-            idUsuarioModificacion);
-
-        if (!resultado.EsValido)
+        var resultado = await _usuarioService.ActualizarPermisosGlobalesAsync(request, idUsuarioModificacion);
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
@@ -313,24 +221,13 @@ public class UsuariosController : ControllerBase
     public async Task<IActionResult> ReactivarUsuario(int idUsuario, [FromBody] ReactivarUsuarioRequest request)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
-        var resultado = await _usuarioService.ReactivarUsuarioAsync(
-            idUsuario,
-            request,
-            idUsuarioModificacion);
-
-        if (!resultado.EsValido)
+        var resultado = await _usuarioService.ReactivarUsuarioAsync(idUsuario, request, idUsuarioModificacion);
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }
@@ -338,28 +235,19 @@ public class UsuariosController : ControllerBase
         return Ok(resultado);
     }
 
-
     // Reactiva la cuenta conservando los valores mensuales y configurando el módulo semanal.
     [Authorize(Policy = "MODULO_SEMANAL")]
     [HttpPut("{idUsuario:int}/reactivar-semanal")]
     public async Task<IActionResult> ReactivarUsuarioSemanal(int idUsuario, [FromBody] ReactivarUsuarioSemanalRequest request)
     {
         var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
+        if(!int.TryParse(idUsuarioClaim, out var idUsuarioModificacion))
         {
-            return Unauthorized(new
-            {
-                esValido = false,
-                codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-                mensaje = "El token no contiene un id de usuario válido.",
-                traceId = HttpContext.TraceIdentifier
-            });
+            return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
         }
 
         var resultado = await _usuarioService.ReactivarUsuarioSemanalAsync(idUsuario, request, idUsuarioModificacion);
-
-        if (!resultado.EsValido)
+        if(!resultado.EsValido)
         {
             return BadRequest(resultado);
         }

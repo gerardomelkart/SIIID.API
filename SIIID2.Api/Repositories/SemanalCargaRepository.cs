@@ -5,7 +5,6 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class SemanalCargaRepository : ISemanalCargaRepository
 {
     private class SemanalCargaConfirmacionInfo
@@ -31,9 +30,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
     }
 
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public SemanalCargaRepository(IDbConnectionFactory dbConnectionFactory) => _dbConnectionFactory = dbConnectionFactory;
-
     public async Task<UsuarioCargaInfo?> ObtenerUsuarioCargaAsync(int idUsuario)
     {
         const string sql = @"
@@ -49,7 +46,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         WHERE u.id_usuario = @IdUsuario
           AND u.activo = 1;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.QueryFirstOrDefaultAsync<UsuarioCargaInfo>(sql, new { IdUsuario = idUsuario });
     }
@@ -151,28 +147,23 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             bloque.anio_corte,
             bloque.mes_corte;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
         using var resultados = await connection.QueryMultipleAsync(sql, new { CodigoReferencia = codigoReferencia });
-
         var carga = await resultados.ReadFirstOrDefaultAsync<SemanalCargaAcuseInfo>();
-
-        if (carga == null) return null;
-
+        if(carga == null)
+            return null;
         carga.Bloques = (await resultados.ReadAsync<SemanalCargaAcuseBloque>()).ToList();
         return carga;
     }
 
-    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idSemanalCarga, int? anioCorte = null, int? mesCorte = null)
+    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseAsync(long idSemanalCarga,
+        int? anioCorte = null,
+        int? mesCorte = null)
     {
-        if (anioCorte.HasValue != mesCorte.HasValue) throw new InvalidOperationException("Debe indicar año y mes de corte.");
-
-        DateTime? fechaInicio = anioCorte.HasValue && mesCorte.HasValue
-            ? new DateTime(anioCorte.Value, mesCorte.Value, 1)
-            : null;
-
+        if(anioCorte.HasValue != mesCorte.HasValue)
+            throw new InvalidOperationException("Debe indicar año y mes de corte.");
+        DateTime? fechaInicio = anioCorte.HasValue && mesCorte.HasValue ? new DateTime(anioCorte.Value, mesCorte.Value, 1) : null;
         var fechaFinExclusiva = fechaInicio?.AddMonths(1);
-
         const string sql = @"
     SELECT
         cd.clave2 AS ClaveDelito,
@@ -260,31 +251,21 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         cd.clave2,
         sd.clave3;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var resumen = (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
-        {
-            IdSemanalCarga = idSemanalCarga,
-            FechaInicio = fechaInicio,
-            FechaFinExclusiva = fechaFinExclusiva
-        })).ToList();
-
-        if (resumen.Count > 0) return resumen;
-
+        var resumen = (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new { IdSemanalCarga = idSemanalCarga, FechaInicio = fechaInicio, FechaFinExclusiva = fechaFinExclusiva })).ToList();
+        if(resumen.Count > 0)
+            return resumen;
         return await ObtenerResumenCargaCeroAsync(connection, idSemanalCarga, anioCorte, mesCorte);
     }
 
-    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idSemanalCarga, int? anioCorte = null, int? mesCorte = null)
+    public async Task<List<CargaAcuseResumenItem>> ObtenerResumenAcuseConfirmadoAsync(long idSemanalCarga,
+        int? anioCorte = null,
+        int? mesCorte = null)
     {
-        if (anioCorte.HasValue != mesCorte.HasValue) throw new InvalidOperationException("Debe indicar año y mes de corte.");
-
-        DateTime? fechaInicio = anioCorte.HasValue && mesCorte.HasValue
-            ? new DateTime(anioCorte.Value, mesCorte.Value, 1)
-            : null;
-
+        if(anioCorte.HasValue != mesCorte.HasValue)
+            throw new InvalidOperationException("Debe indicar año y mes de corte.");
+        DateTime? fechaInicio = anioCorte.HasValue && mesCorte.HasValue ? new DateTime(anioCorte.Value, mesCorte.Value, 1) : null;
         var fechaFinExclusiva = fechaInicio?.AddMonths(1);
-
         const string sql = @"
     SELECT
         cd.clave2 AS ClaveDelito,
@@ -366,22 +347,17 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         cd.clave2,
         sd.clave3;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var resumen = (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
-        {
-            IdSemanalCarga = idSemanalCarga,
-            FechaInicio = fechaInicio,
-            FechaFinExclusiva = fechaFinExclusiva
-        })).ToList();
-
-        if (resumen.Count > 0) return resumen;
-
+        var resumen = (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new { IdSemanalCarga = idSemanalCarga, FechaInicio = fechaInicio, FechaFinExclusiva = fechaFinExclusiva })).ToList();
+        if(resumen.Count > 0)
+            return resumen;
         return await ObtenerResumenCargaCeroAsync(connection, idSemanalCarga, anioCorte, mesCorte);
     }
 
-    public async Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa, int idDelito, DateTime fechaInicio, DateTime fechaFin)
+    public async Task<List<SemanalCargaBloqueConfirmado>> ObtenerBloquesConfirmadosAsync(int idEntidadFederativa,
+        int idDelito,
+        DateTime fechaInicio,
+        DateTime fechaFin)
     {
         const string sql = @"
         SELECT DISTINCT
@@ -407,19 +383,14 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             AnioCorte,
             MesCorte;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return (await connection.QueryAsync<SemanalCargaBloqueConfirmado>(sql, new
-        {
-            IdEntidadFederativa = idEntidadFederativa,
-            IdDelito = idDelito,
-            FechaInicio = fechaInicio.Date,
-            FechaFin = fechaFin.Date
-        })).ToList();
+        return (await connection.QueryAsync<SemanalCargaBloqueConfirmado>(sql, new { IdEntidadFederativa = idEntidadFederativa, IdDelito = idDelito, FechaInicio = fechaInicio.Date, FechaFin = fechaFin.Date })).ToList();
     }
 
-    public async Task<List<SemanalCargaBloquePendiente>> ObtenerBloquesPendientesAsync(int idEntidadFederativa, int idDelito, DateTime fechaInicio, DateTime fechaFin)
+    public async Task<List<SemanalCargaBloquePendiente>> ObtenerBloquesPendientesAsync(int idEntidadFederativa,
+        int idDelito,
+        DateTime fechaInicio,
+        DateTime fechaFin)
     {
         const string sql = @"
         SELECT DISTINCT
@@ -451,19 +422,14 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             MesCorte,
             CodigoReferencia;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return (await connection.QueryAsync<SemanalCargaBloquePendiente>(sql, new
-        {
-            IdEntidadFederativa = idEntidadFederativa,
-            IdDelito = idDelito,
-            FechaInicio = fechaInicio.Date,
-            FechaFin = fechaFin.Date
-        })).ToList();
+        return (await connection.QueryAsync<SemanalCargaBloquePendiente>(sql, new { IdEntidadFederativa = idEntidadFederativa, IdDelito = idDelito, FechaInicio = fechaInicio.Date, FechaFin = fechaFin.Date })).ToList();
     }
 
-    public async Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa, int idUsuarioCarga, int anioSemana, int numeroSemana)
+    public async Task<SemanalSemanaEstadoInfo> ObtenerEstadoSemanaAsync(int idEntidadFederativa,
+        int idUsuarioCarga,
+        int anioSemana,
+        int numeroSemana)
     {
         const string sql = @"
         SELECT
@@ -551,16 +517,8 @@ public class SemanalCargaRepository : ISemanalCargaRepository
                 sc.id_semanal_carga DESC
         ) pendiente;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        return await connection.QuerySingleAsync<SemanalSemanaEstadoInfo>(sql, new
-        {
-            IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga,
-            AnioSemana = anioSemana,
-            NumeroSemana = numeroSemana
-        });
+        return await connection.QuerySingleAsync<SemanalSemanaEstadoInfo>(sql, new { IdEntidadFederativa = idEntidadFederativa, IdUsuarioCarga = idUsuarioCarga, AnioSemana = anioSemana, NumeroSemana = numeroSemana });
     }
 
     public async Task<SemanalDatosComparacion> ObtenerDatosComparacionAsync(long idSemanalCarga, int idEntidadFederativa)
@@ -752,14 +710,8 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         DROP TABLE #CargasConfirmadas;
         DROP TABLE #BloquesComparacion;
         ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-        using var resultados = await connection.QueryMultipleAsync(sql, new
-        {
-            IdSemanalCarga = idSemanalCarga,
-            IdEntidadFederativa = idEntidadFederativa
-        });
-
+        using var resultados = await connection.QueryMultipleAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdEntidadFederativa = idEntidadFederativa });
         return new SemanalDatosComparacion
         {
             CarpetasConfirmadas = (await resultados.ReadAsync<SemanalFilaComparacion>()).ToList(),
@@ -794,15 +746,10 @@ public class SemanalCargaRepository : ISemanalCargaRepository
           )
           AND sc.activo = 1;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var contexto = await connection.QueryFirstOrDefaultAsync<SemanalCargaDiferenciasInfo>(
-            sqlContexto,
-            new { CodigoReferencia = codigoReferencia });
-
-        if (contexto == null) return null;
-
+        var contexto = await connection.QueryFirstOrDefaultAsync<SemanalCargaDiferenciasInfo>(sqlContexto, new { CodigoReferencia = codigoReferencia });
+        if(contexto == null)
+            return null;
         const string sqlDatos = @"
         SELECT
             c.id_semanal_carga AS IdSemanalCarga,
@@ -886,15 +833,10 @@ public class SemanalCargaRepository : ISemanalCargaRepository
           AND v.activo = 1
         ORDER BY v.numero_fila;
     ";
-
-        using var resultados = await connection.QueryMultipleAsync(
-            sqlDatos,
-            new { contexto.IdSemanalCarga });
-
+        using var resultados = await connection.QueryMultipleAsync(sqlDatos, new { contexto.IdSemanalCarga });
         contexto.Carpetas = (await resultados.ReadAsync<SemanalFilaComparacion>()).ToList();
         contexto.Delitos = (await resultados.ReadAsync<SemanalFilaComparacion>()).ToList();
         contexto.Victimas = (await resultados.ReadAsync<SemanalFilaComparacion>()).ToList();
-
         return contexto;
     }
 
@@ -903,7 +845,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             var idSemanalCarga = await CrearCargaAsync(connection, transaction, carga);
@@ -916,8 +857,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             await transaction.CommitAsync();
             return idSemanalCarga;
         }
-
-        catch (SqlException ex) when ((ex.Number == 2601 || ex.Number == 2627) && ex.Message.Contains("UX_semanal_carga_bloque_pendiente", StringComparison.OrdinalIgnoreCase))
+        catch (SqlException ex)when ((ex.Number == 2601 || ex.Number == 2627) && ex.Message.Contains("UX_semanal_carga_bloque_pendiente", StringComparison.OrdinalIgnoreCase))
         {
             await transaction.RollbackAsync();
             return null;
@@ -934,12 +874,10 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioConfirmacion);
-
-            if (carga == null)
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, "NO_ENCONTRADA", "No se encontró una carga semanal válida para continuar.");
@@ -947,45 +885,44 @@ public class SemanalCargaRepository : ISemanalCargaRepository
 
             var esActualizacion = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
             var estadoEsperado = esActualizacion ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "VALIDADO_PENDIENTE";
-
-            if (!string.Equals(carga.Estado, estadoEsperado, StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, estadoEsperado, StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, carga.Estado, $"La operación semanal no se encuentra en estado {estadoEsperado}.");
             }
 
-            if (carga.IdUsuarioCarga != idUsuarioConfirmacion)
+            if(carga.IdUsuarioCarga != idUsuarioConfirmacion)
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, carga.Estado, "Solo el usuario que realizó la carga puede aceptarla o rechazarla.");
             }
 
-            if (!carga.HabilitaSemanal || !carga.HabilitaCarga)
+            if(!carga.HabilitaSemanal || !carga.HabilitaCarga)
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, carga.Estado, "El usuario no tiene habilitada la carga de información en el módulo semanal.");
             }
 
-            if (carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
+            if(carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
             {
                 await ActualizarCargaExpiradaAsync(connection, transaction, carga.IdSemanalCarga, esActualizacion);
                 await transaction.CommitAsync();
                 return Error(codigoReferencia, esActualizacion ? "EXPIRADO_ACTUALIZACION" : "EXPIRADO", "La operación semanal expiró. Debe validar nuevamente los archivos.");
             }
 
-            if (!carga.EsSuperUsuario && carga.IdEntidadFederativaUsuario != carga.IdEntidadFederativaCarga)
+            if(!carga.EsSuperUsuario && carga.IdEntidadFederativaUsuario != carga.IdEntidadFederativaCarga)
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, carga.Estado, "El usuario no puede procesar cargas semanales de otra entidad federativa.");
             }
 
-            if (aceptar && EsPeriodoAnteriorNoPermitido(carga.MesCorte, carga.AnioCorte))
+            if(aceptar && EsPeriodoAnteriorNoPermitido(carga.MesCorte, carga.AnioCorte))
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, "PERIODO_CONSOLIDADO", "La carga corresponde a un mes anterior al mes en curso y ya no puede confirmarse porque ese periodo pertenece al consolidado.");
             }
 
-            if (!aceptar)
+            if(!aceptar)
             {
                 await RechazarCargaAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion, esActualizacion);
                 await transaction.CommitAsync();
@@ -993,8 +930,7 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             }
 
             await SemanalCargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
-
-            if (!carga.EsSuperUsuario)
+            if(!carga.EsSuperUsuario)
             {
                 await EnviarCargaAprobacionAsync(connection, transaction, carga.IdSemanalCarga);
                 await transaction.CommitAsync();
@@ -1002,12 +938,12 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             }
 
             await PrepararReemplazoBloquesAsync(connection, transaction, carga, idUsuarioConfirmacion);
-
             var totalCarpetas = await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
             var totalDelitos = await InsertarDelitosFinalesAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
             var totalVictimas = await InsertarVictimasFinalesAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioConfirmacion);
-
-            if (totalCarpetas != carga.TotalCarpetasIncluidas || totalDelitos != carga.TotalDelitosIncluidos || totalVictimas != carga.TotalVictimasIncluidas)
+            if(totalCarpetas != carga.TotalCarpetasIncluidas
+                || totalDelitos != carga.TotalDelitosIncluidos
+                || totalVictimas != carga.TotalVictimasIncluidas)
             {
                 throw new InvalidOperationException($"Los totales insertados no coinciden con la validación semanal. Carpetas {totalCarpetas}/{carga.TotalCarpetasIncluidas}, delitos {totalDelitos}/{carga.TotalDelitosIncluidos}, víctimas {totalVictimas}/{carga.TotalVictimasIncluidas}.");
             }
@@ -1028,51 +964,47 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioAprobacion);
-
-            if (carga == null)
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, "NO_ENCONTRADA", "No se encontró la carga semanal pendiente de aprobación.");
             }
 
-            if (!carga.EsSuperUsuario || !carga.HabilitaSemanal)
+            if(!carga.EsSuperUsuario || !carga.HabilitaSemanal)
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, carga.Estado, "Solo un superusuario con acceso al módulo semanal puede aprobar cargas.");
             }
 
-            if (!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, carga.Estado, "La carga semanal ya no se encuentra pendiente de aprobación.");
             }
 
-            if (EsPeriodoAnteriorNoPermitido(carga.MesCorte, carga.AnioCorte))
+            if(EsPeriodoAnteriorNoPermitido(carga.MesCorte, carga.AnioCorte))
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, "PERIODO_CONSOLIDADO", "La carga corresponde a un mes anterior al mes en curso y ya no puede aprobarse porque ese periodo pertenece al consolidado.");
             }
 
             var esActualizacion = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
-
             await PrepararReemplazoBloquesAsync(connection, transaction, carga, idUsuarioAprobacion);
-
             var totalCarpetas = await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
             var totalDelitos = await InsertarDelitosFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
             var totalVictimas = await InsertarVictimasFinalesAsync(connection, transaction, carga.IdSemanalCarga, carga.IdUsuarioCarga);
-
-            if (totalCarpetas != carga.TotalCarpetasIncluidas || totalDelitos != carga.TotalDelitosIncluidos || totalVictimas != carga.TotalVictimasIncluidas)
+            if(totalCarpetas != carga.TotalCarpetasIncluidas
+                || totalDelitos != carga.TotalDelitosIncluidos
+                || totalVictimas != carga.TotalVictimasIncluidas)
             {
                 throw new InvalidOperationException($"Los totales insertados no coinciden con la validación semanal. Carpetas {totalCarpetas}/{carga.TotalCarpetasIncluidas}, delitos {totalDelitos}/{carga.TotalDelitosIncluidos}, víctimas {totalVictimas}/{carga.TotalVictimasIncluidas}.");
             }
 
             await ConfirmarCargaFinalAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioAprobacion, esActualizacion);
             await transaction.CommitAsync();
-
             return Exito(codigoReferencia, esActualizacion ? "CONFIRMADO_ACTUALIZACION" : "CONFIRMADO", esActualizacion ? "La actualización semanal fue aprobada y confirmada correctamente." : "La carga semanal fue aprobada y confirmada correctamente.");
         }
         catch
@@ -1087,24 +1019,22 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioRechazo);
-
-            if (carga == null)
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, "NO_ENCONTRADA", "No se encontró la carga semanal pendiente de aprobación.");
             }
 
-            if (!carga.EsSuperUsuario || !carga.HabilitaSemanal)
+            if(!carga.EsSuperUsuario || !carga.HabilitaSemanal)
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, carga.Estado, "Solo un superusuario con acceso al módulo semanal puede rechazar cargas.");
             }
 
-            if (!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
                 return Error(codigoReferencia, carga.Estado, "La carga semanal ya no se encuentra pendiente de aprobación.");
@@ -1112,7 +1042,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
 
             await RechazarCargaAdministracionAsync(connection, transaction, carga.IdSemanalCarga, idUsuarioRechazo, motivo);
             await transaction.CommitAsync();
-
             return Exito(codigoReferencia, "RECHAZADO_ADMIN", "La carga semanal fue rechazada por el administrador.");
         }
         catch
@@ -1181,34 +1110,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             1
         );
     ";
-
-        return await connection.ExecuteScalarAsync<long>(sql, new
-        {
-            carga.IdUsuarioCarga,
-            carga.IdEntidadFederativa,
-            carga.IdDelito,
-            carga.CodigoReferencia,
-            carga.TipoCarga,
-            EstadoInicial = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "VALIDADO_PENDIENTE",
-            carga.Periodo.TipoContenido,
-            carga.Periodo.AnioSemana,
-            carga.Periodo.NumeroSemana,
-            FechaInicioSemana = carga.Periodo.FechaInicioSemana.Date,
-            FechaFinSemana = carga.Periodo.FechaFinSemana.Date,
-            FechaInicioTramo = carga.Periodo.FechaInicioTramo.Date,
-            FechaFinTramo = carga.Periodo.FechaFinTramo.Date,
-            carga.Periodo.MesCorte,
-            carga.Periodo.AnioCorte,
-            carga.TotalCarpetasIncluidas,
-            carga.TotalDelitosIncluidos,
-            carga.TotalVictimasIncluidas,
-            carga.TotalCarpetasExcluidas,
-            carga.TotalDelitosExcluidos,
-            carga.TotalVictimasExcluidas
-        }, transaction);
+        return await connection.ExecuteScalarAsync<long>(sql, new { carga.IdUsuarioCarga, carga.IdEntidadFederativa, carga.IdDelito, carga.CodigoReferencia, carga.TipoCarga, EstadoInicial = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "VALIDADO_PENDIENTE", carga.Periodo.TipoContenido, carga.Periodo.AnioSemana, carga.Periodo.NumeroSemana, FechaInicioSemana = carga.Periodo.FechaInicioSemana.Date, FechaFinSemana = carga.Periodo.FechaFinSemana.Date, FechaInicioTramo = carga.Periodo.FechaInicioTramo.Date, FechaFinTramo = carga.Periodo.FechaFinTramo.Date, carga.Periodo.MesCorte, carga.Periodo.AnioCorte, carga.TotalCarpetasIncluidas, carga.TotalDelitosIncluidos, carga.TotalVictimasIncluidas, carga.TotalCarpetasExcluidas, carga.TotalDelitosExcluidos, carga.TotalVictimasExcluidas }, transaction);
     }
 
-    private static async Task GuardarBloquesCargaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, SemanalCargaPersistencia carga)
+    private static async Task GuardarBloquesCargaAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        SemanalCargaPersistencia carga)
     {
         const string sql = @"
         INSERT INTO dbo.semanal_carga_bloque
@@ -1252,32 +1160,14 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             @Estado
         );
     ";
-
         var estadoInicial = string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase) ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "VALIDADO_PENDIENTE";
-
-        await connection.ExecuteAsync(sql, carga.Bloques.Select(bloque => new
-        {
-            IdSemanalCarga = idSemanalCarga,
-            carga.IdEntidadFederativa,
-            carga.IdUsuarioCarga,
-            carga.IdDelito,
-            bloque.AnioSemana,
-            bloque.NumeroSemana,
-            FechaInicioSemana = bloque.FechaInicioSemana.Date,
-            FechaFinSemana = bloque.FechaFinSemana.Date,
-            bloque.AnioCorte,
-            bloque.MesCorte,
-            FechaInicioTramo = bloque.FechaInicioTramo.Date,
-            FechaFinTramo = bloque.FechaFinTramo.Date,
-            bloque.TotalCarpetas,
-            bloque.TotalDelitos,
-            bloque.TotalVictimas,
-            bloque.ReemplazaInformacion,
-            Estado = estadoInicial
-        }), transaction);
+        await connection.ExecuteAsync(sql, carga.Bloques.Select(bloque => new { IdSemanalCarga = idSemanalCarga, carga.IdEntidadFederativa, carga.IdUsuarioCarga, carga.IdDelito, bloque.AnioSemana, bloque.NumeroSemana, FechaInicioSemana = bloque.FechaInicioSemana.Date, FechaFinSemana = bloque.FechaFinSemana.Date, bloque.AnioCorte, bloque.MesCorte, FechaInicioTramo = bloque.FechaInicioTramo.Date, FechaFinTramo = bloque.FechaFinTramo.Date, bloque.TotalCarpetas, bloque.TotalDelitos, bloque.TotalVictimas, bloque.ReemplazaInformacion, Estado = estadoInicial }), transaction);
     }
 
-    private static async Task GuardarConfiguracionCargaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, List<ConfiguracionModalidadSemanalItem> modalidades)
+    private static async Task GuardarConfiguracionCargaAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        List<ConfiguracionModalidadSemanalItem> modalidades)
     {
         const string sql = @"
         INSERT INTO dbo.semanal_carga_delito_configurado
@@ -1297,11 +1187,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             @Orden
         );
     ";
-
         await connection.ExecuteAsync(sql, modalidades.Select(x => new { IdSemanalCarga = idSemanalCarga, x.IdModalidadDelito, x.EsObligatorio, x.ConservarEntrePeriodos, x.Orden }), transaction);
     }
 
-    private static async Task GuardarTmpCarpetasAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, List<SemanalArchivoFilaCarga> filas)
+    private static async Task GuardarTmpCarpetasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        List<SemanalArchivoFilaCarga> filas)
     {
         var tabla = new DataTable();
         tabla.Columns.Add("id_semanal_carga", typeof(long));
@@ -1318,7 +1210,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         tabla.Columns.Add("codigo_exclusion", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-
         foreach (var item in filas)
         {
             tabla.Rows.Add(idSemanalCarga, item.Fila.NumeroFila ?? 0, ValorTextoStaging(ObtenerValor(item.Fila, "id_ci")), ValorTextoStaging(ObtenerValor(item.Fila, "ntra_ci")), ValorTextoStaging(ObtenerValor(item.Fila, "fha_de_ini")), ValorTextoStaging(ObtenerValor(item.Fila, "hra_de_ini")), ValorTextoStaging(ObtenerValor(item.Fila, "rmen_de_hchos")), ValorTextoStaging(ObtenerValor(item.Fila, "denuncia_anonima")), ValorTextoStaging(ObtenerValor(item.Fila, "denuncia_anonima_089")), ValorTextoStaging(ObtenerValor(item.Fila, "denuncia_anonima_otro_medio")), item.Incluido, item.CodigoExclusion == null ? DBNull.Value : item.CodigoExclusion, "PENDIENTE", true);
@@ -1327,14 +1218,42 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         await EscribirBulkAsync(connection, transaction, "dbo.semanal_carga_tmp_carpeta", tabla);
     }
 
-    private static async Task GuardarTmpDelitosAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, List<SemanalArchivoFilaCarga> filas)
+    private static async Task GuardarTmpDelitosAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        List<SemanalArchivoFilaCarga> filas)
     {
-        var columnas = new[] { "id_ci", "id_delito", "dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "id_ent_hchos", "id_mun_hchos", "id_loc_hchos", "nom_loc_hchos", "id_col_hchos", "nom_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos" };
+        var columnas = new[]
+        {
+            "id_ci",
+            "id_delito",
+            "dto",
+            "moda_dto",
+            "forma_acc",
+            "fha_de_hchos",
+            "hra_de_hchos",
+            "emto_com_dto",
+            "grdo_cons",
+            "clasf_de_dto",
+            "id_ent_hchos",
+            "id_mun_hchos",
+            "id_loc_hchos",
+            "nom_loc_hchos",
+            "id_col_hchos",
+            "nom_col_hchos",
+            "cp",
+            "coord_x",
+            "coord_y",
+            "dom_hchos"
+        };
         var tabla = CrearTablaTemporal(columnas);
-
         foreach (var item in filas)
         {
-            var valores = new List<object> { idSemanalCarga, item.Fila.NumeroFila ?? 0 };
+            var valores = new List<object>
+            {
+                idSemanalCarga,
+                item.Fila.NumeroFila ?? 0
+            };
             valores.AddRange(columnas.Select(columna => (object)ValorTextoStaging(ObtenerValor(item.Fila, columna))));
             valores.Add(item.Incluido);
             valores.Add(item.CodigoExclusion == null ? DBNull.Value : item.CodigoExclusion);
@@ -1346,14 +1265,34 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         await EscribirBulkAsync(connection, transaction, "dbo.semanal_carga_tmp_delito", tabla);
     }
 
-    private static async Task GuardarTmpVictimasAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, List<SemanalArchivoFilaCarga> filas)
+    private static async Task GuardarTmpVictimasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        List<SemanalArchivoFilaCarga> filas)
     {
-        var columnas = new[] { "id_ci", "id_delito", "id_vicf", "id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional" };
+        var columnas = new[]
+        {
+            "id_ci",
+            "id_delito",
+            "id_vicf",
+            "id_tv",
+            "id_tpm",
+            "sexo",
+            "genero",
+            "pob",
+            "disc",
+            "fha_nac",
+            "edad",
+            "nacional"
+        };
         var tabla = CrearTablaTemporal(columnas);
-
         foreach (var item in filas)
         {
-            var valores = new List<object> { idSemanalCarga, item.Fila.NumeroFila ?? 0 };
+            var valores = new List<object>
+            {
+                idSemanalCarga,
+                item.Fila.NumeroFila ?? 0
+            };
             valores.AddRange(columnas.Select(columna => (object)ValorTextoStaging(ObtenerValor(item.Fila, columna))));
             valores.Add(item.Incluido);
             valores.Add(item.CodigoExclusion == null ? DBNull.Value : item.CodigoExclusion);
@@ -1370,7 +1309,8 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         var tabla = new DataTable();
         tabla.Columns.Add("id_semanal_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
-        foreach (var columna in columnasArchivo) tabla.Columns.Add(columna, typeof(string));
+        foreach (var columna in columnasArchivo)
+            tabla.Columns.Add(columna, typeof(string));
         tabla.Columns.Add("incluido", typeof(bool));
         tabla.Columns.Add("codigo_exclusion", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
@@ -1380,12 +1320,19 @@ public class SemanalCargaRepository : ISemanalCargaRepository
 
     private static async Task EscribirBulkAsync(SqlConnection connection, SqlTransaction transaction, string tablaDestino, DataTable tabla)
     {
-        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction) { DestinationTableName = tablaDestino };
-        foreach (DataColumn columna in tabla.Columns) bulkCopy.ColumnMappings.Add(columna.ColumnName, columna.ColumnName);
+        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
+        {
+            DestinationTableName = tablaDestino
+        };
+        foreach (DataColumn columna in tabla.Columns)
+            bulkCopy.ColumnMappings.Add(columna.ColumnName, columna.ColumnName);
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
-    private static async Task<SemanalCargaConfirmacionInfo?> ObtenerCargaConfirmacionAsync(SqlConnection connection, SqlTransaction transaction, string codigoReferencia, int idUsuarioConfirmacion)
+    private static async Task<SemanalCargaConfirmacionInfo?> ObtenerCargaConfirmacionAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        string codigoReferencia,
+        int idUsuarioConfirmacion)
     {
         const string sql = @"
         SELECT
@@ -1416,7 +1363,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
           AND sc.tipo_carga IN (N'CARGA_INICIAL', N'ACTUALIZACION')
           AND sc.activo = 1;
     ";
-
         return await connection.QueryFirstOrDefaultAsync<SemanalCargaConfirmacionInfo>(sql, new { CodigoReferencia = codigoReferencia, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
@@ -1425,16 +1371,17 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         var fechaActual = DateTime.Today;
         var periodoActual = new DateTime(fechaActual.Year, fechaActual.Month, 1);
         var periodoCarga = new DateTime(anioCorte, mesCorte, 1);
-
-        if (periodoCarga >= periodoActual) return false;
-
+        if(periodoCarga >= periodoActual)
+            return false;
         var periodoAnterior = periodoActual.AddMonths(-1);
         var estaEnPrimeraSemanaMes = fechaActual.Day <= 7;
-
         return periodoCarga != periodoAnterior || !estaEnPrimeraSemanaMes;
     }
 
-    private static async Task ActualizarCargaExpiradaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, bool esActualizacion)
+    private static async Task ActualizarCargaExpiradaAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        bool esActualizacion)
     {
         const string sql = @"
         UPDATE dbo.semanal_carga SET estado = @Estado, mensaje_error = N'La operación semanal expiró antes de ser confirmada.' WHERE id_semanal_carga = @IdSemanalCarga;
@@ -1443,11 +1390,14 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         UPDATE dbo.semanal_carga_tmp_delito SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_victima SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
     ";
-
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, Estado = esActualizacion ? "EXPIRADO_ACTUALIZACION" : "EXPIRADO" }, transaction);
     }
 
-    private static async Task RechazarCargaAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioConfirmacion, bool esActualizacion)
+    private static async Task RechazarCargaAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        int idUsuarioConfirmacion,
+        bool esActualizacion)
     {
         const string sql = @"
         UPDATE dbo.semanal_carga
@@ -1463,7 +1413,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         UPDATE dbo.semanal_carga_tmp_delito SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_victima SET estado = @Estado, fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         ";
-
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion, Estado = esActualizacion ? "RECHAZADO_VALIDACION_ACTUALIZACION" : "RECHAZADO_VALIDACION" }, transaction);
     }
 
@@ -1476,11 +1425,14 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         UPDATE dbo.semanal_carga_tmp_delito SET estado = N'PENDIENTE_APROBACION', fecha_procesamiento = NULL WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_victima SET estado = N'PENDIENTE_APROBACION', fecha_procesamiento = NULL WHERE id_semanal_carga = @IdSemanalCarga;
         ";
-
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga }, transaction);
     }
 
-    private static async Task RechazarCargaAdministracionAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioRechazo, string motivo)
+    private static async Task RechazarCargaAdministracionAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        int idUsuarioRechazo,
+        string motivo)
     {
         const string sql = @"
         UPDATE dbo.semanal_carga
@@ -1513,11 +1465,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_semanal_carga = @IdSemanalCarga;
     ";
-
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioRechazo = idUsuarioRechazo, Motivo = motivo }, transaction);
     }
 
-    private static async Task PrepararReemplazoBloquesAsync(SqlConnection connection, SqlTransaction transaction, SemanalCargaConfirmacionInfo carga, int idUsuarioModificacion)
+    private static async Task PrepararReemplazoBloquesAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        SemanalCargaConfirmacionInfo carga,
+        int idUsuarioModificacion)
     {
         const string sql = @"
         DECLARE @IdDelito INT =
@@ -1863,20 +1817,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         FROM dbo.semanal_carpeta_investigacion ci
         INNER JOIN #CarpetasVersionAnterior objetivo ON objetivo.id_semanal_carpeta_investigacion = ci.id_semanal_carpeta_investigacion;
     ";
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdSemanalCargaNueva = carga.IdSemanalCarga,
-                IdEntidadFederativa = carga.IdEntidadFederativaCarga,
-                IdUsuarioModificacion = idUsuarioModificacion
-            },
-            transaction,
-            commandTimeout: 300);
+        await connection.ExecuteAsync(sql, new { IdSemanalCargaNueva = carga.IdSemanalCarga, IdEntidadFederativa = carga.IdEntidadFederativaCarga, IdUsuarioModificacion = idUsuarioModificacion }, transaction, commandTimeout: 300);
     }
 
-    private static async Task<int> InsertarCarpetasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioRegistro)
+    private static async Task<int> InsertarCarpetasFinalesAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        int idUsuarioRegistro)
     {
         const string sql = @"
         INSERT INTO dbo.semanal_carpeta_investigacion
@@ -1917,11 +1864,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
           AND c.incluido = 1
           AND c.activo = 1;
     ";
-
         return await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioRegistro = idUsuarioRegistro }, transaction);
     }
 
-    private static async Task<int> InsertarDelitosFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioRegistro)
+    private static async Task<int> InsertarDelitosFinalesAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        int idUsuarioRegistro)
     {
         const string sql = @"
         INSERT INTO dbo.semanal_delito
@@ -2006,11 +1955,13 @@ public class SemanalCargaRepository : ISemanalCargaRepository
           AND d.incluido = 1
           AND d.activo = 1;
     ";
-
         return await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioRegistro = idUsuarioRegistro }, transaction);
     }
 
-    private static async Task<int> InsertarVictimasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioRegistro)
+    private static async Task<int> InsertarVictimasFinalesAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        int idUsuarioRegistro)
     {
         const string sql = @"
         INSERT INTO dbo.semanal_victima
@@ -2059,11 +2010,14 @@ public class SemanalCargaRepository : ISemanalCargaRepository
           AND v.incluido = 1
           AND v.activo = 1;
     ";
-
         return await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioRegistro = idUsuarioRegistro }, transaction);
     }
 
-    private static async Task ConfirmarCargaFinalAsync(SqlConnection connection, SqlTransaction transaction, long idSemanalCarga, int idUsuarioConfirmacion, bool esActualizacion)
+    private static async Task ConfirmarCargaFinalAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idSemanalCarga,
+        int idUsuarioConfirmacion,
+        bool esActualizacion)
     {
         const string sql = @"
         UPDATE dbo.semanal_carga
@@ -2079,7 +2033,6 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         UPDATE dbo.semanal_carga_tmp_delito SET estado = N'PROCESADO', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         UPDATE dbo.semanal_carga_tmp_victima SET estado = N'PROCESADO', fecha_procesamiento = SYSDATETIME() WHERE id_semanal_carga = @IdSemanalCarga;
         ";
-
         await connection.ExecuteAsync(sql, new { IdSemanalCarga = idSemanalCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion, EstadoConfirmado = esActualizacion ? "CONFIRMADO_ACTUALIZACION" : "CONFIRMADO" }, transaction);
     }
 
@@ -2089,7 +2042,10 @@ public class SemanalCargaRepository : ISemanalCargaRepository
         return valor;
     }
 
-    private static async Task<List<CargaAcuseResumenItem>> ObtenerResumenCargaCeroAsync(IDbConnection connection, long idSemanalCarga, int? anioCorte, int? mesCorte)
+    private static async Task<List<CargaAcuseResumenItem>> ObtenerResumenCargaCeroAsync(IDbConnection connection,
+        long idSemanalCarga,
+        int? anioCorte,
+        int? mesCorte)
     {
         const string sql = @"
         SELECT
@@ -2122,18 +2078,22 @@ public class SemanalCargaRepository : ISemanalCargaRepository
               )
           );
     ";
-
-        return (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new
-        {
-            IdSemanalCarga = idSemanalCarga,
-            AnioCorte = anioCorte,
-            MesCorte = mesCorte
-        })).ToList();
+        return (await connection.QueryAsync<CargaAcuseResumenItem>(sql, new { IdSemanalCarga = idSemanalCarga, AnioCorte = anioCorte, MesCorte = mesCorte })).ToList();
     }
 
     private static string ValorTextoStaging(string? valor) => string.IsNullOrWhiteSpace(valor) ? string.Empty : valor.Trim();
-
-    private static ConfirmarCargaResponse Error(string codigoReferencia, string estado, string mensaje) => new() { EsValido = false, CodigoReferencia = codigoReferencia, Estado = estado, Mensaje = mensaje };
-
-    private static ConfirmarCargaResponse Exito(string codigoReferencia, string estado, string mensaje) => new() { EsValido = true, CodigoReferencia = codigoReferencia, Estado = estado, Mensaje = mensaje };
+    private static ConfirmarCargaResponse Error(string codigoReferencia, string estado, string mensaje) => new()
+    {
+        EsValido = false,
+        CodigoReferencia = codigoReferencia,
+        Estado = estado,
+        Mensaje = mensaje
+    };
+    private static ConfirmarCargaResponse Exito(string codigoReferencia, string estado, string mensaje) => new()
+    {
+        EsValido = true,
+        CodigoReferencia = codigoReferencia,
+        Estado = estado,
+        Mensaje = mensaje
+    };
 }

@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public enum EstadoConsultaRenapo
 {
     Encontrada,
@@ -9,8 +8,4 @@ public enum EstadoConsultaRenapo
     ErrorValidacion
 }
 
-public sealed record RenapoConsultaResultado(
-    EstadoConsultaRenapo Estado,
-    string? TipoError = null,
-    string? CodigoError = null
-);
+public sealed record RenapoConsultaResultado(EstadoConsultaRenapo Estado, string? TipoError = null, string? CodigoError = null);

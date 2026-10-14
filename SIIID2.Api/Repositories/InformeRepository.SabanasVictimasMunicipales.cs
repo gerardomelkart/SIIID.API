@@ -1,13 +1,16 @@
+// Las agregaciones municipales relacionan las víctimas con delito y carpeta sin convertir los IDs en claves compartidas entre módulos.
 using Dapper;
 using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 // Conteo municipal de víctimas; mantiene las reglas de clasificación existentes.
 public partial class InformeRepository : IInformeRepository
 {
-    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(int anioCorte, int? idEntidadFederativa, string modoPlano, int mesUltimoCorte)
+    public async Task<List<IDictionary<string, object?>>> ObtenerSabanaMunicipalVictimasAsync(int anioCorte,
+        int? idEntidadFederativa,
+        string modoPlano,
+        int mesUltimoCorte)
     {
         var sql = @"
                 WITH pendientes_rankeadas AS (
@@ -445,8 +448,6 @@ public partial class InformeRepository : IInformeRepository
                 ELSE 6
             END
         OPTION (RECOMPILE);";
-
         return await QueryDictionaryAnioAsync(sql, anioCorte, idEntidadFederativa, modoPlano, mesUltimoCorte);
     }
-
 }

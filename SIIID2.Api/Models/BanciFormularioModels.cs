@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class BanciFormularioRequest
 {
     public int? IdEntidadFederativa { get; set; }

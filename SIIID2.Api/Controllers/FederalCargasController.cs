@@ -6,7 +6,6 @@ using SIIID2.Api.Repositories;
 using SIIID2.Api.Services;
 
 namespace SIIID2.Api.Controllers;
-
 [ApiController]
 [Authorize(Policy = "MODULO_FEDERAL")]
 [Route("api/federal/cargas")]
@@ -15,8 +14,9 @@ public class FederalCargasController : ControllerBase
     private readonly IFederalCargaArchivosService _federalCargaArchivosService;
     private readonly IFederalCargaRepository _federalCargaRepository;
     private readonly IFederalAcusePdfService _federalAcusePdfService;
-
-    public FederalCargasController(IFederalCargaArchivosService federalCargaArchivosService, IFederalCargaRepository federalCargaRepository, IFederalAcusePdfService federalAcusePdfService)
+    public FederalCargasController(IFederalCargaArchivosService federalCargaArchivosService,
+        IFederalCargaRepository federalCargaRepository,
+        IFederalAcusePdfService federalAcusePdfService)
     {
         _federalCargaArchivosService = federalCargaArchivosService;
         _federalCargaRepository = federalCargaRepository;
@@ -27,26 +27,23 @@ public class FederalCargasController : ControllerBase
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> ValidarArchivos()
     {
-        if (!Request.HasFormContentType)
+        if(!Request.HasFormContentType)
         {
             return BadRequest(new CargaValidacionResponse
             {
                 Mensaje = "La petición debe enviarse como multipart/form-data.",
-                Errores =
-                [
-                    new CargaValidacionError
-                    {
-                        Archivo = "general",
-                        Codigo = "FEDERAL_GENERAL_CONTENT_TYPE_INVALIDO",
-                        DescripcionResumen = "Tipo de petición inválido",
-                        Mensaje = "La petición debe enviarse como multipart/form-data."
-                    }
-                ]
+                Errores = [new CargaValidacionError
+            {
+                Archivo = "general",
+                Codigo = "FEDERAL_GENERAL_CONTENT_TYPE_INVALIDO",
+                DescripcionResumen = "Tipo de petición inválido",
+                Mensaje = "La petición debe enviarse como multipart/form-data."
+            }]
             });
         }
 
-        if (!TryObtenerIdUsuario(out var idUsuarioCarga)) return TokenInvalido();
-
+        if(!TryObtenerIdUsuario(out var idUsuarioCarga))
+            return TokenInvalido();
         var resultado = await _federalCargaArchivosService.ValidarArchivosAsync(Request.Form, idUsuarioCarga);
         return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
     }
@@ -54,8 +51,8 @@ public class FederalCargasController : ControllerBase
     [HttpGet("{codigoReferencia}/acuse")]
     public async Task<IActionResult> DescargarAcuse(string codigoReferencia)
     {
-        if (!TryObtenerIdUsuario(out var idUsuarioConsulta)) return TokenInvalido();
-
+        if(!TryObtenerIdUsuario(out var idUsuarioConsulta))
+            return TokenInvalido();
         try
         {
             var pdf = await _federalAcusePdfService.GenerarAcusePrevioAsync(codigoReferencia.Trim(), idUsuarioConsulta);
@@ -63,30 +60,20 @@ public class FederalCargasController : ControllerBase
         }
         catch (UnauthorizedAccessException ex)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new
-            {
-                esValido = false,
-                codigo = "FEDERAL_ACUSE_SIN_PERMISO",
-                mensaje = ex.Message
-            });
+            return StatusCode(StatusCodes.Status403Forbidden, new { esValido = false, codigo = "FEDERAL_ACUSE_SIN_PERMISO", mensaje = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new
-            {
-                esValido = false,
-                codigo = "FEDERAL_ACUSE_NO_DISPONIBLE",
-                mensaje = ex.Message
-            });
+            return BadRequest(new { esValido = false, codigo = "FEDERAL_ACUSE_NO_DISPONIBLE", mensaje = ex.Message });
         }
     }
 
     [HttpPost("confirmar")]
     public async Task<IActionResult> ConfirmarCarga([FromBody] ConfirmarCargaRequest request)
     {
-        if (!TryObtenerIdUsuario(out var idUsuarioConfirmacion)) return TokenInvalido();
-
-        if (string.IsNullOrWhiteSpace(request.CodigoReferencia))
+        if(!TryObtenerIdUsuario(out var idUsuarioConfirmacion))
+            return TokenInvalido();
+        if(string.IsNullOrWhiteSpace(request.CodigoReferencia))
         {
             return BadRequest(new ConfirmarCargaResponse
             {
@@ -103,8 +90,8 @@ public class FederalCargasController : ControllerBase
     [HttpGet("{codigoReferencia}/acuse-confirmado")]
     public async Task<IActionResult> DescargarAcuseConfirmado(string codigoReferencia)
     {
-        if (!TryObtenerIdUsuario(out var idUsuarioConsulta)) return TokenInvalido();
-
+        if(!TryObtenerIdUsuario(out var idUsuarioConsulta))
+            return TokenInvalido();
         try
         {
             var pdf = await _federalAcusePdfService.GenerarAcuseConfirmadoAsync(codigoReferencia.Trim(), idUsuarioConsulta);
@@ -112,21 +99,11 @@ public class FederalCargasController : ControllerBase
         }
         catch (UnauthorizedAccessException ex)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new
-            {
-                esValido = false,
-                codigo = "FEDERAL_ACUSE_SIN_PERMISO",
-                mensaje = ex.Message
-            });
+            return StatusCode(StatusCodes.Status403Forbidden, new { esValido = false, codigo = "FEDERAL_ACUSE_SIN_PERMISO", mensaje = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new
-            {
-                esValido = false,
-                codigo = "FEDERAL_ACUSE_NO_DISPONIBLE",
-                mensaje = ex.Message
-            });
+            return BadRequest(new { esValido = false, codigo = "FEDERAL_ACUSE_NO_DISPONIBLE", mensaje = ex.Message });
         }
     }
 
@@ -137,12 +114,6 @@ public class FederalCargasController : ControllerBase
 
     private ObjectResult TokenInvalido()
     {
-        return Unauthorized(new
-        {
-            esValido = false,
-            codigo = "GENERAL_TOKEN_SIN_ID_USUARIO",
-            mensaje = "El token no contiene un id de usuario válido.",
-            traceId = HttpContext.TraceIdentifier
-        });
+        return Unauthorized(new { esValido = false, codigo = "GENERAL_TOKEN_SIN_ID_USUARIO", mensaje = "El token no contiene un id de usuario válido.", traceId = HttpContext.TraceIdentifier });
     }
 }

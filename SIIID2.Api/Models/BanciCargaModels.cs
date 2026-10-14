@@ -1,8 +1,8 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class BanciCargaArchivosRequest
 {
-    [System.ComponentModel.DataAnnotations.Range(1, 32)] public int? IdEntidadFederativa { get; set; }
+    [System.ComponentModel.DataAnnotations.Range(1, 32)]
+    public int? IdEntidadFederativa { get; set; }
     public IFormFile? ArchivoLibro { get; set; }
     public IFormFile? ArchivoCarpetas { get; set; }
     public IFormFile? ArchivoDelitos { get; set; }
@@ -14,7 +14,6 @@ public class BanciCargaValidacionResponse
     public int VersionFormato { get; set; } = 3;
     public BanciVistaPrevia? VistaPrevia { get; set; }
     public bool EsValido => Errores.Count == 0;
-
     public long IdBanciCarga { get; set; }
     public string Estado { get; set; } = string.Empty;
     public DateTime? FechaCarga { get; set; }
@@ -26,17 +25,12 @@ public class BanciCargaValidacionResponse
     public int TotalActualizaciones { get; set; }
     public int TotalSinCambio { get; set; }
     public int TotalAdvertencias { get; set; }
-
     public string CodigoReferencia { get; set; } = string.Empty;
-
     public string ModalidadIngreso { get; set; } = string.Empty;
-
     public int TotalCarpetas { get; set; }
     public int TotalDelitos { get; set; }
     public int TotalVictimas { get; set; }
-
     public string Mensaje { get; set; } = string.Empty;
-
     public List<BanciCargaValidacionError> Errores { get; set; } = [];
     public List<BanciCargaValidacionError> Advertencias { get; set; } = [];
 }
@@ -44,8 +38,10 @@ public class BanciCargaValidacionResponse
 public class BanciCargaConfirmacionRequest
 {
     public bool AceptarAdvertencias { get; set; }
+
     [System.ComponentModel.DataAnnotations.StringLength(64)]
     public string? HuellaVistaPrevia { get; set; }
+
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(50)]
     public string CodigoReferencia { get; set; } = string.Empty;
@@ -90,7 +86,6 @@ public class BanciCargaValidacionError
     public int? NumeroFila { get; set; }
     public string? Campo { get; set; }
     public string? Valor { get; set; }
-
     public string Codigo { get; set; } = string.Empty;
     public string Mensaje { get; set; } = string.Empty;
 }
@@ -98,11 +93,9 @@ public class BanciCargaValidacionError
 public class BanciLecturaArchivosResultado
 {
     public string ModalidadIngreso { get; set; } = string.Empty;
-
     public List<ArchivoFila> Carpetas { get; set; } = [];
     public List<ArchivoFila> Delitos { get; set; } = [];
     public List<ArchivoFila> Victimas { get; set; } = [];
-
     public List<BanciCargaValidacionError> Errores { get; set; } = [];
 }
 
@@ -113,12 +106,7 @@ public class BanciUsuarioCargaInfo
     public string Rol { get; set; } = string.Empty;
     public bool HabilitaCarga { get; set; }
     public bool HabilitaModificacion { get; set; }
-
     public bool EsFederal { get; set; }
     public bool PuedeElegirEntidad => EsSuperUsuario || EsFederal;
-    public bool EsSuperUsuario =>
-        string.Equals(
-            Rol,
-            "SUPER_USUARIO",
-            StringComparison.OrdinalIgnoreCase);
+    public bool EsSuperUsuario => string.Equals(Rol, "SUPER_USUARIO", StringComparison.OrdinalIgnoreCase);
 }

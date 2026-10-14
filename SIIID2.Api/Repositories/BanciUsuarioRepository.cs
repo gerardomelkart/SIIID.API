@@ -5,12 +5,10 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class BanciUsuarioRepository : IBanciUsuarioRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
     public BanciUsuarioRepository(IDbConnectionFactory dbConnectionFactory) => _dbConnectionFactory = dbConnectionFactory;
-
     private const string SqlUsuarios = """
         SELECT dbo.fn_banci_es_usuario_federal(u.id_usuario) AS EsFederal, u.id_usuario AS IdUsuario, u.usuario AS Usuario, u.nombre AS Nombre,
             u.primer_apellido AS PrimerApellido, u.segundo_apellido AS SegundoApellido,
@@ -33,22 +31,27 @@ public class BanciUsuarioRepository : IBanciUsuarioRepository
           AND (@IncluirInactivos = 1 OR (u.activo = 1 AND (r.rol = N'SUPER_USUARIO' OR COALESCE(um.activo, 1) = 1)))
         ORDER BY u.nombre, u.primer_apellido, u.segundo_apellido, u.id_usuario;
         """;
-
     public async Task<List<BanciUsuarioDetalle>> ObtenerUsuariosAsync(bool incluirInactivos)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-        return (await connection.QueryAsync<BanciUsuarioDetalle>(SqlUsuarios, new { IdUsuario = (int?)null, IncluirInactivos = incluirInactivos })).ToList();
+        return (await connection.QueryAsync<BanciUsuarioDetalle>(SqlUsuarios, new { IdUsuario = (int? )null, IncluirInactivos = incluirInactivos })).ToList();
     }
 
     public async Task<BanciUsuarioDetalle?> ObtenerDetalleAsync(int idUsuario)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-        return await connection.QuerySingleOrDefaultAsync<BanciUsuarioDetalle>(SqlUsuarios, new { IdUsuario = (int?)idUsuario, IncluirInactivos = true });
+        return await connection.QuerySingleOrDefaultAsync<BanciUsuarioDetalle>(SqlUsuarios, new { IdUsuario = (int? )idUsuario, IncluirInactivos = true });
     }
 
-    public async Task<int> GuardarAsync(string operacion, int idUsuario, BanciUsuarioDatos datos, int? idRol, string? passwordHash, int idAdministrador)
+    public async Task<int> GuardarAsync(string operacion,
+        int idUsuario,
+        BanciUsuarioDatos datos,
+        int? idRol,
+        string? passwordHash,
+        int idAdministrador)
     {
-        if (operacion is not ("CREAR" or "EDITAR" or "DESACTIVAR" or "REACTIVAR" or "PERMISOS" or "GLOBALES")) throw new InvalidOperationException("La operación de usuario no es válida.");
+        if(operacion is not ("CREAR" or "EDITAR" or "DESACTIVAR" or "REACTIVAR" or "PERMISOS" or "GLOBALES"))
+            throw new InvalidOperationException("La operación de usuario no es válida.");
         const string sql = """
             DECLARE @IdModulo tinyint;
             SELECT @IdModulo = id_modulo FROM dbo.catalogo_modulo WITH (UPDLOCK, HOLDLOCK) WHERE clave = N'BANCI' AND activo = 1;
@@ -177,43 +180,26 @@ public class BanciUsuarioRepository : IBanciUsuarioRepository
 
             SELECT @IdUsuario;
             """;
-
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
-            var result = await connection.ExecuteScalarAsync<int>(sql, new
-            {
-                Operacion = operacion,
-                IdUsuario = idUsuario,
-                IdAdministrador = idAdministrador,
-                IdRol = idRol,
-                PasswordHash = passwordHash,
-                datos.Usuario,
-                datos.Nombre,
-                datos.PrimerApellido,
-                datos.SegundoApellido,
-                datos.CorreoElectronico,
-                datos.Rfc,
-                datos.Curp,
-                datos.TelefonoContacto,
-                datos.IdEntidadFederativa,
-                datos.Rol,
-                datos.HabilitaBanci,
-                datos.HabilitaCarga,
-                datos.HabilitaModificacion
-            }, transaction);
-            if (operacion != "GLOBALES") await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, result);
+            var result = await connection.ExecuteScalarAsync<int>(sql, new { Operacion = operacion, IdUsuario = idUsuario, IdAdministrador = idAdministrador, IdRol = idRol, PasswordHash = passwordHash, datos.Usuario, datos.Nombre, datos.PrimerApellido, datos.SegundoApellido, datos.CorreoElectronico, datos.Rfc, datos.Curp, datos.TelefonoContacto, datos.IdEntidadFederativa, datos.Rol, datos.HabilitaBanci, datos.HabilitaCarga, datos.HabilitaModificacion }, transaction);
+            if(operacion != "GLOBALES")
+                await UsuarioModuloAcceso.SincronizarSuperUsuarioAsync(connection, transaction, result);
             await transaction.CommitAsync();
             return result;
         }
-        catch (SqlException ex) when (ex.Number is >= 51000 and <= 51004 || ex.Number is 2601 or 2627)
+        catch (SqlException ex)when (ex.Number is >= 51000 and <= 51004 || ex.Number is 2601 or 2627)
         {
             await transaction.RollbackAsync();
-            if (ex.Number == 51001) throw new UnauthorizedAccessException(ex.Message);
-            if (ex.Number == 51002) throw new KeyNotFoundException(ex.Message);
-            if (ex.Number is 2601 or 2627) throw new InvalidOperationException("Ya existe una cuenta con el usuario, correo, RFC o CURP indicado.");
+            if(ex.Number == 51001)
+                throw new UnauthorizedAccessException(ex.Message);
+            if(ex.Number == 51002)
+                throw new KeyNotFoundException(ex.Message);
+            if(ex.Number is 2601 or 2627)
+                throw new InvalidOperationException("Ya existe una cuenta con el usuario, correo, RFC o CURP indicado.");
             throw new InvalidOperationException(ex.Message);
         }
         catch

@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class UltimosArchivosEntidadArchivo
 {
     public string Tipo { get; set; } = string.Empty;

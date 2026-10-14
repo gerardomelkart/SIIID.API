@@ -6,15 +6,16 @@ using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Services;
-
 public class AuthService : IAuthService
 {
     private readonly IUsuarioRepository _usuarioRepository;
     private readonly SistemaConfiguracionService _sistema;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthService> _logger;
-
-    public AuthService(SistemaConfiguracionService sistema, IUsuarioRepository usuarioRepository, IConfiguration configuration, ILogger<AuthService> logger)
+    public AuthService(SistemaConfiguracionService sistema,
+        IUsuarioRepository usuarioRepository,
+        IConfiguration configuration,
+        ILogger<AuthService> logger)
     {
         _usuarioRepository = usuarioRepository;
         _sistema = sistema;
@@ -24,7 +25,7 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse> LoginAsync(LoginRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Usuario) || string.IsNullOrWhiteSpace(request.Password))
+        if(string.IsNullOrWhiteSpace(request.Usuario) || string.IsNullOrWhiteSpace(request.Password))
         {
             return new LoginResponse
             {
@@ -34,11 +35,9 @@ public class AuthService : IAuthService
         }
 
         var usuario = await _usuarioRepository.ObtenerUsuarioAuthAsync(request.Usuario);
-
-        if (usuario == null)
+        if(usuario == null)
         {
             _logger.LogWarning("Intento de login con usuario inexistente o inactivo: {Usuario}", request.Usuario);
-
             return new LoginResponse
             {
                 EsValido = false,
@@ -47,21 +46,13 @@ public class AuthService : IAuthService
         }
 
         bool passwordValida;
-
         try
         {
-            passwordValida = BCrypt.Net.BCrypt.Verify(
-                request.Password,
-                usuario.PasswordHash?.Trim() ?? string.Empty);
+            passwordValida = BCrypt.Net.BCrypt.Verify(request.Password, usuario.PasswordHash?.Trim() ?? string.Empty);
         }
         catch (BCrypt.Net.SaltParseException ex)
         {
-            _logger.LogError(
-                ex,
-                "El usuario tiene una contraseña almacenada con formato inválido. Usuario: {Usuario}, IdUsuario: {IdUsuario}",
-                usuario.Usuario,
-                usuario.IdUsuario);
-
+            _logger.LogError(ex, "El usuario tiene una contraseña almacenada con formato inválido. Usuario: {Usuario}, IdUsuario: {IdUsuario}", usuario.Usuario, usuario.IdUsuario);
             return new LoginResponse
             {
                 EsValido = false,
@@ -69,10 +60,9 @@ public class AuthService : IAuthService
             };
         }
 
-        if (!passwordValida)
+        if(!passwordValida)
         {
             _logger.LogWarning("Intento de login con contraseña incorrecta. Usuario: {Usuario}", request.Usuario);
-
             return new LoginResponse
             {
                 EsValido = false,
@@ -82,13 +72,7 @@ public class AuthService : IAuthService
 
         var expiraEnMinutos = ObtenerMinutosExpiracion();
         var token = GenerarToken(usuario, expiraEnMinutos);
-
-        _logger.LogInformation(
-            "Login correcto. Usuario: {Usuario}, IdUsuario: {IdUsuario}, Rol: {Rol}",
-            usuario.Usuario,
-            usuario.IdUsuario,
-            usuario.Rol);
-
+        _logger.LogInformation("Login correcto. Usuario: {Usuario}, IdUsuario: {IdUsuario}, Rol: {Rol}", usuario.Usuario, usuario.IdUsuario, usuario.Rol);
         return new LoginResponse
         {
             EsValido = true,
@@ -115,8 +99,7 @@ public class AuthService : IAuthService
 
     public async Task<CambiarPasswordResponse> CambiarPasswordAsync(int idUsuario, CambiarPasswordRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.NuevaPassword) ||
-            string.IsNullOrWhiteSpace(request.ConfirmarPassword))
+        if(string.IsNullOrWhiteSpace(request.NuevaPassword) || string.IsNullOrWhiteSpace(request.ConfirmarPassword))
         {
             return new CambiarPasswordResponse
             {
@@ -126,10 +109,7 @@ public class AuthService : IAuthService
             };
         }
 
-        if (!string.Equals(
-                request.NuevaPassword,
-                request.ConfirmarPassword,
-                StringComparison.Ordinal))
+        if(!string.Equals(request.NuevaPassword, request.ConfirmarPassword, StringComparison.Ordinal))
         {
             return new CambiarPasswordResponse
             {
@@ -139,7 +119,7 @@ public class AuthService : IAuthService
             };
         }
 
-        if (request.NuevaPassword.Length < 8)
+        if(request.NuevaPassword.Length < 8)
         {
             return new CambiarPasswordResponse
             {
@@ -150,8 +130,7 @@ public class AuthService : IAuthService
         }
 
         var usuario = await _usuarioRepository.ObtenerUsuarioPasswordAsync(idUsuario);
-
-        if (usuario == null)
+        if(usuario == null)
         {
             return new CambiarPasswordResponse
             {
@@ -161,7 +140,7 @@ public class AuthService : IAuthService
             };
         }
 
-        if (!usuario.RequiereCambioPassword)
+        if(!usuario.RequiereCambioPassword)
         {
             return new CambiarPasswordResponse
             {
@@ -172,20 +151,13 @@ public class AuthService : IAuthService
         }
 
         bool esLaMismaPassword;
-
         try
         {
-            esLaMismaPassword = BCrypt.Net.BCrypt.Verify(
-                request.NuevaPassword,
-                usuario.PasswordHash?.Trim() ?? string.Empty);
+            esLaMismaPassword = BCrypt.Net.BCrypt.Verify(request.NuevaPassword, usuario.PasswordHash?.Trim() ?? string.Empty);
         }
         catch (BCrypt.Net.SaltParseException ex)
         {
-            _logger.LogError(
-                ex,
-                "El usuario tiene una contraseña almacenada con formato inválido. IdUsuario: {IdUsuario}",
-                idUsuario);
-
+            _logger.LogError(ex, "El usuario tiene una contraseña almacenada con formato inválido. IdUsuario: {IdUsuario}", idUsuario);
             return new CambiarPasswordResponse
             {
                 EsValido = false,
@@ -194,7 +166,7 @@ public class AuthService : IAuthService
             };
         }
 
-        if (esLaMismaPassword)
+        if(esLaMismaPassword)
         {
             return new CambiarPasswordResponse
             {
@@ -204,15 +176,9 @@ public class AuthService : IAuthService
             };
         }
 
-        var passwordHash = BCrypt.Net.BCrypt.HashPassword(
-            request.NuevaPassword,
-            workFactor: 12);
-
-        var actualizado = await _usuarioRepository.ActualizarPasswordPropioAsync(
-            idUsuario,
-            passwordHash);
-
-        if (!actualizado)
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.NuevaPassword, workFactor: 12);
+        var actualizado = await _usuarioRepository.ActualizarPasswordPropioAsync(idUsuario, passwordHash);
+        if(!actualizado)
         {
             return new CambiarPasswordResponse
             {
@@ -222,10 +188,7 @@ public class AuthService : IAuthService
             };
         }
 
-        _logger.LogInformation(
-            "Cambio obligatorio de contraseña completado. IdUsuario: {IdUsuario}",
-            idUsuario);
-
+        _logger.LogInformation("Cambio obligatorio de contraseña completado. IdUsuario: {IdUsuario}", idUsuario);
         return new CambiarPasswordResponse
         {
             EsValido = true,
@@ -236,15 +199,9 @@ public class AuthService : IAuthService
 
     private string GenerarToken(UsuarioAuthInfo usuario, int expiraEnMinutos)
     {
-        var jwtSecretKey = _configuration["Jwt:SecretKey"]
-            ?? throw new InvalidOperationException("No se encontró Jwt:SecretKey.");
-
-        var jwtIssuer = _configuration["Jwt:Issuer"]
-            ?? throw new InvalidOperationException("No se encontró Jwt:Issuer.");
-
-        var jwtAudience = _configuration["Jwt:Audience"]
-            ?? throw new InvalidOperationException("No se encontró Jwt:Audience.");
-
+        var jwtSecretKey = _configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("No se encontró Jwt:SecretKey.");
+        var jwtIssuer = _configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("No se encontró Jwt:Issuer.");
+        var jwtAudience = _configuration["Jwt:Audience"] ?? throw new InvalidOperationException("No se encontró Jwt:Audience.");
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, usuario.IdUsuario.ToString()),
@@ -252,32 +209,19 @@ public class AuthService : IAuthService
             new Claim(ClaimTypes.Role, usuario.Rol),
             new Claim("rol", usuario.Rol)
         };
-
-        if (usuario.IdEntidadFederativa.HasValue)
+        if(usuario.IdEntidadFederativa.HasValue)
         {
             claims.Add(new Claim("id_entidad_federativa", usuario.IdEntidadFederativa.Value.ToString()));
         }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey));
-
-        var credentials = new SigningCredentials(
-            key,
-            SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            issuer: jwtIssuer,
-            audience: jwtAudience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expiraEnMinutos),
-            signingCredentials: credentials);
-
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var token = new JwtSecurityToken(issuer: jwtIssuer, audience: jwtAudience, claims: claims, expires: DateTime.UtcNow.AddMinutes(expiraEnMinutos), signingCredentials: credentials);
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     private int ObtenerMinutosExpiracion()
     {
-        return int.TryParse(_configuration["Jwt:MinutesToExpire"], out var minutos)
-            ? minutos
-            : 480;
+        return int.TryParse(_configuration["Jwt:MinutesToExpire"], out var minutos) ? minutos : 480;
     }
 }

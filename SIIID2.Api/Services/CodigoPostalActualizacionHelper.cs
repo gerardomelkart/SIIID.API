@@ -3,7 +3,6 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Services;
-
 public static class CodigoPostalActualizacionHelper
 {
     private sealed class DiferenciaCpRow
@@ -13,50 +12,61 @@ public static class CodigoPostalActualizacionHelper
         public string? ValorNuevo { get; set; }
     }
 
-    public static async Task AplicarDetalleAsync(IDbConnectionFactory dbConnectionFactory, string codigoReferencia, ActualizacionDiferenciasResponse response, int limitePorSeccion, bool soloMuestra = false)
+    public static async Task AplicarDetalleAsync(IDbConnectionFactory dbConnectionFactory,
+        string codigoReferencia,
+        ActualizacionDiferenciasResponse response,
+        int limitePorSeccion,
+        bool soloMuestra = false)
     {
-        if (!response.EsValido || string.IsNullOrWhiteSpace(codigoReferencia)) return;
-
+        if(!response.EsValido || string.IsNullOrWhiteSpace(codigoReferencia))
+            return;
         var diferencias = await ObtenerDiferenciasAsync(dbConnectionFactory, codigoReferencia, soloMuestra ? limitePorSeccion : int.MaxValue);
         var agregados = 0;
-
         foreach (var diferencia in diferencias)
         {
             var existente = response.Delitos.FirstOrDefault(x => x.IdentificadorFiscalia == diferencia.IdentificadorFiscalia);
-
-            if (existente != null)
+            if(existente != null)
             {
-                if (!existente.CamposModificados.Any(x => x.Campo == "cp"))
+                if(!existente.CamposModificados.Any(x => x.Campo == "cp"))
                 {
-                    existente.CamposModificados.Add(new ActualizacionCampoDiferencia { Campo = "cp", ValorAnterior = diferencia.ValorAnterior, ValorNuevo = diferencia.ValorNuevo });
+                    existente.CamposModificados.Add(new ActualizacionCampoDiferencia
+                    {
+                        Campo = "cp",
+                        ValorAnterior = diferencia.ValorAnterior,
+                        ValorNuevo = diferencia.ValorNuevo
+                    });
                 }
 
                 continue;
             }
 
             agregados++;
-
-            if (response.Delitos.Count < limitePorSeccion)
+            if(response.Delitos.Count < limitePorSeccion)
             {
                 response.Delitos.Add(new ActualizacionDiferenciaRegistro
                 {
                     TipoMovimiento = "MODIFICADO",
                     CampoIdentificador = "id_ci + id_delito",
                     IdentificadorFiscalia = diferencia.IdentificadorFiscalia,
-                    CamposModificados = new List<ActualizacionCampoDiferencia>
-                    {
-                        new() { Campo = "cp", ValorAnterior = diferencia.ValorAnterior, ValorNuevo = diferencia.ValorNuevo }
-                    }
+                    CamposModificados = new List<ActualizacionCampoDiferencia> { new()
+                {
+                    Campo = "cp",
+                    ValorAnterior = diferencia.ValorAnterior,
+                    ValorNuevo = diferencia.ValorNuevo
+                } }
                 });
             }
         }
 
         response.TotalDelitos += agregados;
         response.TotalDiferencias += agregados;
-        if (response.TotalDelitos > response.Delitos.Count) response.DetalleLimitado = true;
+        if(response.TotalDelitos > response.Delitos.Count)
+            response.DetalleLimitado = true;
     }
 
-    private static async Task<List<DiferenciaCpRow>> ObtenerDiferenciasAsync(IDbConnectionFactory dbConnectionFactory, string codigoReferencia, int limiteFilas)
+    private static async Task<List<DiferenciaCpRow>> ObtenerDiferenciasAsync(IDbConnectionFactory dbConnectionFactory,
+        string codigoReferencia,
+        int limiteFilas)
     {
         const string sql = @"
             ;WITH ctx AS (
@@ -92,7 +102,6 @@ public static class CodigoPostalActualizacionHelper
             INNER JOIN actuales_base a ON a.id_ci = tmp.id_ci AND a.id_delito = tmp.id_delito AND a.rn = 1
             WHERE tmp.activo = 1
               AND ISNULL(a.cp_actual, N'') <> ISNULL(NULLIF(LTRIM(RTRIM(tmp.cp)), N''), N'');";
-
         using var connection = dbConnectionFactory.CrearConexion();
         var filas = await connection.QueryAsync<DiferenciaCpRow>(sql, new { CodigoReferencia = codigoReferencia, LimiteFilas = limiteFilas }, commandTimeout: 180);
         return filas.ToList();

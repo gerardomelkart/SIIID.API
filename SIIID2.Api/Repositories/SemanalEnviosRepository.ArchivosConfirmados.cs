@@ -4,7 +4,6 @@ using SIIID2.Api.Models;
 using System.Globalization;
 
 namespace SIIID2.Api.Repositories;
-
 // Recuperación del contenido confirmado de una semana y sus bloques.
 public partial class SemanalEnviosRepository : ISemanalEnviosRepository
 {
@@ -67,7 +66,6 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
         ORDER BY
             ci.identificador_carpeta_fiscalia;
         ";
-
         return QueryDictionaryAsync(sql, referencia);
     }
 
@@ -165,7 +163,6 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
             ci.identificador_carpeta_fiscalia,
             d.identificador_delito_fiscalia;
         ";
-
         return QueryDictionaryAsync(sql, referencia);
     }
 
@@ -251,21 +248,13 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
             d.identificador_delito_fiscalia,
             v.identificador_victima_fiscalia;
         ";
-
         return QueryDictionaryAsync(sql, referencia);
     }
 
     private async Task<List<IDictionary<string, object?>>> QueryDictionaryAsync(string sql, SemanalEnvioReferenciaInfo referencia)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var filas = await connection.QueryAsync(sql, new
-        {
-            referencia.IdSemanalCarga,
-            referencia.IdEntidadFederativa
-        });
-
+        var filas = await connection.QueryAsync(sql, new { referencia.IdSemanalCarga, referencia.IdEntidadFederativa });
         return filas.Select(fila => ((IDictionary<string, object?>)fila).ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)).Cast<IDictionary<string, object?>>().ToList();
     }
-
 }

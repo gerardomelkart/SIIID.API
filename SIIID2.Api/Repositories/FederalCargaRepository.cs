@@ -6,7 +6,6 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class FederalCargaRepository : IFederalCargaRepository
 {
     private class FederalCargaConfirmacionInfo
@@ -24,7 +23,6 @@ public class FederalCargaRepository : IFederalCargaRepository
 
     private readonly BanciCruceService _cruce;
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public FederalCargaRepository(BanciCruceService cruce, IDbConnectionFactory dbConnectionFactory)
     {
         _cruce = cruce;
@@ -55,7 +53,6 @@ public class FederalCargaRepository : IFederalCargaRepository
             WHERE u.id_usuario = @IdUsuario
               AND u.activo = 1;
             """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.QueryFirstOrDefaultAsync<UsuarioCargaInfo>(sql, new { IdUsuario = idUsuario });
     }
@@ -72,7 +69,6 @@ public class FederalCargaRepository : IFederalCargaRepository
               AND estado = N'CONFIRMADO'
               AND activo = 1;
             """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return await connection.ExecuteScalarAsync<int>(sql, new { MesCorte = mesCorte, AnioCorte = anioCorte }) > 0;
     }
@@ -87,35 +83,43 @@ public class FederalCargaRepository : IFederalCargaRepository
         return pendiente;
     }
 
-    public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<CargaValidacionError> advertencias, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas)
+    public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga,
+        string codigoReferencia,
+        int mesCorte,
+        int anioCorte,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas,
+        string estado,
+        string? mensajeError,
+        List<CargaValidacionError> advertencias,
+        List<ArchivoFila> filasCarpetas,
+        List<ArchivoFila> filasDelitos,
+        List<ArchivoFila> filasVictimas)
     {
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             await FederalOperacionPeriodoSql.BloquearAsync(connection, transaction, mesCorte, anioCorte);
             await FederalOperacionPeriodoSql.ExpirarPendientesAsync(connection, transaction, mesCorte, anioCorte);
-            if (estado == "VALIDADO_PENDIENTE")
+            if(estado == "VALIDADO_PENDIENTE")
                 await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, mesCorte, anioCorte, actualizacion: false);
-
             var idFederalCarga = await CrearCargaAsync(connection, transaction, idUsuarioCarga, codigoReferencia, mesCorte, anioCorte, totalCarpetas, totalDelitos, totalVictimas, estado, mensajeError);
-
             await BanciCruceService.GuardarFederalAsync(connection, transaction, idFederalCarga, filasCarpetas, filasDelitos, filasVictimas);
             await GuardarTmpCarpetasAsync(connection, transaction, idFederalCarga, filasCarpetas);
             await GuardarTmpDelitosAsync(connection, transaction, idFederalCarga, filasDelitos);
             await GuardarTmpVictimasAsync(connection, transaction, idFederalCarga, filasVictimas);
             await FederalCargaAuditoriaSql.GuardarAdvertenciasAsync(connection, transaction, idFederalCarga, advertencias);
             await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, idFederalCarga, null, estado, idUsuarioCarga, estado == "VALIDADO_PENDIENTE" ? "Carga inicial federal validada y pendiente de decisión del usuario." : "Intento de carga inicial federal registrado con errores de validación.");
-
             await transaction.CommitAsync();
             return idFederalCarga;
         }
         catch
         {
-            if (transaction.Connection != null) await transaction.RollbackAsync();
+            if(transaction.Connection != null)
+                await transaction.RollbackAsync();
             throw;
         }
     }
@@ -124,33 +128,30 @@ public class FederalCargaRepository : IFederalCargaRepository
     {
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             await FederalOperacionPeriodoSql.BloquearPorCodigoAsync(connection, transaction, codigoReferencia);
             var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioConfirmacion);
-
-            if (carga == null)
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
                 return Respuesta(false, codigoReferencia, "NO_ENCONTRADA", "No se encontró una carga federal válida para continuar.");
             }
 
-            if (!string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, "VALIDADO_PENDIENTE", StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
                 return Respuesta(false, codigoReferencia, carga.Estado, "La carga federal no se encuentra en estado VALIDADO_PENDIENTE.");
             }
 
-            if (carga.IdUsuarioCarga != idUsuarioConfirmacion)
+            if(carga.IdUsuarioCarga != idUsuarioConfirmacion)
             {
                 await transaction.RollbackAsync();
                 return Respuesta(false, codigoReferencia, carga.Estado, "Solo el usuario que realizó la carga federal puede aceptar o rechazar esta validación.");
             }
 
-            if (carga.EstaVencida)
+            if(carga.EstaVencida)
             {
                 await ActualizarCargaExpiradaAsync(connection, transaction, carga.IdFederalCarga);
                 await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdFederalCarga, carga.Estado, "EXPIRADO", null, "La carga federal expiró antes de que el usuario tomara una decisión.");
@@ -158,13 +159,13 @@ public class FederalCargaRepository : IFederalCargaRepository
                 return Respuesta(false, codigoReferencia, "EXPIRADO", "La carga federal ya expiró. Debe validar nuevamente los archivos.");
             }
 
-            if (!carga.HabilitaCarga)
+            if(!carga.HabilitaCarga)
             {
                 await transaction.RollbackAsync();
                 return Respuesta(false, codigoReferencia, carga.Estado, "El usuario no tiene habilitada la carga de información federal.");
             }
 
-            if (!aceptar)
+            if(!aceptar)
             {
                 await RechazarCargaAsync(connection, transaction, carga.IdFederalCarga, idUsuarioConfirmacion);
                 await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdFederalCarga, carga.Estado, "RECHAZADO_VALIDACION", idUsuarioConfirmacion, "La carga federal fue rechazada por el usuario después de revisar el acuse previo y las validaciones.");
@@ -173,10 +174,8 @@ public class FederalCargaRepository : IFederalCargaRepository
             }
 
             await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, carga.MesCorte, carga.AnioCorte, actualizacion: false, idFederalCarga: carga.IdFederalCarga);
-
             await FederalCargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(connection, transaction, carga.IdFederalCarga, idUsuarioConfirmacion);
-
-            if (!carga.EsSuperUsuario)
+            if(!carga.EsSuperUsuario)
             {
                 await EnviarCargaAprobacionAsync(connection, transaction, carga.IdFederalCarga);
                 await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdFederalCarga, carga.Estado, "PENDIENTE_APROBACION", idUsuarioConfirmacion, "El enlace federal aceptó la validación y envió la carga a revisión administrativa.");
@@ -189,18 +188,19 @@ public class FederalCargaRepository : IFederalCargaRepository
             await InsertarVictimasFinalesAsync(connection, transaction, carga.IdFederalCarga, idUsuarioConfirmacion);
             await ConfirmarCargaFinalAsync(connection, transaction, carga.IdFederalCarga, idUsuarioConfirmacion);
             await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdFederalCarga, carga.Estado, "CONFIRMADO", idUsuarioConfirmacion, "Carga federal realizada y confirmada directamente por un superusuario.");
-
             await transaction.CommitAsync();
             return Respuesta(true, codigoReferencia, "CONFIRMADO", "La carga federal fue confirmada correctamente.");
         }
         catch (FederalOperacionPeriodoSql.ConflictoException ex)
         {
-            if (transaction.Connection != null) await transaction.RollbackAsync();
+            if(transaction.Connection != null)
+                await transaction.RollbackAsync();
             return Respuesta(false, codigoReferencia, "CONFLICTO_PERIODO", ex.Message);
         }
         catch
         {
-            if (transaction.Connection != null) await transaction.RollbackAsync();
+            if(transaction.Connection != null)
+                await transaction.RollbackAsync();
             throw;
         }
     }
@@ -247,7 +247,6 @@ public class FederalCargaRepository : IFederalCargaRepository
             c.fecha_validacion ASC,
             c.id_federal_carga ASC;
         """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
         return (await connection.QueryAsync<CargaPendienteAdministracionItem>(sql)).ToList();
     }
@@ -292,7 +291,6 @@ public class FederalCargaRepository : IFederalCargaRepository
           AND c.estado = N'PENDIENTE_APROBACION'
           AND c.activo = 1;
         """;
-
         const string sqlAdvertencias = """
         SELECT
             ca.id_federal_carga_advertencia AS IdCargaAdvertencia,
@@ -314,15 +312,11 @@ public class FederalCargaRepository : IFederalCargaRepository
             ca.numero_fila,
             ca.id_federal_carga_advertencia;
         """;
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
         var carga = await connection.QueryFirstOrDefaultAsync<CargaPendienteAdministracionDetalle>(sqlCarga, new { CodigoReferencia = codigoReferencia });
-
-        if (carga == null) return null;
-
+        if(carga == null)
+            return null;
         carga.Advertencias = (await connection.QueryAsync<CargaAdvertenciaAdministracionItem>(sqlAdvertencias, new { IdCarga = carga.IdCarga })).ToList();
-
         return carga;
     }
 
@@ -330,60 +324,48 @@ public class FederalCargaRepository : IFederalCargaRepository
     {
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             await FederalOperacionPeriodoSql.BloquearPorCodigoAsync(connection, transaction, codigoReferencia);
             var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioAprobacion);
-
-            if (carga == null)
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
                 return Respuesta(false, codigoReferencia, "NO_ENCONTRADA", "No se encontró la carga federal pendiente de aprobación.");
             }
 
-            if (!carga.EsSuperUsuario)
+            if(!carga.EsSuperUsuario)
             {
                 await transaction.RollbackAsync();
                 return Respuesta(false, codigoReferencia, carga.Estado, "Solo un superusuario puede aprobar cargas federales.");
             }
 
-            if (!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
                 return Respuesta(false, codigoReferencia, carga.Estado, "La carga federal ya no se encuentra pendiente de aprobación.");
             }
 
             await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, carga.MesCorte, carga.AnioCorte, actualizacion: false, idFederalCarga: carga.IdFederalCarga);
-
             await InsertarCarpetasFinalesAsync(connection, transaction, carga.IdFederalCarga, carga.IdUsuarioCarga);
             await InsertarDelitosFinalesAsync(connection, transaction, carga.IdFederalCarga, carga.IdUsuarioCarga);
             await InsertarVictimasFinalesAsync(connection, transaction, carga.IdFederalCarga, carga.IdUsuarioCarga);
             await ConfirmarCargaFinalAsync(connection, transaction, carga.IdFederalCarga, idUsuarioAprobacion);
-
-            await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                connection,
-                transaction,
-                carga.IdFederalCarga,
-                "PENDIENTE_APROBACION",
-                "CONFIRMADO",
-                idUsuarioAprobacion,
-                "La carga federal fue aprobada por el superusuario.");
-
+            await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdFederalCarga, "PENDIENTE_APROBACION", "CONFIRMADO", idUsuarioAprobacion, "La carga federal fue aprobada por el superusuario.");
             await transaction.CommitAsync();
-
             return Respuesta(true, codigoReferencia, "CONFIRMADO", "La carga federal fue aprobada y confirmada correctamente.");
         }
         catch (FederalOperacionPeriodoSql.ConflictoException ex)
         {
-            if (transaction.Connection != null) await transaction.RollbackAsync();
+            if(transaction.Connection != null)
+                await transaction.RollbackAsync();
             return Respuesta(false, codigoReferencia, "CONFLICTO_PERIODO", ex.Message);
         }
         catch
         {
-            if (transaction.Connection != null) await transaction.RollbackAsync();
+            if(transaction.Connection != null)
+                await transaction.RollbackAsync();
             throw;
         }
     }
@@ -392,63 +374,51 @@ public class FederalCargaRepository : IFederalCargaRepository
     {
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             await FederalOperacionPeriodoSql.BloquearPorCodigoAsync(connection, transaction, codigoReferencia);
             var carga = await ObtenerCargaConfirmacionAsync(connection, transaction, codigoReferencia, idUsuarioRechazo);
-
-            if (carga == null)
+            if(carga == null)
             {
                 await transaction.RollbackAsync();
                 return Respuesta(false, codigoReferencia, "NO_ENCONTRADA", "No se encontró la carga federal pendiente de aprobación.");
             }
 
-            if (!carga.EsSuperUsuario)
+            if(!carga.EsSuperUsuario)
             {
                 await transaction.RollbackAsync();
                 return Respuesta(false, codigoReferencia, carga.Estado, "Solo un superusuario puede rechazar cargas federales.");
             }
 
-            if (!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
+            if(!string.Equals(carga.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase))
             {
                 await transaction.RollbackAsync();
                 return Respuesta(false, codigoReferencia, carga.Estado, "La carga federal ya no se encuentra pendiente de aprobación.");
             }
 
             var motivoLimpio = motivo?.Trim() ?? string.Empty;
-
-            if (motivoLimpio.Length < 5)
+            if(motivoLimpio.Length < 5)
             {
                 await transaction.RollbackAsync();
                 return Respuesta(false, codigoReferencia, "MOTIVO_INVALIDO", "Debe capturar un motivo de rechazo de al menos 5 caracteres.");
             }
 
             await RechazarCargaAdministracionAsync(connection, transaction, carga.IdFederalCarga, idUsuarioRechazo, motivoLimpio);
-
-            await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(
-                connection,
-                transaction,
-                carga.IdFederalCarga,
-                "PENDIENTE_APROBACION",
-                "RECHAZADO_ADMIN",
-                idUsuarioRechazo,
-                motivoLimpio);
-
+            await FederalCargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdFederalCarga, "PENDIENTE_APROBACION", "RECHAZADO_ADMIN", idUsuarioRechazo, motivoLimpio);
             await transaction.CommitAsync();
-
             return Respuesta(true, codigoReferencia, "RECHAZADO_ADMIN", "La carga federal fue rechazada por el administrador.");
         }
         catch (FederalOperacionPeriodoSql.ConflictoException ex)
         {
-            if (transaction.Connection != null) await transaction.RollbackAsync();
+            if(transaction.Connection != null)
+                await transaction.RollbackAsync();
             return Respuesta(false, codigoReferencia, "CONFLICTO_PERIODO", ex.Message);
         }
         catch
         {
-            if (transaction.Connection != null) await transaction.RollbackAsync();
+            if(transaction.Connection != null)
+                await transaction.RollbackAsync();
             throw;
         }
     }
@@ -464,7 +434,17 @@ public class FederalCargaRepository : IFederalCargaRepository
         };
     }
 
-    private static async Task<long> CrearCargaAsync(SqlConnection connection, SqlTransaction transaction, int idUsuarioCarga, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError)
+    private static async Task<long> CrearCargaAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        int idUsuarioCarga,
+        string codigoReferencia,
+        int mesCorte,
+        int anioCorte,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas,
+        string estado,
+        string? mensajeError)
     {
         const string sql = """
             INSERT INTO dbo.federal_carga
@@ -503,25 +483,15 @@ public class FederalCargaRepository : IFederalCargaRepository
                 1
             );
             """;
-
-        return await connection.ExecuteScalarAsync<long>(sql, new
-        {
-            IdUsuarioCarga = idUsuarioCarga,
-            CodigoReferencia = codigoReferencia,
-            MesCorte = mesCorte,
-            AnioCorte = anioCorte,
-            TotalCarpetas = totalCarpetas,
-            TotalDelitos = totalDelitos,
-            TotalVictimas = totalVictimas,
-            Estado = estado,
-            MensajeError = mensajeError
-        }, transaction);
+        return await connection.ExecuteScalarAsync<long>(sql, new { IdUsuarioCarga = idUsuarioCarga, CodigoReferencia = codigoReferencia, MesCorte = mesCorte, AnioCorte = anioCorte, TotalCarpetas = totalCarpetas, TotalDelitos = totalDelitos, TotalVictimas = totalVictimas, Estado = estado, MensajeError = mensajeError }, transaction);
     }
 
-    private static async Task GuardarTmpCarpetasAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, List<ArchivoFila> filasCarpetas)
+    private static async Task GuardarTmpCarpetasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        List<ArchivoFila> filasCarpetas)
     {
         var tabla = new DataTable();
-
         tabla.Columns.Add("id_federal_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("id_ci", typeof(string));
@@ -531,23 +501,26 @@ public class FederalCargaRepository : IFederalCargaRepository
         tabla.Columns.Add("rmen_de_hchos", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-
         foreach (var fila in filasCarpetas)
         {
             tabla.Rows.Add(idFederalCarga, fila.NumeroFila, ValorTextoStaging(ObtenerValor(fila, "id_ci")), ValorTextoStaging(ObtenerValor(fila, "ntra_ci")), ValorTextoStaging(ObtenerValor(fila, "fha_de_ini")), ValorTextoStaging(ObtenerValor(fila, "hra_de_ini")), ValorTextoStaging(ObtenerValor(fila, "rmen_de_hchos")), "PENDIENTE", true);
         }
 
-        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction) { DestinationTableName = "dbo.federal_carga_tmp_carpeta" };
-
-        foreach (DataColumn columna in tabla.Columns) bulkCopy.ColumnMappings.Add(columna.ColumnName, columna.ColumnName);
-
+        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
+        {
+            DestinationTableName = "dbo.federal_carga_tmp_carpeta"
+        };
+        foreach (DataColumn columna in tabla.Columns)
+            bulkCopy.ColumnMappings.Add(columna.ColumnName, columna.ColumnName);
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
-    private static async Task GuardarTmpDelitosAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, List<ArchivoFila> filasDelitos)
+    private static async Task GuardarTmpDelitosAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        List<ArchivoFila> filasDelitos)
     {
         var tabla = new DataTable();
-
         tabla.Columns.Add("id_federal_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("id_ci", typeof(string));
@@ -572,23 +545,26 @@ public class FederalCargaRepository : IFederalCargaRepository
         tabla.Columns.Add("dom_hchos", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-
         foreach (var fila in filasDelitos)
         {
             tabla.Rows.Add(idFederalCarga, fila.NumeroFila, ValorTextoStaging(ObtenerValor(fila, "id_ci")), ValorTextoStaging(ObtenerValor(fila, "id_delito")), ValorTextoStaging(ObtenerValor(fila, "dto")), ValorTextoStaging(ObtenerValor(fila, "moda_dto")), ValorTextoStaging(ObtenerValor(fila, "forma_acc")), ValorTextoStaging(ObtenerValor(fila, "fha_de_hchos")), ValorTextoStaging(ObtenerValor(fila, "hra_de_hchos")), ValorTextoStaging(ObtenerValor(fila, "emto_com_dto")), ValorTextoStaging(ObtenerValor(fila, "grdo_cons")), ValorTextoStaging(ObtenerValor(fila, "clasf_de_dto")), ValorTextoStaging(ObtenerValor(fila, "id_ent_hchos")), ValorTextoStaging(ObtenerValor(fila, "id_mun_hchos")), ValorTextoStaging(ObtenerValor(fila, "id_loc_hchos")), ValorTextoStaging(ObtenerValor(fila, "nom_loc_hchos")), ValorTextoStaging(ObtenerValor(fila, "id_col_hchos")), ValorTextoStaging(ObtenerValor(fila, "nom_col_hchos")), ValorTextoStaging(ObtenerValor(fila, "cp")), ValorTextoStaging(ObtenerValor(fila, "coord_x")), ValorTextoStaging(ObtenerValor(fila, "coord_y")), ValorTextoStaging(ObtenerValor(fila, "dom_hchos")), "PENDIENTE", true);
         }
 
-        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction) { DestinationTableName = "dbo.federal_carga_tmp_delito" };
-
-        foreach (DataColumn columna in tabla.Columns) bulkCopy.ColumnMappings.Add(columna.ColumnName, columna.ColumnName);
-
+        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
+        {
+            DestinationTableName = "dbo.federal_carga_tmp_delito"
+        };
+        foreach (DataColumn columna in tabla.Columns)
+            bulkCopy.ColumnMappings.Add(columna.ColumnName, columna.ColumnName);
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
-    private static async Task GuardarTmpVictimasAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, List<ArchivoFila> filasVictimas)
+    private static async Task GuardarTmpVictimasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        List<ArchivoFila> filasVictimas)
     {
         var tabla = new DataTable();
-
         tabla.Columns.Add("id_federal_carga", typeof(long));
         tabla.Columns.Add("numero_fila", typeof(int));
         tabla.Columns.Add("id_ci", typeof(string));
@@ -609,20 +585,24 @@ public class FederalCargaRepository : IFederalCargaRepository
         tabla.Columns.Add("curp_vicfem", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-
         foreach (var fila in filasVictimas)
         {
             tabla.Rows.Add(idFederalCarga, fila.NumeroFila, ValorTextoStaging(ObtenerValor(fila, "id_ci")), ValorTextoStaging(ObtenerValor(fila, "id_delito")), ValorTextoStaging(ObtenerValor(fila, "id_vicf")), ValorTextoStaging(ObtenerValor(fila, "id_tv")), ValorTextoStaging(ObtenerValor(fila, "id_tpm")), ValorTextoStaging(ObtenerValor(fila, "sexo")), ValorTextoStaging(ObtenerValor(fila, "genero")), ValorTextoStaging(ObtenerValor(fila, "pob")), ValorTextoStaging(ObtenerValor(fila, "disc")), ValorTextoStaging(ObtenerValor(fila, "fha_nac")), ValorTextoStaging(ObtenerValor(fila, "edad")), ValorTextoStaging(ObtenerValor(fila, "nacional")), ValorTextoStaging(ObtenerValor(fila, "nombre_vicfem")), ValorTextoStaging(ObtenerValor(fila, "1apellido_vicfem")), ValorTextoStaging(ObtenerValor(fila, "2apellido_vicfem")), ValorTextoStaging(ObtenerValor(fila, "curp_vicfem")), "PENDIENTE", true);
         }
 
-        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction) { DestinationTableName = "dbo.federal_carga_tmp_victima" };
-
-        foreach (DataColumn columna in tabla.Columns) bulkCopy.ColumnMappings.Add(columna.ColumnName, columna.ColumnName);
-
+        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
+        {
+            DestinationTableName = "dbo.federal_carga_tmp_victima"
+        };
+        foreach (DataColumn columna in tabla.Columns)
+            bulkCopy.ColumnMappings.Add(columna.ColumnName, columna.ColumnName);
         await bulkCopy.WriteToServerAsync(tabla);
     }
 
-    private static async Task<FederalCargaConfirmacionInfo?> ObtenerCargaConfirmacionAsync(SqlConnection connection, SqlTransaction transaction, string codigoReferencia, int idUsuarioConfirmacion)
+    private static async Task<FederalCargaConfirmacionInfo?> ObtenerCargaConfirmacionAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        string codigoReferencia,
+        int idUsuarioConfirmacion)
     {
         const string sql = """
             SELECT
@@ -653,12 +633,7 @@ public class FederalCargaRepository : IFederalCargaRepository
               AND c.tipo_carga = N'CARGA_INICIAL'
               AND c.activo = 1;
             """;
-
-        return await connection.QueryFirstOrDefaultAsync<FederalCargaConfirmacionInfo>(sql, new
-        {
-            CodigoReferencia = codigoReferencia,
-            IdUsuarioConfirmacion = idUsuarioConfirmacion
-        }, transaction);
+        return await connection.QueryFirstOrDefaultAsync<FederalCargaConfirmacionInfo>(sql, new { CodigoReferencia = codigoReferencia, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
     private static async Task ActualizarCargaExpiradaAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga)
@@ -673,11 +648,13 @@ public class FederalCargaRepository : IFederalCargaRepository
             UPDATE dbo.federal_carga_tmp_delito SET estado = N'EXPIRADO', fecha_procesamiento = SYSDATETIME() WHERE id_federal_carga = @IdFederalCarga;
             UPDATE dbo.federal_carga_tmp_victima SET estado = N'EXPIRADO', fecha_procesamiento = SYSDATETIME() WHERE id_federal_carga = @IdFederalCarga;
             """;
-
         await connection.ExecuteAsync(sql, new { IdFederalCarga = idFederalCarga }, transaction);
     }
 
-    private static async Task RechazarCargaAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, int idUsuarioConfirmacion)
+    private static async Task RechazarCargaAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        int idUsuarioConfirmacion)
     {
         const string sql = """
             UPDATE dbo.federal_carga
@@ -691,11 +668,14 @@ public class FederalCargaRepository : IFederalCargaRepository
             UPDATE dbo.federal_carga_tmp_delito SET estado = N'RECHAZADO_VALIDACION', fecha_procesamiento = SYSDATETIME() WHERE id_federal_carga = @IdFederalCarga;
             UPDATE dbo.federal_carga_tmp_victima SET estado = N'RECHAZADO_VALIDACION', fecha_procesamiento = SYSDATETIME() WHERE id_federal_carga = @IdFederalCarga;
             """;
-
         await connection.ExecuteAsync(sql, new { IdFederalCarga = idFederalCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 
-    private static async Task RechazarCargaAdministracionAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, int idUsuarioRechazo, string motivo)
+    private static async Task RechazarCargaAdministracionAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        int idUsuarioRechazo,
+        string motivo)
     {
         const string sql = """
         UPDATE dbo.federal_carga
@@ -722,13 +702,7 @@ public class FederalCargaRepository : IFederalCargaRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_federal_carga = @IdFederalCarga;
         """;
-
-        await connection.ExecuteAsync(sql, new
-        {
-            IdFederalCarga = idFederalCarga,
-            IdUsuarioRechazo = idUsuarioRechazo,
-            Motivo = motivo
-        }, transaction);
+        await connection.ExecuteAsync(sql, new { IdFederalCarga = idFederalCarga, IdUsuarioRechazo = idUsuarioRechazo, Motivo = motivo }, transaction);
     }
 
     private static async Task EnviarCargaAprobacionAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga)
@@ -739,11 +713,13 @@ public class FederalCargaRepository : IFederalCargaRepository
             UPDATE dbo.federal_carga_tmp_delito SET estado = N'PENDIENTE_APROBACION', fecha_procesamiento = NULL WHERE id_federal_carga = @IdFederalCarga;
             UPDATE dbo.federal_carga_tmp_victima SET estado = N'PENDIENTE_APROBACION', fecha_procesamiento = NULL WHERE id_federal_carga = @IdFederalCarga;
             """;
-
         await connection.ExecuteAsync(sql, new { IdFederalCarga = idFederalCarga }, transaction);
     }
 
-    private static async Task InsertarCarpetasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, int idUsuarioRegistro)
+    private static async Task InsertarCarpetasFinalesAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        int idUsuarioRegistro)
     {
         const string sql = """
             INSERT INTO dbo.federal_carpeta_investigacion
@@ -780,11 +756,13 @@ public class FederalCargaRepository : IFederalCargaRepository
             WHERE c.id_federal_carga = @IdFederalCarga
               AND c.activo = 1;
             """;
-
         await connection.ExecuteAsync(sql, new { IdFederalCarga = idFederalCarga, IdUsuarioRegistro = idUsuarioRegistro }, transaction);
     }
 
-    private static async Task InsertarDelitosFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, int idUsuarioRegistro)
+    private static async Task InsertarDelitosFinalesAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        int idUsuarioRegistro)
     {
         const string sql = """
             INSERT INTO dbo.federal_delito
@@ -874,11 +852,13 @@ public class FederalCargaRepository : IFederalCargaRepository
             WHERE d.id_federal_carga = @IdFederalCarga
               AND d.activo = 1;
             """;
-
         await connection.ExecuteAsync(sql, new { IdFederalCarga = idFederalCarga, IdUsuarioRegistro = idUsuarioRegistro }, transaction);
     }
 
-    private static async Task InsertarVictimasFinalesAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, int idUsuarioRegistro)
+    private static async Task InsertarVictimasFinalesAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        int idUsuarioRegistro)
     {
         const string sql = """
             INSERT INTO dbo.federal_victima
@@ -943,11 +923,13 @@ public class FederalCargaRepository : IFederalCargaRepository
             WHERE v.id_federal_carga = @IdFederalCarga
               AND v.activo = 1;
             """;
-
         await connection.ExecuteAsync(sql, new { IdFederalCarga = idFederalCarga, IdUsuarioRegistro = idUsuarioRegistro }, transaction);
     }
 
-    private async Task ConfirmarCargaFinalAsync(SqlConnection connection, SqlTransaction transaction, long idFederalCarga, int idUsuarioConfirmacion)
+    private async Task ConfirmarCargaFinalAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idFederalCarga,
+        int idUsuarioConfirmacion)
     {
         await _cruce.ConfirmarAsync(connection, transaction, idFederalCarga, federal: true);
         const string sql = """
@@ -962,7 +944,6 @@ public class FederalCargaRepository : IFederalCargaRepository
             UPDATE dbo.federal_carga_tmp_delito SET estado = N'PROCESADO', fecha_procesamiento = SYSDATETIME() WHERE id_federal_carga = @IdFederalCarga;
             UPDATE dbo.federal_carga_tmp_victima SET estado = N'PROCESADO', fecha_procesamiento = SYSDATETIME() WHERE id_federal_carga = @IdFederalCarga;
             """;
-
         await connection.ExecuteAsync(sql, new { IdFederalCarga = idFederalCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
     }
 

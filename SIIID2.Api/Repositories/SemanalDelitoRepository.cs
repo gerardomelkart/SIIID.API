@@ -4,13 +4,10 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public class SemanalDelitoRepository : ISemanalDelitoRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-
     public SemanalDelitoRepository(IDbConnectionFactory dbConnectionFactory) => _dbConnectionFactory = dbConnectionFactory;
-
     public async Task<bool> PuedeAdministrarDelitosAsync(int idUsuario)
     {
         const string sql = @"
@@ -23,9 +20,7 @@ public class SemanalDelitoRepository : ISemanalDelitoRepository
           AND u.activo = 1
           AND r.rol = N'SUPER_USUARIO';
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
         return await connection.ExecuteScalarAsync<int>(sql, new { IdUsuario = idUsuario }) > 0;
     }
 
@@ -57,9 +52,7 @@ public class SemanalDelitoRepository : ISemanalDelitoRepository
         WHERE md.activo = 1
         ORDER BY bj.clave1, cd.clave2, sd.clave3, md.clave4;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
         return (await connection.QueryAsync<ConfiguracionModalidadSemanalItem>(sql)).ToList();
     }
 
@@ -83,9 +76,7 @@ public class SemanalDelitoRepository : ISemanalDelitoRepository
             MIN(configuracion.orden),
             cd.clave2;
     ";
-
         using var connection = _dbConnectionFactory.CrearConexion();
-
         return (await connection.QueryAsync<DelitoSemanalHabilitadoItem>(sql)).ToList();
     }
 
@@ -99,7 +90,6 @@ public class SemanalDelitoRepository : ISemanalDelitoRepository
             fecha_modificacion = SYSDATETIME(),
             id_usuario_modificacion = @IdUsuarioModificacion;
     ";
-
         const string sqlGuardar = @"
         IF EXISTS (SELECT 1 FROM dbo.semanal_configuracion_delito WHERE id_modalidad_delito = @IdModalidadDelito)
         BEGIN
@@ -118,13 +108,9 @@ public class SemanalDelitoRepository : ISemanalDelitoRepository
             VALUES (@IdModalidadDelito, @EsObligatorio, @ConservarEntrePeriodos, @Orden, @IdUsuarioModificacion, 1);
         END;
     ";
-
         using var connection = (SqlConnection)_dbConnectionFactory.CrearConexion();
-
         await connection.OpenAsync();
-
         using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-
         try
         {
             await connection.ExecuteAsync(sqlDesactivar, new { IdUsuarioModificacion = idUsuarioModificacion }, transaction);

@@ -3,9 +3,7 @@ using System.Text.Json;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Validators;
-
 public sealed record BanciCruceArchivos(List<ArchivoFila> Carpetas, List<ArchivoFila> Delitos, List<ArchivoFila> Victimas);
-
 // Los identificadores sólo relacionan filas DENTRO de cada fuente.
 public static class BanciCruceValidator
 {
@@ -15,6 +13,7 @@ public static class BanciCruceValidator
     public static readonly string[] CamposVictima = ["id_tv", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional"];
     public static string Valor(ArchivoFila fila, string campo) => fila.Columnas.GetValueOrDefault(campo)?.Trim() ?? "";
     public static string Clave(string valor) => valor.Trim().ToUpperInvariant();
+    // Las firmas comparan el contenido de cada víctima; los IDs sólo unen filas dentro de su propia fuente.
     public static List<CargaValidacionError> Comparar(BanciCruceArchivos mensual, BanciCruceArchivos banci, ISet<string> clasificaciones)
     {
         var errores = new List<CargaValidacionError>();
@@ -27,13 +26,33 @@ public static class BanciCruceValidator
         var carpetasBanci = banci.Carpetas.GroupBy(c => Clave(Valor(c, "ntra_ci"))).ToDictionary(g => g.Key, g => g.ToList());
         foreach (var ntra in carpetasMensuales.Keys.Union(carpetasBanci.Keys))
         {
-            if (!carpetasMensuales.TryGetValue(ntra, out var mc)) { Error("carpetas", null, ntra, "ntra_ci", "BANCI_OMITIDA", "Falta en Consolidado la carpeta y su información de desaparición registrada en BANCI."); continue; }
-            if (!carpetasBanci.TryGetValue(ntra, out var bc)) { Error("carpetas", mc[0], ntra, "ntra_ci", "BANCI_NO_REPORTADA", "Debe registrar esta información en BANCI antes de volver a cargar el Consolidado. Si no tiene acceso, solicítelo a un usuario autorizado."); continue; }
-            if (mc.Count != 1 || bc.Count != 1) { Error("carpetas", mc[0], ntra, "ntra_ci", "BANCI_AMBIGUA", "NTRA_CI no identifica una única carpeta en ambas fuentes. Corrija la duplicidad."); continue; }
+            if(!carpetasMensuales.TryGetValue(ntra, out var mc))
+            {
+                Error("carpetas", null, ntra, "ntra_ci", "BANCI_OMITIDA", "Falta en Consolidado la carpeta y su información de desaparición registrada en BANCI.");
+                continue;
+            }
+
+            if(!carpetasBanci.TryGetValue(ntra, out var bc))
+            {
+                Error("carpetas", mc[0], ntra, "ntra_ci", "BANCI_NO_REPORTADA", "Debe registrar esta información en BANCI antes de volver a cargar el Consolidado. Si no tiene acceso, solicítelo a un usuario autorizado.");
+                continue;
+            }
+
+            if(mc.Count != 1 || bc.Count != 1)
+            {
+                Error("carpetas", mc[0], ntra, "ntra_ci", "BANCI_AMBIGUA", "NTRA_CI no identifica una única carpeta en ambas fuentes. Corrija la duplicidad.");
+                continue;
+            }
+
             CompararCampos("carpetas", ntra, mc[0], bc[0], CamposCarpeta);
             var md = mdPorCarpeta[Clave(Valor(mc[0], "id_ci"))].ToList();
             var bd = bdPorCarpeta[Clave(Valor(bc[0], "id_ci"))].ToList();
-            if (md.Count != 1 || bd.Count != 1) { Error("delitos", mc[0], ntra, "clasf_de_dto", "BANCI_CANTIDAD_DELITOS", $"Se requiere un delito de desaparición por carpeta: Consolidado={md.Count}; BANCI={bd.Count}."); continue; }
+            if(md.Count != 1 || bd.Count != 1)
+            {
+                Error("delitos", mc[0], ntra, "clasf_de_dto", "BANCI_CANTIDAD_DELITOS", $"Se requiere un delito de desaparición por carpeta: Consolidado={md.Count}; BANCI={bd.Count}.");
+                continue;
+            }
+
             CompararCampos("delitos", ntra, md[0], bd[0], CamposDelito);
             var mv = mvPorDelito[(Clave(Valor(mc[0], "id_ci")), Clave(Valor(md[0], "id_delito")))].ToList();
             var pendientes = bvPorDelito[(Clave(Valor(bc[0], "id_ci")), Clave(Valor(bd[0], "id_delito")))].ToList();
@@ -41,41 +60,69 @@ public static class BanciCruceValidator
             var faltantes = new List<ArchivoFila>();
             foreach (var v in mv)
             {
-                if (grupos.TryGetValue(Firma(v, false), out var grupo) && grupo.Count > 0) grupo.Dequeue();
-                else faltantes.Add(v);
+                if(grupos.TryGetValue(Firma(v, false), out var grupo) && grupo.Count > 0)
+                    grupo.Dequeue();
+                else
+                    faltantes.Add(v);
             }
+
             pendientes = grupos.Values.SelectMany(g => g).ToList();
-            if (faltantes.Count == 1 && pendientes.Count == 1) CompararCampos("victimas", ntra, faltantes[0], pendientes[0], CamposVictima);
+            if(faltantes.Count == 1 && pendientes.Count == 1)
+                CompararCampos("victimas", ntra, faltantes[0], pendientes[0], CamposVictima);
             else
             {
-                foreach (var v in faltantes) Error("victimas", v, ntra, "", "BANCI_VICTIMA_DIFERENTE", "Registro del Consolidado sin equivalente en BANCI: " + Describir(v));
-                foreach (var v in pendientes) Error("victimas", null, ntra, "", "BANCI_VICTIMA_OMITIDA", "Registro BANCI sin equivalente en Consolidado: " + Describir(v));
+                foreach (var v in faltantes)
+                    Error("victimas", v, ntra, "", "BANCI_VICTIMA_DIFERENTE", "Registro del Consolidado sin equivalente en BANCI: " + Describir(v));
+                foreach (var v in pendientes)
+                    Error("victimas", null, ntra, "", "BANCI_VICTIMA_OMITIDA", "Registro BANCI sin equivalente en Consolidado: " + Describir(v));
             }
         }
-        return errores;
 
+        return errores;
         void CompararCampos(string archivo, string ntra, ArchivoFila m, ArchivoFila b, string[] campos)
         {
             foreach (var campo in campos.Where(c => Normal(m, c, false) != Normal(b, c, true)))
                 Error(archivo, m, ntra, campo, "BANCI_DIFERENCIA", $"Consolidado: '{Valor(m, campo)}'; BANCI: '{Valor(b, campo)}'. Corrija la diferencia antes de continuar.");
         }
-        void Error(string archivo, ArchivoFila? fila, string ntra, string campo, string codigo, string mensaje) => errores.Add(new() { NtraCi = ntra, Archivo = archivo, Fila = fila?.NumeroFila, Columna = campo, Campo = campo, Valor = fila == null ? ntra : Valor(fila, campo), Codigo = codigo, DescripcionResumen = "Cruce Consolidado–BANCI", Mensaje = $"Carpeta {ntra}: {mensaje}" });
+
+        void Error(string archivo,
+            ArchivoFila? fila,
+            string ntra,
+            string campo,
+            string codigo,
+            string mensaje) => errores.Add(new()
+        {
+            NtraCi = ntra,
+            Archivo = archivo,
+            Fila = fila?.NumeroFila,
+            Columna = campo,
+            Campo = campo,
+            Valor = fila == null ? ntra : Valor(fila, campo),
+            Codigo = codigo,
+            DescripcionResumen = "Cruce Consolidado–BANCI",
+            Mensaje = $"Carpeta {ntra}: {mensaje}"
+        });
     }
+
     // Sólo cambia el diagnóstico de claves ausentes del período; no agrega
     // registros históricos a la comparación ni elimina errores bloqueantes.
     public static void AclararOtrosPeriodos(List<CargaValidacionError> errores,
-        BanciCruceArchivos carga, IEnumerable<ArchivoFila> otrasCarpetas, int mes, int anio)
+        BanciCruceArchivos carga,
+        IEnumerable<ArchivoFila> otrasCarpetas,
+        int mes,
+        int anio)
     {
         var otras = otrasCarpetas.ToLookup(c => Clave(Valor(c, "ntra_ci")));
         var enviadas = carga.Carpetas.ToLookup(c => Clave(Valor(c, "ntra_ci")));
         foreach (var error in errores.Where(e => e.Codigo == "BANCI_NO_REPORTADA"))
         {
             var clave = Clave(error.NtraCi ?? "");
-            if (!otras.Contains(clave))
+            if(!otras.Contains(clave))
             {
                 error.Mensaje = $"Carpeta {clave}: No está registrada en BANCI para el período {mes:00}/{anio}. Revise el número de carpeta; si es correcto, regístrela primero en BANCI y vuelva a cargar el Consolidado.";
                 continue;
             }
+
             var fechaCarga = string.Join(", ", enviadas[clave].Select(c => Normal(c, "fha_de_ini", false)).Distinct());
             var fechasBanci = string.Join(", ", otras[clave].Select(c => Normal(c, "fha_de_ini", true)).Distinct().Order());
             error.Codigo = "BANCI_OTRO_PERIODO";
@@ -84,26 +131,38 @@ public static class BanciCruceValidator
             error.Mensaje = $"Carpeta {clave}: Ya está registrada en BANCI en otro período. Fecha de inicio en Consolidado: {fechaCarga}; en BANCI: {fechasBanci}. El cruce corresponde a {mes:00}/{anio}. Revise el número de carpeta y la fecha de inicio; no vuelva a registrarla ni incluya carpetas de meses anteriores para resolver este aviso.";
         }
     }
+
     private static string Firma(ArchivoFila v, bool banci) => JsonSerializer.Serialize(CamposVictima.Select(c => Normal(v, c, banci)));
     private static string Describir(ArchivoFila v) => JsonSerializer.Serialize(CamposVictima.ToDictionary(c => c, c => Valor(v, c)));
     private static string Normal(ArchivoFila fila, string campo, bool banci)
     {
         var valor = Clave(Valor(fila, campo));
         // El cruce aplica la misma interpretación que el alta a ambos archivos.
-        if (campo is "pob" or "disc") valor = BanciPobDiscNormalizer.Normalizar(valor);
-        if (valor is "" or "ND" or "N/D" or "NO DISPONIBLE") return "";
-        if (campo.StartsWith("fha_", StringComparison.Ordinal))
+        if(campo is "pob" or "disc")
+            valor = BanciPobDiscNormalizer.Normalizar(valor);
+        if(valor is "" or "ND" or "N/D" or "NO DISPONIBLE")
+            return "";
+        if(campo.StartsWith("fha_", StringComparison.Ordinal))
         {
-            if (DateTime.TryParseExact(valor, ["yyyy-MM-dd", "yyyy/MM/dd", "yyyyMMdd", "dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var fecha)
-                || DateTime.TryParse(valor, CultureInfo.GetCultureInfo("es-MX"), DateTimeStyles.None, out fecha)) return fecha.ToString("yyyy-MM-dd");
-            if (double.TryParse(valor, NumberStyles.Float, CultureInfo.InvariantCulture, out var serial) && serial > 0 && serial < 60000) return DateTime.FromOADate(serial).ToString("yyyy-MM-dd");
+            if(DateTime.TryParseExact(valor, ["yyyy-MM-dd", "yyyy/MM/dd", "yyyyMMdd", "dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var fecha)
+                || DateTime.TryParse(valor, CultureInfo.GetCultureInfo("es-MX"), DateTimeStyles.None, out fecha))
+                return fecha.ToString("yyyy-MM-dd");
+            if(double.TryParse(valor, NumberStyles.Float, CultureInfo.InvariantCulture, out var serial) && serial > 0 && serial < 60000)
+                return DateTime.FromOADate(serial).ToString("yyyy-MM-dd");
         }
-        if (campo.StartsWith("hra_", StringComparison.Ordinal))
+
+        if(campo.StartsWith("hra_", StringComparison.Ordinal))
         {
-            if (double.TryParse(valor, NumberStyles.Float, CultureInfo.InvariantCulture, out var serial) && serial >= 0 && serial < 1) return Math.Round(TimeSpan.FromDays(serial).TotalSeconds).ToString(CultureInfo.InvariantCulture);
-            if (TimeSpan.TryParse(valor, CultureInfo.InvariantCulture, out var hora)) return Math.Round(hora.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+            if(double.TryParse(valor, NumberStyles.Float, CultureInfo.InvariantCulture, out var serial) && serial >= 0 && serial < 1)
+                return Math.Round(TimeSpan.FromDays(serial).TotalSeconds).ToString(CultureInfo.InvariantCulture);
+            if(TimeSpan.TryParse(valor, CultureInfo.InvariantCulture, out var hora))
+                return Math.Round(hora.TotalSeconds).ToString(CultureInfo.InvariantCulture);
         }
-        if ((campo.StartsWith("id_", StringComparison.Ordinal) || campo is "forma_acc" or "emto_com_dto" or "grdo_cons" or "sexo" or "genero" or "pob" or "disc" or "edad" or "nacional" or "coord_x" or "coord_y" or "cp") && decimal.TryParse(valor, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var numero)) return numero.ToString("G29", CultureInfo.InvariantCulture);
+
+        if((campo.StartsWith("id_", StringComparison.Ordinal)
+            || campo is "forma_acc" or "emto_com_dto" or "grdo_cons" or "sexo" or "genero" or "pob" or "disc" or "edad" or "nacional" or "coord_x" or "coord_y" or "cp")
+            && decimal.TryParse(valor, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var numero))
+            return numero.ToString("G29", CultureInfo.InvariantCulture);
         return valor;
     }
 }

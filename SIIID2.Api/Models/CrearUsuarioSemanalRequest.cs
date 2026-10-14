@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class CrearUsuarioSemanalRequest
 {
     public string Usuario { get; set; } = string.Empty;

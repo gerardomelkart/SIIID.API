@@ -1,7 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
 namespace SIIID2.Api.Models;
-
 public class ActualizacionDiferenciasResumen
 {
     public int Nuevos { get; set; }
@@ -13,7 +12,6 @@ public class ActualizacionDiferenciasResponse
 {
     [JsonIgnore]
     public long IdCarga { get; set; }
-
     public bool EsValido { get; set; }
     public string CodigoReferencia { get; set; } = string.Empty;
     public string Mensaje { get; set; } = string.Empty;

@@ -1,7 +1,6 @@
 ﻿using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 public interface ICargaRepository
 {
     // Guarda el intento completo de carga:
@@ -10,11 +9,22 @@ public interface ICargaRepository
     // 3. Guarda delitos en staging.
     // 4. Guarda víctimas en staging.
     // Todo se ejecuta dentro de una transacción.
-    Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga, int? idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, int totalCarpetas, int totalDelitos, int totalVictimas, string estado, string? mensajeError, List<CargaValidacionError> advertencias, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas);
-
+    Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga,
+        int? idEntidadFederativa,
+        string codigoReferencia,
+        int mesCorte,
+        int anioCorte,
+        int totalCarpetas,
+        int totalDelitos,
+        int totalVictimas,
+        string estado,
+        string? mensajeError,
+        List<CargaValidacionError> advertencias,
+        List<ArchivoFila> filasCarpetas,
+        List<ArchivoFila> filasDelitos,
+        List<ArchivoFila> filasVictimas);
     // Valida si ya existe una carga confirmada para la misma entidad y periodo.
     Task<bool> ExisteCargaConfirmadaAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
-
     // Confirma o rechaza una carga validada.
     // Si acepta, mueve staging a tablas finales.
     // Si rechaza, solo actualiza estados.
@@ -22,14 +32,16 @@ public interface ICargaRepository
     // Obtiene el código de una carga pendiente para la misma entidad y periodo.
     // Si regresa null, no existe pendiente.
     Task<CargaPendienteInfo?> ObtenerCodigoCargaPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
-
     Task<CargaPendienteInfo?> ObtenerCodigoActualizacionPendienteAsync(int idEntidadFederativa, int mesCorte, int anioCorte);
-
     Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idEntidadFederativa);
-
-    Task<ConfirmarCargaResponse> GuardarYConfirmarCargaDirectaAsync(int idUsuarioCarga, int idEntidadFederativa, string codigoReferencia, int mesCorte, int anioCorte, List<ArchivoFila> filasCarpetas, List<ArchivoFila> filasDelitos, List<ArchivoFila> filasVictimas);
-
+    Task<ConfirmarCargaResponse> GuardarYConfirmarCargaDirectaAsync(int idUsuarioCarga,
+        int idEntidadFederativa,
+        string codigoReferencia,
+        int mesCorte,
+        int anioCorte,
+        List<ArchivoFila> filasCarpetas,
+        List<ArchivoFila> filasDelitos,
+        List<ArchivoFila> filasVictimas);
     Task<ConfirmarCargaResponse> AprobarCargaPendienteAsync(string codigoReferencia, int idUsuarioAprobacion);
-
     Task<ConfirmarCargaResponse> RechazarCargaPendienteAsync(string codigoReferencia, int idUsuarioRechazo, string motivo);
 }

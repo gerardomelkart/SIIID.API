@@ -1,16 +1,18 @@
-﻿using Dapper;
+﻿// Conserva las instrucciones de auditoría de la carga; los textos SQL deben permanecer literales al formatear C#.
+using Dapper;
 using Microsoft.Data.SqlClient;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
-
 internal static class CargaAuditoriaSql
 {
-    public static async Task GuardarAdvertenciasAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, IEnumerable<CargaValidacionError> advertencias)
+    public static async Task GuardarAdvertenciasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        IEnumerable<CargaValidacionError> advertencias)
     {
         var lista = advertencias?.ToList() ?? [];
-
-        if (lista.Count == 0)
+        if(lista.Count == 0)
         {
             return;
         }
@@ -49,27 +51,17 @@ internal static class CargaAuditoriaSql
                 1
             );
             """;
-
-        var parametros = lista.Select(advertencia => new
-        {
-            IdCarga = idCarga,
-            Codigo = Limitar(advertencia.Codigo, 150),
-            Archivo = Limitar(advertencia.Archivo, 50),
-            NumeroFila = advertencia.Fila,
-            Columna = LimitarNullable(advertencia.Columna, 150),
-            Campo = LimitarNullable(advertencia.Campo, 150),
-            Valor = LimitarNullable(advertencia.Valor, 1000),
-            DescripcionResumen = Limitar(advertencia.DescripcionResumen, 500),
-            Mensaje = Limitar(advertencia.Mensaje, 2000)
-        });
-
-        await connection.ExecuteAsync(
-            sql,
-            parametros,
-            transaction);
+        var parametros = lista.Select(advertencia => new { IdCarga = idCarga, Codigo = Limitar(advertencia.Codigo, 150), Archivo = Limitar(advertencia.Archivo, 50), NumeroFila = advertencia.Fila, Columna = LimitarNullable(advertencia.Columna, 150), Campo = LimitarNullable(advertencia.Campo, 150), Valor = LimitarNullable(advertencia.Valor, 1000), DescripcionResumen = Limitar(advertencia.DescripcionResumen, 500), Mensaje = Limitar(advertencia.Mensaje, 2000) });
+        await connection.ExecuteAsync(sql, parametros, transaction);
     }
 
-    public static async Task RegistrarCambioEstadoAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, string? estadoAnterior, string estadoNuevo, int? idUsuario, string? comentario)
+    public static async Task RegistrarCambioEstadoAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        string? estadoAnterior,
+        string estadoNuevo,
+        int? idUsuario,
+        string? comentario)
     {
         const string sql = """
             INSERT INTO dbo.carga_bitacora_estado
@@ -93,44 +85,30 @@ internal static class CargaAuditoriaSql
                 1
             );
             """;
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                EstadoAnterior = LimitarNullable(estadoAnterior, 50),
-                EstadoNuevo = Limitar(estadoNuevo, 50),
-                IdUsuario = idUsuario,
-                Comentario = LimitarNullable(comentario, 2000)
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, EstadoAnterior = LimitarNullable(estadoAnterior, 50), EstadoNuevo = Limitar(estadoNuevo, 50), IdUsuario = idUsuario, Comentario = LimitarNullable(comentario, 2000) }, transaction);
     }
 
     private static string Limitar(string? valor, int longitudMaxima)
     {
         var texto = valor?.Trim() ?? string.Empty;
-
-        return texto.Length <= longitudMaxima
-            ? texto
-            : texto[..longitudMaxima];
+        return texto.Length <= longitudMaxima ? texto : texto[..longitudMaxima];
     }
 
     private static string? LimitarNullable(string? valor, int longitudMaxima)
     {
-        if (string.IsNullOrWhiteSpace(valor))
+        if(string.IsNullOrWhiteSpace(valor))
         {
             return null;
         }
 
         var texto = valor.Trim();
-
-        return texto.Length <= longitudMaxima
-            ? texto
-            : texto[..longitudMaxima];
+        return texto.Length <= longitudMaxima ? texto : texto[..longitudMaxima];
     }
 
-    public static async Task MarcarAdvertenciasAceptadasAsync(SqlConnection connection, SqlTransaction transaction, long idCarga, int idUsuarioAceptacion)
+    public static async Task MarcarAdvertenciasAceptadasAsync(SqlConnection connection,
+        SqlTransaction transaction,
+        long idCarga,
+        int idUsuarioAceptacion)
     {
         const string sql = """
         UPDATE dbo.carga_advertencia
@@ -141,16 +119,6 @@ internal static class CargaAuditoriaSql
           AND activo = 1
           AND aceptada_usuario = 0;
         """;
-
-        await connection.ExecuteAsync(
-            sql,
-            new
-            {
-                IdCarga = idCarga,
-                IdUsuarioAceptacion = idUsuarioAceptacion
-            },
-            transaction);
+        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioAceptacion = idUsuarioAceptacion }, transaction);
     }
-
-    
 }

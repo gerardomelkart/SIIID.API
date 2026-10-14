@@ -1,5 +1,4 @@
 ﻿namespace SIIID2.Api.Models;
-
 public class UsuarioValidacionError
 {
     public string Campo { get; set; } = string.Empty;

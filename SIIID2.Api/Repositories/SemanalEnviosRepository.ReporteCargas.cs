@@ -4,11 +4,13 @@ using SIIID2.Api.Models;
 using System.Globalization;
 
 namespace SIIID2.Api.Repositories;
-
 // Seguimiento administrativo de remisiones semanales.
 public partial class SemanalEnviosRepository : ISemanalEnviosRepository
 {
-    public async Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa, int? idUsuarioCarga, int? anioCorte, int? mesCorte)
+    public async Task<List<SemanalReporteCargaItem>> ObtenerReporteCargasAsync(int? idEntidadFederativa,
+        int? idUsuarioCarga,
+        int? anioCorte,
+        int? mesCorte)
     {
         const string sql = @"
             SET NOCOUNT ON;
@@ -227,28 +229,20 @@ public partial class SemanalEnviosRepository : ISemanalEnviosRepository
                 catalogo_delito.delito;
         ";
         using var connection = _dbConnectionFactory.CrearConexion();
-
-        var registros = (await connection.QueryAsync<SemanalReporteCargaItem>(sql, new
-        {
-            IdEntidadFederativa = idEntidadFederativa,
-            IdUsuarioCarga = idUsuarioCarga,
-            AnioCorte = anioCorte,
-            MesCorte = mesCorte
-        })).ToList();
-
+        var registros = (await connection.QueryAsync<SemanalReporteCargaItem>(sql, new { IdEntidadFederativa = idEntidadFederativa, IdUsuarioCarga = idUsuarioCarga, AnioCorte = anioCorte, MesCorte = mesCorte })).ToList();
         var cultura = CultureInfo.GetCultureInfo("es-MX");
-
         foreach (var registro in registros)
         {
             var nombreMes = cultura.TextInfo.ToTitleCase(cultura.DateTimeFormat.GetMonthName(registro.MesCorte));
-
             registro.Periodo = $"{nombreMes} {registro.AnioCorte}";
-            registro.Delitos = string.IsNullOrWhiteSpace(registro.Delito) ? new List<string>() : new List<string> { registro.Delito };
+            registro.Delitos = string.IsNullOrWhiteSpace(registro.Delito) ? new List<string>() : new List<string>
+            {
+                registro.Delito
+            };
             registro.FechaCargaActualizacionTexto = registro.FechaCargaActualizacion.HasValue ? registro.FechaCargaActualizacion.Value.ToString("yyyy-MM-dd HH:mm:ss") : string.Empty;
             registro.FechaAprobacionTexto = registro.FechaAprobacion.HasValue ? registro.FechaAprobacion.Value.ToString("yyyy-MM-dd HH:mm:ss") : string.Empty;
         }
 
         return registros;
     }
-
 }

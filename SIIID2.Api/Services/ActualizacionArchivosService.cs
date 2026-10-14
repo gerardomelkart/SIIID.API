@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿// La actualización parte de una carga validada y conserva sus diferencias para revisar qué se integrará.
+using System.Globalization;
 using System.Text;
 using SIIID2.Api.Models;
 using SIIID2.Api.Readers;
@@ -6,7 +7,6 @@ using SIIID2.Api.Repositories;
 using SIIID2.Api.Validators;
 
 namespace SIIID2.Api.Services;
-
 // Actualización:
 // - Se usa /api/actualizaciones/validar.
 // - El periodo lo selecciona el usuario en el front.
@@ -32,18 +32,30 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     private readonly IUsuarioRepository _usuarioRepository;
     private readonly IActualizacionCargaRepository _actualizacionCargaRepository;
     private readonly IUltimosArchivosEntidadService _ultimosArchivosEntidadService;
-
     // Extensiones permitidas para los archivos de actualización.
     private readonly string[] _extensionesPermitidas =
     {
         ".csv",
         ".xlsx"
     };
-
     // Tamaño máximo permitido por archivo: 50 MB.
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
-
-    public ActualizacionArchivosService(BanciCruceService cruce, SistemaConfiguracionService config, IArchivoReader archivoReader, CarpetasValidator carpetasValidator, DelitosValidator delitosValidator, VictimasValidator victimasValidator, FeminicidioVictimaValidator feminicidioVictimaValidator, FeminicidioRenapoValidator feminicidioRenapoValidator, CargaIntegridadValidator cargaIntegridadValidator, CatalogosValidator catalogosValidator, ICargaRepository cargaRepository, IActualizacionCargaRepository actualizacionCargaRepository, IActualizacionDiferenciasRepository actualizacionDiferenciasRepository, IActualizacionRepository actualizacionRepository, IUsuarioRepository usuarioRepository, IUltimosArchivosEntidadService ultimosArchivosEntidadService)
+    public ActualizacionArchivosService(BanciCruceService cruce,
+        SistemaConfiguracionService config,
+        IArchivoReader archivoReader,
+        CarpetasValidator carpetasValidator,
+        DelitosValidator delitosValidator,
+        VictimasValidator victimasValidator,
+        FeminicidioVictimaValidator feminicidioVictimaValidator,
+        FeminicidioRenapoValidator feminicidioRenapoValidator,
+        CargaIntegridadValidator cargaIntegridadValidator,
+        CatalogosValidator catalogosValidator,
+        ICargaRepository cargaRepository,
+        IActualizacionCargaRepository actualizacionCargaRepository,
+        IActualizacionDiferenciasRepository actualizacionDiferenciasRepository,
+        IActualizacionRepository actualizacionRepository,
+        IUsuarioRepository usuarioRepository,
+        IUltimosArchivosEntidadService ultimosArchivosEntidadService)
     {
         _config = config;
         _cruce = cruce;
@@ -67,18 +79,15 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     {
         // Los archivos y campos adicionales vienen en multipart/form-data.
         var archivos = form.Files;
-
         // El usuario viene del token.
         // Se consulta en base para validar que exista, esté activo y tenga permisos.
         var usuarioCarga = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioCarga);
-
-        if (usuarioCarga == null)
+        if(usuarioCarga == null)
         {
             var responseUsuario = new CargaValidacionResponse
             {
                 CodigoReferencia = GenerarCodigoReferencia()
             };
-
             responseUsuario.Errores.Add(new CargaValidacionError
             {
                 Archivo = "general",
@@ -90,20 +99,18 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 DescripcionResumen = "Usuario de carga no existe",
                 Mensaje = "El usuario autenticado no existe o no está activo."
             });
-
             FinalizarRespuesta(responseUsuario, 0, 0, 0);
             return responseUsuario;
         }
 
         // Para actualización se revisa habilita_modificacion.
         // No se usa habilita_carga porque son permisos distintos.
-        if (!usuarioCarga.HabilitaModificacion)
+        if(!usuarioCarga.HabilitaModificacion)
         {
             var responseUsuario = new CargaValidacionResponse
             {
                 CodigoReferencia = GenerarCodigoReferencia()
             };
-
             responseUsuario.Errores.Add(new CargaValidacionError
             {
                 Archivo = "general",
@@ -115,7 +122,6 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 DescripcionResumen = "Usuario sin permiso de modificación",
                 Mensaje = "El usuario autenticado no tiene habilitada la modificación de información."
             });
-
             FinalizarRespuesta(responseUsuario, 0, 0, 0);
             return responseUsuario;
         }
@@ -126,7 +132,6 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         {
             CodigoReferencia = GenerarCodigoReferencia()
         };
-
         // En actualización, el periodo no se infiere del Excel.
         // El usuario selecciona mes/año en la pantalla de actualización.
         // Esos valores llegan como campos Text dentro del form-data:
@@ -135,11 +140,9 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         var periodo = ObtenerPeriodoCorteDesdeForm(form, response.Errores);
         var mesCorte = periodo.MesCorte;
         var anioCorte = periodo.AnioCorte;
-
         var idEntidadFederativaSeleccionada = ObtenerEntidadFederativaSeleccionadaDesdeForm(form, usuarioCarga, response.Errores);
-
         // Validación base: deben llegar los tres archivos.
-        if (archivos == null || archivos.Count == 0)
+        if(archivos == null || archivos.Count == 0)
         {
             response.Errores.Add(new CargaValidacionError
             {
@@ -152,13 +155,11 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 DescripcionResumen = "No se recibieron archivos",
                 Mensaje = "Debe enviar los archivos de carpetas, delitos y víctimas."
             });
-
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
         }
 
         var listaArchivos = archivos.ToList();
-
         // Validamos tamaño y extensión de cada archivo.
         foreach (var archivo in listaArchivos)
         {
@@ -171,19 +172,16 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         var archivoCarpetas = BuscarArchivoPorNombre(listaArchivos, "carpeta");
         var archivoDelitos = BuscarArchivoPorNombre(listaArchivos, "delito");
         var archivoVictimas = BuscarArchivoPorNombre(listaArchivos, "victima");
-
         // Validamos que exista un archivo de cada tipo.
         ValidarArchivoEsperado(archivoCarpetas, "carpetas", "carpeta", response.Errores);
         ValidarArchivoEsperado(archivoDelitos, "delitos", "delito", response.Errores);
         ValidarArchivoEsperado(archivoVictimas, "victimas", "victima", response.Errores);
-
         // Validamos que no manden dos archivos que parezcan ser del mismo tipo.
         ValidarDuplicadosPorTipo(listaArchivos, "carpeta", "carpetas", response.Errores);
         ValidarDuplicadosPorTipo(listaArchivos, "delito", "delitos", response.Errores);
         ValidarDuplicadosPorTipo(listaArchivos, "victima", "victimas", response.Errores);
-
         // Si hubo errores generales de archivos, no intentamos leerlos.
-        if (response.Errores.Count > 0)
+        if(response.Errores.Count > 0)
         {
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
@@ -192,15 +190,10 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Validación estructural temprana.
         // Si falta una columna obligatoria, no leemos filas completas,
         // no corremos más validaciones y no guardamos temporales.
-        var erroresEstructura = await ValidarEstructuraArchivosAsync(
-            archivoCarpetas!,
-            archivoDelitos!,
-            archivoVictimas!);
-
-        if (erroresEstructura.Count > 0)
+        var erroresEstructura = await ValidarEstructuraArchivosAsync(archivoCarpetas!, archivoDelitos!, archivoVictimas!);
+        if(erroresEstructura.Count > 0)
         {
             response.Errores.AddRange(erroresEstructura);
-
             FinalizarRespuesta(response, 0, 0, 0);
             return response;
         }
@@ -209,16 +202,13 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         var filasCarpetas = await _archivoReader.LeerAsync(archivoCarpetas!);
         var filasDelitos = await _archivoReader.LeerAsync(archivoDelitos!);
         var filasVictimas = await _archivoReader.LeerAsync(archivoVictimas!);
-
         // Validaciones individuales por archivo.
         response.Errores.AddRange(_carpetasValidator.Validar(filasCarpetas, validarMesInmediatoAnterior: false));
         response.Errores.AddRange(_delitosValidator.Validar(filasDelitos));
         response.Errores.AddRange(_victimasValidator.Validar(filasVictimas));
-
         // Validamos que el usuario solo actualice información de su entidad.
         // El SUPER_USUARIO puede actualizar cualquier entidad.
         response.Errores.AddRange(ValidarEntidadUsuarioCarga(usuarioCarga, filasDelitos));
-
         // Si el periodo recibido desde el front fue válido,
         // validamos que las carpetas del Excel pertenezcan al periodo seleccionado.
         //
@@ -228,38 +218,23 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         //
         // Todas las fha_de_ini de carpetas deben corresponder al mes de información
         // asociado al corte seleccionado
-        if (mesCorte.HasValue && anioCorte.HasValue)
+        if(mesCorte.HasValue && anioCorte.HasValue)
         {
-            response.Errores.AddRange(ValidarPeriodoCarpetas(
-                filasCarpetas,
-                mesCorte.Value,
-                anioCorte.Value));
+            response.Errores.AddRange(ValidarPeriodoCarpetas(filasCarpetas, mesCorte.Value, anioCorte.Value));
         }
 
         // Las validaciones cruzadas solo se ejecutan si hasta aquí no hay errores.
         // Esto evita errores secundarios cuando la estructura base del archivo está mal.
         var sinErroresInternos = response.Errores.Count == 0;
-
         var advertenciasPendientes = new List<CargaValidacionError>();
-
-        if (sinErroresInternos)
+        if(sinErroresInternos)
         {
-            var erroresIntegridad = _cargaIntegridadValidator.Validar(
-                filasCarpetas,
-                filasDelitos,
-                filasVictimas);
-
-            if (usuarioCarga.EsSuperUsuario)
+            var erroresIntegridad = _cargaIntegridadValidator.Validar(filasCarpetas, filasDelitos, filasVictimas);
+            if(usuarioCarga.EsSuperUsuario)
             {
-                var advertenciasFechaHechos = erroresIntegridad
-                    .Where(error => error.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
-                    .ToList();
-
+                var advertenciasFechaHechos = erroresIntegridad.Where(error => error.Codigo == "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO").ToList();
                 advertenciasPendientes.AddRange(advertenciasFechaHechos);
-
-                erroresIntegridad = erroresIntegridad
-                    .Where(error => error.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO")
-                    .ToList();
+                erroresIntegridad = erroresIntegridad.Where(error => error.Codigo != "INTEGRIDAD_FECHA_HECHOS_MAYOR_FECHA_INICIO").ToList();
             }
 
             response.Errores.AddRange(erroresIntegridad);
@@ -267,21 +242,17 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
         // Validaciones contra catálogos.
         // Se mantienen igual que en carga normal.
-        response.Errores.AddRange(await _catalogosValidator.ValidarAsync(
-            filasCarpetas,
-            filasDelitos,
-            filasVictimas));
+        response.Errores.AddRange(await _catalogosValidator.ValidarAsync(filasCarpetas, filasDelitos, filasVictimas));
         var coordenadasMunicipio = await _catalogosValidator.ValidarCoordenadasConfiguradasAsync(filasDelitos, "MENSUAL", _config);
         response.Errores.AddRange(coordenadasMunicipio.Errores);
-        if (coordenadasMunicipio.Advertencia is not null) response.Advertencias.Add(coordenadasMunicipio.Advertencia);
-
-        if (response.Errores.Count == 0 && _config.Activa("MENSUAL", "FEMINICIDIO_DATOS_ADICIONALES"))
+        if(coordenadasMunicipio.Advertencia is not null)
+            response.Advertencias.Add(coordenadasMunicipio.Advertencia);
+        if(response.Errores.Count == 0 && _config.Activa("MENSUAL", "FEMINICIDIO_DATOS_ADICIONALES"))
         {
             var validacionFeminicidio = _feminicidioVictimaValidator.Validar(filasDelitos, filasVictimas);
             response.Errores.AddRange(validacionFeminicidio.Errores);
             advertenciasPendientes.AddRange(validacionFeminicidio.Advertencias);
-
-            if (response.Errores.Count == 0)
+            if(response.Errores.Count == 0)
             {
                 var validacionRenapo = await _feminicidioRenapoValidator.ValidarAsync(filasDelitos, filasVictimas);
                 response.Errores.AddRange(validacionRenapo.Errores);
@@ -292,22 +263,13 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Obtenemos la entidad real de la actualización.
         // Para usuario normal viene de su usuario.
         // Para SUPER_USUARIO se toma del archivo de delitos.
-        var idEntidadFederativaCarga = ObtenerEntidadFederativaCarga(
-            usuarioCarga,
-            idEntidadFederativaSeleccionada,
-            filasDelitos,
-            response.Errores);
-
+        var idEntidadFederativaCarga = ObtenerEntidadFederativaCarga(usuarioCarga, idEntidadFederativaSeleccionada, filasDelitos, response.Errores);
         // Si no hay errores y ya tenemos entidad/periodo,
         // revisamos que exista una carga inicial confirmada para ese corte.
-        if (idEntidadFederativaCarga.HasValue && mesCorte.HasValue && anioCorte.HasValue)
+        if(idEntidadFederativaCarga.HasValue && mesCorte.HasValue && anioCorte.HasValue)
         {
-            var existeCargaConfirmada = await _cargaRepository.ExisteCargaConfirmadaAsync(
-                idEntidadFederativaCarga.Value,
-                mesCorte.Value,
-                anioCorte.Value);
-
-            if (!existeCargaConfirmada)
+            var existeCargaConfirmada = await _cargaRepository.ExisteCargaConfirmadaAsync(idEntidadFederativaCarga.Value, mesCorte.Value, anioCorte.Value);
+            if(!existeCargaConfirmada)
             {
                 response.Errores.Add(new CargaValidacionError
                 {
@@ -324,11 +286,9 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             else
             {
                 var actualizacionPendiente = await _cargaRepository.ObtenerCodigoActualizacionPendienteAsync(idEntidadFederativaCarga.Value, mesCorte.Value, anioCorte.Value);
-
-                if (actualizacionPendiente != null)
+                if(actualizacionPendiente != null)
                 {
                     var enRevisionAdministrativa = string.Equals(actualizacionPendiente.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
-
                     response.Errores.Add(new CargaValidacionError
                     {
                         Archivo = "general",
@@ -338,69 +298,52 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                         Valor = actualizacionPendiente.CodigoReferencia,
                         Codigo = enRevisionAdministrativa ? "ACTUALIZACION_PENDIENTE_APROBACION" : "ACTUALIZACION_PENDIENTE_EXISTENTE",
                         DescripcionResumen = enRevisionAdministrativa ? "Actualización en revisión administrativa" : "Ya existe actualización pendiente",
-                        Mensaje = enRevisionAdministrativa
-                            ? $"Ya existe una actualización en revisión administrativa para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte.Value:00}/{anioCorte.Value}. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}. Debe esperar la resolución del administrador."
-                            : $"Ya existe una actualización validada pendiente de confirmar para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte.Value:00}/{anioCorte.Value}. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}. Debe aceptar o rechazar esa actualización antes de enviar una nueva."
+                        Mensaje = enRevisionAdministrativa ? $"Ya existe una actualización en revisión administrativa para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte.Value:00}/{anioCorte.Value}. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}. Debe esperar la resolución del administrador." : $"Ya existe una actualización validada pendiente de confirmar para la entidad {idEntidadFederativaCarga.Value} y periodo {mesCorte.Value:00}/{anioCorte.Value}. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}. Debe aceptar o rechazar esa actualización antes de enviar una nueva."
                     });
                 }
             }
         }
 
-        if (response.Errores.Count == 0) response.Errores.AddRange(await _cruce.ValidarAsync(idEntidadFederativaCarga!.Value, mesCorte!.Value, anioCorte!.Value, new(filasCarpetas, filasDelitos, filasVictimas)));
-
-        if (response.Errores.Count == 0) await _config.PrepararFeminicidioAsync(filasVictimas, idEntidadFederativaCarga!.Value, mesCorte!.Value, anioCorte!.Value, true);
-
-        if (response.Errores.Count == 0)
+        if(response.Errores.Count == 0)
+            response.Errores.AddRange(await _cruce.ValidarAsync(idEntidadFederativaCarga!.Value, mesCorte!.Value, anioCorte!.Value, new(filasCarpetas, filasDelitos, filasVictimas)));
+        if(response.Errores.Count == 0)
+            await _config.PrepararFeminicidioAsync(filasVictimas, idEntidadFederativaCarga!.Value, mesCorte!.Value, anioCorte!.Value, true);
+        if(response.Errores.Count == 0)
         {
             response.Advertencias.AddRange(advertenciasPendientes);
             response.Advertencias.AddRange(_delitosValidator.ValidarAdvertencias(filasDelitos, _config.Activa("MENSUAL", "COORDENADAS_FORMATO_RANGO"), _config.Activa("MENSUAL", "COORDENADAS_SIN_INFORMACION"), _config.Activa("MENSUAL", "COORDENADAS_CONCENTRACION")));
-
-            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(
-                filasDelitos,
-                filasVictimas));
+            response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(filasDelitos, filasVictimas));
         }
 
         // Construimos resumen y mensaje final.
-        FinalizarRespuesta(
-            response,
-            filasCarpetas.Count,
-            filasDelitos.Count,
-            filasVictimas.Count);
-
+        FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
         // Estos errores bloquean el intento de actualización.
         // No se guarda fila en carga ni staging para evitar ensuciar la base.
         //
         // Si el periodo viene inválido, no se debe guardar la carga con mes/anio en 0.
         // Si no existe carga confirmada o ya hay una actualización pendiente,
         // tampoco se guarda staging.
-        if (response.Errores.Any(x =>
-                x.Codigo.StartsWith("BANCI_", StringComparison.Ordinal) ||
-                x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD" ||
-                x.Codigo == "GENERAL_ENTIDAD_SELECCIONADA_OBLIGATORIA" ||
-                x.Codigo == "GENERAL_ENTIDAD_SELECCIONADA_INVALIDA" ||
-                x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO" ||
-                x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_SELECCIONADA" ||
-                x.Codigo == "ACTUALIZACION_MES_CORTE_OBLIGATORIO" ||
-                x.Codigo == "ACTUALIZACION_MES_CORTE_INVALIDO" ||
-                x.Codigo == "ACTUALIZACION_ANIO_CORTE_OBLIGATORIO" ||
-                x.Codigo == "ACTUALIZACION_ANIO_CORTE_INVALIDO" ||
-                x.Codigo == "ACTUALIZACION_SIN_CARGA_CONFIRMADA" ||
-                x.Codigo == "ACTUALIZACION_PENDIENTE_EXISTENTE" ||
-                x.Codigo == "ACTUALIZACION_PENDIENTE_APROBACION"))
+        if(response.Errores.Any(x => x.Codigo.StartsWith("BANCI_", StringComparison.Ordinal)
+            || x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD"
+            || x.Codigo == "GENERAL_ENTIDAD_SELECCIONADA_OBLIGATORIA"
+            || x.Codigo == "GENERAL_ENTIDAD_SELECCIONADA_INVALIDA"
+            || x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO"
+            || x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_SELECCIONADA"
+            || x.Codigo == "ACTUALIZACION_MES_CORTE_OBLIGATORIO"
+            || x.Codigo == "ACTUALIZACION_MES_CORTE_INVALIDO"
+            || x.Codigo == "ACTUALIZACION_ANIO_CORTE_OBLIGATORIO"
+            || x.Codigo == "ACTUALIZACION_ANIO_CORTE_INVALIDO"
+            || x.Codigo == "ACTUALIZACION_SIN_CARGA_CONFIRMADA"
+            || x.Codigo == "ACTUALIZACION_PENDIENTE_EXISTENTE"
+            || x.Codigo == "ACTUALIZACION_PENDIENTE_APROBACION"))
         {
             return response;
         }
 
         // Si la validación fue correcta, queda pendiente de confirmación.
         // Si tuvo errores normales de validación, se guarda como rechazado de validación.
-        var estadoCarga = response.EsValido
-            ? "VALIDADO_PENDIENTE_ACTUALIZACION"
-            : "RECHAZADO_VALIDACION_ACTUALIZACION";
-
-        var mensajeError = response.EsValido
-            ? null
-            : $"La actualización contiene errores de validación. Total de errores: {response.Errores.Count}.";
-
+        var estadoCarga = response.EsValido ? "VALIDADO_PENDIENTE_ACTUALIZACION" : "RECHAZADO_VALIDACION_ACTUALIZACION";
+        var mensajeError = response.EsValido ? null : $"La actualización contiene errores de validación. Total de errores: {response.Errores.Count}.";
         // Guardamos el intento de actualización.
         // Esto crea una fila en carga con tipo_carga = ACTUALIZACION
         // y guarda los tres archivos en staging.
@@ -408,33 +351,16 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Solo se llega aquí si:
         // - no hay error bloqueante de periodo sin carga confirmada
         // - no hay actualización pendiente existente
-        var idCargaActualizacion = await _actualizacionCargaRepository.GuardarIntentoActualizacionAsync(
-                                    idUsuarioCarga,
-                                    idEntidadFederativaCarga,
-                                    response.CodigoReferencia,
-                                    mesCorte ?? 0,
-                                    anioCorte ?? 0,
-                                    filasCarpetas.Count,
-                                    filasDelitos.Count,
-                                    filasVictimas.Count,
-                                    estadoCarga,
-                                    mensajeError,
-                                    response.Advertencias,
-                                    filasCarpetas,
-                                    filasDelitos,
-                                    filasVictimas);
-
-        if (idEntidadFederativaCarga.HasValue && mesCorte.HasValue && anioCorte.HasValue)
+        var idCargaActualizacion = await _actualizacionCargaRepository.GuardarIntentoActualizacionAsync(idUsuarioCarga, idEntidadFederativaCarga, response.CodigoReferencia, mesCorte ?? 0, anioCorte ?? 0, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count, estadoCarga, mensajeError, response.Advertencias, filasCarpetas, filasDelitos, filasVictimas);
+        if(idEntidadFederativaCarga.HasValue && mesCorte.HasValue && anioCorte.HasValue)
         {
             await _ultimosArchivosEntidadService.GuardarAsync(idEntidadFederativaCarga.Value, response.CodigoReferencia, "ACTUALIZACION", mesCorte.Value, anioCorte.Value, archivoCarpetas!, archivoDelitos!, archivoVictimas!);
         }
 
-        if (response.EsValido)
+        if(response.EsValido)
         {
             var resumenDiferencias = await _actualizacionCargaRepository.ObtenerResumenDiferenciasActualizacionAsync(idCargaActualizacion);
-
             response.ResumenValidacion.AddRange(resumenDiferencias);
-
             response.Mensaje = "Actualización validada correctamente. Revise las diferencias antes de confirmar la actualización.";
         }
 
@@ -449,16 +375,9 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // se agrega error pero el flujo puede seguir acumulando más errores.
         int? mesCorte = null;
         int? anioCorte = null;
-
-        var valorMes = form.TryGetValue("mesCorte", out var mesValues)
-            ? mesValues.FirstOrDefault()
-            : null;
-
-        var valorAnio = form.TryGetValue("anioCorte", out var anioValues)
-            ? anioValues.FirstOrDefault()
-            : null;
-
-        if (string.IsNullOrWhiteSpace(valorMes))
+        var valorMes = form.TryGetValue("mesCorte", out var mesValues) ? mesValues.FirstOrDefault() : null;
+        var valorAnio = form.TryGetValue("anioCorte", out var anioValues) ? anioValues.FirstOrDefault() : null;
+        if(string.IsNullOrWhiteSpace(valorMes))
         {
             errores.Add(new CargaValidacionError
             {
@@ -472,9 +391,9 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 Mensaje = "Debe enviar el mes de corte que desea actualizar."
             });
         }
-        else if (!int.TryParse(valorMes, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mesParseado) ||
-                 mesParseado < 1 ||
-                 mesParseado > 12)
+        else if(!int.TryParse(valorMes, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mesParseado)
+            || mesParseado < 1
+            || mesParseado > 12)
         {
             errores.Add(new CargaValidacionError
             {
@@ -493,7 +412,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             mesCorte = mesParseado;
         }
 
-        if (string.IsNullOrWhiteSpace(valorAnio))
+        if(string.IsNullOrWhiteSpace(valorAnio))
         {
             errores.Add(new CargaValidacionError
             {
@@ -507,9 +426,9 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 Mensaje = "Debe enviar el año de corte que desea actualizar."
             });
         }
-        else if (!int.TryParse(valorAnio, NumberStyles.Integer, CultureInfo.InvariantCulture, out var anioParseado) ||
-                 anioParseado < 2000 ||
-                 anioParseado > 2100)
+        else if(!int.TryParse(valorAnio, NumberStyles.Integer, CultureInfo.InvariantCulture, out var anioParseado)
+            || anioParseado < 2000
+            || anioParseado > 2100)
         {
             errores.Add(new CargaValidacionError
             {
@@ -534,7 +453,6 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     private static List<CargaValidacionError> ValidarPeriodoCarpetas(List<ArchivoFila> filasCarpetas, int mesCorte, int anioCorte)
     {
         var errores = new List<CargaValidacionError>();
-
         // En actualización, el usuario selecciona el mes/año de corte.
         // Pero los archivos contienen información del mes inmediato anterior.
         //
@@ -543,24 +461,22 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Corte: mayo 2026
         // Información esperada en el Excel: abril 2026.
         var periodoInformacion = ObtenerPeriodoInformacionDesdeCorte(mesCorte, anioCorte);
-
         foreach (var fila in filasCarpetas)
         {
             fila.Columnas.TryGetValue("fha_de_ini", out var valorFecha);
-
             // Si viene vacío, lo reporta CarpetasValidator.
-            if (string.IsNullOrWhiteSpace(valorFecha))
+            if(string.IsNullOrWhiteSpace(valorFecha))
             {
                 continue;
             }
 
             // Si viene con formato inválido, lo reporta CarpetasValidator.
-            if (!DateTime.TryParse(valorFecha, new CultureInfo("es-MX"), DateTimeStyles.None, out var fecha))
+            if(!DateTime.TryParse(valorFecha, new CultureInfo("es-MX"), DateTimeStyles.None, out var fecha))
             {
                 continue;
             }
 
-            if (fecha.Month == periodoInformacion.Mes && fecha.Year == periodoInformacion.Anio)
+            if(fecha.Month == periodoInformacion.Mes && fecha.Year == periodoInformacion.Anio)
             {
                 continue;
             }
@@ -581,10 +497,13 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         return errores;
     }
 
-    private int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga, int? idEntidadFederativaSeleccionada, List<ArchivoFila> filasDelitos, List<CargaValidacionError> errores)
+    private int? ObtenerEntidadFederativaCarga(UsuarioCargaInfo usuarioCarga,
+        int? idEntidadFederativaSeleccionada,
+        List<ArchivoFila> filasDelitos,
+        List<CargaValidacionError> errores)
     {
         // Para usuarios normales, la entidad de actualización es la entidad asignada al usuario.
-        if (!usuarioCarga.EsSuperUsuario)
+        if(!usuarioCarga.EsSuperUsuario)
         {
             return usuarioCarga.IdEntidadFederativa;
         }
@@ -592,19 +511,16 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Para SUPER_USUARIO, se obtiene desde el archivo de delitos.
         // La actualización solo puede corresponder a una entidad.
         var entidades = new HashSet<int>();
-
         foreach (var fila in filasDelitos)
         {
             fila.Columnas.TryGetValue("id_ent_hchos", out var valorEntidad);
-
-            if (string.IsNullOrWhiteSpace(valorEntidad))
+            if(string.IsNullOrWhiteSpace(valorEntidad))
             {
                 continue;
             }
 
             valorEntidad = valorEntidad.Trim();
-
-            if (!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidad))
+            if(!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidad))
             {
                 continue;
             }
@@ -612,7 +528,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             entidades.Add(idEntidad);
         }
 
-        if (entidades.Count == 0)
+        if(entidades.Count == 0)
         {
             errores.Add(new CargaValidacionError
             {
@@ -625,11 +541,10 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 DescripcionResumen = "No se pudo determinar la entidad de la carga",
                 Mensaje = "No se pudo determinar la entidad de la carga a partir del archivo de delitos."
             });
-
             return null;
         }
 
-        if (entidades.Count > 1)
+        if(entidades.Count > 1)
         {
             errores.Add(new CargaValidacionError
             {
@@ -642,14 +557,11 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 DescripcionResumen = "La carga contiene múltiples entidades",
                 Mensaje = "La actualización contiene delitos de más de una entidad federativa. Una actualización solo puede corresponder a una entidad."
             });
-
             return null;
         }
 
         var idEntidadExcel = entidades.First();
-
-        if (idEntidadFederativaSeleccionada.HasValue &&
-            idEntidadExcel != idEntidadFederativaSeleccionada.Value)
+        if(idEntidadFederativaSeleccionada.HasValue && idEntidadExcel != idEntidadFederativaSeleccionada.Value)
         {
             errores.Add(new CargaValidacionError
             {
@@ -662,25 +574,23 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 DescripcionResumen = "Entidad del Excel distinta a la entidad seleccionada",
                 Mensaje = $"La entidad del Excel ({idEntidadExcel}) no corresponde con la entidad seleccionada ({idEntidadFederativaSeleccionada.Value})."
             });
-
             return null;
         }
 
         return idEntidadFederativaSeleccionada ?? idEntidadExcel;
     }
 
-    private static int? ObtenerEntidadFederativaSeleccionadaDesdeForm(IFormCollection form, UsuarioCargaInfo usuarioCarga, List<CargaValidacionError> errores)
+    private static int? ObtenerEntidadFederativaSeleccionadaDesdeForm(IFormCollection form,
+        UsuarioCargaInfo usuarioCarga,
+        List<CargaValidacionError> errores)
     {
-        if (!usuarioCarga.EsSuperUsuario)
+        if(!usuarioCarga.EsSuperUsuario)
         {
             return null;
         }
 
-        var valorEntidad = form.TryGetValue("idEntidadFederativa", out var entidadValues)
-            ? entidadValues.FirstOrDefault()
-            : null;
-
-        if (string.IsNullOrWhiteSpace(valorEntidad))
+        var valorEntidad = form.TryGetValue("idEntidadFederativa", out var entidadValues) ? entidadValues.FirstOrDefault() : null;
+        if(string.IsNullOrWhiteSpace(valorEntidad))
         {
             errores.Add(new CargaValidacionError
             {
@@ -693,12 +603,11 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 DescripcionResumen = "Entidad federativa obligatoria",
                 Mensaje = "Debe seleccionar la entidad federativa de la actualización."
             });
-
             return null;
         }
 
-        if (!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidadFederativa) ||
-            idEntidadFederativa <= 0)
+        if(!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidadFederativa)
+            || idEntidadFederativa <= 0)
         {
             errores.Add(new CargaValidacionError
             {
@@ -711,7 +620,6 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 DescripcionResumen = "Entidad federativa inválida",
                 Mensaje = "La entidad federativa seleccionada no es válida."
             });
-
             return null;
         }
 
@@ -721,15 +629,14 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     private List<CargaValidacionError> ValidarEntidadUsuarioCarga(UsuarioCargaInfo usuarioCarga, List<ArchivoFila> filasDelitos)
     {
         var errores = new List<CargaValidacionError>();
-
         // SUPER_USUARIO puede actualizar cualquier entidad.
-        if (usuarioCarga.EsSuperUsuario)
+        if(usuarioCarga.EsSuperUsuario)
         {
             return errores;
         }
 
         // Usuario normal debe tener entidad asignada.
-        if (!usuarioCarga.IdEntidadFederativa.HasValue)
+        if(!usuarioCarga.IdEntidadFederativa.HasValue)
         {
             errores.Add(new CargaValidacionError
             {
@@ -742,7 +649,6 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 DescripcionResumen = "Usuario sin entidad federativa asignada",
                 Mensaje = "El usuario no tiene una entidad federativa asignada y no puede realizar actualizaciones."
             });
-
             return errores;
         }
 
@@ -750,23 +656,21 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         foreach (var fila in filasDelitos)
         {
             fila.Columnas.TryGetValue("id_ent_hchos", out var valorEntidad);
-
             // Si viene vacío, lo reporta DelitosValidator.
-            if (string.IsNullOrWhiteSpace(valorEntidad))
+            if(string.IsNullOrWhiteSpace(valorEntidad))
             {
                 continue;
             }
 
             valorEntidad = valorEntidad.Trim();
-
             // Si no se puede convertir, lo reportan otros validadores.
-            if (!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidadExcel))
+            if(!int.TryParse(valorEntidad, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idEntidadExcel))
             {
                 continue;
             }
 
             // Acepta valores tipo 9 y 09 porque ambos se convierten a 9.
-            if (idEntidadExcel == usuarioCarga.IdEntidadFederativa.Value)
+            if(idEntidadExcel == usuarioCarga.IdEntidadFederativa.Value)
             {
                 continue;
             }
@@ -790,7 +694,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     private void ValidarArchivoBase(IFormFile archivo, List<CargaValidacionError> errores)
     {
         // Archivo vacío.
-        if (archivo.Length == 0)
+        if(archivo.Length == 0)
         {
             errores.Add(new CargaValidacionError
             {
@@ -802,7 +706,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         }
 
         // Archivo mayor a 50 MB.
-        if (archivo.Length > TamanioMaximoBytes)
+        if(archivo.Length > TamanioMaximoBytes)
         {
             errores.Add(new CargaValidacionError
             {
@@ -815,8 +719,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
         // Extensión permitida.
         var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
-
-        if (!_extensionesPermitidas.Contains(extension))
+        if(!_extensionesPermitidas.Contains(extension))
         {
             errores.Add(new CargaValidacionError
             {
@@ -831,19 +734,17 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     private IFormFile? BuscarArchivoPorNombre(List<IFormFile> archivos, string palabraEsperada)
     {
         var palabraNormalizada = NormalizarTexto(palabraEsperada);
-
         return archivos.FirstOrDefault(archivo =>
         {
             var nombreSinExtension = Path.GetFileNameWithoutExtension(archivo.FileName);
             var nombreNormalizado = NormalizarTexto(nombreSinExtension);
-
             return nombreNormalizado.Contains(palabraNormalizada);
         });
     }
 
     private void ValidarArchivoEsperado(IFormFile? archivo, string tipoArchivo, string palabraEsperada, List<CargaValidacionError> errores)
     {
-        if (archivo != null)
+        if(archivo != null)
         {
             return;
         }
@@ -857,21 +758,19 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         });
     }
 
-    private void ValidarDuplicadosPorTipo(List<IFormFile> archivos, string palabraEsperada, string tipoArchivo, List<CargaValidacionError> errores)
+    private void ValidarDuplicadosPorTipo(List<IFormFile> archivos,
+        string palabraEsperada,
+        string tipoArchivo,
+        List<CargaValidacionError> errores)
     {
         var palabraNormalizada = NormalizarTexto(palabraEsperada);
-
-        var coincidencias = archivos
-            .Where(archivo =>
-            {
-                var nombreSinExtension = Path.GetFileNameWithoutExtension(archivo.FileName);
-                var nombreNormalizado = NormalizarTexto(nombreSinExtension);
-
-                return nombreNormalizado.Contains(palabraNormalizada);
-            })
-            .ToList();
-
-        if (coincidencias.Count <= 1)
+        var coincidencias = archivos.Where(archivo =>
+        {
+            var nombreSinExtension = Path.GetFileNameWithoutExtension(archivo.FileName);
+            var nombreNormalizado = NormalizarTexto(nombreSinExtension);
+            return nombreNormalizado.Contains(palabraNormalizada);
+        }).ToList();
+        if(coincidencias.Count <= 1)
         {
             return;
         }
@@ -888,14 +787,11 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     private static string NormalizarTexto(string texto)
     {
         texto = texto.ToLowerInvariant().Normalize(NormalizationForm.FormD);
-
         var builder = new StringBuilder();
-
         foreach (var caracter in texto)
         {
             var categoria = CharUnicodeInfo.GetUnicodeCategory(caracter);
-
-            if (categoria != UnicodeCategory.NonSpacingMark)
+            if(categoria != UnicodeCategory.NonSpacingMark)
             {
                 builder.Append(caracter);
             }
@@ -908,15 +804,13 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     {
         // EsValido es propiedad calculada en CargaValidacionResponse:
         // true si Errores.Count == 0.
-        if (response.EsValido && response.Advertencias.Count > 0)
+        if(response.EsValido && response.Advertencias.Count > 0)
         {
             response.Mensaje = "La actualización fue validada con advertencias. Revise las advertencias antes de continuar.";
         }
         else
         {
-            response.Mensaje = response.EsValido
-                ? "Actualización validada correctamente. Puede generar el acuse previo y confirmar la actualización."
-                : "La actualización contiene errores de validación.";
+            response.Mensaje = response.EsValido ? "Actualización validada correctamente. Puede generar el acuse previo y confirmar la actualización." : "La actualización contiene errores de validación.";
         }
 
         // Resumen base de registros recibidos.
@@ -947,28 +841,15 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 EsError = false
             }
         };
-
         // Resumen de errores agrupados por archivo.
-        var incidenciasPorArchivo = response.Errores
-            .Concat(response.Advertencias)
-            .Where(e =>
-                !string.IsNullOrWhiteSpace(e.Codigo) &&
-                !string.IsNullOrWhiteSpace(e.DescripcionResumen))
-            .GroupBy(e => new
-            {
-                Archivo = string.IsNullOrWhiteSpace(e.Archivo) ? "general" : e.Archivo,
-                e.Codigo,
-                e.DescripcionResumen
-            })
-            .Select(g => new CargaValidacionResumenItem
-            {
-                Archivo = g.Key.Archivo,
-                Codigo = g.Key.Codigo,
-                Descripcion = g.Key.DescripcionResumen,
-                TotalRegistros = g.Count(),
-                EsError = true
-            });
-
+        var incidenciasPorArchivo = response.Errores.Concat(response.Advertencias).Where(e => !string.IsNullOrWhiteSpace(e.Codigo) && !string.IsNullOrWhiteSpace(e.DescripcionResumen)).GroupBy(e => new { Archivo = string.IsNullOrWhiteSpace(e.Archivo) ? "general" : e.Archivo, e.Codigo, e.DescripcionResumen }).Select(g => new CargaValidacionResumenItem
+        {
+            Archivo = g.Key.Archivo,
+            Codigo = g.Key.Codigo,
+            Descripcion = g.Key.DescripcionResumen,
+            TotalRegistros = g.Count(),
+            EsError = true
+        });
         response.ResumenValidacion.AddRange(incidenciasPorArchivo);
     }
 
@@ -986,11 +867,13 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         return (mesCorte, anioCorte);
     }
 
-    public async Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia, int idUsuarioConsulta, int limitePorSeccion, bool incluirResumen = true)
+    public async Task<ActualizacionDiferenciasResponse> ObtenerDetalleDiferenciasAsync(string codigoReferencia,
+        int idUsuarioConsulta,
+        int limitePorSeccion,
+        bool incluirResumen = true)
     {
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
-
-        if (usuarioConsulta == null)
+        if(usuarioConsulta == null)
         {
             return new ActualizacionDiferenciasResponse
             {
@@ -1000,13 +883,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
-        var detalle = await _actualizacionDiferenciasRepository.ObtenerDetalleDiferenciasActualizacionAsync(
-            codigoReferencia,
-            usuarioConsulta.IdEntidadFederativa,
-            usuarioConsulta.EsSuperUsuario,
-            limitePorSeccion);
-
-        if (detalle == null)
+        var detalle = await _actualizacionDiferenciasRepository.ObtenerDetalleDiferenciasActualizacionAsync(codigoReferencia, usuarioConsulta.IdEntidadFederativa, usuarioConsulta.EsSuperUsuario, limitePorSeccion);
+        if(detalle == null)
         {
             return new ActualizacionDiferenciasResponse
             {
@@ -1016,7 +894,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
-        if (incluirResumen)
+        if(incluirResumen)
         {
             var resumen = await _actualizacionCargaRepository.ObtenerResumenDiferenciasActualizacionAsync(detalle.IdCarga);
             AplicarResumenMovimientos(detalle, resumen);
@@ -1025,23 +903,25 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         return detalle;
     }
 
-    private static void AplicarResumenMovimientos(ActualizacionDiferenciasResponse response, IEnumerable<CargaValidacionResumenItem> resumen)
+    private static void AplicarResumenMovimientos(ActualizacionDiferenciasResponse response,
+        IEnumerable<CargaValidacionResumenItem> resumen)
     {
         foreach (var item in resumen)
         {
-            ActualizacionDiferenciasResumen? destino = item.Archivo.Trim().ToLowerInvariant() switch
-            {
+            ActualizacionDiferenciasResumen? destino = item.Archivo.Trim().ToLowerInvariant() switch            {
                 "carpetas" => response.ResumenCarpetas,
                 "delitos" => response.ResumenDelitos,
                 "victimas" => response.ResumenVictimas,
                 _ => null
             };
-
-            if (destino == null) continue;
-
-            if (item.Codigo.EndsWith("_NUEVO", StringComparison.OrdinalIgnoreCase)) destino.Nuevos += item.TotalRegistros;
-            else if (item.Codigo.EndsWith("_MODIFICADO", StringComparison.OrdinalIgnoreCase)) destino.Modificados += item.TotalRegistros;
-            else if (item.Codigo.EndsWith("_ELIMINADO", StringComparison.OrdinalIgnoreCase)) destino.Eliminados += item.TotalRegistros;
+            if(destino == null)
+                continue;
+            if(item.Codigo.EndsWith("_NUEVO", StringComparison.OrdinalIgnoreCase))
+                destino.Nuevos += item.TotalRegistros;
+            else if(item.Codigo.EndsWith("_MODIFICADO", StringComparison.OrdinalIgnoreCase))
+                destino.Modificados += item.TotalRegistros;
+            else if(item.Codigo.EndsWith("_ELIMINADO", StringComparison.OrdinalIgnoreCase))
+                destino.Eliminados += item.TotalRegistros;
         }
 
         response.ResumenTotal = new ActualizacionDiferenciasResumen
@@ -1050,8 +930,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             Modificados = response.ResumenCarpetas.Modificados + response.ResumenDelitos.Modificados + response.ResumenVictimas.Modificados,
             Eliminados = response.ResumenCarpetas.Eliminados + response.ResumenDelitos.Eliminados + response.ResumenVictimas.Eliminados
         };
-
-        if (response.LimitePorSeccion == 0)
+        if(response.LimitePorSeccion == 0)
         {
             response.TotalCarpetas = response.ResumenCarpetas.Nuevos + response.ResumenCarpetas.Modificados + response.ResumenCarpetas.Eliminados;
             response.TotalDelitos = response.ResumenDelitos.Nuevos + response.ResumenDelitos.Modificados + response.ResumenDelitos.Eliminados;
@@ -1063,7 +942,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
 
     public async Task<ConfirmarCargaResponse> ConfirmarActualizacionAsync(ConfirmarCargaRequest request, int idUsuarioConfirmacion)
     {
-        if (request == null || string.IsNullOrWhiteSpace(request.CodigoReferencia))
+        if(request == null || string.IsNullOrWhiteSpace(request.CodigoReferencia))
         {
             return new ConfirmarCargaResponse
             {
@@ -1074,17 +953,16 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
-        return await _actualizacionRepository.ConfirmarActualizacionAsync(
-            request.CodigoReferencia,
-            request.Aceptar,
-            idUsuarioConfirmacion);
+        return await _actualizacionRepository.ConfirmarActualizacionAsync(request.CodigoReferencia, request.Aceptar, idUsuarioConfirmacion);
     }
 
-    public async Task<ActualizacionPeriodoResponse> ConsultarPeriodoActualizacionAsync(int mesCorte, int anioCorte, int idUsuarioConsulta, int? idEntidadFederativa = null)
+    public async Task<ActualizacionPeriodoResponse> ConsultarPeriodoActualizacionAsync(int mesCorte,
+        int anioCorte,
+        int idUsuarioConsulta,
+        int? idEntidadFederativa = null)
     {
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
-
-        if (usuarioConsulta == null)
+        if(usuarioConsulta == null)
         {
             return new ActualizacionPeriodoResponse
             {
@@ -1098,7 +976,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
-        if (!usuarioConsulta.HabilitaModificacion)
+        if(!usuarioConsulta.HabilitaModificacion)
         {
             return new ActualizacionPeriodoResponse
             {
@@ -1113,7 +991,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
-        if (mesCorte < 1 || mesCorte > 12)
+        if(mesCorte < 1 || mesCorte > 12)
         {
             return new ActualizacionPeriodoResponse
             {
@@ -1128,7 +1006,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
-        if (anioCorte < 2000 || anioCorte > 2100)
+        if(anioCorte < 2000 || anioCorte > 2100)
         {
             return new ActualizacionPeriodoResponse
             {
@@ -1144,12 +1022,10 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         }
 
         int? idEntidadConsulta;
-
-        if (usuarioConsulta.EsSuperUsuario)
+        if(usuarioConsulta.EsSuperUsuario)
         {
             idEntidadConsulta = idEntidadFederativa;
-
-            if (!idEntidadConsulta.HasValue)
+            if(!idEntidadConsulta.HasValue)
             {
                 return new ActualizacionPeriodoResponse
                 {
@@ -1167,8 +1043,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         else
         {
             idEntidadConsulta = usuarioConsulta.IdEntidadFederativa;
-
-            if (!idEntidadConsulta.HasValue)
+            if(!idEntidadConsulta.HasValue)
             {
                 return new ActualizacionPeriodoResponse
                 {
@@ -1184,12 +1059,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             }
         }
 
-        var existeCargaConfirmada = await _cargaRepository.ExisteCargaConfirmadaAsync(
-            idEntidadConsulta.Value,
-            mesCorte,
-            anioCorte);
-
-        if (!existeCargaConfirmada)
+        var existeCargaConfirmada = await _cargaRepository.ExisteCargaConfirmadaAsync(idEntidadConsulta.Value, mesCorte, anioCorte);
+        if(!existeCargaConfirmada)
         {
             return new ActualizacionPeriodoResponse
             {
@@ -1200,16 +1071,13 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 IdEntidadFederativa = idEntidadConsulta.Value,
                 MesCorte = mesCorte,
                 AnioCorte = anioCorte,
-                Mensaje = $"No existe una carga inicial confirmada para el periodo {mesCorte:00}/{anioCorte}. No se puede realizar actualización."
-            };
+                Mensaje = $"No existe una carga inicial confirmada para el periodo {mesCorte:00}/{anioCorte}. No se puede realizar actualización."};
         }
 
         var actualizacionPendiente = await _cargaRepository.ObtenerCodigoActualizacionPendienteAsync(idEntidadConsulta.Value, mesCorte, anioCorte);
-
-        if (actualizacionPendiente != null)
+        if(actualizacionPendiente != null)
         {
             var enRevisionAdministrativa = string.Equals(actualizacionPendiente.Estado, "PENDIENTE_APROBACION", StringComparison.OrdinalIgnoreCase);
-
             return new ActualizacionPeriodoResponse
             {
                 EsValido = true,
@@ -1221,10 +1089,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 IdEntidadFederativa = idEntidadConsulta.Value,
                 MesCorte = mesCorte,
                 AnioCorte = anioCorte,
-                Mensaje = enRevisionAdministrativa
-                    ? $"La actualización del periodo {mesCorte:00}/{anioCorte} se encuentra en revisión administrativa. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}."
-                    : $"Ya existe una actualización pendiente para el periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}."
-            };
+                Mensaje = enRevisionAdministrativa ? $"La actualización del periodo {mesCorte:00}/{anioCorte} se encuentra en revisión administrativa. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}." : $"Ya existe una actualización pendiente para el periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}."};
         }
 
         return new ActualizacionPeriodoResponse
@@ -1237,27 +1102,25 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             IdEntidadFederativa = idEntidadConsulta.Value,
             MesCorte = mesCorte,
             AnioCorte = anioCorte,
-            Mensaje = $"Existe carga inicial confirmada para el periodo {mesCorte:00}/{anioCorte}. Puede continuar con la actualización."
-        };
+            Mensaje = $"Existe carga inicial confirmada para el periodo {mesCorte:00}/{anioCorte}. Puede continuar con la actualización."};
     }
 
-    public async Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idUsuarioConsulta, int? idEntidadFederativa = null)
+    public async Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idUsuarioConsulta,
+        int? idEntidadFederativa = null)
     {
         var usuarioConsulta = await _usuarioRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
-
-        if (usuarioConsulta == null)
+        if(usuarioConsulta == null)
         {
             return new List<ActualizacionAnioDisponibleItem>();
         }
 
-        if (!usuarioConsulta.HabilitaModificacion)
+        if(!usuarioConsulta.HabilitaModificacion)
         {
             return new List<ActualizacionAnioDisponibleItem>();
         }
 
         int? idEntidadConsulta;
-
-        if (usuarioConsulta.EsSuperUsuario)
+        if(usuarioConsulta.EsSuperUsuario)
         {
             idEntidadConsulta = idEntidadFederativa;
         }
@@ -1266,7 +1129,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             idEntidadConsulta = usuarioConsulta.IdEntidadFederativa;
         }
 
-        if (!idEntidadConsulta.HasValue)
+        if(!idEntidadConsulta.HasValue)
         {
             return new List<ActualizacionAnioDisponibleItem>();
         }
@@ -1274,42 +1137,27 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         return await _cargaRepository.ObtenerPeriodosDisponiblesActualizacionAsync(idEntidadConsulta.Value);
     }
 
-    private async Task<List<CargaValidacionError>> ValidarEstructuraArchivosAsync(IFormFile archivoCarpetas, IFormFile archivoDelitos, IFormFile archivoVictimas)
+    private async Task<List<CargaValidacionError>> ValidarEstructuraArchivosAsync(IFormFile archivoCarpetas,
+        IFormFile archivoDelitos,
+        IFormFile archivoVictimas)
     {
         var errores = new List<CargaValidacionError>();
-
-        await ValidarColumnasObligatoriasArchivoAsync(
-            archivoCarpetas,
-            "carpetas",
-            _carpetasValidator.ColumnasObligatorias,
-            errores);
-
-        await ValidarColumnasObligatoriasArchivoAsync(
-            archivoDelitos,
-            "delitos",
-            _delitosValidator.ColumnasObligatorias,
-            errores);
-
-        await ValidarColumnasObligatoriasArchivoAsync(
-            archivoVictimas,
-            "victimas",
-            _victimasValidator.ColumnasObligatorias,
-            errores);
-
+        await ValidarColumnasObligatoriasArchivoAsync(archivoCarpetas, "carpetas", _carpetasValidator.ColumnasObligatorias, errores);
+        await ValidarColumnasObligatoriasArchivoAsync(archivoDelitos, "delitos", _delitosValidator.ColumnasObligatorias, errores);
+        await ValidarColumnasObligatoriasArchivoAsync(archivoVictimas, "victimas", _victimasValidator.ColumnasObligatorias, errores);
         return errores;
     }
 
-    private async Task ValidarColumnasObligatoriasArchivoAsync(IFormFile archivo, string nombreArchivo, IReadOnlyCollection<string> columnasObligatorias, List<CargaValidacionError> errores)
+    private async Task ValidarColumnasObligatoriasArchivoAsync(IFormFile archivo,
+        string nombreArchivo,
+        IReadOnlyCollection<string> columnasObligatorias,
+        List<CargaValidacionError> errores)
     {
         var encabezados = await _archivoReader.LeerEncabezadosAsync(archivo);
-
-        var columnasArchivo = encabezados
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
+        var columnasArchivo = encabezados.Where(x => !string.IsNullOrWhiteSpace(x)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var columna in columnasObligatorias)
         {
-            if (columnasArchivo.Contains(columna))
+            if(columnasArchivo.Contains(columna))
             {
                 continue;
             }
