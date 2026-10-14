@@ -242,6 +242,9 @@ public class BanciCargaService : IBanciCargaService
             victima.Columnas["id_tpm"] = null;
         }
 
+        // Usar el catálogo vigente también para representar ceros y omisiones.
+        var catalogos = await _banciCargaRepository.ObtenerFormularioCatalogosAsync();
+        BanciCatalogosNormalizer.Preparar(lectura, catalogos);
         BanciAltaNormalizer.Preparar(lectura);
         response.ModalidadIngreso = lectura.ModalidadIngreso;
         response.TotalCarpetas = lectura.Carpetas.Count;

@@ -14,8 +14,15 @@ public static class BanciCruceValidator
     public static string Valor(ArchivoFila fila, string campo) => fila.Columnas.GetValueOrDefault(campo)?.Trim() ?? "";
     public static string Clave(string valor) => valor.Trim().ToUpperInvariant();
     // Las firmas comparan el contenido de cada víctima; los IDs sólo unen filas dentro de su propia fuente.
-    public static List<CargaValidacionError> Comparar(BanciCruceArchivos mensual, BanciCruceArchivos banci, ISet<string> clasificaciones)
+    public static List<CargaValidacionError> Comparar(BanciCruceArchivos mensual, BanciCruceArchivos banci, ISet<string> clasificaciones,
+        IReadOnlyList<BanciFormularioOpcion>? catalogos = null)
     {
+        // Normalizar copias evita modificar la remisión o el snapshot usado para auditoría.
+        if(catalogos != null)
+        {
+            mensual = BanciCatalogosNormalizer.NormalizarCruce(mensual, catalogos);
+            banci = BanciCatalogosNormalizer.NormalizarCruce(banci, catalogos);
+        }
         var errores = new List<CargaValidacionError>();
         var delitosMensuales = mensual.Delitos.Where(d => clasificaciones.Contains(Valor(d, "clasf_de_dto"))).ToList();
         var mdPorCarpeta = delitosMensuales.ToLookup(d => Clave(Valor(d, "id_ci")));
@@ -137,9 +144,6 @@ public static class BanciCruceValidator
     private static string Normal(ArchivoFila fila, string campo, bool banci)
     {
         var valor = Clave(Valor(fila, campo));
-        // El cruce aplica la misma interpretación que el alta a ambos archivos.
-        if(campo is "pob" or "disc")
-            valor = BanciPobDiscNormalizer.Normalizar(valor);
         if(valor is "" or "ND" or "N/D" or "NO DISPONIBLE")
             return "";
         if(campo.StartsWith("fha_", StringComparison.Ordinal))

@@ -5,6 +5,7 @@ using Dapper;
 using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 using SIIID2.Api.Validators;
+using SIIID2.Api.Repositories;
 
 namespace SIIID2.Api.Services;
 public sealed class BanciCruceException(List<CargaValidacionError> errores) : Exception("El cruce con BANCI impide integrar la carga. Corrija las diferencias y vuelva a validar.")
@@ -13,7 +14,8 @@ public sealed class BanciCruceException(List<CargaValidacionError> errores) : Ex
 }
 
 // Compara el período reportado por entidad; en Federal también limita los registros al usuario que los reportó.
-public sealed class BanciCruceService(IDbConnectionFactory factory, SistemaConfiguracionService config)
+public sealed class BanciCruceService(IDbConnectionFactory factory, SistemaConfiguracionService config,
+    IBanciCargaRepository catalogosRepository)
 {
     public Task<List<CargaValidacionError>> ValidarAsync(int entidad,
         int mes,
@@ -87,7 +89,7 @@ public sealed class BanciCruceService(IDbConnectionFactory factory, SistemaConfi
         await db.ExecuteAsync($"UPDATE dbo.{cruce} SET victimas_json=@ids,fecha_cruce_utc=SYSUTCDATETIME() WHERE {columna}=@idCarga;", new { idCarga, ids = JsonSerializer.Serialize(ids) }, tx);
     }
 
-    private static async Task<(List<CargaValidacionError>, long[])> CompararAsync(IDbConnection db,
+    private async Task<(List<CargaValidacionError>, long[])> CompararAsync(IDbConnection db,
         IDbTransaction tx,
         int? entidad,
         int? usuarioFederal,
@@ -95,6 +97,7 @@ public sealed class BanciCruceService(IDbConnectionFactory factory, SistemaConfi
         int anio,
         BanciCruceArchivos archivos)
     {
+        var catalogos = await catalogosRepository.ObtenerFormularioCatalogosAsync();
         var errores = new List<CargaValidacionError>();
         var ids = new List<long>();
         // Todas las entidades, en orden fijo, para detectar también las omitidas por completo.
@@ -107,7 +110,7 @@ public sealed class BanciCruceService(IDbConnectionFactory factory, SistemaConfi
         {
             var(banci, claves) = await LeerAsync(db, tx, e, mes, anio, usuarioFederal);
             var parcial = usuarioFederal.HasValue ? PorEntidad(archivos, claves, e) : archivos;
-            var diferencias = BanciCruceValidator.Comparar(parcial, banci, claves);
+            var diferencias = BanciCruceValidator.Comparar(parcial, banci, claves, catalogos);
             // Consultar otros períodos sólo para claves enviadas que no se encontraron
             // en el mes reportado. Nunca incorporarlas como carpetas obligatorias.
             var noEncontradas = diferencias.Where(d => d.Codigo == "BANCI_NO_REPORTADA").Select(d => d.NtraCi).Where(n => n != null).Distinct().ToArray();

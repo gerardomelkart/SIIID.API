@@ -73,15 +73,6 @@ public static class BanciAltaNormalizer
                 victima.Columnas["id_delito"] = Valor(delito, "id_delito");
             }
 
-            // La ausencia de POB/DISC representa No identificado, clave del catálogo institucional.
-            foreach (var campo in new[]
-            {
-                "pob",
-                "disc"
-            }
-
-            )
-                victima.Columnas[campo] = BanciPobDiscNormalizer.Normalizar(victima.Columnas.GetValueOrDefault(campo));
             victima.Columnas["id_vicf"] = NuevoId("VIC");
         }
     }
