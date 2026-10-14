@@ -89,8 +89,9 @@ public static class BanciCruceValidator
     private static string Normal(ArchivoFila fila, string campo, bool banci)
     {
         var valor = Clave(Valor(fila, campo));
+        // El cruce aplica la misma interpretación que el alta a ambos archivos.
+        if (campo is "pob" or "disc") valor = BanciPobDiscNormalizer.Normalizar(valor);
         if (valor is "" or "ND" or "N/D" or "NO DISPONIBLE") return "";
-        if (banci && (campo is "pob" or "disc") && valor == "0") return "2";
         if (campo.StartsWith("fha_", StringComparison.Ordinal))
         {
             if (DateTime.TryParseExact(valor, ["yyyy-MM-dd", "yyyy/MM/dd", "yyyyMMdd", "dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var fecha)
