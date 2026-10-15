@@ -91,6 +91,7 @@ builder.Services.AddScoped<IFederalActualizacionArchivosService, FederalActualiz
 builder.Services.AddScoped<IFederalEnviosService, FederalEnviosService>();
 builder.Services.AddScoped<IFederalUsuarioService, FederalUsuarioService>();
 builder.Services.AddScoped<IBanciUsuarioService, BanciUsuarioService>();
+builder.Services.AddScoped<BanciMensualService>();
 builder.Services.AddScoped<IFederalArchivosOriginalesService, FederalArchivosOriginalesService>();
 // Registro del servicio de actualizaciones.
 builder.Services.AddScoped<IActualizacionArchivosService, ActualizacionArchivosService>();

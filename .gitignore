@@ -382,3 +382,6 @@ appsettings.*.local.json
 *.zip
 *.7z
 *.rar
+
+# Originales BANCI: conservar en cada publicación, no versionar información cargada.
+**/ArchivosOriginalesBanci/**

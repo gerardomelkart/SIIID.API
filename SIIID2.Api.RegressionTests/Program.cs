@@ -150,34 +150,142 @@ filaRegla.Columnas["clasf_de_dto"] = "ext-test";
 filaRegla.Columnas["grdo_cons"] = null;
 ReglaSemanal("NormalizarGradoConsumacionExtorsion", filasRegla);
 Verificar(filaRegla.Columnas["grdo_cons"] == "31", "Semanal: grado omitido en extorsión usa significado vigente");
-
 // Contratos antiguos retirados: tampoco deben volver por registro de DI o controladores.
-var assembly=typeof(SIIID2.Api.Controllers.BanciModeloController).Assembly;
-foreach(var nombre in new[] { "BanciCruceService", "BanciCruceController", "BanciCargasController", "BanciActualizacionesController", "BanciAltaNormalizer", "BanciArchivoReader", "BanciActualizacionRepository" })
-    Verificar(!assembly.GetTypes().Any(t=>t.Name==nombre),"Contrato retirado: "+nombre);
-Verificar(assembly.GetTypes().Any(t=>t.Name=="BanciUsuariosController"),"Se conserva administración de usuarios BANCI");
-Verificar(!CurpFormatoValidator.EsFormatoValido("GODE020230HDFRRN00"),"Rechazar fecha imposible de CURP sin RENAPO");
-Verificar(!CurpFormatoValidator.EsFormatoValido("dato invalido"),"Conservar validación local de CURP");
-var curpBase="GODE561231HDFRRN0";
-const string alfabeto="0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
-var suma=Enumerable.Range(0,17).Sum(i=>alfabeto.IndexOf(curpBase[i])*(18-i));
-var curpValida=curpBase+((10-suma%10)%10);
-Verificar(CurpFormatoValidator.EsFormatoValido(curpValida),"Aceptar CURP válida sin consulta externa");
-Verificar(!CurpFormatoValidator.EsFormatoValido(curpBase+((curpValida[17]-'0'+1)%10)),"Rechazar dígito verificador incorrecto");
-
-foreach(var modulo in new[] { "MENSUAL", "FEDERAL" })
+var assembly = typeof(SIIID2.Api.Controllers.BanciMensualController).Assembly;
+foreach (var nombre in new[]
 {
-    var configuracion=new SistemaConfiguracionService(null!);
-    typeof(SistemaConfiguracionService).GetProperty("Version")!.SetValue(configuracion,1L);
-    configuracion.Modulos.Add(new SistemaModulo { Clave=modulo, Activo=true });
-    var feminicidio=new SistemaOpcion { Modulo=modulo, Clave="FEMINICIDIO_DATOS_ADICIONALES", Habilitado=false, Disponible=true };
-    var renapo=new SistemaOpcion { Modulo=modulo, Clave="RENAPO", Habilitado=true, Disponible=true };
-    configuracion.Opciones.AddRange([feminicidio,renapo]);
-    Verificar(!configuracion.Activa(modulo,"RENAPO"),"Apagar feminicidio apaga RENAPO: "+modulo);
-    feminicidio.Habilitado=true;
-    renapo.Habilitado=false;
-    Verificar(configuracion.Activa(modulo,"FEMINICIDIO_DATOS_ADICIONALES")&&!configuracion.Activa(modulo,"RENAPO"),"Apagar RENAPO conserva reglas locales: "+modulo);
+    "BanciCruceService",
+    "BanciCruceController",
+    "BanciCargasController",
+    "BanciActualizacionesController",
+    "BanciAltaNormalizer",
+    "BanciArchivoReader",
+    "BanciActualizacionRepository"
 }
+
+)
+    Verificar(!assembly.GetTypes().Any(t => t.Name == nombre), "Contrato retirado: " + nombre);
+Verificar(assembly.GetTypes().Any(t => t.Name == "BanciUsuariosController"), "Se conserva administración de usuarios BANCI");
+Verificar(!CurpFormatoValidator.EsFormatoValido("GODE020230HDFRRN00"), "Rechazar fecha imposible de CURP sin RENAPO");
+Verificar(!CurpFormatoValidator.EsFormatoValido("dato invalido"), "Conservar validación local de CURP");
+var curpBase = "GODE561231HDFRRN0";
+const string alfabeto = "0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+var suma = Enumerable.Range(0, 17).Sum(i => alfabeto.IndexOf(curpBase[i]) * (18 - i));
+var curpValida = curpBase + ((10 - suma % 10) % 10);
+Verificar(CurpFormatoValidator.EsFormatoValido(curpValida), "Aceptar CURP válida sin consulta externa");
+Verificar(!CurpFormatoValidator.EsFormatoValido(curpBase + ((curpValida[17] - '0' + 1) % 10)), "Rechazar dígito verificador incorrecto");
+foreach (var modulo in new[]
+{
+    "MENSUAL",
+    "FEDERAL"
+}
+
+)
+{
+    var configuracion = new SistemaConfiguracionService(null !);
+    typeof(SistemaConfiguracionService).GetProperty("Version")!.SetValue(configuracion, 1L);
+    configuracion.Modulos.Add(new SistemaModulo { Clave = modulo, Activo = true });
+    var feminicidio = new SistemaOpcion
+    {
+        Modulo = modulo,
+        Clave = "FEMINICIDIO_DATOS_ADICIONALES",
+        Habilitado = false,
+        Disponible = true
+    };
+    var renapo = new SistemaOpcion
+    {
+        Modulo = modulo,
+        Clave = "RENAPO",
+        Habilitado = true,
+        Disponible = true
+    };
+    configuracion.Opciones.AddRange([feminicidio, renapo]);
+    Verificar(!configuracion.Activa(modulo, "RENAPO"), "Apagar feminicidio apaga RENAPO: " + modulo);
+    feminicidio.Habilitado = true;
+    renapo.Habilitado = false;
+    Verificar(configuracion.Activa(modulo, "FEMINICIDIO_DATOS_ADICIONALES") && !configuracion.Activa(modulo, "RENAPO"), "Apagar RENAPO conserva reglas locales: " + modulo);
+}
+
+BanciLibro LibroPrueba() => new()
+{
+    Entidad = 9,
+    Mes = 9,
+    Anio = 2026,
+    Carpetas = [new ArchivoFila
+    {
+        Columnas = new()
+        {
+            ["id_ci"] = "CI-1",
+            ["ntra_ci"] = "PRUEBA-1",
+            ["fha_de_ini"] = "2026-09-01"
+        }
+    }
+
+    ],
+    Delitos = [new ArchivoFila
+    {
+        Columnas = new()
+        {
+            ["id_ci"] = "CI-1",
+            ["id_delito"] = "D-1",
+            ["dto"] = "Dato protegido"
+        }
+    }
+
+    ],
+    Victimas = [new ArchivoFila
+    {
+        Columnas = new()
+        {
+            ["id_ci"] = "CI-1",
+            ["id_delito"] = "D-1",
+            ["id_vicf"] = "V-1",
+            ["id_tv"] = "18",
+            ["nomb"] = "Antes"
+        }
+    }
+
+    ]
+};
+var origenBanci = LibroPrueba();
+var propuestaBanci = LibroPrueba();
+propuestaBanci.Victimas[0].Columnas["nomb"] = "Después";
+Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Count == 0, "Permitir editar complementos sin modificar el consolidado");
+propuestaBanci.Carpetas[0].Columnas["ntra_ci"] = "ALTERADA";
+Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e => e.Campo == "ntra_ci"), "Bloquear nomenclatura modificada");
+propuestaBanci = LibroPrueba();
+propuestaBanci.Victimas.Clear();
+Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e => e.Archivo == "victimas"), "Bloquear omisión de víctima");
+propuestaBanci = LibroPrueba();
+propuestaBanci.Victimas[0].Columnas["id_vicf"] = "OTRA";
+Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Count == 2, "Detectar cambio de identidad como faltante y extra");
+propuestaBanci = LibroPrueba();
+propuestaBanci.Delitos.Add(propuestaBanci.Delitos[0]);
+Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e => e.Archivo == "delitos"), "Bloquear duplicados aunque se conserven todos los originales");
+propuestaBanci = LibroPrueba();
+propuestaBanci.Victimas[0].Columnas["id_tv"] = "16";
+Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e => e.Campo == "id_tv"), "Conservar el tipo de víctima del consolidado");
+var mensualBanci = new BanciMensualService(null !, null !, null !, new CarpetasValidator(), new DelitosValidator(), new VictimasValidator(reglas), null !, null !, reglas, null !, null !);
+var libroExcel = LibroPrueba();
+libroExcel.Victimas[0].Columnas["curp"] = "TEXTO18CARACTERES";
+libroExcel.Carpetas[0].Columnas["id_ci"] = "00000000000000000001";
+var bytesExcel = mensualBanci.Excel(libroExcel);
+using (var streamExcel = new MemoryStream(bytesExcel))
+{
+    var archivoExcel = new Microsoft.AspNetCore.Http.FormFile(streamExcel, 0, streamExcel.Length, "archivo", "BANCI.xlsx");
+    var leido = await mensualBanci.LeerExcelAsync(archivoExcel, 9, 9, 2026, false);
+    Verificar(leido.Carpetas[0].Columnas["id_ci"] == "00000000000000000001", "Excel conserva IDs largos y ceros iniciales como texto");
+    Verificar(leido.Victimas[0].Columnas["curp"] == "TEXTO18CARACTERES", "Excel conserva complementos en la tercera pestaña");
+    Verificar(leido.Carpetas.Count == 1 && leido.Delitos.Count == 1 && leido.Victimas.Count == 1, "Excel de tres pestañas conserva las cantidades");
+}
+
+var origenActualizacion = LibroPrueba();
+var propuestaActualizacion = LibroPrueba();
+origenActualizacion.Victimas[0].Columnas["sexo"] = "10";
+propuestaActualizacion.Victimas[0].Columnas["sexo"] = "11";
+Verificar(BanciMensualService.CompararOrigen(origenActualizacion, propuestaActualizacion).Count > 0, "Los datos personales del origen están protegidos en carga inicial");
+propuestaActualizacion.Actualizacion = true;
+Verificar(BanciMensualService.CompararOrigen(origenActualizacion, propuestaActualizacion).Count == 0, "Una actualización permite modificar datos personales de BANCI");
 Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {

@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace SIIID2.Api.Models;
 public class BanciUsuarioDatos
 {
-    [Range(1, 32)]
+    [Range(1, int.MaxValue)]
     public int? IdEntidadFederativa { get; set; }
 
     [Required, StringLength(50)]

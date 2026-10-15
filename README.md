@@ -47,8 +47,8 @@ La compilación valida la integración de los parciales; no sustituye una prueba
 
 Usar cuatro espacios y llaves en una línea independiente. Las firmas y condiciones que caben en 140 columnas se escriben en una línea; las más largas se dividen por parámetros o expresiones. Los comentarios explican decisiones, permisos y etapas de validación, sin repetir cada instrucción. Mantener intactos los textos SQL y los mensajes al aplicar formato. La configuración del editor está en `.editorconfig`.
 
-## BANCI mensual — bloque 1
+## BANCI mensual: vistas y operación
 
-Retira el modelo anterior y su cruce en mensual/federal. La API conserva administración de usuarios y `GET /api/banci/modelo` (acceso BANCI requerido); los endpoints antiguos de carga/actualización/consulta ya no se publican. La carga por cortes, aprobación, informes y nuevo cruce se habilitarán en sus bloques. La validación local de CURP continúa en `CurpFormatoValidator`, independiente de RENAPO.
+Se recuperó el diseño institucional original y se conectaron carga/actualización masiva y manual, informes, originales, aprobación administrativa y configuración al modelo mensual. Requiere el script `desarrollo/12_banci_mensual_operacion.sql` de SIIID2BD después del bloque 1.
 
-Instalar `desarrollo/11_banci_mensual_bloque1.sql` de SIIID2BD en una ventana con la API detenida, primero en desarrollo/QA; publicar conjuntamente API y Front. No reejecutar los ajustes antiguos 02–10 retirados del repositorio. Se conservan cuentas y catálogos compartidos. Consulte `documentacion/banci_bloque1_instalacion.md` del repo BD.
+Guía coordinada y prueba de QA: `SIIID2BD/documentacion/banci_operacion_mensual.md`. Conservar `ArchivosOriginalesBanci` al publicar API. El nuevo cruce del consolidado y las reclasificaciones permanecen en el bloque 5, desactivado.
