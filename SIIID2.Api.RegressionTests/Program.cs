@@ -265,6 +265,23 @@ Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e 
 propuestaBanci = LibroPrueba();
 propuestaBanci.Victimas[0].Columnas["id_tv"] = "16";
 Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e => e.Campo == "id_tv"), "Conservar el tipo de víctima del consolidado");
+// Las cargas adicionales excluyen lo aprobado sin romper las relaciones del libro.
+var adicionales = new BanciLibro
+{
+    Carpetas = [new ArchivoFila { Columnas = new() { ["id_ci"] = "CI-ANTERIOR" } }, new ArchivoFila { Columnas = new() { ["id_ci"] = "CI-NUEVA" } }],
+    Delitos = [new ArchivoFila { Columnas = new() { ["id_ci"] = "CI-ANTERIOR" } }, new ArchivoFila { Columnas = new() { ["id_ci"] = "CI-NUEVA" } }],
+    Victimas = [new ArchivoFila { Columnas = new() { ["id_ci"] = "CI-ANTERIOR" } }, new ArchivoFila { Columnas = new() { ["id_ci"] = "CI-NUEVA" } }]
+};
+BanciMensualService.FiltrarNuevas(adicionales, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ci-anterior" });
+Verificar(adicionales.Carpetas.Count == 1 && adicionales.Delitos.Count == 1 && adicionales.Victimas.Count == 1 && adicionales.Victimas[0].Columnas["id_ci"] == "CI-NUEVA", "La carga adicional incluye solo nuevas carpetas y sus hijos");
+var identidad = new ArchivoFila { Columnas = new() { ["nomb"] = "Nombre BANCI", ["nombre_vicfem"] = "Origen", ["1apellido_vicfem"] = "Apellido", ["curp_vicfem"] = "CURP-DE-ORIGEN" } };
+BanciMensualService.PrecargarIdentidad(identidad);
+Verificar(identidad.Columnas["nomb"] == "Nombre BANCI" && identidad.Columnas["pro_apellido"] == "Apellido" && identidad.Columnas["curp"] == "CURP-DE-ORIGEN", "Precargar identidad sin sobrescribir datos BANCI existentes");
+var sinCambios = new BanciLibro { Victimas = [identidad] };
+var cambioEditable = new BanciLibro { Victimas = [new ArchivoFila { Columnas = new(identidad.Columnas) }] };
+Verificar(!BanciMensualService.HayCambiosEditables(sinCambios, cambioEditable), "No enviar actualización sin cambios");
+cambioEditable.Victimas[0].Columnas["nomb"] = "Nombre actualizado";
+Verificar(BanciMensualService.HayCambiosEditables(sinCambios, cambioEditable), "Detectar modificación de identidad editable");
 var mensualBanci = new BanciMensualService(null !, null !, null !, new CarpetasValidator(), new DelitosValidator(), new VictimasValidator(reglas), null !, null !, reglas, null !, null !);
 var libroExcel = LibroPrueba();
 libroExcel.Victimas[0].Columnas["curp"] = "TEXTO18CARACTERES";

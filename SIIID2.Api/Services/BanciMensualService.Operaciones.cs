@@ -24,9 +24,13 @@ public sealed partial class BanciMensualService
                     filas[i].NumeroFila = i + 2;
         }
 
+        if(!libro.Actualizacion)
+            errores.AddRange(await ValidarCarpetasNuevasAsync(libro));
         var protegido = origen.Carpetas.Count > 0;
         if(protegido)
             errores.AddRange(CompararOrigen(origen, libro));
+        if(libro.Actualizacion && CompararOrigen(origen, libro).Count == 0 && !HayCambiosEditables(origen, libro))
+            errores.Add(Error("victimas", new ArchivoFila(), "actualizacion", "Modifique al menos un dato personal o de localización antes de enviar la actualización."));
         if(!protegido || libro.Actualizacion)
         {
             foreach (var fila in libro.Victimas)
@@ -171,6 +175,44 @@ public sealed partial class BanciMensualService
             File.Delete(ruta);
             throw;
         }
+    }
+
+    private async Task<List<CargaValidacionError>> ValidarCarpetasNuevasAsync(BanciLibro libro)
+    {
+        using var db = factory.CrearConexion();
+        var errores = new List<CargaValidacionError>();
+        foreach(var lote in libro.Carpetas.Chunk(500))
+        {
+            var registradas = (await db.QueryAsync<(string Id, string Nomenclatura, int Mes, int Anio)>("""
+                SELECT id_ci AS Id,ntra_ci AS Nomenclatura,mes_corte AS Mes,anio_corte AS Anio
+                FROM dbo.banci_carpeta_investigacion
+                WHERE id_entidad_federativa=@Entidad
+                  AND ((mes_corte=@Mes AND anio_corte=@Anio AND id_ci IN @ids) OR ntra_ci IN @nomenclaturas);
+                """, new
+                {
+                    libro.Entidad,
+                    libro.Mes,
+                    libro.Anio,
+                    ids = lote.Select(f => Valor(f, "id_ci")).ToArray(),
+                    nomenclaturas = lote.Select(f => Valor(f, "ntra_ci")).ToArray()
+                })).ToArray();
+            foreach(var fila in lote)
+            {
+                var repetida = registradas.Any(r =>
+                    (r.Mes == libro.Mes && r.Anio == libro.Anio
+                        && string.Equals(r.Id, Valor(fila, "id_ci"), StringComparison.OrdinalIgnoreCase))
+                    || string.Equals(r.Nomenclatura, Valor(fila, "ntra_ci"), StringComparison.OrdinalIgnoreCase));
+                if(repetida)
+                    errores.Add(Error("carpetas", fila, "id_ci", "La carpeta ya está registrada en BANCI. La carga adicional solo incorpora carpetas nuevas; utilice Actualización para modificarla o reclasificarla."));
+            }
+        }
+        return errores;
+    }
+
+    public static bool HayCambiosEditables(BanciLibro origen, BanciLibro propuesta)
+    {
+        var anteriores = origen.Victimas.GroupBy(f => Llave(f, 3)).ToDictionary(g => g.Key, g => g.First());
+        return propuesta.Victimas.Any(f => !anteriores.TryGetValue(Llave(f, 3), out var anterior) || Editables(true).Any(c => Valor(f, c) != Valor(anterior, c)));
     }
 
     private async Task<List<CargaValidacionError>> ValidarComplementosAsync(BanciLibro libro)
@@ -345,17 +387,9 @@ public sealed partial class BanciMensualService
                 if(bloqueo < 0)
                     throw new InvalidOperationException("El corte está siendo procesado. Intente nuevamente.");
                 var actual = await OrigenAsync(db, op.Entidad, op.Mes, op.Anio, op.Tipo == "ACTUALIZACION", tx);
-                // Los complementos vacíos de la descarga forman parte del snapshot de validación.
-                if(op.Tipo != "ACTUALIZACION")
-                {
-                    await reglas.CargarAsync();
-                    foreach (var fila in actual.Victimas)
-                    {
-                        foreach (var campo in Complementos)
-                            fila.Columnas.TryAdd(campo, null);
-                        fila.Columnas["localizado_o_no_localizado"] = reglas.Clave("banci_catalogo_localizacion", "NO_LOCALIZADO");
-                    }
-                }
+                if(op.Tipo == "CARGA")
+                    await ExcluirCarpetasRegistradasAsync(db, actual, tx);
+                await PrepararComplementosAsync(actual);
 
                 if(Huella(actual) != op.Huella)
                     throw new InvalidOperationException("Los datos de origen cambiaron después de validar. Genere una nueva plantilla y envíe nuevamente.");
@@ -385,10 +419,10 @@ public sealed partial class BanciMensualService
 
     private static async Task IntegrarCargaAsync(IDbConnection db, IDbTransaction tx, BanciOperacion op, BanciLibro libro, int usuario)
     {
-        if(await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.banci_carpeta_investigacion WHERE id_entidad_federativa=@Entidad AND mes_corte=@Mes AND anio_corte=@Anio;", op, tx) > 0)
-            throw new InvalidOperationException("El corte ya fue integrado. Utilice actualización.");
         foreach (var carpeta in libro.Carpetas)
         {
+            if(await db.ExecuteScalarAsync<bool>("SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.banci_carpeta_investigacion WITH(UPDLOCK,HOLDLOCK) WHERE id_entidad_federativa=@Entidad AND ((mes_corte=@Mes AND anio_corte=@Anio AND id_ci=@ci) OR ntra_ci=@ntra)) THEN 1 ELSE 0 END);", new { op.Entidad, op.Mes, op.Anio, ci = Valor(carpeta,"id_ci"), ntra = Valor(carpeta,"ntra_ci") }, tx))
+                throw new InvalidOperationException("La carpeta ya está registrada en BANCI. Las cargas adicionales solo agregan carpetas nuevas; para modificar o reclasificar utilice Actualización.");
             var numero = await db.ExecuteScalarAsync<long>("""
                 IF NOT EXISTS(SELECT 1 FROM dbo.banci_consecutivo_carpeta WITH(UPDLOCK,HOLDLOCK) WHERE id_entidad_federativa=@Entidad AND anio=@Anio)
                     INSERT dbo.banci_consecutivo_carpeta(id_entidad_federativa,anio,ultimo_consecutivo) VALUES(@Entidad,@Anio,0);

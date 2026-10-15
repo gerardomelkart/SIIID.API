@@ -199,25 +199,60 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         await AccesoAsync(usuario, entidad, actualizacion ? "ACTUALIZACION" : "CARGA");
         await PeriodoAsync(entidad, mes, anio, actualizacion);
         using var db = factory.CrearConexion();
-        if(!actualizacion
-            && await db.ExecuteScalarAsync<bool>("SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.banci_carpeta_investigacion WHERE id_entidad_federativa=@entidad AND mes_corte=@mes AND anio_corte=@anio) THEN 1 ELSE 0 END);", new { entidad, mes, anio }))
-            throw new InvalidOperationException("Este corte ya tiene carga BANCI aprobada. Utilice Actualización.");
         var libro = await OrigenAsync(db, entidad, mes, anio, actualizacion);
         if(actualizacion && libro.Carpetas.Count == 0)
             throw new InvalidOperationException("El corte no tiene carga BANCI aprobada.");
+        var tieneOrigenConsolidado = libro.Carpetas.Count > 0;
+        if(!actualizacion)
+            await ExcluirCarpetasRegistradasAsync(db, libro);
         var historica = new DateTime(anio, mes, 1) < new DateTime(FechaRangoValidator.Hoy().AddMonths(-1).Year, FechaRangoValidator.Hoy().AddMonths(-1).Month, 1);
-        if(!actualizacion && libro.Carpetas.Count == 0 && !historica)
-            throw new InvalidOperationException("No hay carpetas de desaparición aceptadas en el consolidado para este corte.");
-        await reglas.CargarAsync();
-        foreach (var fila in libro.Victimas)
-        {
-            foreach (var campo in Complementos)
-                fila.Columnas.TryAdd(campo, null);
-            if(!actualizacion && Valor(fila, "localizado_o_no_localizado") == "")
-                fila.Columnas["localizado_o_no_localizado"] = reglas.Clave("banci_catalogo_localizacion", "NO_LOCALIZADO");
-        }
+        if(!actualizacion && libro.Carpetas.Count == 0 && (!historica || tieneOrigenConsolidado))
+            throw new InvalidOperationException("No hay carpetas nuevas de desaparición pendientes de reportar en BANCI para este corte. Las ya registradas se conservan; utilice Actualización para modificarlas.");
+        await PrepararComplementosAsync(libro);
 
         return libro;
+    }
+
+    // Las cargas adicionales incorporan solo carpetas nuevas; nunca sustituyen ni eliminan lo aprobado.
+    private static async Task ExcluirCarpetasRegistradasAsync(IDbConnection db, BanciLibro libro, IDbTransaction? tx = null)
+    {
+        var registradas = (await db.QueryAsync<string>("SELECT id_ci FROM dbo.banci_carpeta_investigacion WHERE id_entidad_federativa=@Entidad AND mes_corte=@Mes AND anio_corte=@Anio;", libro, tx)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        FiltrarNuevas(libro, registradas);
+    }
+
+    public static void FiltrarNuevas(BanciLibro libro, ISet<string> registradas)
+    {
+        libro.Carpetas.RemoveAll(f => registradas.Contains(Valor(f, "id_ci")));
+        var nuevas = libro.Carpetas.Select(f => Valor(f, "id_ci")).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        libro.Delitos.RemoveAll(f => !nuevas.Contains(Valor(f, "id_ci")));
+        libro.Victimas.RemoveAll(f => !nuevas.Contains(Valor(f, "id_ci")));
+    }
+
+    private async Task PrepararComplementosAsync(BanciLibro libro)
+    {
+        await reglas.CargarAsync();
+        foreach(var fila in libro.Victimas)
+        {
+            PrecargarIdentidad(fila);
+            foreach(var campo in Complementos)
+                fila.Columnas.TryAdd(campo, null);
+            if(Valor(fila, "localizado_o_no_localizado") == "")
+                fila.Columnas["localizado_o_no_localizado"] = reglas.Clave("banci_catalogo_localizacion", "NO_LOCALIZADO");
+        }
+    }
+
+    // Se conserva el origen protegido y se muestra una sola captura editable de cada dato personal.
+    public static void PrecargarIdentidad(ArchivoFila fila)
+    {
+        foreach(var (editable, origen) in new[]
+        {
+            ("nomb", "nombre_vicfem"),
+            ("pro_apellido", "1apellido_vicfem"),
+            ("sdo_apellido", "2apellido_vicfem"),
+            ("curp", "curp_vicfem")
+        })
+            if(Valor(fila, editable) == "" && Valor(fila, origen) != "")
+                fila.Columnas[editable] = Valor(fila, origen);
     }
 
     // La protección del archivo es orientativa. La igualdad se comprueba nuevamente en servidor.
