@@ -41,26 +41,14 @@ En actualizaciones, todas las etapas reciben la misma transacción. Conservar el
 
 Comentar el motivo de las decisiones, los límites de acceso y las dependencias transaccionales, evitando repetir lo que ya expresa el método. Antes de retirar una consulta o endpoint, revisar consumidores del frontend y posibles integraciones externas.
 
-La compilación valida la integración de los parciales; no sustituye una prueba contra SQL Server. Para cambios de consultas o reglas, verificar en QA cargas, aprobación/rechazo y sábanas de los módulos afectados. No hay un proyecto de pruebas automatizadas de API en este repositorio.
+La compilación valida la integración de los parciales; no sustituye una prueba contra SQL Server. Para cambios de consultas o reglas, verificar en QA cargas, aprobación/rechazo y sábanas de los módulos afectados. El proyecto `SIIID2.Api.RegressionTests` verifica reglas compartidas y el retiro de contratos anteriores sin conectar a BD.
 
 ## Estilo de código
 
 Usar cuatro espacios y llaves en una línea independiente. Las firmas y condiciones que caben en 140 columnas se escriben en una línea; las más largas se dividen por parámetros o expresiones. Los comentarios explican decisiones, permisos y etapas de validación, sin repetir cada instrucción. Mantener intactos los textos SQL y los mensajes al aplicar formato. La configuración del editor está en `.editorconfig`.
 
-## BANCI: ceros y omisiones en catálogos compartidos
+## BANCI mensual — bloque 1
 
-Antes de validar y guardar un alta manual o masiva, `BanciCatalogosNormalizer` resuelve la opción activa «No identificado» o «No identificada» desde los catálogos devueltos por el repositorio. Aplica a sexo, género, POB, DISC, nacionalidad, forma de acción, instrumento y grado de consumación. No fija claves numéricas: cada catálogo aporta la suya. Sólo un cero numérico o un dato omitido/vacío activa esa sustitución; otras claves conservan las validaciones de formato y catálogo. Si no existe una opción activa inequívoca, se informa un error de configuración del campo antes de guardar la carga.
+Retira el modelo anterior y su cruce en mensual/federal. La API conserva administración de usuarios y `GET /api/banci/modelo` (acceso BANCI requerido); los endpoints antiguos de carga/actualización/consulta ya no se publican. La carga por cortes, aprobación, informes y nuevo cruce se habilitarán en sus bloques. La validación local de CURP continúa en `CurpFormatoValidator`, independiente de RENAPO.
 
-El cruce aplica la misma interpretación a copias de las filas de ambas fuentes, sin alterar el Consolidado ni sus snapshots. Los IDs de relación y los campos geográficos conservan sus reglas específicas. La normalización se realiza en la API, sin modificar los catálogos ni ejecutar una conversión masiva en BD.
-
-Tras publicar esta API, rechazar y volver a validar las cargas antiguas que quedaron pendientes con ceros en staging; la publicación no modifica propuestas previamente almacenadas. Conservar el script 09 de BD ya aplicado.
-
-Pruebas sin conexión a la base: `dotnet run --project SIIID2.Api.RegressionTests --configuration Release`.
-
-## Catálogos y significados de reglas
-
-Antes de publicar esta versión, ejecutar `desarrollo/10_significados_catalogos.sql` del repositorio SIIID2BD en cada base (después de 09). Después publicar API y Front, en ese orden. El código consulta las opciones activas y su `codigo_regla`; no usa IDs o descripciones para decidir el significado. Los ceros/omisiones BANCI siguen resolviéndose a No identificado según cada catálogo. Las reglas de validación permanecen en C#, incluyendo tipo de víctima, feminicidio y semanal. Las sábanas leen filas, etiquetas y orden de sexo del catálogo.
-
-`ICatalogoReglasRepository` carga los significados una vez por solicitud, sin caché global. Una configuración ausente o ambigua se informa; nunca se inventa una clave por defecto. El script incorpora también las guardas equivalentes en los SP BANCI existentes para que carga, vista previa y actualización usen los mismos catálogos, sin cambiar permisos ni períodos.
-
-Las pruebas de `SIIID2.Api.RegressionTests` cubren claves y etiquetas modificadas, omisiones, claves inválidas, ambos motivos BANCI, tipos de víctima, reglas de feminicidio mensual/federal y semanal. No requieren conexión a BD ni RENAPO.
+Instalar `desarrollo/11_banci_mensual_bloque1.sql` de SIIID2BD en una ventana con la API detenida, primero en desarrollo/QA; publicar conjuntamente API y Front. No reejecutar los ajustes antiguos 02–10 retirados del repositorio. Se conservan cuentas y catálogos compartidos. Consulte `documentacion/banci_bloque1_instalacion.md` del repo BD.

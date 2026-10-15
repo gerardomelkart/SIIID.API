@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using SIIID2.Api.Data;
@@ -10,7 +10,7 @@ public class BanciUsuarioRepository : IBanciUsuarioRepository
     private readonly IDbConnectionFactory _dbConnectionFactory;
     public BanciUsuarioRepository(IDbConnectionFactory dbConnectionFactory) => _dbConnectionFactory = dbConnectionFactory;
     private const string SqlUsuarios = """
-        SELECT dbo.fn_banci_es_usuario_federal(u.id_usuario) AS EsFederal, u.id_usuario AS IdUsuario, u.usuario AS Usuario, u.nombre AS Nombre,
+        SELECT u.id_usuario AS IdUsuario, u.usuario AS Usuario, u.nombre AS Nombre,
             u.primer_apellido AS PrimerApellido, u.segundo_apellido AS SegundoApellido,
             u.correo_electronico AS CorreoElectronico, u.rfc AS Rfc, u.curp AS Curp,
             u.telefono_contacto AS TelefonoContacto, u.id_rol AS IdRol, r.rol AS Rol,
@@ -31,6 +31,18 @@ public class BanciUsuarioRepository : IBanciUsuarioRepository
           AND (@IncluirInactivos = 1 OR (u.activo = 1 AND (r.rol = N'SUPER_USUARIO' OR COALESCE(um.activo, 1) = 1)))
         ORDER BY u.nombre, u.primer_apellido, u.segundo_apellido, u.id_usuario;
         """;
+    public async Task<bool> EsAdministradorAsync(int idUsuario)
+    {
+        using var connection = _dbConnectionFactory.CrearConexion();
+        return await connection.ExecuteScalarAsync<bool>("""
+            SELECT CONVERT(bit,CASE WHEN EXISTS(
+                SELECT 1 FROM dbo.usuario u JOIN dbo.roles r ON r.id_rol=u.id_rol AND r.activo=1
+                JOIN dbo.catalogo_modulo m ON m.clave=N'BANCI' AND m.activo=1
+                WHERE u.id_usuario=@IdUsuario AND u.activo=1 AND r.rol=N'SUPER_USUARIO'
+            ) THEN 1 ELSE 0 END);
+            """, new { IdUsuario = idUsuario });
+    }
+
     public async Task<List<BanciUsuarioDetalle>> ObtenerUsuariosAsync(bool incluirInactivos)
     {
         using var connection = _dbConnectionFactory.CrearConexion();
@@ -77,7 +89,7 @@ public class BanciUsuarioRepository : IBanciUsuarioRepository
                 INNER JOIN dbo.usuario u ON u.id_usuario = um.id_usuario
                 INNER JOIN dbo.roles r ON r.id_rol = u.id_rol
                 WHERE um.id_modulo = @IdModulo AND um.activo = 1 AND um.habilitado = 1
-                  AND u.activo = 1 AND r.activo = 1 AND r.rol = N'ENLACE_ESTATAL' AND (u.id_entidad_federativa BETWEEN 1 AND 32 OR dbo.fn_banci_es_usuario_federal(u.id_usuario)=1);
+                  AND u.activo = 1 AND r.activo = 1 AND r.rol = N'ENLACE_ESTATAL' AND EXISTS(SELECT 1 FROM dbo.catalogo_entidad_federativa ef WHERE ef.id_entidad_federativa=u.id_entidad_federativa AND ef.activo=1 AND ef.es_entidad_territorial=1);
                 RETURN;
             END;
 
@@ -131,7 +143,7 @@ public class BanciUsuarioRepository : IBanciUsuarioRepository
                     THROW 51003, 'El rol no existe o no está activo.', 1;
                 IF @Rol NOT IN (N'SUPER_USUARIO', N'ENLACE_ESTATAL', N'CONSULTA')
                     THROW 51003, 'El rol indicado no está permitido.', 1;
-                IF @Rol = N'ENLACE_ESTATAL' AND dbo.fn_banci_es_usuario_federal(@IdUsuario)=0 AND (@IdEntidadFederativa IS NULL OR @IdEntidadFederativa NOT BETWEEN 1 AND 32)
+                IF @Rol = N'ENLACE_ESTATAL' AND NOT EXISTS(SELECT 1 FROM dbo.catalogo_entidad_federativa ef WHERE ef.id_entidad_federativa=@IdEntidadFederativa AND ef.activo=1 AND ef.es_entidad_territorial=1)
                     THROW 51003, 'El enlace estatal requiere una entidad entre 1 y 32.', 1;
                 IF @IdEntidadFederativa IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.catalogo_entidad_federativa WHERE id_entidad_federativa = @IdEntidadFederativa AND activo = 1 AND id_entidad_federativa BETWEEN 1 AND 32)
                     THROW 51003, 'La entidad no existe o no está activa.', 1;
@@ -164,7 +176,7 @@ public class BanciUsuarioRepository : IBanciUsuarioRepository
             DECLARE @Acceso bit = CASE WHEN @Operacion = N'DESACTIVAR' THEN 0 ELSE @HabilitaBanci END;
             DECLARE @RolPermisos nvarchar(50) = CASE WHEN @Operacion IN (N'CREAR', N'EDITAR') THEN @Rol ELSE @RolActual END;
             IF @RolPermisos = N'SUPER_USUARIO' BEGIN SET @Acceso = 1; SET @HabilitaCarga = 1; SET @HabilitaModificacion = 1; END;
-            IF @Acceso = 1 AND @RolPermisos = N'ENLACE_ESTATAL' AND @Operacion NOT IN (N'CREAR', N'EDITAR') AND dbo.fn_banci_es_usuario_federal(@IdUsuario)=0 AND (@EntidadActual IS NULL OR @EntidadActual NOT BETWEEN 1 AND 32)
+            IF @Acceso = 1 AND @RolPermisos = N'ENLACE_ESTATAL' AND @Operacion NOT IN (N'CREAR', N'EDITAR') AND NOT EXISTS(SELECT 1 FROM dbo.catalogo_entidad_federativa ef WHERE ef.id_entidad_federativa=@EntidadActual AND ef.activo=1 AND ef.es_entidad_territorial=1)
                 THROW 51003, 'La cuenta requiere una entidad estatal para habilitar BANCI.', 1;
             DECLARE @Carga bit = CASE WHEN @Acceso = 1 AND @RolPermisos <> N'CONSULTA' THEN @HabilitaCarga ELSE 0 END;
             DECLARE @Modificacion bit = CASE WHEN @Acceso = 1 AND @RolPermisos <> N'CONSULTA' THEN @HabilitaModificacion ELSE 0 END;

@@ -1,28 +1,9 @@
 using System.Reflection;
-using SIIID2.Api.Services;
 using SIIID2.Api.Models;
 using SIIID2.Api.Repositories;
 using SIIID2.Api.Validators;
+using SIIID2.Api.Services;
 
-// Ejecutar sin conexión a BD: los catálogos simulados prueban que la clave se obtiene de sus datos.
-var campos = new[]
-{
-    "sexo",
-    "genero",
-    "pob",
-    "disc",
-    "nacional",
-    "forma_acc",
-    "emto_com_dto",
-    "grdo_cons"
-};
-var catalogos = campos.Select(c => new BanciFormularioOpcion
-{
-    CodigoRegla = "NO_IDENTIFICADO",
-    Campo = c,
-    Clave = c == "nacional" ? "174" : c == "emto_com_dto" ? "7" : "3",
-    Descripcion = c == "nacional" ? "No identificada" : "No identificado"
-}).ToList();
 var pruebas = 0;
 void Verificar(bool condicion, string caso)
 {
@@ -31,168 +12,6 @@ void Verificar(bool condicion, string caso)
     pruebas++;
 }
 
-BanciLecturaArchivosResultado Lectura() => new()
-{
-    Delitos = [new ArchivoFila
-    {
-        Columnas = new()
-        {
-            ["id_ci"] = "ci",
-            ["id_delito"] = "del",
-            ["forma_acc"] = "1",
-            ["emto_com_dto"] = "2",
-            ["grdo_cons"] = "1",
-            ["clasf_de_dto"] = "2.07.04",
-            ["id_ent_hchos"] = "9",
-            ["id_mun_hchos"] = "015"
-        }
-    }
-
-    ],
-    Victimas = [new ArchivoFila
-    {
-        Columnas = new()
-        {
-            ["id_ci"] = "ci",
-            ["id_delito"] = "del",
-            ["id_tv"] = "1",
-            ["sexo"] = "1",
-            ["genero"] = "1",
-            ["pob"] = "2",
-            ["disc"] = "2",
-            ["nacional"] = "73"
-        }
-    }
-
-    ]
-};
-ArchivoFila Fila(BanciLecturaArchivosResultado l, string campo) => campos.Take(5).Contains(campo) ? l.Victimas[0] : l.Delitos[0];
-foreach (var campo in campos)
-{
-    foreach (var entrada in new string? []
-    {
-        null,
-        "",
-        " ",
-        "0",
-        "000",
-        "+0"
-    }
-
-    )
-    {
-        var lectura = Lectura();
-        Fila(lectura, campo).Columnas[campo] = entrada;
-        BanciCatalogosNormalizer.Preparar(lectura, catalogos);
-        Verificar(lectura.Errores.Count == 0 && Fila(lectura, campo).Columnas[campo] == catalogos.Single(c => c.Campo == campo).Clave, $"Normalizar {campo}: '{entrada}'");
-    }
-
-    var omitida = Lectura();
-    Fila(omitida, campo).Columnas.Remove(campo);
-    BanciCatalogosNormalizer.Preparar(omitida, catalogos);
-    Verificar(Fila(omitida, campo).Columnas[campo] == catalogos.Single(c => c.Campo == campo).Clave, "Campo omitido: " + campo);
-    var invalida = Lectura();
-    Fila(invalida, campo).Columnas[campo] = "99";
-    BanciCatalogosNormalizer.Preparar(invalida, catalogos);
-    var errores = await new CatalogosValidator(new CatalogosSimulados(), new ReglasSimuladas()).ValidarBanciAsync([], invalida.Delitos, invalida.Victimas);
-    Verificar(errores.Any(e => e.Campo == campo), "No sustituir una clave inválida: " + campo);
-}
-
-var alternativa = Lectura();
-alternativa.Victimas[0].Columnas["genero"] = "0";
-var cambiados = catalogos.Select(c => new BanciFormularioOpcion
-{
-    Campo = c.Campo,
-    Clave = c.Campo == "genero" ? "19" : c.Clave,
-    Descripcion = "Etiqueta modificada",
-    CodigoRegla = c.CodigoRegla
-}).ToList();
-BanciCatalogosNormalizer.Preparar(alternativa, cambiados);
-Verificar(alternativa.Victimas[0].Columnas["genero"] == "19", "Leer la clave del catálogo, no fijar 3");
-var sinOpcion = Lectura();
-sinOpcion.Victimas[0].Columnas["genero"] = "0";
-BanciCatalogosNormalizer.Preparar(sinOpcion, catalogos.Where(c => c.Campo != "genero").ToList());
-Verificar(sinOpcion.Errores.Any(e => e.Campo == "genero"), "No inventar clave si falta la opción activa");
-var cruce = Lectura();
-cruce.Victimas[0].Columnas["genero"] = "0";
-var original = new BanciCruceArchivos([new ArchivoFila { Columnas = new()
-{
-    ["id_ci"] = "ci",
-    ["ntra_ci"] = "prueba"
-} }], cruce.Delitos, cruce.Victimas);
-var normal = BanciCatalogosNormalizer.NormalizarCruce(original, catalogos);
-Verificar(original.Victimas[0].Columnas["genero"] == "0" && normal.Victimas[0].Columnas["genero"] == "3", "Conservar snapshot original");
-Verificar(BanciCruceValidator.Comparar(original, normal, new HashSet<string> { "2.07.04" }, catalogos).Count == 0, "Cruce reconoce cero y No identificado con el catálogo vigente");
-// Una descripción igual sin significado configurado no habilita un valor por defecto.
-var sinSignificado = Lectura();
-sinSignificado.Victimas[0].Columnas["genero"] = "0";
-BanciCatalogosNormalizer.Preparar(sinSignificado, catalogos.Select(c => new BanciFormularioOpcion
-{
-    Campo = c.Campo,
-    Clave = c.Clave,
-    Descripcion = c.Descripcion,
-    CodigoRegla = c.Campo == "genero" ? null : c.CodigoRegla
-}).ToList());
-Verificar(sinSignificado.Errores.Any(e => e.Campo == "genero"), "No resolver significados por descripción");
-var motivos = new List<BanciFormularioOpcion>
-{
-    new()
-    {
-        Campo = "constitutiva_delito",
-        Clave = "17",
-        CodigoRegla = "DELITO",
-        Descripcion = "Etiqueta A"
-    },
-    new()
-    {
-        Campo = "constitutiva_delito",
-        Clave = "29",
-        CodigoRegla = "NO_DELITO",
-        Descripcion = "Etiqueta B"
-    },
-    new()
-    {
-        Campo = "motivo_delito",
-        Clave = "delito-real"
-    },
-    new()
-    {
-        Campo = "motivo_no_delito",
-        Clave = "otro-real"
-    }
-};
-foreach (var(tipo, motivo)in new[]
-{
-    ("17", "delito-real"),
-    ("29", "otro-real")
-}
-
-)
-    Verificar(!BanciMotivoValidator.Validar(new()
-    {
-        ["constitutiva_delito"] = tipo,
-        ["motivo_desaparicion"] = motivo
-    }, 1, motivos).Any(), "Motivo con clave vigente: " + tipo);
-Verificar(BanciMotivoValidator.Validar(new()
-{
-    ["constitutiva_delito"] = "1",
-    ["motivo_desaparicion"] = "delito-real"
-}, 1, motivos).Any(), "Rechazar clave anterior de constitutiva");
-Verificar(BanciMotivoValidator.Validar(new()
-{
-    ["constitutiva_delito"] = "17",
-    ["motivo_desaparicion"] = "otro-real"
-}, 1, motivos).Any(), "Rechazar motivo del otro catálogo");
-var metodologia = Lectura();
-var opcionesIniciales = catalogos.Concat(new[] { new BanciFormularioOpcion
-{
-    Campo = "localizado_o_no_localizado",
-    Clave = "55",
-    CodigoRegla = "NO_LOCALIZADO",
-    Descripcion = "Etiqueta nueva"
-} }).ToList();
-new BanciMetodologiaValidator().Validar(metodologia, opcionesIniciales);
-Verificar(metodologia.Victimas[0].Columnas["localizado_o_no_localizado"] == "55", "Estado inicial toma la clave del catálogo");
 var reglas = new ReglasSimuladas();
 var fisica = new ArchivoFila
 {
@@ -331,35 +150,35 @@ filaRegla.Columnas["clasf_de_dto"] = "ext-test";
 filaRegla.Columnas["grdo_cons"] = null;
 ReglaSemanal("NormalizarGradoConsumacionExtorsion", filasRegla);
 Verificar(filaRegla.Columnas["grdo_cons"] == "31", "Semanal: grado omitido en extorsión usa significado vigente");
-Console.WriteLine($"{pruebas} verificaciones aprobadas.");
-sealed class CatalogosSimulados : ICatalogoRepository
-{
-    public Task<HashSet<int>> ObtenerClavesNumericasActivasAsync(string tabla,
-        string columnaClave) => Task.FromResult(tabla == "catalogo_entidad_federativa" ? new HashSet<int> { 9 } : new HashSet<int>
-    {
-        1,
-        2,
-        3,
-        4,
-        7,
-        8
-    });
-    public Task<HashSet<string>> ObtenerClavesTextoActivasAsync(string tabla,
-        string columnaClave) => Task.FromResult(tabla == "banci_catalogo_clasificacion_delito" ? new HashSet<string> { "2.07.04" } : new HashSet<string>
-    {
-        "73",
-        "174",
-        "09"
-    });
-    public Task<HashSet<string>> ObtenerMunicipiosPorEntidadActivosAsync() => Task.FromResult(new HashSet<string> { "9|015" });
-    public Task<bool> CoordenadasCorrespondenMunicipioAsync(int idEntidadFederativa,
-        int idMunicipio,
-        decimal coordX,
-        decimal coordY) => Task.FromResult(true);
-    public Task<List<EntidadFederativaCatalogoItem>> ObtenerEntidadesFederativasActivasAsync() => Task.FromResult(new List<EntidadFederativaCatalogoItem>());
-    public Task<List<RolCatalogoItem>> ObtenerRolesActivosAsync() => Task.FromResult(new List<RolCatalogoItem>());
-}
 
+// Contratos antiguos retirados: tampoco deben volver por registro de DI o controladores.
+var assembly=typeof(SIIID2.Api.Controllers.BanciModeloController).Assembly;
+foreach(var nombre in new[] { "BanciCruceService", "BanciCruceController", "BanciCargasController", "BanciActualizacionesController", "BanciAltaNormalizer", "BanciArchivoReader", "BanciActualizacionRepository" })
+    Verificar(!assembly.GetTypes().Any(t=>t.Name==nombre),"Contrato retirado: "+nombre);
+Verificar(assembly.GetTypes().Any(t=>t.Name=="BanciUsuariosController"),"Se conserva administración de usuarios BANCI");
+Verificar(!CurpFormatoValidator.EsFormatoValido("GODE020230HDFRRN00"),"Rechazar fecha imposible de CURP sin RENAPO");
+Verificar(!CurpFormatoValidator.EsFormatoValido("dato invalido"),"Conservar validación local de CURP");
+var curpBase="GODE561231HDFRRN0";
+const string alfabeto="0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+var suma=Enumerable.Range(0,17).Sum(i=>alfabeto.IndexOf(curpBase[i])*(18-i));
+var curpValida=curpBase+((10-suma%10)%10);
+Verificar(CurpFormatoValidator.EsFormatoValido(curpValida),"Aceptar CURP válida sin consulta externa");
+Verificar(!CurpFormatoValidator.EsFormatoValido(curpBase+((curpValida[17]-'0'+1)%10)),"Rechazar dígito verificador incorrecto");
+
+foreach(var modulo in new[] { "MENSUAL", "FEDERAL" })
+{
+    var configuracion=new SistemaConfiguracionService(null!);
+    typeof(SistemaConfiguracionService).GetProperty("Version")!.SetValue(configuracion,1L);
+    configuracion.Modulos.Add(new SistemaModulo { Clave=modulo, Activo=true });
+    var feminicidio=new SistemaOpcion { Modulo=modulo, Clave="FEMINICIDIO_DATOS_ADICIONALES", Habilitado=false, Disponible=true };
+    var renapo=new SistemaOpcion { Modulo=modulo, Clave="RENAPO", Habilitado=true, Disponible=true };
+    configuracion.Opciones.AddRange([feminicidio,renapo]);
+    Verificar(!configuracion.Activa(modulo,"RENAPO"),"Apagar feminicidio apaga RENAPO: "+modulo);
+    feminicidio.Habilitado=true;
+    renapo.Habilitado=false;
+    Verificar(configuracion.Activa(modulo,"FEMINICIDIO_DATOS_ADICIONALES")&&!configuracion.Activa(modulo,"RENAPO"),"Apagar RENAPO conserva reglas locales: "+modulo);
+}
+Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {
     public Task CargarAsync() => Task.CompletedTask;

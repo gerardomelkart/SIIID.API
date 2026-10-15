@@ -1,4 +1,4 @@
-﻿using SIIID2.Api.Services;
+using SIIID2.Api.Services;
 using System.Data;
 using Dapper;
 using Microsoft.Data.SqlClient;
@@ -23,11 +23,9 @@ public class CargaRepository : ICargaRepository
     }
 
     private readonly IDbConnectionFactory _dbConnectionFactory;
-    private readonly BanciCruceService _cruce;
-    public CargaRepository(BanciCruceService cruce, IDbConnectionFactory dbConnectionFactory)
+    public CargaRepository(IDbConnectionFactory dbConnectionFactory)
     {
         _dbConnectionFactory = dbConnectionFactory;
-        _cruce = cruce;
     }
 
     public async Task<long> GuardarIntentoCargaAsync(int idUsuarioCarga,
@@ -58,7 +56,6 @@ public class CargaRepository : ICargaRepository
             await GuardarTmpVictimasAsync(connection, transaction, idCarga, filasVictimas);
             await CargaAuditoriaSql.GuardarAdvertenciasAsync(connection, transaction, idCarga, advertencias);
             await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, idCarga, estadoAnterior: null, estadoNuevo: estado, idUsuario: idUsuarioCarga, comentario: estado == "VALIDADO_PENDIENTE" ? "Carga inicial validada y pendiente de decisión del usuario." : "Intento de carga inicial registrado con errores de validación.");
-            await BanciCruceService.GuardarAsync(connection, transaction, idCarga, filasCarpetas, filasDelitos, filasVictimas);
             await transaction.CommitAsync();
             return idCarga;
         }
@@ -833,7 +830,6 @@ public class CargaRepository : ICargaRepository
         long idCarga,
         int idUsuarioConfirmacion)
     {
-        await _cruce.ConfirmarAsync(connection, transaction, idCarga);
         var sql = @"
         UPDATE carga
         SET estado = 'CONFIRMADO',
@@ -983,7 +979,6 @@ public class CargaRepository : ICargaRepository
             await GuardarTmpCarpetasAsync(connection, transaction, idCarga, filasCarpetas);
             await GuardarTmpDelitosAsync(connection, transaction, idCarga, filasDelitos);
             await GuardarTmpVictimasAsync(connection, transaction, idCarga, filasVictimas);
-            await BanciCruceService.GuardarAsync(connection, transaction, idCarga, filasCarpetas, filasDelitos, filasVictimas);
             await InsertarCarpetasFinalesAsync(connection, transaction, idCarga, idUsuarioCarga);
             await InsertarDelitosFinalesAsync(connection, transaction, idCarga, idUsuarioCarga);
             await InsertarVictimasFinalesAsync(connection, transaction, idCarga, idUsuarioCarga);

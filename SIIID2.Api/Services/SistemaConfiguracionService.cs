@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using Dapper;
 using SIIID2.Api.Data;
 using SIIID2.Api.Models;
@@ -21,7 +21,7 @@ public sealed class SistemaConfiguracionService(IDbConnectionFactory factory)
         Opciones = (await datos.ReadAsync<SistemaOpcion>()).ToList();
     }
 
-    // Evalúa dependencias entre opciones: apagar BANCI apaga el cruce; apagar feminicidio apaga RENAPO.
+    // Las reglas locales de feminicidio condicionan únicamente su consulta externa RENAPO.
     public bool Activa(string modulo, string clave)
     {
         if(Version == 0)
@@ -33,8 +33,6 @@ public sealed class SistemaConfiguracionService(IDbConnectionFactory factory)
             return false;
         if((modulo == "MENSUAL" || modulo == "FEDERAL") && clave == "RENAPO")
             return Activa(modulo, "FEMINICIDIO_DATOS_ADICIONALES");
-        if(clave == "CRUCE_BANCI")
-            return Modulos.Any(m => m.Clave == "BANCI" && m.Activo);
         return true;
     }
 

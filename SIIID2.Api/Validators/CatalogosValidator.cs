@@ -29,16 +29,6 @@ public class CatalogosValidator
         return await ValidarAsync(filasCarpetas, filasDelitos, filasVictimas, "federal_catalogo_modalidad_delito");
     }
 
-    public async Task<List<CargaValidacionError>> ValidarBanciAsync(List<ArchivoFila> filasCarpetas,
-        List<ArchivoFila> filasDelitos,
-        List<ArchivoFila> filasVictimas)
-    {
-        var errores = new List<CargaValidacionError>();
-        await ValidarCatalogosVictimasAsync(filasVictimas, errores);
-        await ValidarCatalogosDelitosAsync(filasDelitos, errores, "banci_catalogo_clasificacion_delito", "clave");
-        return errores;
-    }
-
     private async Task<List<CargaValidacionError>> ValidarAsync(List<ArchivoFila> filasCarpetas,
         List<ArchivoFila> filasDelitos,
         List<ArchivoFila> filasVictimas,

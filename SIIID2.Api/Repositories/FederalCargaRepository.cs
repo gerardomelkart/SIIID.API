@@ -21,11 +21,9 @@ public class FederalCargaRepository : IFederalCargaRepository
         public int IdUsuarioCarga { get; set; }
     }
 
-    private readonly BanciCruceService _cruce;
     private readonly IDbConnectionFactory _dbConnectionFactory;
-    public FederalCargaRepository(BanciCruceService cruce, IDbConnectionFactory dbConnectionFactory)
+    public FederalCargaRepository(IDbConnectionFactory dbConnectionFactory)
     {
-        _cruce = cruce;
         _dbConnectionFactory = dbConnectionFactory;
     }
 
@@ -107,7 +105,6 @@ public class FederalCargaRepository : IFederalCargaRepository
             if(estado == "VALIDADO_PENDIENTE")
                 await FederalOperacionPeriodoSql.ValidarDisponibilidadAsync(connection, transaction, mesCorte, anioCorte, actualizacion: false);
             var idFederalCarga = await CrearCargaAsync(connection, transaction, idUsuarioCarga, codigoReferencia, mesCorte, anioCorte, totalCarpetas, totalDelitos, totalVictimas, estado, mensajeError);
-            await BanciCruceService.GuardarFederalAsync(connection, transaction, idFederalCarga, filasCarpetas, filasDelitos, filasVictimas);
             await GuardarTmpCarpetasAsync(connection, transaction, idFederalCarga, filasCarpetas);
             await GuardarTmpDelitosAsync(connection, transaction, idFederalCarga, filasDelitos);
             await GuardarTmpVictimasAsync(connection, transaction, idFederalCarga, filasVictimas);
@@ -931,7 +928,6 @@ public class FederalCargaRepository : IFederalCargaRepository
         long idFederalCarga,
         int idUsuarioConfirmacion)
     {
-        await _cruce.ConfirmarAsync(connection, transaction, idFederalCarga, federal: true);
         const string sql = """
             UPDATE dbo.federal_carga
             SET estado = N'CONFIRMADO',

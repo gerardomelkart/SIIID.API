@@ -75,7 +75,7 @@ public class FeminicidioVictimaValidator(ICatalogoReglasRepository reglas)
                 // una sola advertencia agregada si falta alguno.
                 if(string.IsNullOrWhiteSpace(curp))
                     mexicanasSinCurp++;
-                else if(!BanciRenapoValidator.EsFormatoValido(curp.Trim().ToUpperInvariant()))
+                else if(!CurpFormatoValidator.EsFormatoValido(curp.Trim().ToUpperInvariant()))
                 {
                     errores.Add(new CargaValidacionError
                     {

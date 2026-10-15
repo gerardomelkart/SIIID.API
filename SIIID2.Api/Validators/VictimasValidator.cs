@@ -97,7 +97,6 @@ public class VictimasValidator(ICatalogoReglasRepository reglas)
         return errores;
     }
 
-    public Task<List<CargaValidacionError>> ValidarBanciAsync(List<ArchivoFila> filas) => ValidarAsync(filas);
     private bool TieneVariablesPersonaFisicaInformadas(ArchivoFila fila)
     {
         return TieneValorPersonaFisica(fila, "sexo") || TieneValorPersonaFisica(fila, "genero") || TieneValorPersonaFisica(fila, "fha_nac") || TieneValorPersonaFisica(fila, "edad") || TieneValorPersonaFisica(fila, "nacional") || TieneValorPersonaFisica(fila, "pob", aceptaNoAplica: true) || TieneValorPersonaFisica(fila, "disc", aceptaNoAplica: true);

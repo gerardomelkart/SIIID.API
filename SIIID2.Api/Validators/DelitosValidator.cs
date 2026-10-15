@@ -35,7 +35,7 @@ public class DelitosValidator
     };
     public IReadOnlyCollection<string> ColumnasObligatorias => _columnasObligatorias;
 
-    public List<CargaValidacionError> Validar(List<ArchivoFila> filas, bool camposBanciOpcionales = false)
+    public List<CargaValidacionError> Validar(List<ArchivoFila> filas)
     {
         var errores = new List<CargaValidacionError>();
         // Si no hay filas, el archivo no tiene registros útiles.
@@ -69,15 +69,11 @@ public class DelitosValidator
             ValidarTextoObligatorio(fila, "id_delito", errores, 250, "DELITOS_ID_DELITO_SIN_INFORMACION", "\"ID_DELITO\" sin información");
             // Descripción del delito y modalidad.
             ValidarTextoObligatorio(fila, "dto", errores, 2000, "DELITOS_DTO_SIN_INFORMACION", "Falta la descripción del delito");
-            // BANCI permite omitir modalidad. Cuando se informa, mantiene la validación de longitud.
-            if(!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "moda_dto")))
-                ValidarTextoObligatorio(fila, "moda_dto", errores, 2000, "DELITOS_MODA_DTO_SIN_INFORMACION", "Falta la descripción de la modalidad del delito");
+            ValidarTextoObligatorio(fila, "moda_dto", errores, 2000, "DELITOS_MODA_DTO_SIN_INFORMACION", "Falta la descripción de la modalidad del delito");
             // Claves numéricas de catálogos.
             // La existencia real contra catálogo se validará después con base de datos.
-            if(!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "forma_acc")))
-                ValidarEnteroObligatorio(fila, "forma_acc", errores, "DELITOS_FORMA_ACC_SIN_INFORMACION", "Clave de forma de acción sin información");
-            if(!camposBanciOpcionales || !string.IsNullOrWhiteSpace(ObtenerValor(fila, "emto_com_dto")))
-                ValidarEnteroObligatorio(fila, "emto_com_dto", errores, "DELITOS_EMTO_COM_DTO_SIN_INFORMACION", "Clave de elemento de comisión sin información");
+            ValidarEnteroObligatorio(fila, "forma_acc", errores, "DELITOS_FORMA_ACC_SIN_INFORMACION", "Clave de forma de acción sin información");
+            ValidarEnteroObligatorio(fila, "emto_com_dto", errores, "DELITOS_EMTO_COM_DTO_SIN_INFORMACION", "Clave de elemento de comisión sin información");
             ValidarEnteroObligatorio(fila, "grdo_cons", errores, "DELITOS_GRDO_CONS_SIN_INFORMACION", "Clave de grado de consumación sin información");
             // CLASF_DE_DTO no es entero.
             // Viene como clave tipo 7.01.02, 3.01, 5.01, etc.

@@ -19,7 +19,6 @@ using SIIID2.Api.Authorization;
 var builder = WebApplication.CreateBuilder(args);
 // Habilita controladores MVC/API.
 builder.Services.AddScoped<SIIID2.Api.Services.SistemaConfiguracionService>();
-builder.Services.AddScoped<BanciCruceService>();
 builder.Services.AddScoped<SIIID2.Api.Filters.SistemaConfiguracionFilter>();
 builder.Services.AddControllers(options => options.Filters.AddService<SIIID2.Api.Filters.SistemaConfiguracionFilter>());
 builder.Services.AddMemoryCache();
@@ -52,7 +51,6 @@ builder.Services.AddSwaggerGen();
 // Registro del lector de archivos.
 // Cuando alguien pida IArchivoReader, ASP.NET entregará ArchivoReader.
 builder.Services.AddScoped<IArchivoReader, ArchivoReader>();
-builder.Services.AddScoped<IBanciArchivoReader, BanciArchivoReader>();
 // Registro de conexión a base de datos.
 builder.Services.AddScoped<IDbConnectionFactory, SqlServerConnectionFactory>();
 // Registro de repositorios.
@@ -64,8 +62,6 @@ builder.Services.AddScoped<IFederalEnviosRepository, FederalEnviosRepository>();
 builder.Services.AddScoped<IFederalUsuarioRepository, FederalUsuarioRepository>();
 builder.Services.AddScoped<IBanciUsuarioRepository, BanciUsuarioRepository>();
 builder.Services.AddScoped<IFederalActualizacionRepository, FederalActualizacionRepository>();
-builder.Services.AddScoped<IBanciCargaRepository, BanciCargaRepository>();
-builder.Services.AddScoped<IBanciConsultaRepository, BanciConsultaRepository>();
 // Registro de validadores específicos por archivo, validación cruzada y catálogos.
 builder.Services.AddScoped<CarpetasValidator>();
 builder.Services.AddScoped<DelitosValidator>();
@@ -76,10 +72,6 @@ builder.Services.AddScoped<CatalogosValidator>();
 builder.Services.AddScoped<FeminicidioVictimaValidator>();
 builder.Services.AddScoped<FeminicidioRenapoValidator>();
 builder.Services.AddHttpClient<IRenapoCurpService, RenapoCurpService>(client => client.Timeout = TimeSpan.FromSeconds(12));
-builder.Services.AddScoped<BanciMetodologiaValidator>();
-builder.Services.AddScoped<BanciRenapoValidator>();
-builder.Services.AddScoped<BanciActualizacionRepository>();
-builder.Services.AddScoped<BanciActualizacionService>();
 builder.Services.AddScoped<ICargaRepository, CargaRepository>();
 builder.Services.AddScoped<IActualizacionCargaRepository, ActualizacionCargaRepository>();
 builder.Services.AddScoped<IAcuseRepository, AcuseRepository>();
@@ -94,8 +86,6 @@ builder.Services.AddScoped<ISemanalEnviosRepository, SemanalEnviosRepository>();
 // Registro del servicio principal de carga.
 // Cuando el controller pida ICargaArchivosService, se usará CargaArchivosService.
 builder.Services.AddScoped<ICargaArchivosService, CargaArchivosService>();
-builder.Services.AddScoped<IBanciCargaService, BanciCargaService>();
-builder.Services.AddScoped<IBanciConsultaService, BanciConsultaService>();
 builder.Services.AddScoped<IFederalCargaArchivosService, FederalCargaArchivosService>();
 builder.Services.AddScoped<IFederalActualizacionArchivosService, FederalActualizacionArchivosService>();
 builder.Services.AddScoped<IFederalEnviosService, FederalEnviosService>();

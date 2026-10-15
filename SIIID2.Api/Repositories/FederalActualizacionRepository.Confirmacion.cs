@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using Microsoft.Data.SqlClient;
 using SIIID2.Api.Models;
 
@@ -203,7 +203,6 @@ public partial class FederalActualizacionRepository
         int idUsuarioRegistro,
         int idUsuarioConfirmacion)
     {
-        await _cruce.ConfirmarAsync(connection, transaction, idFederalCarga, federal: true);
         const string sql = """
         SET NOCOUNT ON;
         DECLARE @MesCorte TINYINT, @AnioCorte SMALLINT;

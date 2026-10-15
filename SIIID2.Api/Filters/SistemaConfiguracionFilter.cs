@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,8 +17,6 @@ public sealed class SistemaConfiguracionFilter(SistemaConfiguracionService confi
         ["FederalCargas"] = ("FEDERAL", "CARGA"),
         ["FederalActualizaciones"] = ("FEDERAL", "ACTUALIZACION"),
         ["SemanalCargas"] = ("SEMANAL", "CARGA"),
-        ["BanciCargas"] = ("BANCI", "CARGA"),
-        ["BanciActualizaciones"] = ("BANCI", "ACTUALIZACION"),
         ["AdministracionCargas"] = ("MENSUAL", ""),
         ["FederalAdministracionCargas"] = ("FEDERAL", ""),
         ["SemanalAdministracionCargas"] = ("SEMANAL", "")
@@ -108,22 +106,8 @@ public sealed class SistemaConfiguracionFilter(SistemaConfiguracionService confi
             sistema_validacion_configuracion queda exclusivamente como
             información de trazabilidad/auditoría.
 
-            Excepción de integridad: el cruce con BANCI consulta datos vivos
-            nuevamente dentro de la transacción de integración, si está activo.
-            No vuelve a ejecutar las demás reglas de los archivos.
         */
         var resultado = await next();
-        if(resultado.Exception is BanciCruceException cruce)
-        {
-            resultado.ExceptionHandled = true;
-            resultado.Result = new BadRequestObjectResult(new SIIID2.Api.Models.CargaValidacionResponse
-            {
-                Mensaje = cruce.Message,
-                Errores = cruce.Errores
-            });
-            return;
-        }
-
         /*
             Confirmaciones y aprobaciones no generan una nueva versión
             de validación. Solamente las acciones Validar exitosas

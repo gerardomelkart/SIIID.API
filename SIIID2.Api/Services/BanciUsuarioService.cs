@@ -10,23 +10,22 @@ public class BanciUsuarioService : IBanciUsuarioService
     private const string RegexCurp = @"^[A-Z][AEIOUX][A-Z]{2}\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[HM](AS|BC|BS|CC|CL|CM|CS|CH|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]\d$";
     private readonly IBanciUsuarioRepository _repository;
     private readonly IUsuarioRepository _usuarioRepository;
-    private readonly IBanciCargaRepository _cargaRepository;
+    private readonly ICatalogoRepository _catalogos;
     private readonly ILogger<BanciUsuarioService> _logger;
     public BanciUsuarioService(IBanciUsuarioRepository repository,
         IUsuarioRepository usuarioRepository,
-        IBanciCargaRepository cargaRepository,
+        ICatalogoRepository catalogos,
         ILogger<BanciUsuarioService> logger)
     {
         _repository = repository;
         _usuarioRepository = usuarioRepository;
-        _cargaRepository = cargaRepository;
+        _catalogos = catalogos;
         _logger = logger;
     }
 
     private async Task ValidarAdministradorAsync(int idAdministrador)
     {
-        var usuario = await _cargaRepository.ObtenerUsuarioCargaAsync(idAdministrador);
-        if(usuario == null || !usuario.EsSuperUsuario)
+        if(!await _repository.EsAdministradorAsync(idAdministrador))
             throw new UnauthorizedAccessException("Se requiere un superusuario con acceso activo al módulo Banci.");
     }
 
@@ -74,7 +73,6 @@ public class BanciUsuarioService : IBanciUsuarioService
         string? password,
         bool crear)
     {
-        var esFederal = !crear && (await _repository.ObtenerDetalleAsync(idUsuario))?.EsFederal == true;
         Normalizar(request);
         if(crear && request.Rol == "SUPER_USUARIO")
             request.IdEntidadFederativa = null;
@@ -86,10 +84,10 @@ public class BanciUsuarioService : IBanciUsuarioService
         else if(!string.IsNullOrWhiteSpace(password) && password.Length < 8)
             errores.Add(ErrorUsuario(crear ? "password" : "nuevaPassword", "USUARIO_PASSWORD_CORTO", "La contraseña debe tener al menos 8 caracteres."));
         int? idRol = string.IsNullOrWhiteSpace(request.Rol) ? null : await _usuarioRepository.ObtenerIdRolActivoAsync(request.Rol);
-        if(!esFederal
-            && request.Rol == "ENLACE_ESTATAL"
+        if(request.Rol == "ENLACE_ESTATAL"
             && (!request.IdEntidadFederativa.HasValue
-            || await _cargaRepository.ResolverEntidadFederativaAsync(request.IdEntidadFederativa.Value.ToString()) != request.IdEntidadFederativa))
+            || !(await _catalogos.ObtenerEntidadesFederativasActivasAsync()).Any(e => e.IdEntidadFederativa == request.IdEntidadFederativa
+            && e.EsEntidadTerritorial)))
             errores.Add(ErrorUsuario("idEntidadFederativa", "USUARIO_ENTIDAD_OBLIGATORIA", "El enlace estatal debe tener una entidad territorial activa del catálogo."));
         if(request.IdEntidadFederativa.HasValue && !await _usuarioRepository.ExisteEntidadActivaAsync(request.IdEntidadFederativa.Value))
             errores.Add(ErrorUsuario("idEntidadFederativa", "USUARIO_ENTIDAD_INVALIDA", "La entidad no existe o no está activa."));

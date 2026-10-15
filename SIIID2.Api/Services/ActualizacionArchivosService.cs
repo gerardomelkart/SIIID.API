@@ -17,7 +17,6 @@ namespace SIIID2.Api.Services;
 public class ActualizacionArchivosService : IActualizacionArchivosService
 {
     private readonly SistemaConfiguracionService _config;
-    private readonly BanciCruceService _cruce;
     private readonly IArchivoReader _archivoReader;
     private readonly CarpetasValidator _carpetasValidator;
     private readonly DelitosValidator _delitosValidator;
@@ -40,8 +39,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     };
     // Tamaño máximo permitido por archivo: 50 MB.
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
-    public ActualizacionArchivosService(BanciCruceService cruce,
-        SistemaConfiguracionService config,
+    public ActualizacionArchivosService(SistemaConfiguracionService config,
         IArchivoReader archivoReader,
         CarpetasValidator carpetasValidator,
         DelitosValidator delitosValidator,
@@ -58,7 +56,6 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         IUltimosArchivosEntidadService ultimosArchivosEntidadService)
     {
         _config = config;
-        _cruce = cruce;
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
@@ -305,8 +302,6 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         }
 
         if(response.Errores.Count == 0)
-            response.Errores.AddRange(await _cruce.ValidarAsync(idEntidadFederativaCarga!.Value, mesCorte!.Value, anioCorte!.Value, new(filasCarpetas, filasDelitos, filasVictimas)));
-        if(response.Errores.Count == 0)
             await _config.PrepararFeminicidioAsync(filasVictimas, idEntidadFederativaCarga!.Value, mesCorte!.Value, anioCorte!.Value, true);
         if(response.Errores.Count == 0)
         {
@@ -323,8 +318,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Si el periodo viene inválido, no se debe guardar la carga con mes/anio en 0.
         // Si no existe carga confirmada o ya hay una actualización pendiente,
         // tampoco se guarda staging.
-        if(response.Errores.Any(x => x.Codigo.StartsWith("BANCI_", StringComparison.Ordinal)
-            || x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD"
+        if(response.Errores.Any(x => x.Codigo == "GENERAL_USUARIO_SIN_ENTIDAD"
             || x.Codigo == "GENERAL_ENTIDAD_SELECCIONADA_OBLIGATORIA"
             || x.Codigo == "GENERAL_ENTIDAD_SELECCIONADA_INVALIDA"
             || x.Codigo == "DELITOS_ENTIDAD_NO_CORRESPONDE_USUARIO"
