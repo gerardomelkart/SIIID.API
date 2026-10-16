@@ -2,6 +2,25 @@ namespace SIIID2.Api.Repositories;
 // Se leen definitivos aceptados, nunca staging ni cargas pendientes de aprobación.
 internal static class BanciMensualSql
 {
+    // La misma consulta alimenta la pantalla y valida Excel/manual, sin crear objetos en la BD.
+    public const string Motivos = """
+        SELECT c.clave AS condicion,CONVERT(nvarchar(1000),cd.clave2) AS clave,
+            CONVERT(nvarchar(1000),cd.delito) AS descripcion
+        FROM dbo.banci_catalogo_constitutiva_delito c CROSS JOIN dbo.catalogo_delito cd
+        WHERE c.activo=1 AND c.codigo_regla=N'DELITO' AND cd.activo=1
+        UNION ALL
+        SELECT c.clave,CONVERT(nvarchar(1000),md.clave4),
+            CONVERT(nvarchar(1000),CONCAT(bj.bien_juridico,N' / ',cd.delito,N' / ',sd.subtipo_delito,N' / ',md.modalidad_delito))
+        FROM dbo.banci_catalogo_constitutiva_delito c CROSS JOIN dbo.catalogo_modalidad_delito md
+        JOIN dbo.catalogo_subtipo_delito sd ON sd.id_subtipo_delito=md.id_subtipo_delito AND sd.activo=1
+        JOIN dbo.catalogo_delito cd ON cd.id_delito=sd.id_delito AND cd.activo=1
+        JOIN dbo.catalogo_bien_juridico bj ON bj.id_bien_juridico=cd.id_bien_juridico AND bj.activo=1
+        WHERE c.activo=1 AND c.codigo_regla=N'DELITO' AND md.activo=1
+        UNION ALL
+        SELECT c.clave,CONVERT(nvarchar(1000),m.clave),m.descripcion
+        FROM dbo.banci_catalogo_constitutiva_delito c CROSS JOIN dbo.banci_catalogo_motivo_no_delito m
+        WHERE c.activo=1 AND c.codigo_regla=N'NO_DELITO' AND m.activo=1
+        """;
     public const string Origen = """
         SELECT ci.identificador_carpeta_fiscalia AS id_ci, ci.nomenclatura_carpeta_fiscalia AS ntra_ci,
             CONVERT(varchar(10),ci.fecha_inicio,23) AS fha_de_ini, CONVERT(varchar(8),ci.fecha_inicio,108) AS hra_de_ini,

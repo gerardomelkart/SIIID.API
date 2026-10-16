@@ -52,3 +52,26 @@ Usar cuatro espacios y llaves en una línea independiente. Las firmas y condicio
 Se recuperó el diseño institucional original y se conectaron carga/actualización masiva y manual, informes, originales, aprobación administrativa y configuración al modelo mensual. Requiere el script `desarrollo/12_banci_mensual_operacion.sql` de SIIID2BD después del bloque 1.
 
 Guía coordinada y prueba de QA: `SIIID2BD/documentacion/banci_operacion_mensual.md`. Conservar `ArchivosOriginalesBanci` al publicar API. El nuevo cruce del consolidado y las reclasificaciones permanecen en el bloque 5, desactivado.
+
+
+### Ajustes BANCI: masiva completa, captura manual y acuse
+
+Publicar API y Front de forma coordinada. Estos ajustes no requieren ningún cambio de BD ni scripts SQL nuevos.
+Los motivos se consultan directamente en los catálogos existentes, con la misma consulta para manual y Excel.
+
+- Masiva: la plantilla y la validación incluyen todas las carpetas, delitos y víctimas de desaparición
+  del mensual aceptado para la entidad y corte, sin registros faltantes, adicionales o duplicados.
+  Al integrar, se conservan los folios existentes y se registran los cambios.
+- Manual: cada alta envía una carpeta elegida y sus hijos. Las aprobadas o enviadas a revisión dejan de
+  aparecer como pendientes; se pueden enviar otras carpetas sin esperar la aprobación de las anteriores.
+- Actualización manual y masiva: se integran solo víctimas modificadas y sus padres. La manual envía el
+  subconjunto seleccionado; la masiva valida primero la coincidencia de la plantilla completa. El servidor
+  protege identificadores y descarta registros sin cambios antes de preparar la operación.
+- No localizada: condición de vida, fecha, condición y motivo de localización se ignoran y almacenan vacíos.
+  La API aplica esta regla también al Excel y con validaciones de contenido desactivadas.
+- Motivos constitutivos de delito: catálogo completo de modalidades con la jerarquía vigente del Semanal,
+  conservando las claves generales anteriores. El catálogo de desaparición que delimita el mensual no cambia.
+- Confirmación BANCI en morado. Acuse PDF en captura y reportes, con resumen y `no_banci` por víctima.
+  El envío pendiente se distingue del confirmado; los folios nuevos se asignan al aprobar.
+
+Validar los flujos contra la BD de desarrollo/QA antes de publicar en producción.

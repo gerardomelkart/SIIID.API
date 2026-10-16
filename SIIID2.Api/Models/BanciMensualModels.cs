@@ -6,6 +6,7 @@ public sealed class BanciLibro
     public int Mes { get; set; }
     public int Anio { get; set; }
     public bool Actualizacion { get; set; }
+    public bool Manual { get; set; }
     public List<BanciCambioVista> Cambios { get; set; } = [];
     public List<ArchivoFila> Carpetas { get; set; } = [];
     public List<ArchivoFila> Delitos { get; set; } = [];

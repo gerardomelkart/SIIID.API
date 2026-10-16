@@ -66,7 +66,7 @@ var victimaFem = new ArchivoFila
         ["curp_vicfem"] = ""
     }
 };
-foreach (var(modulo, clasificacion)in new[]
+foreach(var (modulo, clasificacion) in new[]
 {
     ("MENSUAL", "fem-local"),
     ("FEDERAL", "fem-federal")
@@ -92,7 +92,7 @@ foreach (var(modulo, clasificacion)in new[]
 }
 
 // Ejecutar las reglas reales de semanal con claves diferentes de las semillas actuales.
-var semanal = new SemanalCargaService(null !, null !, null !, null !, null !, reglas, null !, null !, null !, null !, null !, null !, null !);
+var semanal = new SemanalCargaService(null!, null!, null!, null!, null!, reglas, null!, null!, null!, null!, null!, null!, null!);
 void ReglaSemanal(string nombre,
     params object[] argumentos) => typeof(SemanalCargaService).GetMethod(nombre, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(semanal, argumentos);
 var filaRegla = new ArchivoFila
@@ -152,7 +152,7 @@ ReglaSemanal("NormalizarGradoConsumacionExtorsion", filasRegla);
 Verificar(filaRegla.Columnas["grdo_cons"] == "31", "Semanal: grado omitido en extorsión usa significado vigente");
 // Contratos antiguos retirados: tampoco deben volver por registro de DI o controladores.
 var assembly = typeof(SIIID2.Api.Controllers.BanciMensualController).Assembly;
-foreach (var nombre in new[]
+foreach(var nombre in new[]
 {
     "BanciCruceService",
     "BanciCruceController",
@@ -174,7 +174,7 @@ var suma = Enumerable.Range(0, 17).Sum(i => alfabeto.IndexOf(curpBase[i]) * (18 
 var curpValida = curpBase + ((10 - suma % 10) % 10);
 Verificar(CurpFormatoValidator.EsFormatoValido(curpValida), "Aceptar CURP válida sin consulta externa");
 Verificar(!CurpFormatoValidator.EsFormatoValido(curpBase + ((curpValida[17] - '0' + 1) % 10)), "Rechazar dígito verificador incorrecto");
-foreach (var modulo in new[]
+foreach(var modulo in new[]
 {
     "MENSUAL",
     "FEDERAL"
@@ -182,7 +182,7 @@ foreach (var modulo in new[]
 
 )
 {
-    var configuracion = new SistemaConfiguracionService(null !);
+    var configuracion = new SistemaConfiguracionService(null!);
     typeof(SistemaConfiguracionService).GetProperty("Version")!.SetValue(configuracion, 1L);
     configuracion.Modulos.Add(new SistemaModulo { Clave = modulo, Activo = true });
     var feminicidio = new SistemaOpcion
@@ -282,12 +282,12 @@ var cambioEditable = new BanciLibro { Victimas = [new ArchivoFila { Columnas = n
 Verificar(!BanciMensualService.HayCambiosEditables(sinCambios, cambioEditable), "No enviar actualización sin cambios");
 cambioEditable.Victimas[0].Columnas["nomb"] = "Nombre actualizado";
 Verificar(BanciMensualService.HayCambiosEditables(sinCambios, cambioEditable), "Detectar modificación de identidad editable");
-var mensualBanci = new BanciMensualService(null !, null !, null !, new CarpetasValidator(), new DelitosValidator(), new VictimasValidator(reglas), null !, null !, reglas, null !, null !);
+var mensualBanci = new BanciMensualService(null!, null!, null!, new CarpetasValidator(), new DelitosValidator(), new VictimasValidator(reglas), null!, null!, reglas, null!, null!);
 var libroExcel = LibroPrueba();
 libroExcel.Victimas[0].Columnas["curp"] = "TEXTO18CARACTERES";
 libroExcel.Carpetas[0].Columnas["id_ci"] = "00000000000000000001";
 var bytesExcel = mensualBanci.Excel(libroExcel);
-using (var streamExcel = new MemoryStream(bytesExcel))
+using(var streamExcel = new MemoryStream(bytesExcel))
 {
     var archivoExcel = new Microsoft.AspNetCore.Http.FormFile(streamExcel, 0, streamExcel.Length, "archivo", "BANCI.xlsx");
     var leido = await mensualBanci.LeerExcelAsync(archivoExcel, 9, 9, 2026, false);
@@ -303,11 +303,73 @@ propuestaActualizacion.Victimas[0].Columnas["sexo"] = "11";
 Verificar(BanciMensualService.CompararOrigen(origenActualizacion, propuestaActualizacion).Count > 0, "Los datos personales del origen están protegidos en carga inicial");
 propuestaActualizacion.Actualizacion = true;
 Verificar(BanciMensualService.CompararOrigen(origenActualizacion, propuestaActualizacion).Count == 0, "Una actualización permite modificar datos personales de BANCI");
+// Manual es un subconjunto autorizado; masiva sigue exigiendo la totalidad del mensual.
+var total = LibroPrueba();
+var segunda = LibroPrueba();
+foreach(var fila in segunda.Carpetas.Concat(segunda.Delitos).Concat(segunda.Victimas)) fila.Columnas["id_ci"] = "CI-2";
+total.Carpetas.AddRange(segunda.Carpetas);
+total.Delitos.AddRange(segunda.Delitos);
+total.Victimas.AddRange(segunda.Victimas);
+var parcial = LibroPrueba();
+Verificar(BanciMensualService.CompararOrigen(total, parcial).Count == 3, "Masiva rechaza una carpeta faltante y sus hijos");
+parcial.Manual = true;
+var seleccionado = BanciMensualService.SeleccionarOrigen(total, parcial);
+Verificar(BanciMensualService.CompararOrigen(seleccionado, parcial).Count == 0, "Manual permite una carpeta de la lista con sus hijos");
+parcial.Victimas.Clear();
+Verificar(BanciMensualService.CompararOrigen(BanciMensualService.SeleccionarOrigen(total, parcial), parcial).Count > 0, "Alta manual no permite omitir víctimas de la carpeta elegida");
+parcial = LibroPrueba();
+parcial.Manual = true;
+parcial.Actualizacion = true;
+parcial.Victimas[0].Columnas["nomb"] = "Modificado";
+seleccionado = BanciMensualService.SeleccionarOrigen(total, parcial);
+Verificar(BanciMensualService.CompararOrigen(seleccionado, parcial).Count == 0, "Actualización manual permite modificar una víctima de varias");
+var conSinCambios = LibroPrueba();
+conSinCambios.Actualizacion = true;
+conSinCambios.Carpetas.AddRange(segunda.Carpetas);
+conSinCambios.Delitos.AddRange(segunda.Delitos);
+conSinCambios.Victimas.AddRange(segunda.Victimas);
+conSinCambios.Victimas[0].Columnas["nomb"] = "Modificado";
+BanciMensualService.ConservarCambios(total, conSinCambios);
+Verificar(conSinCambios.Victimas.Count == 1 && conSinCambios.Carpetas.Count == 1 && conSinCambios.Delitos.Count == 1, "Se excluyen registros sin cambios y sus padres no afectados");
+parcial = LibroPrueba();
+parcial.Manual = true;
+parcial.Carpetas[0].Columnas["id_ci"] = "FUERA-DE-LISTA";
+Verificar(BanciMensualService.CompararOrigen(BanciMensualService.SeleccionarOrigen(total, parcial), parcial).Count > 0, "Manual no acepta carpetas fuera del mensual");
+var noLocalizada = LibroPrueba();
+noLocalizada.Victimas[0].Columnas["localizado_o_no_localizado"] = "49";
+noLocalizada.Victimas[0].Columnas["con_o_sin_vida"] = "valor inválido ignorado";
+noLocalizada.Victimas[0].Columnas["fecha_localizacion"] = "fecha inválida ignorada";
+BanciMensualService.NormalizarLocalizacion(noLocalizada, "49");
+Verificar(noLocalizada.Victimas[0].Columnas["con_o_sin_vida"] == null && noLocalizada.Victimas[0].Columnas["fecha_localizacion"] == null, "No localizada ignora condición de vida y datos residuales antes de validar/persistir");
+noLocalizada.Victimas[0].Columnas["localizado_o_no_localizado"] = "45";
+noLocalizada.Victimas[0].Columnas["con_o_sin_vida"] = "1";
+BanciMensualService.NormalizarLocalizacion(noLocalizada, "49");
+Verificar(noLocalizada.Victimas[0].Columnas["con_o_sin_vida"] == "1", "Localizada conserva condición de vida para su validación");
+var envioUno = LibroPrueba();
+envioUno.Manual = true;
+var envioDos = segunda;
+envioDos.Manual = true;
+Verificar(!BanciMensualService.SeSuperponen(envioUno, envioDos), "Permitir envíos manuales pendientes de carpetas distintas");
+Verificar(BanciMensualService.SeSuperponen(envioUno, envioUno), "Bloquear dos envíos pendientes del mismo registro");
+envioDos.Manual = false;
+Verificar(BanciMensualService.SeSuperponen(envioUno, envioDos), "Una masiva pendiente bloquea otros envíos del corte");
+var acuseLibro = LibroPrueba();
+acuseLibro.Carpetas[0].Columnas["no_banci"] = "BANCI/09/2026/000001";
+var operacionAcuse = new BanciOperacion { Referencia = Guid.NewGuid(), EntidadNombre = "Ciudad de México", Mes = 9, Anio = 2026, Estado = "CONFIRMADO", Tipo = "CARGA", NombreUsuario = "Prueba" };
+var catalogosAcuse = new Dictionary<string, Dictionary<string, string>>();
+var pdfAcuse = BanciMensualService.GenerarAcuse(operacionAcuse, acuseLibro, new DateTime(2026, 10, 15, 22, 0, 0), catalogosAcuse);
+Verificar(System.Text.Encoding.ASCII.GetString(pdfAcuse, 0, 5) == "%PDF-", "Se genera el acuse PDF confirmado con datos y folios BANCI");
+// La ruta opcional permite revisar texto y paginación durante la verificación local.
+var salidaAcuse = Environment.GetEnvironmentVariable("BANCI_ACUSE_PRUEBA");
+if(!string.IsNullOrEmpty(salidaAcuse)) File.WriteAllBytes(salidaAcuse, pdfAcuse);
+operacionAcuse.Estado = "PENDIENTE_APROBACION";
+Verificar(BanciMensualService.GenerarAcuse(operacionAcuse, acuseLibro, DateTime.UtcNow, catalogosAcuse).Length > 1000, "El acuse pendiente se distingue del confirmado");
 Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {
     public Task CargarAsync() => Task.CompletedTask;
-    public string Clave(string catalogo, string codigo) => (catalogo, codigo) switch    {
+    public string Clave(string catalogo, string codigo) => (catalogo, codigo) switch
+    {
         ("catalogo_tipo_victima", "PERSONA_FISICA") => "16",
         ("catalogo_tipo_victima", "PERSONA_MORAL") => "18",
         ("catalogo_tipo_victima", "OTRO") => "19",
@@ -327,9 +389,11 @@ sealed class ReglasSimuladas : ICatalogoReglasRepository
         ("catalogo_instrumento_comision", "OTRO") => "66",
         ("catalogo_instrumento_comision", "NO_IDENTIFICADO") => "77",
         ("catalogo_instrumento_comision", "NO_APLICA") => "88",
-        _ => throw new NotSupportedException()};
+        _ => throw new NotSupportedException()
+    };
     public int ClaveNumerica(string catalogo, string codigo) => int.Parse(Clave(catalogo, codigo));
-    public bool Contiene(string catalogo, string codigo, string? clave) => (catalogo, codigo, clave) switch    {
+    public bool Contiene(string catalogo, string codigo, string? clave) => (catalogo, codigo, clave) switch
+    {
         ("catalogo_modalidad_delito", "ROBO_VEHICULO", "robo-test") => true,
         ("catalogo_modalidad_delito", "EXTORSION", "ext-test") => true,
         ("catalogo_subtipo_delito", "LESIONES_DOLOSAS", "les-test") => true,

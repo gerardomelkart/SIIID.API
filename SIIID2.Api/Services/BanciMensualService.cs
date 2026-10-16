@@ -26,7 +26,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
 {
     public static readonly string[] Complementos = ["fub", "pro_apellido", "sdo_apellido", "nomb", "entidad_nacimiento", "estado_migratorio", "curp", "rfc", "localizado_o_no_localizado", "con_o_sin_vida", "fecha_localizacion", "constitutiva_delito", "motivo_desaparicion", "acciones_busqueda", "obs"];
     public static readonly string[] Personales = ["sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional"];
-    public static string[] Editables(bool actualizacion) => actualizacion ? [..Personales, ..Complementos] : Complementos;
+    public static string[] Editables(bool actualizacion) => actualizacion ? [.. Personales, .. Complementos] : Complementos;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static string Serializar(object valor) => JsonSerializer.Serialize(valor, Json);
     private static string Valor(ArchivoFila fila, string campo) => fila.Columnas.GetValueOrDefault(campo)?.Trim() ?? "";
@@ -41,10 +41,10 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
     }.Take(nivel));
     private static List<ArchivoFila> Filas(IEnumerable<dynamic> filas) => filas.Select((fila,
         i) => new ArchivoFila
-    {
-        NumeroFila = i + 2,
-        Columnas = ((IDictionary<string, object>)fila).ToDictionary(p => p.Key, p => p.Value is null or DBNull ? null : Convert.ToString(p.Value, CultureInfo.InvariantCulture), StringComparer.OrdinalIgnoreCase)
-    }).ToList();
+        {
+            NumeroFila = i + 2,
+            Columnas = ((IDictionary<string, object>)fila).ToDictionary(p => p.Key, p => p.Value is null or DBNull ? null : Convert.ToString(p.Value, CultureInfo.InvariantCulture), StringComparer.OrdinalIgnoreCase)
+        }).ToList();
     private static string Huella(BanciLibro libro) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Serializar(new[]
     {
         libro.Carpetas,
@@ -80,7 +80,10 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
             && !configuracion.Activa("BANCI", "PERMITIR_CORTES_ANTERIORES"))
             throw new InvalidOperationException("La carga de cortes anteriores está desactivada.");
         using var db = factory.CrearConexion();
-        if(!await db.ExecuteScalarAsync<bool>("SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.catalogo_entidad_federativa WHERE id_entidad_federativa=@entidad AND activo=1 AND es_entidad_territorial=1) THEN 1 ELSE 0 END);", new { entidad }))
+        if(!await db.ExecuteScalarAsync<bool>("SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.catalogo_entidad_federativa WHERE id_entidad_federativa=@entidad AND activo=1 AND es_entidad_territorial=1) THEN 1 ELSE 0 END);", new
+        {
+            entidad
+        }))
             throw new InvalidOperationException("Seleccione una entidad territorial activa.");
     }
 
@@ -89,9 +92,13 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         var acceso = await AccesoAsync(usuario);
         await configuracion.CargarAsync();
         using var db = factory.CrearConexion();
-        var entidades = await db.QueryAsync("SELECT id_entidad_federativa AS id,nombre FROM dbo.catalogo_entidad_federativa WHERE activo=1 AND es_entidad_territorial=1 AND(@admin=1 OR id_entidad_federativa=@entidad) ORDER BY nombre;", new { admin = AlcanceNacional(acceso), entidad = acceso.IdEntidadFederativa });
+        var entidades = await db.QueryAsync("SELECT id_entidad_federativa AS id,nombre FROM dbo.catalogo_entidad_federativa WHERE activo=1 AND es_entidad_territorial=1 AND(@admin=1 OR id_entidad_federativa=@entidad) ORDER BY nombre;", new
+        {
+            admin = AlcanceNacional(acceso),
+            entidad = acceso.IdEntidadFederativa
+        });
         var catalogos = new Dictionary<string, object>();
-        foreach (var tabla in new[]
+        foreach(var tabla in new[]
         {
             "banci_catalogo_localizacion",
             "banci_catalogo_condicion_vida",
@@ -100,7 +107,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
 
         )
             catalogos[tabla.Replace("banci_catalogo_", "")] = await db.QueryAsync($"SELECT clave,descripcion,codigo_regla AS codigo FROM dbo.{tabla} WHERE activo=1 ORDER BY clave;");
-        foreach (var(campo, tabla)in new[]
+        foreach(var (campo, tabla) in new[]
         {
             ("id_tv", "catalogo_tipo_victima"),
             ("id_tpm", "catalogo_tipo_victima_moral"),
@@ -119,7 +126,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         catalogos["clasf_de_dto"] = await db.QueryAsync("SELECT clave,descripcion FROM dbo.banci_catalogo_clasificacion_delito WHERE activo=1 ORDER BY clave;");
         catalogos["id_ent_hchos"] = await db.QueryAsync("SELECT id_entidad_federativa AS clave,nombre AS descripcion FROM dbo.catalogo_entidad_federativa WHERE activo=1 ORDER BY nombre;");
         catalogos["id_mun_hchos"] = await db.QueryAsync("SELECT clave,nombre AS descripcion,id_entidad_federativa AS condicion FROM dbo.catalogo_municipio WHERE activo=1 ORDER BY nombre;");
-        catalogos["motivos"] = await db.QueryAsync("SELECT constitutiva_delito AS condicion,clave,descripcion FROM dbo.banci_vw_motivo_desaparicion_catalogo ORDER BY descripcion;");
+        catalogos["motivos"] = await db.QueryAsync(BanciMensualSql.Motivos + " ORDER BY descripcion;");
         var corte = FechaRangoValidator.Hoy().AddMonths(-1);
         return new
         {
@@ -163,23 +170,43 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         };
         if(!actualizacion)
         {
-            using var consulta = await db.QueryMultipleAsync(BanciMensualSql.Origen, new { Entidad = entidad, Mes = mes, Anio = anio }, tx);
+            using var consulta = await db.QueryMultipleAsync(BanciMensualSql.Origen, new
+            {
+                Entidad = entidad,
+                Mes = mes,
+                Anio = anio
+            }, tx);
             libro.Carpetas = Filas(await consulta.ReadAsync());
             libro.Delitos = Filas(await consulta.ReadAsync());
             libro.Victimas = Filas(await consulta.ReadAsync());
         }
         else
         {
-            libro.Carpetas = Filas(await db.QueryAsync("SELECT id_ci,ntra_ci,CONVERT(varchar(10),fha_de_ini,23) AS fha_de_ini,CONVERT(varchar(8),hra_de_ini,108) AS hra_de_ini,rmen_de_hchos,no_banci FROM dbo.banci_carpeta_investigacion WHERE id_entidad_federativa=@entidad AND mes_corte=@mes AND anio_corte=@anio AND activo=1 ORDER BY id_ci;", new { entidad, mes, anio }, tx));
+            libro.Carpetas = Filas(await db.QueryAsync("SELECT id_ci,ntra_ci,CONVERT(varchar(10),fha_de_ini,23) AS fha_de_ini,CONVERT(varchar(8),hra_de_ini,108) AS hra_de_ini,rmen_de_hchos,no_banci FROM dbo.banci_carpeta_investigacion WHERE id_entidad_federativa=@entidad AND mes_corte=@mes AND anio_corte=@anio AND activo=1 ORDER BY id_ci;", new
+            {
+                entidad,
+                mes,
+                anio
+            }, tx));
             var filtro = " FROM dbo.banci_carpeta_investigacion ci JOIN dbo.banci_delito d ON d.id_banci_carpeta_investigacion=ci.id_banci_carpeta_investigacion AND d.activo=1 ";
             var condicion = " WHERE ci.id_entidad_federativa=@entidad AND ci.mes_corte=@mes AND ci.anio_corte=@anio AND ci.activo=1 ";
-            libro.Delitos = Filas(await db.QueryAsync("SELECT ci.id_ci,d.*" + filtro + condicion + " ORDER BY ci.id_ci,d.id_delito;", new { entidad, mes, anio }, tx));
-            libro.Victimas = Filas(await db.QueryAsync("SELECT ci.id_ci,d.id_delito,v.*" + filtro + " JOIN dbo.banci_victima v ON v.id_banci_delito=d.id_banci_delito AND v.activo=1 " + condicion + " ORDER BY ci.id_ci,d.id_delito,v.id_vicf;", new { entidad, mes, anio }, tx));
-            foreach (var fila in libro.Delitos.Concat(libro.Victimas))
+            libro.Delitos = Filas(await db.QueryAsync("SELECT ci.id_ci,d.*" + filtro + condicion + " ORDER BY ci.id_ci,d.id_delito;", new
             {
-                foreach (var campo in fila.Columnas.Keys.Where(c => c.StartsWith("id_banci_") || c.EndsWith("_consolidado") || c == "activo").ToArray())
+                entidad,
+                mes,
+                anio
+            }, tx));
+            libro.Victimas = Filas(await db.QueryAsync("SELECT ci.id_ci,d.id_delito,v.*" + filtro + " JOIN dbo.banci_victima v ON v.id_banci_delito=d.id_banci_delito AND v.activo=1 " + condicion + " ORDER BY ci.id_ci,d.id_delito,v.id_vicf;", new
+            {
+                entidad,
+                mes,
+                anio
+            }, tx));
+            foreach(var fila in libro.Delitos.Concat(libro.Victimas))
+            {
+                foreach(var campo in fila.Columnas.Keys.Where(c => c.StartsWith("id_banci_") || c.EndsWith("_consolidado") || c == "activo").ToArray())
                     fila.Columnas.Remove(campo);
-                foreach (var campo in fila.Columnas.Keys.ToArray())
+                foreach(var campo in fila.Columnas.Keys.ToArray())
                     if((campo.StartsWith("fha_")
                         || campo == "fecha_localizacion")
                         && DateTime.TryParse(fila.Columnas[campo], CultureInfo.InvariantCulture, out var fecha))
@@ -194,7 +221,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         return libro;
     }
 
-    public async Task<BanciLibro> PrecargaAsync(int usuario, int entidad, int mes, int anio, bool actualizacion)
+    public async Task<BanciLibro> PrecargaAsync(int usuario, int entidad, int mes, int anio, bool actualizacion, bool manual = false)
     {
         await AccesoAsync(usuario, entidad, actualizacion ? "ACTUALIZACION" : "CARGA");
         await PeriodoAsync(entidad, mes, anio, actualizacion);
@@ -203,20 +230,40 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         if(actualizacion && libro.Carpetas.Count == 0)
             throw new InvalidOperationException("El corte no tiene carga BANCI aprobada.");
         var tieneOrigenConsolidado = libro.Carpetas.Count > 0;
-        if(!actualizacion)
-            await ExcluirCarpetasRegistradasAsync(db, libro);
+        if(!actualizacion && manual)
+            await ExcluirCarpetasRegistradasAsync(db, libro, incluirEnRevision: true);
         var historica = new DateTime(anio, mes, 1) < new DateTime(FechaRangoValidator.Hoy().AddMonths(-1).Year, FechaRangoValidator.Hoy().AddMonths(-1).Month, 1);
         if(!actualizacion && libro.Carpetas.Count == 0 && (!historica || tieneOrigenConsolidado))
-            throw new InvalidOperationException("No hay carpetas nuevas de desaparición pendientes de reportar en BANCI para este corte. Las ya registradas se conservan; utilice Actualización para modificarlas.");
+            throw new InvalidOperationException("Ya no hay carpetas pendientes de las reportadas en el SIIID mensual para esta entidad y periodo. Revise Consulta de envíos para conocer el estado de lo enviado; utilice Actualización para modificar registros aprobados.");
+        libro.Manual = manual;
         await PrepararComplementosAsync(libro);
+        if(!actualizacion && !manual)
+            await PrecargarComplementosRegistradosAsync(db, libro);
 
         return libro;
     }
 
-    // Las cargas adicionales incorporan solo carpetas nuevas; nunca sustituyen ni eliminan lo aprobado.
-    private static async Task ExcluirCarpetasRegistradasAsync(IDbConnection db, BanciLibro libro, IDbTransaction? tx = null)
+    private async Task PrecargarComplementosRegistradosAsync(IDbConnection db, BanciLibro libro, IDbTransaction? tx = null)
+    {
+        var registrados = await OrigenAsync(db, libro.Entidad, libro.Mes, libro.Anio, true, tx);
+        var indice = registrados.Victimas.ToDictionary(f => Llave(f, 3));
+        foreach(var fila in libro.Victimas)
+            if(indice.TryGetValue(Llave(fila, 3), out var previa))
+                foreach(var campo in Complementos)
+                    fila.Columnas[campo] = previa.Columnas.GetValueOrDefault(campo);
+    }
+
+    // La captura manual incorpora únicamente carpetas pendientes.
+    private static async Task ExcluirCarpetasRegistradasAsync(IDbConnection db, BanciLibro libro, IDbTransaction? tx = null, bool incluirEnRevision = false)
     {
         var registradas = (await db.QueryAsync<string>("SELECT id_ci FROM dbo.banci_carpeta_investigacion WHERE id_entidad_federativa=@Entidad AND mes_corte=@Mes AND anio_corte=@Anio;", libro, tx)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if(incluirEnRevision)
+            registradas.UnionWith(await db.QueryAsync<string>("""
+                SELECT JSON_VALUE(t.datos_propuestos,'$.columnas.id_ci')
+                FROM dbo.banci_carga_tmp_carpeta t JOIN dbo.banci_carga c ON c.id_banci_carga=t.id_banci_carga
+                WHERE c.id_entidad_federativa=@Entidad AND c.mes_corte=@Mes AND c.anio_corte=@Anio
+                  AND c.tipo_carga='CARGA' AND c.estado='PENDIENTE_APROBACION';
+                """, libro, tx));
         FiltrarNuevas(libro, registradas);
     }
 
@@ -239,6 +286,55 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
             if(Valor(fila, "localizado_o_no_localizado") == "")
                 fila.Columnas["localizado_o_no_localizado"] = reglas.Clave("banci_catalogo_localizacion", "NO_LOCALIZADO");
         }
+    }
+
+    public static void NormalizarLocalizacion(BanciLibro libro, string noLocalizado)
+    {
+        foreach(var fila in libro.Victimas.Where(f => Valor(f, "localizado_o_no_localizado") == noLocalizado))
+            foreach(var campo in new[] { "con_o_sin_vida", "fecha_localizacion", "constitutiva_delito", "motivo_desaparicion" })
+                fila.Columnas[campo] = null;
+    }
+
+    // Una carga manual toma una carpeta completa; una actualización toma solo las víctimas enviadas.
+    public static BanciLibro SeleccionarOrigen(BanciLibro origen, BanciLibro propuesta)
+    {
+        if(!propuesta.Manual)
+            return origen;
+        var carpetas = propuesta.Carpetas.Select(f => Llave(f, 1)).ToHashSet();
+        var delitos = propuesta.Delitos.Select(f => Llave(f, 2)).ToHashSet();
+        var victimas = propuesta.Victimas.Select(f => Llave(f, 3)).ToHashSet();
+        return new BanciLibro
+        {
+            Entidad = origen.Entidad,
+            Mes = origen.Mes,
+            Anio = origen.Anio,
+            Actualizacion = origen.Actualizacion,
+            Manual = true,
+            Carpetas = origen.Carpetas.Where(f => carpetas.Contains(Llave(f, 1))).ToList(),
+            Delitos = origen.Delitos.Where(f => propuesta.Actualizacion ? delitos.Contains(Llave(f, 2)) : carpetas.Contains(Llave(f, 1))).ToList(),
+            Victimas = origen.Victimas.Where(f => propuesta.Actualizacion ? victimas.Contains(Llave(f, 3)) : carpetas.Contains(Llave(f, 1))).ToList()
+        };
+    }
+
+    public static bool SeSuperponen(BanciLibro primero, BanciLibro segundo)
+    {
+        // Una masiva siempre reserva el corte completo. Dos actualizaciones manuales pueden tratar víctimas distintas.
+        if(!primero.Manual || !segundo.Manual)
+            return true;
+        var nivel = primero.Actualizacion && segundo.Actualizacion ? 3 : 1;
+        var claves = (nivel == 3 ? primero.Victimas : primero.Carpetas).Select(f => Llave(f, nivel)).ToHashSet();
+        return (nivel == 3 ? segundo.Victimas : segundo.Carpetas).Any(f => claves.Contains(Llave(f, nivel)));
+    }
+
+    public static void ConservarCambios(BanciLibro origen, BanciLibro propuesta)
+    {
+        var anteriores = origen.Victimas.ToDictionary(f => Llave(f, 3));
+        propuesta.Victimas.RemoveAll(f => anteriores.TryGetValue(Llave(f, 3), out var previa)
+            && Editables(true).All(c => Valor(f, c) == Valor(previa, c)));
+        var delitos = propuesta.Victimas.Select(f => Llave(f, 2)).ToHashSet();
+        var carpetas = propuesta.Victimas.Select(f => Llave(f, 1)).ToHashSet();
+        propuesta.Delitos.RemoveAll(f => !delitos.Contains(Llave(f, 2)));
+        propuesta.Carpetas.RemoveAll(f => !carpetas.Contains(Llave(f, 1)));
     }
 
     // Se conserva el origen protegido y se muestra una sola captura editable de cada dato personal.
@@ -265,7 +361,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
             ("Delitos", libro.Delitos, delitosValidator.ColumnasObligatorias),
             ("Victimas", libro.Victimas, (IReadOnlyCollection<string>)victimasValidator.ColumnasObligatorias.Concat(Complementos).ToArray())
         };
-        foreach (var(nombre, filas, baseColumnas)in grupos)
+        foreach(var (nombre, filas, baseColumnas) in grupos)
         {
             var hoja = wb.AddWorksheet(nombre);
             var columnas = baseColumnas.Concat(filas.SelectMany(f => f.Columnas.Keys)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -315,7 +411,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
             Anio = anio,
             Actualizacion = actualizacion
         };
-        foreach (var(nombre, destino)in new[]
+        foreach(var (nombre, destino) in new[]
         {
             ("Carpetas", libro.Carpetas),
             ("Delitos", libro.Delitos),
@@ -356,7 +452,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
     public static List<CargaValidacionError> CompararOrigen(BanciLibro origen, BanciLibro propuesta)
     {
         var errores = new List<CargaValidacionError>();
-        foreach (var(nombre, antes, despues, nivel)in new[]
+        foreach(var (nombre, antes, despues, nivel) in new[]
         {
             ("carpetas", origen.Carpetas, propuesta.Carpetas, 1),
             ("delitos", origen.Delitos, propuesta.Delitos, 2),
@@ -366,7 +462,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         )
         {
             var indice = despues.GroupBy(f => Llave(f, nivel)).ToDictionary(g => g.Key, g => g.ToList());
-            foreach (var fila in antes)
+            foreach(var fila in antes)
             {
                 var key = Llave(fila, nivel);
                 if(!indice.TryGetValue(key, out var coincidencias) || coincidencias.Count != 1)
@@ -375,13 +471,13 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
                     continue;
                 }
 
-                foreach (var par in fila.Columnas.Where(p => nombre != "victimas" || !Editables(propuesta.Actualizacion).Contains(p.Key)))
+                foreach(var par in fila.Columnas.Where(p => nombre != "victimas" || !Editables(propuesta.Actualizacion).Contains(p.Key)))
                     if((par.Value ?? "").Trim() != Valor(coincidencias[0], par.Key))
                         errores.Add(Error(nombre, coincidencias[0], par.Key, $"El dato protegido debe coincidir con el origen: {par.Value}."));
             }
 
             var claves = antes.Select(f => Llave(f, nivel)).ToHashSet();
-            foreach (var fila in despues.Where(f => !claves.Contains(Llave(f, nivel))))
+            foreach(var fila in despues.Where(f => !claves.Contains(Llave(f, nivel))))
                 errores.Add(Error(nombre, fila, "identificadores", "El registro no pertenece al origen de este corte."));
         }
 
