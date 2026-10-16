@@ -70,7 +70,20 @@ public class SemanalCargasController : ControllerBase
         if(!ObtenerIdUsuario(out var idUsuario))
             return TokenSinUsuario();
         limitePorSeccion = Math.Clamp(limitePorSeccion, 0, 200);
-        var resultado = await _semanalCargaService.ObtenerDiferenciasAsync(codigoReferencia, idUsuario, limitePorSeccion, soloMuestra);
+        ActualizacionDiferenciasResponse resultado;
+        try
+        {
+            resultado = await _semanalCargaService.ObtenerDiferenciasAsync(codigoReferencia, idUsuario, limitePorSeccion, soloMuestra);
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == -2)
+        {
+            return StatusCode(StatusCodes.Status504GatewayTimeout, new
+            {
+                esValido = false,
+                codigo = "DIFERENCIAS_TIMEOUT",
+                mensaje = "La consulta de diferencias semanales excedió el tiempo de espera. La actualización permanece pendiente de decisión."
+            });
+        }
         return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
     }
 

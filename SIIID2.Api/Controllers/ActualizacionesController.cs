@@ -77,7 +77,20 @@ public class ActualizacionesController : ControllerBase
         }
 
         limitePorSeccion = Math.Clamp(limitePorSeccion, 0, 200);
-        var resultado = await _actualizacionArchivosService.ObtenerDetalleDiferenciasAsync(codigoReferencia, idUsuarioConsulta, limitePorSeccion, incluirResumen);
+        ActualizacionDiferenciasResponse resultado;
+        try
+        {
+            resultado = await _actualizacionArchivosService.ObtenerDetalleDiferenciasAsync(codigoReferencia, idUsuarioConsulta, limitePorSeccion, incluirResumen);
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == -2)
+        {
+            return StatusCode(StatusCodes.Status504GatewayTimeout, new
+            {
+                esValido = false,
+                codigo = "DIFERENCIAS_TIMEOUT",
+                mensaje = "La consulta de diferencias excedió el tiempo de espera. La actualización permanece validada y pendiente de decisión."
+            });
+        }
         if(!resultado.EsValido)
             return BadRequest(resultado);
         if(limitePorSeccion > 0)

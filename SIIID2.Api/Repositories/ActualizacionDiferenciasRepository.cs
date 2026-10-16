@@ -266,7 +266,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             LimiteFilas = limiteFilas
         };
         using var connection = dbConnectionFactory.CrearConexion();
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 180);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 60);
         return filas.ToList();
     }
 
@@ -568,7 +568,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             LimiteFilas = limiteFilas
         };
         using var connection = dbConnectionFactory.CrearConexion();
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 180);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 60);
         return filas.ToList();
     }
 
@@ -577,8 +577,9 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         int limitePorSeccion)
     {
         var sql = @"
-        ;WITH victimas_actuales AS (
-            SELECT
+                -- Materializar el periodo y el archivo una sola vez: las tres clases
+        -- de movimiento no deben volver a ejecutar los JOIN sobre tablas masivas.
+        SELECT
                 ci.identificador_carpeta_fiscalia AS id_ci,
                 d.identificador_delito_fiscalia AS id_delito_fiscalia,
                 v.identificador_victima_fiscalia,
@@ -602,6 +603,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 nac.clave AS nacional_valor,
                 CONVERT(varchar(50), pob.clave) AS pob_valor,
                 CONVERT(varchar(50), disc.clave) AS disc_valor
+            INTO #victimas_actuales
             FROM victima v
             INNER JOIN delito d
                 ON d.id_delito = v.id_delito
@@ -630,10 +632,11 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
               AND c.anio_corte = @AnioCorte
               AND c.estado IN ('CONFIRMADO', 'CONFIRMADO_ACTUALIZACION')
               AND c.activo = 1
-              AND v.activo = 1
-),
-        victimas_tmp AS (
-            SELECT
+              AND v.activo = 1;
+        CREATE INDEX IX_victimas_actuales_llave
+            ON #victimas_actuales(id_ci, id_delito_fiscalia, identificador_victima_fiscalia);
+
+        SELECT
                 v.id_ci,
                 v.id_delito,
                 v.id_vicf,
@@ -662,6 +665,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                     TRY_CONVERT(date, NULLIF(v.fha_nac, ''))
                 ) AS fecha_nacimiento,
                 TRY_CONVERT(smallint, NULLIF(v.edad, '')) AS edad
+            INTO #victimas_tmp
             FROM carga_tmp_victima v
             INNER JOIN catalogo_tipo_victima tv
                 ON tv.clave = TRY_CONVERT(tinyint, v.id_tv)
@@ -685,8 +689,10 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
                 ON disc.clave = TRY_CONVERT(tinyint, NULLIF(v.disc, ''))
                AND disc.activo = 1
             WHERE v.id_carga = @IdCarga
-              AND v.activo = 1
-        )
+              AND v.activo = 1;
+        CREATE INDEX IX_victimas_tmp_llave
+            ON #victimas_tmp(id_ci, id_delito, id_vicf);
+
         SELECT TOP (@LimiteFilas)
             'victimas' AS Seccion,
             'NUEVO' AS TipoMovimiento,
@@ -695,8 +701,8 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             dif.Campo,
             dif.ValorAnterior,
             dif.ValorNuevo
-        FROM victimas_tmp vt
-        LEFT JOIN victimas_actuales va
+        FROM #victimas_tmp vt
+        LEFT JOIN #victimas_actuales va
             ON va.id_ci = vt.id_ci
            AND va.id_delito_fiscalia = vt.id_delito
            AND va.identificador_victima_fiscalia = vt.id_vicf
@@ -731,8 +737,8 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             dif.Campo,
             dif.ValorAnterior,
             dif.ValorNuevo
-        FROM victimas_actuales va
-        LEFT JOIN victimas_tmp vt
+        FROM #victimas_actuales va
+        LEFT JOIN #victimas_tmp vt
             ON vt.id_ci = va.id_ci
            AND vt.id_delito = va.id_delito_fiscalia
            AND vt.id_vicf = va.identificador_victima_fiscalia
@@ -767,8 +773,8 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             dif.Campo,
             dif.ValorAnterior,
             dif.ValorNuevo
-        FROM victimas_tmp vt
-        INNER JOIN victimas_actuales va
+        FROM #victimas_tmp vt
+        INNER JOIN #victimas_actuales va
             ON va.id_ci = vt.id_ci
            AND va.id_delito_fiscalia = vt.id_delito
            AND va.identificador_victima_fiscalia = vt.id_vicf
@@ -803,7 +809,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             LimiteFilas = limiteFilas
         };
         using var connection = dbConnectionFactory.CrearConexion();
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 180);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 60);
         return filas.ToList();
     }
 

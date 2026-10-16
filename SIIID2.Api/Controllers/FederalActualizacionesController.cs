@@ -47,7 +47,20 @@ public class FederalActualizacionesController : ControllerBase
     {
         if(!ObtenerIdUsuario(out var idUsuario))
             return TokenSinUsuario();
-        var resultado = await _service.ObtenerDiferenciasAsync(codigoReferencia.Trim(), idUsuario, Math.Clamp(limitePorSeccion, 0, 200), incluirResumen);
+        ActualizacionDiferenciasResponse resultado;
+        try
+        {
+            resultado = await _service.ObtenerDiferenciasAsync(codigoReferencia.Trim(), idUsuario, Math.Clamp(limitePorSeccion, 0, 200), incluirResumen);
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == -2)
+        {
+            return StatusCode(StatusCodes.Status504GatewayTimeout, new
+            {
+                esValido = false,
+                codigo = "DIFERENCIAS_TIMEOUT",
+                mensaje = "La consulta de diferencias Federal excedió el tiempo de espera. La actualización permanece pendiente de decisión."
+            });
+        }
         return resultado.EsValido ? Ok(resultado) : BadRequest(resultado);
     }
 
