@@ -226,6 +226,8 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         await AccesoAsync(usuario, entidad, actualizacion ? "ACTUALIZACION" : "CARGA");
         await PeriodoAsync(entidad, mes, anio, actualizacion);
         using var db = factory.CrearConexion();
+        if(!actualizacion && !manual)
+            await VerificarCargaMasivaDisponibleAsync(db, entidad, mes, anio);
         var libro = await OrigenAsync(db, entidad, mes, anio, actualizacion);
         if(actualizacion && libro.Carpetas.Count == 0)
             throw new InvalidOperationException("El corte no tiene carga BANCI aprobada.");
@@ -241,6 +243,17 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
             await PrecargarComplementosRegistradosAsync(db, libro);
 
         return libro;
+    }
+
+    private static async Task VerificarCargaMasivaDisponibleAsync(IDbConnection db, int entidad, int mes, int anio, IDbTransaction? tx = null, long? excluirCarga = null)
+    {
+        if(await db.ExecuteScalarAsync<bool>("""
+            SELECT CONVERT(bit,CASE WHEN
+                EXISTS(SELECT 1 FROM dbo.banci_carpeta_investigacion WHERE id_entidad_federativa=@entidad AND mes_corte=@mes AND anio_corte=@anio)
+                OR EXISTS(SELECT 1 FROM dbo.banci_carga WHERE id_entidad_federativa=@entidad AND mes_corte=@mes AND anio_corte=@anio AND estado='PENDIENTE_APROBACION' AND (@excluirCarga IS NULL OR id_banci_carga<>@excluirCarga))
+                THEN 1 ELSE 0 END);
+            """, new { entidad, mes, anio, excluirCarga }, tx))
+            throw new InvalidOperationException("El periodo ya tiene información BANCI registrada o enviada a revisión. Utilice Actualización para modificar registros aprobados; para carpetas pendientes utilice la captura manual.");
     }
 
     private async Task PrecargarComplementosRegistradosAsync(IDbConnection db, BanciLibro libro, IDbTransaction? tx = null)

@@ -179,10 +179,12 @@ public class AcusePdfService : IAcusePdfService
     }
 
     private void ConstruirEncabezado(IContainer container, CargaAcuseInfo carga)
+        => ConstruirEncabezadoInstitucional(container, carga.FechaConfirmacion ?? carga.FechaValidacion, _webHostEnvironment.WebRootPath);
+
+    internal static void ConstruirEncabezadoInstitucional(IContainer container, DateTime fechaAcuse, string webRootPath)
     {
-        var rutaLogo = ObtenerRutaArchivo(RutaLogoAcuse);
-        var rutaMujer = ObtenerRutaArchivo(RutaMujerAcuse);
-        var fechaAcuse = carga.FechaConfirmacion ?? carga.FechaValidacion;
+        var rutaLogo = ObtenerRutaArchivoInstitucional(webRootPath, RutaLogoAcuse);
+        var rutaMujer = ObtenerRutaArchivoInstitucional(webRootPath, RutaMujerAcuse);
         container.Column(column =>
         {
             column.Item().Row(row =>
@@ -263,20 +265,20 @@ public class AcusePdfService : IAcusePdfService
     }
 
     private void ConstruirPiePagina(IContainer container)
+        => ConstruirPiePaginaInstitucional(container, _webHostEnvironment.WebRootPath);
+
+    internal static void ConstruirPiePaginaInstitucional(IContainer container, string webRootPath)
     {
-        var rutaPiePagina = ObtenerRutaArchivo(RutaPiePaginaAcuse);
+        var rutaPiePagina = ObtenerRutaArchivoInstitucional(webRootPath, RutaPiePaginaAcuse);
         container.AlignLeft().Height(54).Width(572).Image(rutaPiePagina).FitArea();
     }
 
-    private string ObtenerRutaArchivo(string rutaRelativa)
+    private static string ObtenerRutaArchivoInstitucional(string webRootPath, string rutaRelativa)
     {
         var rutaLimpia = rutaRelativa.Replace("wwwroot/", string.Empty).Replace("/", Path.DirectorySeparatorChar.ToString());
-        var rutaFisica = Path.Combine(_webHostEnvironment.WebRootPath, rutaLimpia);
+        var rutaFisica = Path.Combine(webRootPath, rutaLimpia);
         if(!File.Exists(rutaFisica))
-        {
             throw new FileNotFoundException($"No se encontró el archivo requerido para el acuse: {rutaFisica}");
-        }
-
         return rutaFisica;
     }
 

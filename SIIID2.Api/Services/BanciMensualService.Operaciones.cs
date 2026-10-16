@@ -471,6 +471,8 @@ public sealed partial class BanciMensualService
                 var manual = documento.RootElement.TryGetProperty("manual", out _) ? snapshot.Manual : op.Tipo == "CARGA";
                 var propuesta = await PropuestaAsync(db, op, tx);
                 propuesta.Manual = manual;
+                if(op.Tipo == "CARGA" && !manual)
+                    await VerificarCargaMasivaDisponibleAsync(db, op.Entidad, op.Mes, op.Anio, tx, op.Id);
                 var actual = await OrigenAsync(db, op.Entidad, op.Mes, op.Anio, op.Tipo == "ACTUALIZACION", tx);
                 if(op.Tipo == "CARGA" && manual)
                     await ExcluirCarpetasRegistradasAsync(db, actual, tx);

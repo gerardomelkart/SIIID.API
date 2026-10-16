@@ -357,13 +357,23 @@ var acuseLibro = LibroPrueba();
 acuseLibro.Carpetas[0].Columnas["no_banci"] = "BANCI/09/2026/000001";
 var operacionAcuse = new BanciOperacion { Referencia = Guid.NewGuid(), EntidadNombre = "Ciudad de México", Mes = 9, Anio = 2026, Estado = "CONFIRMADO", Tipo = "CARGA", NombreUsuario = "Prueba" };
 var catalogosAcuse = new Dictionary<string, Dictionary<string, string>>();
-var pdfAcuse = BanciMensualService.GenerarAcuse(operacionAcuse, acuseLibro, new DateTime(2026, 10, 15, 22, 0, 0), catalogosAcuse);
+var webRootAcuse = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../SIIID2.Api/wwwroot"));
+var pdfAcuse = BanciMensualService.GenerarAcuse(operacionAcuse, acuseLibro, new DateTime(2026, 10, 15, 22, 0, 0), catalogosAcuse, webRootAcuse);
 Verificar(System.Text.Encoding.ASCII.GetString(pdfAcuse, 0, 5) == "%PDF-", "Se genera el acuse PDF confirmado con datos y folios BANCI");
 // La ruta opcional permite revisar texto y paginación durante la verificación local.
 var salidaAcuse = Environment.GetEnvironmentVariable("BANCI_ACUSE_PRUEBA");
 if(!string.IsNullOrEmpty(salidaAcuse)) File.WriteAllBytes(salidaAcuse, pdfAcuse);
 operacionAcuse.Estado = "PENDIENTE_APROBACION";
-Verificar(BanciMensualService.GenerarAcuse(operacionAcuse, acuseLibro, DateTime.UtcNow, catalogosAcuse).Length > 1000, "El acuse pendiente se distingue del confirmado");
+Verificar(BanciMensualService.GenerarAcuse(operacionAcuse, acuseLibro, DateTime.UtcNow, catalogosAcuse, webRootAcuse).Length > 1000, "El acuse pendiente se distingue del confirmado");
+var acuseLargo = LibroPrueba();
+acuseLargo.Carpetas[0].Columnas["no_banci"] = "BANCI/09/2026/000001";
+acuseLargo.Victimas = Enumerable.Range(1, 80).Select(i => new ArchivoFila
+{
+    Columnas = new(acuseLibro.Victimas[0].Columnas) { ["id_vicf"] = i.ToString(), ["nomb"] = "Persona de prueba con nombre extenso para verificar paginación del acuse" }
+}).ToList();
+var pdfLargo = BanciMensualService.GenerarAcuse(operacionAcuse, acuseLargo, DateTime.UtcNow, catalogosAcuse, webRootAcuse);
+Verificar(pdfLargo.Length > 1000, "El acuse institucional pagina el detalle de víctimas conservando encabezado y pie");
+if(!string.IsNullOrEmpty(salidaAcuse)) File.WriteAllBytes(Path.ChangeExtension(salidaAcuse, "largo.pdf"), pdfLargo);
 Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {

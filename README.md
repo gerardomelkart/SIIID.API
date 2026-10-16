@@ -61,7 +61,7 @@ Los motivos se consultan directamente en los catálogos existentes, con la misma
 
 - Masiva: la plantilla y la validación incluyen todas las carpetas, delitos y víctimas de desaparición
   del mensual aceptado para la entidad y corte, sin registros faltantes, adicionales o duplicados.
-  Al integrar, se conservan los folios existentes y se registran los cambios.
+  Si el periodo ya tiene registros BANCI o un envío en revisión, se bloquean descarga, validación e integración de una nueva carga masiva; se utiliza Actualización.
 - Manual: cada alta envía una carpeta elegida y sus hijos. Las aprobadas o enviadas a revisión dejan de
   aparecer como pendientes; se pueden enviar otras carpetas sin esperar la aprobación de las anteriores.
 - Actualización manual y masiva: se integran solo víctimas modificadas y sus padres. La manual envía el
@@ -71,7 +71,8 @@ Los motivos se consultan directamente en los catálogos existentes, con la misma
   La API aplica esta regla también al Excel y con validaciones de contenido desactivadas.
 - Motivos constitutivos de delito: catálogo completo de modalidades con la jerarquía vigente del Semanal,
   conservando las claves generales anteriores. El catálogo de desaparición que delimita el mensual no cambia.
-- Confirmación BANCI en morado. Acuse PDF en captura y reportes, con resumen y `no_banci` por víctima.
+- Confirmación BANCI en morado. Acuse PDF con el mismo formato institucional del Consolidado (logos, encabezado, pie y tablas), con resumen y `no_banci` por víctima.
+- Actualización masiva usa los mismos dos pasos de Carga: descargar plantilla precargada y cargar el Excel completado; el archivo solo se habilita después de descargar.
   El envío pendiente se distingue del confirmado; los folios nuevos se asignan al aprobar.
 
 Validar los flujos contra la BD de desarrollo/QA antes de publicar en producción.
