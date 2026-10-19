@@ -246,7 +246,7 @@ public partial class FederalActualizacionRepository
         ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
         WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";
-        var limiteFilas = Math.Max(limitePorSeccion, 1) * 5;
+        var limiteFilas = (int)Math.Min((long)Math.Max(limitePorSeccion, 1) * 5, int.MaxValue);
         var parametros = new
         {
             contexto.IdCarga,
@@ -255,7 +255,7 @@ public partial class FederalActualizacionRepository
             LimiteFilas = limiteFilas
         };
         using var connection = dbConnectionFactory.CrearConexion();
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 60);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: limitePorSeccion == int.MaxValue ? 300 : 60);
         return filas.ToList();
     }
 
@@ -547,7 +547,7 @@ public partial class FederalActualizacionRepository
         /*
             Un federal_delito genera hasta veinte filas de campos.
         */
-        var limiteFilas = Math.Max(limitePorSeccion, 1) * 20;
+        var limiteFilas = (int)Math.Min((long)Math.Max(limitePorSeccion, 1) * 20, int.MaxValue);
         var parametros = new
         {
             contexto.IdCarga,
@@ -556,7 +556,7 @@ public partial class FederalActualizacionRepository
             LimiteFilas = limiteFilas
         };
         using var connection = dbConnectionFactory.CrearConexion();
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 60);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: limitePorSeccion == int.MaxValue ? 300 : 60);
         return filas.ToList();
     }
 
@@ -786,7 +786,7 @@ public partial class FederalActualizacionRepository
         /*
             Una víctima genera hasta doce filas de campos.
         */
-        var limiteFilas = Math.Max(limitePorSeccion, 1) * 12;
+        var limiteFilas = (int)Math.Min((long)Math.Max(limitePorSeccion, 1) * 12, int.MaxValue);
         var parametros = new
         {
             contexto.IdCarga,
@@ -795,7 +795,7 @@ public partial class FederalActualizacionRepository
             LimiteFilas = limiteFilas
         };
         using var connection = dbConnectionFactory.CrearConexion();
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 60);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: limitePorSeccion == int.MaxValue ? 300 : 60);
         return filas.ToList();
     }
 

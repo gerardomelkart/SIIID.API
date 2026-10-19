@@ -22,9 +22,10 @@ public static class CodigoPostalActualizacionHelper
             return;
         var diferencias = await ObtenerDiferenciasAsync(dbConnectionFactory, codigoReferencia, soloMuestra ? limitePorSeccion : int.MaxValue);
         var agregados = 0;
+        var indice = response.Delitos.GroupBy(x => x.IdentificadorFiscalia).ToDictionary(g => g.Key, g => g.First());
         foreach (var diferencia in diferencias)
         {
-            var existente = response.Delitos.FirstOrDefault(x => x.IdentificadorFiscalia == diferencia.IdentificadorFiscalia);
+            var existente = indice.GetValueOrDefault(diferencia.IdentificadorFiscalia);
             if(existente != null)
             {
                 if(!existente.CamposModificados.Any(x => x.Campo == "cp"))
@@ -55,6 +56,7 @@ public static class CodigoPostalActualizacionHelper
                     ValorNuevo = diferencia.ValorNuevo
                 } }
                 });
+                indice[diferencia.IdentificadorFiscalia] = response.Delitos[^1];
             }
         }
 

@@ -256,7 +256,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         ) dif(Campo, ValorAnterior, ValorNuevo, ComparacionAnterior, ComparacionNuevo)
         WHERE ISNULL(dif.ComparacionAnterior, '') <> ISNULL(dif.ComparacionNuevo, '') OPTION (RECOMPILE);
     ";
-        var limiteFilas = Math.Max(limitePorSeccion, 1) * 5;
+        var limiteFilas = (int)Math.Min((long)Math.Max(limitePorSeccion, 1) * 5, int.MaxValue);
         var parametros = new
         {
             contexto.IdCarga,
@@ -266,7 +266,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             LimiteFilas = limiteFilas
         };
         using var connection = dbConnectionFactory.CrearConexion();
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 60);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: limitePorSeccion == int.MaxValue ? 300 : 60);
         return filas.ToList();
     }
 
@@ -558,7 +558,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         /*
             Un delito genera hasta veinte filas de campos.
         */
-        var limiteFilas = Math.Max(limitePorSeccion, 1) * 20;
+        var limiteFilas = (int)Math.Min((long)Math.Max(limitePorSeccion, 1) * 20, int.MaxValue);
         var parametros = new
         {
             contexto.IdCarga,
@@ -568,7 +568,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             LimiteFilas = limiteFilas
         };
         using var connection = dbConnectionFactory.CrearConexion();
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 60);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: limitePorSeccion == int.MaxValue ? 300 : 60);
         return filas.ToList();
     }
 
@@ -799,7 +799,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
         /*
             Una víctima genera hasta dieciséis filas de campos.
         */
-        var limiteFilas = Math.Max(limitePorSeccion, 1) * 16;
+        var limiteFilas = (int)Math.Min((long)Math.Max(limitePorSeccion, 1) * 16, int.MaxValue);
         var parametros = new
         {
             contexto.IdCarga,
@@ -809,7 +809,7 @@ public class ActualizacionDiferenciasRepository : IActualizacionDiferenciasRepos
             LimiteFilas = limiteFilas
         };
         using var connection = dbConnectionFactory.CrearConexion();
-        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: 60);
+        var filas = await connection.QueryAsync<ActualizacionDiferenciaRow>(sql, parametros, commandTimeout: limitePorSeccion == int.MaxValue ? 300 : 60);
         return filas.ToList();
     }
 

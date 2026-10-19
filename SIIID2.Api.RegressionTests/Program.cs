@@ -445,6 +445,70 @@ if(!string.IsNullOrWhiteSpace(directorioPruebasBanci))
         Verificar(leido.Victimas.All(f => !f.Columnas.Keys.Any(c => c.Contains("vicfem"))), "Los Excel entregados no contienen columnas de feminicidio");
     }
 }
+// El archivo administrativo exporta el detalle completo y conserva los valores como texto.
+var diferenciasExcel = new ActualizacionDiferenciasResponse
+{
+    EsValido = true,
+    Victimas = Enumerable.Range(1, 151).Select(i => new ActualizacionDiferenciaRegistro
+    {
+        TipoMovimiento = "MODIFICADO", CampoIdentificador = "id_ci + id_delito + id_vicf", IdentificadorFiscalia = $"000{i}",
+        CamposModificados = [new() { Campo = "nomb", ValorAnterior = "Anterior", ValorNuevo = "=2+2" }, new() { Campo = "sexo", ValorAnterior = "1", ValorNuevo = "2" }]
+    }).ToList(),
+    Carpetas = [new() { TipoMovimiento = "NUEVO", IdentificadorFiscalia = "001", CamposModificados = [new() { Campo = "rmen_de_hchos", ValorNuevo = new string('a', 60_001) }] }],
+    Delitos = [new() { TipoMovimiento = "ELIMINADO", IdentificadorFiscalia = "002", CamposModificados = [new() { Campo = "dto", ValorAnterior = "Anterior", ValorNuevo = null }] }]
+};
+string archivoTemporal;
+using(var exportado = DiferenciasExcel.Crear(diferenciasExcel))
+{
+    archivoTemporal = ((FileStream)exportado).Name;
+    using(var documentoValidar = DocumentFormat.OpenXml.Packaging.SpreadsheetDocument.Open(exportado, false))
+        Verificar(!new DocumentFormat.OpenXml.Validation.OpenXmlValidator().Validate(documentoValidar).Any(), "El Excel generado cumple el formato Open XML");
+    exportado.Position = 0;
+    using var excel = new ClosedXML.Excel.XLWorkbook(exportado);
+    Verificar(excel.Worksheets.Count == 3, "El Excel incluye Carpetas, Delitos y Víctimas");
+    var victimasExcel = excel.Worksheet("Victimas");
+    Verificar(victimasExcel.LastRowUsed()!.RowNumber() == 303, "Exporta los 151 registros y todos sus campos, más allá de la muestra de 100");
+    Verificar(victimasExcel.Cell(2, 6).GetString() == "=2+2" && !victimasExcel.Cell(2, 6).HasFormula, "Los valores se exportan como texto, nunca como fórmulas");
+    Verificar(victimasExcel.Cell(2, 3).GetString() == "0001", "Se conservan los ceros iniciales de los identificadores");
+    Verificar(excel.Worksheet("Delitos").Cell(2, 1).GetString() == "ELIMINADO", "Se incluyen también registros eliminados");
+    var carpetasExcel = excel.Worksheet("Carpetas");
+    Verificar(string.Concat(Enumerable.Range(2, 3).Select(f => carpetasExcel.Cell(f, 6).GetString())) == new string('a', 60_001), "Los textos que exceden el límite de celda se conservan completos en partes");
+    Verificar(victimasExcel.AutoFilter.IsEnabled && victimasExcel.SheetView.SplitRow == 1, "El Excel permite filtrar y conserva visibles los encabezados");
+}
+Verificar(!File.Exists(archivoTemporal), "El archivo temporal se elimina al terminar la descarga");
+diferenciasExcel.DetalleLimitado = true;
+var rechazoParcial = false;
+try { using var parcialExcel = DiferenciasExcel.Crear(diferenciasExcel); }
+catch(InvalidOperationException) { rechazoParcial = true; }
+Verificar(rechazoParcial, "Nunca entrega una muestra parcial como si fuera el Excel completo");
+var controladorExportacion = typeof(SIIID2.Api.Controllers.DiferenciasAdministracionController);
+Verificar(controladorExportacion.GetCustomAttributes<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>().Any(a => a.Roles == "SUPER_USUARIO"), "La descarga completa requiere aprobación administrativa de superusuario");
+foreach(var (accion, politica) in new[] { ("Mensual", "MODULO_MENSUAL"), ("Federal", "MODULO_FEDERAL"), ("Semanal", "MODULO_SEMANAL"), ("Banci", "MODULO_BANCI") })
+    Verificar(controladorExportacion.GetMethod(accion)!.GetCustomAttributes<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>().Any(a => a.Policy == politica), "La descarga exige también acceso al módulo " + accion);
+var salidaDiferencias = Environment.GetEnvironmentVariable("DIFERENCIAS_EXCEL_VOLUMEN");
+if(!string.IsNullOrEmpty(salidaDiferencias))
+{
+    var volumen = new ActualizacionDiferenciasResponse { EsValido = true };
+    volumen.Victimas = Enumerable.Range(1, 60_000).Select(i => new ActualizacionDiferenciaRegistro
+    {
+        TipoMovimiento = "MODIFICADO", IdentificadorFiscalia = i.ToString(), CampoIdentificador = "id_vicf",
+        CamposModificados = Enumerable.Range(1, 20).Select(c => new ActualizacionCampoDiferencia { Campo = "campo_" + c, ValorAnterior = "Anterior", ValorNuevo = "Nuevo" }).ToList()
+    }).ToList();
+    using var archivo = DiferenciasExcel.Crear(volumen);
+    using(var salida = File.Create(salidaDiferencias)) archivo.CopyTo(salida);
+    archivo.Position = 0;
+    using var documentoExcel = DocumentFormat.OpenXml.Packaging.SpreadsheetDocument.Open(archivo, false);
+    var hojasVictimas = documentoExcel.WorkbookPart!.Workbook.GetFirstChild<DocumentFormat.OpenXml.Spreadsheet.Sheets>()!.Elements<DocumentFormat.OpenXml.Spreadsheet.Sheet>().Where(h => h.Name!.Value!.StartsWith("Victimas")).ToList();
+    var filasVolumen = 0;
+    foreach(var hoja in hojasVictimas)
+    {
+        using var lector = DocumentFormat.OpenXml.OpenXmlReader.Create(documentoExcel.WorkbookPart.GetPartById(hoja.Id!));
+        var filasHoja = 0;
+        while(lector.Read()) if(lector.IsStartElement && lector.ElementType == typeof(DocumentFormat.OpenXml.Spreadsheet.Row)) filasHoja++;
+        filasVolumen += filasHoja - 1;
+    }
+    Verificar(filasVolumen == 1_200_000 && hojasVictimas.Count == 2, "La exportación de 60 mil registros conserva 1.2 millones de cambios y continúa en otra hoja al alcanzar el límite de Excel");
+}
 Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {

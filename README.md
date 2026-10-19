@@ -87,3 +87,11 @@ El informe previo y el acuse final se muestran en el visor de PDF con Aceptar/Re
 sin descarga automática. Los reportes permiten abrir ese mismo visor.
 Las plantillas y formularios BANCI no incluyen las columnas heredadas de feminicidio.
 Estos ajustes no modifican objetos de BD ni el flujo de Consolidado, Federal o Semanal.
+
+### Descarga administrativa de diferencias completas
+
+En Aprobación administrativa de Mensual, Federal, Semanal y BANCI se ofrece **Descargar todas las diferencias en Excel**. La muestra de pantalla permanece limitada a 100 registros por sección en los tres primeros módulos; la descarga consulta el detalle completo de forma independiente, incluso si no se pudo cargar la muestra.
+
+La API exige rol SUPER_USUARIO y acceso al módulo correspondiente. El archivo contiene Carpetas, Delitos y Víctimas con movimiento, identificador, campo y valores anterior/propuesto, filtros y encabezados inmovilizados. Los textos extensos continúan en filas con número de parte, y las hojas se dividen al alcanzar el límite de filas de Excel. Se genera en un archivo temporal eliminado al terminar la descarga, sin enviar el detalle completo al navegador como JSON ni renderizarlo en tablas.
+
+Publicar API y frontend de forma coordinada. No requiere scripts ni cambios en la estructura de la base de datos.

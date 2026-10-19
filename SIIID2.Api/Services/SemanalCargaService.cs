@@ -793,7 +793,7 @@ public class SemanalCargaService : ISemanalCargaService
         response.TotalDiferencias = response.TotalCarpetas + response.TotalDelitos + response.TotalVictimas;
         response.DetalleLimitado = soloMuestra && limitePorSeccion > 0 ? response.Carpetas.Count >= limitePorSeccion || response.Delitos.Count >= limitePorSeccion || response.Victimas.Count >= limitePorSeccion : response.TotalCarpetas > response.Carpetas.Count || response.TotalDelitos > response.Delitos.Count || response.TotalVictimas > response.Victimas.Count;
         response.Mensaje = response.TotalDiferencias == 0 ? "No se detectaron diferencias entre la actualización y la versión confirmada." : "Revise los registros nuevos, modificados y eliminados antes de continuar al informe previo.";
-        if(!soloMuestra && limitePorSeccion > 0)
+        if(!soloMuestra && limitePorSeccion > 0 && limitePorSeccion != int.MaxValue)
         {
             _cache.Set(cacheKey, new SemanalDiferenciasCache
             {
