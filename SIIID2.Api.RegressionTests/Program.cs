@@ -305,7 +305,7 @@ propuestaActualizacion.Victimas[0].Columnas["sexo"] = "11";
 Verificar(BanciMensualService.CompararOrigen(origenActualizacion, propuestaActualizacion).Count > 0, "Los datos personales del origen están protegidos en carga inicial");
 propuestaActualizacion.Actualizacion = true;
 Verificar(BanciMensualService.CompararOrigen(origenActualizacion, propuestaActualizacion).Count == 0, "Una actualización permite modificar datos personales de BANCI");
-// Manual es un subconjunto autorizado; masiva sigue exigiendo la totalidad del mensual.
+// Manual es un subconjunto autorizado; masiva exige la totalidad de las carpetas pendientes.
 var total = LibroPrueba();
 var segunda = LibroPrueba();
 foreach(var fila in segunda.Carpetas.Concat(segunda.Delitos).Concat(segunda.Victimas)) fila.Columnas["id_ci"] = "CI-2";
@@ -354,7 +354,22 @@ envioDos.Manual = true;
 Verificar(!BanciMensualService.SeSuperponen(envioUno, envioDos), "Permitir envíos manuales pendientes de carpetas distintas");
 Verificar(BanciMensualService.SeSuperponen(envioUno, envioUno), "Bloquear dos envíos pendientes del mismo registro");
 envioDos.Manual = false;
-Verificar(BanciMensualService.SeSuperponen(envioUno, envioDos), "Una masiva pendiente bloquea otros envíos del corte");
+Verificar(!BanciMensualService.SeSuperponen(envioUno, envioDos), "Una masiva de pendientes permite completar otras carpetas ya capturadas manualmente");
+Verificar(BanciMensualService.SeSuperponen(envioDos, envioDos), "La masiva sigue bloqueando envíos de los mismos registros");
+var pendientesMasiva = new BanciLibro();
+for(var i = 1; i <= 5; i++)
+{
+    var fila = new ArchivoFila { Columnas = new() { ["id_ci"] = $"CI-{i}" } };
+    pendientesMasiva.Carpetas.Add(fila);
+    pendientesMasiva.Delitos.Add(fila);
+    pendientesMasiva.Victimas.Add(fila);
+}
+BanciMensualService.FiltrarNuevas(pendientesMasiva, new HashSet<string> { "CI-1", "CI-2" });
+Verificar(pendientesMasiva.Carpetas.Count == 3 && pendientesMasiva.Delitos.Count == 3 && pendientesMasiva.Victimas.Count == 3,
+    "Después de dos capturas manuales la masiva conserva las tres carpetas pendientes con sus hijos");
+BanciMensualService.FiltrarNuevas(pendientesMasiva, new HashSet<string> { "CI-3", "CI-4", "CI-5" });
+Verificar(pendientesMasiva.Carpetas.Count == 0 && pendientesMasiva.Delitos.Count == 0 && pendientesMasiva.Victimas.Count == 0,
+    "Al completar el periodo ya no quedan registros para una nueva carga");
 var acuseLibro = LibroPrueba();
 acuseLibro.Carpetas[0].Columnas["no_banci"] = "BANCI/09/2026/000001";
 var operacionAcuse = new BanciOperacion { Referencia = Guid.NewGuid(), EntidadNombre = "Ciudad de México", Mes = 9, Anio = 2026, Estado = "CONFIRMADO", Tipo = "CARGA", NombreUsuario = "Prueba" };

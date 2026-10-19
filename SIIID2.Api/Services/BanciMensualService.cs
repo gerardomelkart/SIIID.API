@@ -220,48 +220,23 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         await AccesoAsync(usuario, entidad, actualizacion ? "ACTUALIZACION" : "CARGA");
         await PeriodoAsync(entidad, mes, anio, actualizacion);
         using var db = factory.CrearConexion();
-        if(!actualizacion && !manual)
-            await VerificarCargaMasivaDisponibleAsync(db, entidad, mes, anio);
         var libro = await OrigenAsync(db, entidad, mes, anio, actualizacion);
         if(actualizacion && libro.Carpetas.Count == 0)
             throw new InvalidOperationException("El corte no tiene carga BANCI aprobada.");
         var tieneOrigenConsolidado = libro.Carpetas.Count > 0;
-        if(!actualizacion && manual)
+        if(!actualizacion)
             await ExcluirCarpetasRegistradasAsync(db, libro, incluirEnRevision: true);
         var historica = new DateTime(anio, mes, 1) < new DateTime(FechaRangoValidator.Hoy().AddMonths(-1).Year, FechaRangoValidator.Hoy().AddMonths(-1).Month, 1);
         if(!actualizacion && libro.Carpetas.Count == 0 && (!historica || tieneOrigenConsolidado))
             throw new InvalidOperationException("Ya no hay carpetas pendientes de las reportadas en el SIIID mensual para esta entidad y periodo. Revise Consulta de envíos para conocer el estado de lo enviado; utilice Actualización para modificar registros aprobados.");
         libro.Manual = manual;
         await PrepararComplementosAsync(libro);
-        if(!actualizacion && !manual)
-            await PrecargarComplementosRegistradosAsync(db, libro);
 
         return libro;
     }
 
-    private static async Task VerificarCargaMasivaDisponibleAsync(IDbConnection db, int entidad, int mes, int anio, IDbTransaction? tx = null, long? excluirCarga = null)
-    {
-        if(await db.ExecuteScalarAsync<bool>("""
-            SELECT CONVERT(bit,CASE WHEN
-                EXISTS(SELECT 1 FROM dbo.banci_carpeta_investigacion WHERE id_entidad_federativa=@entidad AND mes_corte=@mes AND anio_corte=@anio)
-                OR EXISTS(SELECT 1 FROM dbo.banci_carga WHERE id_entidad_federativa=@entidad AND mes_corte=@mes AND anio_corte=@anio AND estado='PENDIENTE_APROBACION' AND (@excluirCarga IS NULL OR id_banci_carga<>@excluirCarga))
-                THEN 1 ELSE 0 END);
-            """, new { entidad, mes, anio, excluirCarga }, tx))
-            throw new InvalidOperationException("El periodo ya tiene información BANCI registrada o enviada a revisión. Utilice Actualización para modificar registros aprobados; para carpetas pendientes utilice la captura manual.");
-    }
-
-    private async Task PrecargarComplementosRegistradosAsync(IDbConnection db, BanciLibro libro, IDbTransaction? tx = null)
-    {
-        var registrados = await OrigenAsync(db, libro.Entidad, libro.Mes, libro.Anio, true, tx);
-        var indice = registrados.Victimas.ToDictionary(f => Llave(f, 3));
-        foreach(var fila in libro.Victimas)
-            if(indice.TryGetValue(Llave(fila, 3), out var previa))
-                foreach(var campo in Complementos)
-                    fila.Columnas[campo] = previa.Columnas.GetValueOrDefault(campo);
-    }
-
-    // La captura manual incorpora únicamente carpetas pendientes.
-    private static async Task ExcluirCarpetasRegistradasAsync(IDbConnection db, BanciLibro libro, IDbTransaction? tx = null, bool incluirEnRevision = false)
+    // Ambas modalidades incorporan únicamente carpetas pendientes.
+    private static async Task ExcluirCarpetasRegistradasAsync(IDbConnection db, BanciLibro libro, IDbTransaction? tx = null, bool incluirEnRevision = false, long? excluirCarga = null)
     {
         var registradas = (await db.QueryAsync<string>("SELECT id_ci FROM dbo.banci_carpeta_investigacion WHERE id_entidad_federativa=@Entidad AND mes_corte=@Mes AND anio_corte=@Anio;", libro, tx)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if(incluirEnRevision)
@@ -269,8 +244,9 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
                 SELECT JSON_VALUE(t.datos_propuestos,'$.columnas.id_ci')
                 FROM dbo.banci_carga_tmp_carpeta t JOIN dbo.banci_carga c ON c.id_banci_carga=t.id_banci_carga
                 WHERE c.id_entidad_federativa=@Entidad AND c.mes_corte=@Mes AND c.anio_corte=@Anio
-                  AND c.tipo_carga='CARGA' AND c.estado='PENDIENTE_APROBACION';
-                """, libro, tx));
+                  AND c.tipo_carga='CARGA' AND c.estado='PENDIENTE_APROBACION'
+                  AND (@excluirCarga IS NULL OR c.id_banci_carga<>@excluirCarga);
+                """, new { libro.Entidad, libro.Mes, libro.Anio, excluirCarga }, tx));
         FiltrarNuevas(libro, registradas);
     }
 
@@ -326,9 +302,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
 
     public static bool SeSuperponen(BanciLibro primero, BanciLibro segundo)
     {
-        // Una masiva siempre reserva el corte completo. Dos actualizaciones manuales pueden tratar víctimas distintas.
-        if(!primero.Manual || !segundo.Manual)
-            return true;
+        // Cada envío reserva sus carpetas; las actualizaciones reservan las víctimas modificadas.
         var nivel = primero.Actualizacion && segundo.Actualizacion ? 3 : 1;
         var claves = (nivel == 3 ? primero.Victimas : primero.Carpetas).Select(f => Llave(f, nivel)).ToHashSet();
         return (nivel == 3 ? segundo.Victimas : segundo.Carpetas).Any(f => claves.Contains(Llave(f, nivel)));

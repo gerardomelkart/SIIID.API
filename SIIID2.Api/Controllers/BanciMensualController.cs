@@ -56,7 +56,7 @@ public sealed class BanciMensualController(BanciMensualService servicio, ILogger
     public Task<IActionResult> Detalle(Guid referencia) => Ejecutar(async id => Ok(await servicio.DetalleAsync(id, referencia)));
     [HttpGet("envios/{referencia:guid}/acuse")]
     public Task<IActionResult> Acuse(Guid referencia) => Ejecutar(async id =>
-        File(await servicio.AcuseAsync(id, referencia), "application/pdf", $"BANCI_acuse_{referencia:N}.pdf"));
+        File(await servicio.AcuseAsync(id, referencia), "application/pdf", "BANCI_acuse.pdf"));
     [HttpPost("envios/{referencia:guid}/confirmar")]
     public Task<IActionResult> Confirmar(Guid referencia,
         BanciDecision decision) => Ejecutar(async id => Ok(await servicio.ResolverAsync(id, referencia, decision, false)));

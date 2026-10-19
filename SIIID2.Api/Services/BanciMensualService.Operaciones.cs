@@ -248,14 +248,11 @@ public sealed partial class BanciMensualService
             foreach(var fila in lote)
             {
                 var repetida = registradas.Any(r =>
-                    (libro.Manual || r.Mes != libro.Mes || r.Anio != libro.Anio
-                        || !string.Equals(r.Id, Valor(fila, "id_ci"), StringComparison.OrdinalIgnoreCase)
-                        || !string.Equals(r.Nomenclatura, Valor(fila, "ntra_ci"), StringComparison.OrdinalIgnoreCase))
-                    && ((r.Mes == libro.Mes && r.Anio == libro.Anio
+                    (r.Mes == libro.Mes && r.Anio == libro.Anio
                         && string.Equals(r.Id, Valor(fila, "id_ci"), StringComparison.OrdinalIgnoreCase))
-                    || string.Equals(r.Nomenclatura, Valor(fila, "ntra_ci"), StringComparison.OrdinalIgnoreCase)));
+                    || string.Equals(r.Nomenclatura, Valor(fila, "ntra_ci"), StringComparison.OrdinalIgnoreCase));
                 if(repetida)
-                    errores.Add(Error("carpetas", fila, "id_ci", "La carpeta ya está registrada en BANCI con este identificador o nomenclatura. En manual elija una carpeta pendiente; en masiva conserve su identificador y periodo originales."));
+                    errores.Add(Error("carpetas", fila, "id_ci", "La carpeta ya está registrada en BANCI con este identificador o nomenclatura. Descargue una nueva plantilla de las carpetas pendientes o utilice Actualización."));
             }
         }
         return errores;
@@ -471,14 +468,10 @@ public sealed partial class BanciMensualService
                 var manual = documento.RootElement.TryGetProperty("manual", out _) ? snapshot.Manual : op.Tipo == "CARGA";
                 var propuesta = await PropuestaAsync(db, op, tx);
                 propuesta.Manual = manual;
-                if(op.Tipo == "CARGA" && !manual)
-                    await VerificarCargaMasivaDisponibleAsync(db, op.Entidad, op.Mes, op.Anio, tx, op.Id);
                 var actual = await OrigenAsync(db, op.Entidad, op.Mes, op.Anio, op.Tipo == "ACTUALIZACION", tx);
-                if(op.Tipo == "CARGA" && manual)
-                    await ExcluirCarpetasRegistradasAsync(db, actual, tx);
+                if(op.Tipo == "CARGA")
+                    await ExcluirCarpetasRegistradasAsync(db, actual, tx, incluirEnRevision: true, excluirCarga: op.Id);
                 await PrepararComplementosAsync(actual);
-                if(op.Tipo == "CARGA" && !manual)
-                    await PrecargarComplementosRegistradosAsync(db, actual, tx);
                 actual = SeleccionarOrigen(actual, propuesta);
 
                 if(Huella(actual) != op.Huella)

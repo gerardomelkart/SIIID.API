@@ -41,6 +41,9 @@ public sealed partial class BanciMensualService
             var clave = Valor(fila, campo);
             return catalogos.TryGetValue(campo, out var opciones) && opciones.TryGetValue(clave, out var nombre) ? nombre : clave == "" ? "No aplica" : clave;
         }
+        var ciudadDeMexico = op.Entidad == 9 || string.Equals(op.EntidadNombre.Trim(), "Ciudad de México", StringComparison.OrdinalIgnoreCase);
+        var territorio = ciudadDeMexico ? "DE LA CIUDAD DE MÉXICO" : $"DEL ESTADO DE {op.EntidadNombre.ToUpper(cultura)}";
+        var fiscalia = ciudadDeMexico ? "Fiscalía General de Justicia de la Ciudad de México" : $"Fiscalía General del Estado de {op.EntidadNombre}";
         var carpetas = libro.Carpetas.ToDictionary(f => Valor(f, "id_ci"));
         return Document.Create(documento => documento.Page(pagina =>
         {
@@ -56,20 +59,20 @@ public sealed partial class BanciMensualService
             pagina.Content().Column(col =>
             {
                 col.Spacing(8);
-                col.Item().PaddingTop(4).AlignCenter().Text($"ACUSE DE {(libro.Actualizacion ? "ACTUALIZACIÓN" : "ENTREGA")} DE INFORMACIÓN BANCI DEL ESTADO DE {op.EntidadNombre.ToUpper(cultura)}").FontSize(12).Bold();
+                col.Item().PaddingTop(4).AlignCenter().Text($"ACUSE DE {(libro.Actualizacion ? "ACTUALIZACIÓN" : "ENTREGA")} DE INFORMACIÓN BANCI {territorio}").FontSize(12).Bold();
                 col.Item().Text(text =>
                 {
                     text.Justify();
                     text.DefaultTextStyle(t => t.FontSize(8.5f));
                     text.Span("El presente acuse de recepción hace constar que la información BANCI reportada por la ");
-                    text.Span($"Fiscalía General del Estado de {op.EntidadNombre}").Bold();
+                    text.Span(fiscalia).Bold();
                     text.Span(confirmado ? " ha sido integrada satisfactoriamente mediante la plataforma web, el día " : op.Estado == "VALIDADO" ? " ha sido validada y está pendiente de confirmar su envío en la plataforma web, el día " : " ha sido enviada a revisión administrativa mediante la plataforma web, el día ");
                     text.Span(fecha.ToString("dd 'de' MMMM 'de' yyyy", cultura)).Bold();
                     text.Span(" a las "); text.Span(fecha.ToString("HH:mm:ss", cultura)).Bold();
                     text.Span(" horas (Tiempo del centro de México).");
                 });
                 col.Item().Text($"Mes de corte estadístico: {new DateTime(op.Anio, op.Mes, 1).ToString("MMMM 'de' yyyy", cultura)}").FontSize(8.5f);
-                col.Item().Text($"Referencia: {op.Referencia} · Usuario: {op.NombreUsuario} · Estado: {op.Estado.Replace('_', ' ')}");
+                col.Item().Text($"Usuario: {op.NombreUsuario} · Estado: {op.Estado.Replace('_', ' ')}");
                 if(!confirmado)
                     col.Item().Text(op.Estado == "VALIDADO" ? "Informe previo: confirme o descarte el envío. Los folios nuevos se asignan al aprobar; este documento no acredita su envío ni su integración definitiva." : "Pendiente de aprobación administrativa. Los folios de carpetas nuevas se asignan al aprobar; este documento no acredita su integración definitiva.").Bold();
                 col.Item().Table(tabla =>
@@ -126,10 +129,10 @@ public sealed partial class BanciMensualService
                 }
             });
             pagina.Footer().Element(c => AcusePdfService.ConstruirPiePaginaInstitucional(c, webRootPath));
-        })).GeneratePdf();
+        })).WithMetadata(new DocumentMetadata { Title = "Acuse de información BANCI", Author = "Centro Nacional de Información" }).GeneratePdf();
     }
 
-    private static IContainer TituloAcuseBanci(IContainer c) => c.Border(0.5f).BorderColor(Colors.Black).Background("#7A1735").Padding(3).AlignCenter().DefaultTextStyle(t => t.FontSize(8).Bold().FontColor(Colors.White));
-    private static IContainer EncabezadoAcuseBanci(IContainer c) => c.Border(0.5f).BorderColor(Colors.Black).Background("#B7B7B7").Padding(3).AlignCenter().AlignMiddle().DefaultTextStyle(t => t.FontSize(7.5f).Bold());
+    private static IContainer TituloAcuseBanci(IContainer c) => c.Border(0.5f).BorderColor(Colors.Black).Background("#6F2C91").Padding(3).AlignCenter().DefaultTextStyle(t => t.FontSize(8).Bold().FontColor(Colors.White));
+    private static IContainer EncabezadoAcuseBanci(IContainer c) => c.Border(0.5f).BorderColor(Colors.Black).Background("#EEE1F6").Padding(3).AlignCenter().AlignMiddle().DefaultTextStyle(t => t.FontSize(7.5f).Bold());
     private static IContainer CeldaAcuseBanci(IContainer c) => c.Border(0.5f).BorderColor(Colors.Black).PaddingHorizontal(3).PaddingVertical(2).AlignMiddle().DefaultTextStyle(t => t.FontSize(7.2f));
 }
