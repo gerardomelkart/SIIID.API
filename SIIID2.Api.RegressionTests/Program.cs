@@ -555,6 +555,9 @@ var revisionBanci = BanciMensualService.PrepararRevisionAdministracion(libroRevi
 Verificar(revisionBanci.TotalVictimas == 150 && revisionBanci.TotalCambios == 250 && revisionBanci.VictimasConCambios == 1, "Revisión administrativa BANCI conserva los totales completos y cuenta víctimas distintas");
 Verificar(revisionBanci.Libro.Victimas.Count == 100 && revisionBanci.Libro.Cambios.Count == 100 && revisionBanci.LimiteMuestra == 100, "Revisión BANCI limita registros y cambios enviados al navegador");
 Verificar(libroRevision.Cambios.Count == 250 && libroRevision.Victimas.Count == 150 && revisionBanci.Libro.Manual && revisionBanci.Libro.Anio == 2025, "La muestra de revisión no altera datos originales ni modalidad o corte");
+Verificar(!BanciMensualService.PrepararRecordatorio(0, 2026, 9).HayPendiente, "BANCI no avisa de carga pendiente cuando no quedan carpetas por remitir");
+var avisoBanci = BanciMensualService.PrepararRecordatorio(2, 2026, 9);
+Verificar(avisoBanci.HayPendiente && avisoBanci.Periodo == "septiembre de 2026" && avisoBanci.Mensaje.Contains("2 carpeta"), "BANCI recuerda el corte y las carpetas aún pendientes de carga");
 Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {

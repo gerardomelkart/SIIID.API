@@ -36,3 +36,12 @@ public sealed class BanciRevisionAdministracion
     public int LimiteMuestra { get; set; }
     public BanciLibro Libro { get; set; } = new();
 }
+
+public sealed class BanciRecordatorio
+{
+    public bool HayPendiente { get; set; }
+    public string Titulo { get; set; } = "";
+    public string Mensaje { get; set; } = "";
+    public string Periodo { get; set; } = "";
+    public string[] Delitos { get; set; } = [];
+}

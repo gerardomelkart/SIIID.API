@@ -59,6 +59,10 @@ public sealed class BanciMensualController(BanciMensualService servicio, ILogger
     [Authorize(Roles = "SUPER_USUARIO")]
     [HttpGet("administracion/{referencia:guid}/revision")]
     public Task<IActionResult> RevisionAdministracion(Guid referencia) => Ejecutar(async id => Ok(await servicio.RevisionAdministracionAsync(id, referencia)));
+    [HttpPost("notificaciones/rechazos/consumir")]
+    public Task<IActionResult> ConsumirRechazos() => Ejecutar(async id => Ok(await servicio.ConsumirRechazosAsync(id)));
+    [HttpGet("recordatorio")]
+    public Task<IActionResult> Recordatorio() => Ejecutar(async id => Ok(await servicio.RecordatorioAsync(id)));
     [HttpGet("envios/periodos")]
     public Task<IActionResult> PeriodosEnvios() => Ejecutar(async id => Ok(await servicio.PeriodosEnviosAsync(id)));
     [HttpGet("envios/acuses")]
