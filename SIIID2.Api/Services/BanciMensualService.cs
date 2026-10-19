@@ -143,13 +143,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
             {
                 carpetas = carpetasValidator.ColumnasObligatorias,
                 delitos = delitosValidator.ColumnasObligatorias,
-                victimas = victimasValidator.ColumnasObligatorias.Concat(new[]
-                {
-                    "nombre_vicfem",
-                    "1apellido_vicfem",
-                    "2apellido_vicfem",
-                    "curp_vicfem"
-                }).Concat(Complementos)
+                victimas = victimasValidator.ColumnasObligatorias.Concat(Complementos)
             }
         };
     }
@@ -294,6 +288,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         foreach(var fila in libro.Victimas)
         {
             PrecargarIdentidad(fila);
+            foreach(var campo in CamposFeminicidio) fila.Columnas.Remove(campo);
             foreach(var campo in Complementos)
                 fila.Columnas.TryAdd(campo, null);
             if(Valor(fila, "localizado_o_no_localizado") == "")
@@ -351,6 +346,8 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
     }
 
     // Se conserva el origen protegido y se muestra una sola captura editable de cada dato personal.
+    private static readonly string[] CamposFeminicidio = ["nombre_vicfem", "1apellido_vicfem", "2apellido_vicfem", "curp_vicfem", "primer_apellido_vicfem", "segundo_apellido_vicfem"];
+
     public static void PrecargarIdentidad(ArchivoFila fila)
     {
         foreach(var (editable, origen) in new[]
@@ -377,7 +374,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         foreach(var (nombre, filas, baseColumnas) in grupos)
         {
             var hoja = wb.AddWorksheet(nombre);
-            var columnas = baseColumnas.Concat(filas.SelectMany(f => f.Columnas.Keys)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var columnas = baseColumnas.Concat(filas.SelectMany(f => f.Columnas.Keys)).Where(c => !CamposFeminicidio.Contains(c, StringComparer.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             for(var c = 0; c < columnas.Length; c++)
             {
                 hoja.Cell(1, c + 1).SetValue(columnas[c]);

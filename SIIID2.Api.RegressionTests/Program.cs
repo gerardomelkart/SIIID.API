@@ -286,6 +286,7 @@ var mensualBanci = new BanciMensualService(null!, null!, null!, new CarpetasVali
 var libroExcel = LibroPrueba();
 libroExcel.Victimas[0].Columnas["curp"] = "TEXTO18CARACTERES";
 libroExcel.Carpetas[0].Columnas["id_ci"] = "00000000000000000001";
+libroExcel.Victimas[0].Columnas["nombre_vicfem"] = "Columna heredada que no se exporta";
 var bytesExcel = mensualBanci.Excel(libroExcel);
 using(var streamExcel = new MemoryStream(bytesExcel))
 {
@@ -293,6 +294,7 @@ using(var streamExcel = new MemoryStream(bytesExcel))
     var leido = await mensualBanci.LeerExcelAsync(archivoExcel, 9, 9, 2026, false);
     Verificar(leido.Carpetas[0].Columnas["id_ci"] == "00000000000000000001", "Excel conserva IDs largos y ceros iniciales como texto");
     Verificar(leido.Victimas[0].Columnas["curp"] == "TEXTO18CARACTERES", "Excel conserva complementos en la tercera pestaña");
+    Verificar(!leido.Victimas[0].Columnas.Keys.Any(c => c.Contains("vicfem")), "La plantilla BANCI excluye todas las columnas heredadas de feminicidio");
     Verificar(leido.Carpetas.Count == 1 && leido.Delitos.Count == 1 && leido.Victimas.Count == 1, "Excel de tres pestañas conserva las cantidades");
 }
 
@@ -374,6 +376,20 @@ acuseLargo.Victimas = Enumerable.Range(1, 80).Select(i => new ArchivoFila
 var pdfLargo = BanciMensualService.GenerarAcuse(operacionAcuse, acuseLargo, DateTime.UtcNow, catalogosAcuse, webRootAcuse);
 Verificar(pdfLargo.Length > 1000, "El acuse institucional pagina el detalle de víctimas conservando encabezado y pie");
 if(!string.IsNullOrEmpty(salidaAcuse)) File.WriteAllBytes(Path.ChangeExtension(salidaAcuse, "largo.pdf"), pdfLargo);
+var directorioPruebasBanci = Environment.GetEnvironmentVariable("BANCI_ARCHIVOS_PRUEBA");
+if(!string.IsNullOrWhiteSpace(directorioPruebasBanci))
+{
+    foreach(var actualizar in new[] { false, true })
+    {
+        var nombre = actualizar ? "BANCI_202609_ACTUALIZACION_PRUEBA.xlsx" : "BANCI_202609_CARGA_PRUEBA.xlsx";
+        await using var archivo = File.OpenRead(Path.Combine(directorioPruebasBanci, nombre));
+        var formulario = new Microsoft.AspNetCore.Http.FormFile(archivo, 0, archivo.Length, "archivo", nombre);
+        var leido = await mensualBanci.LeerExcelAsync(formulario, 9, 9, 2026, actualizar);
+        Verificar(leido.Carpetas.Count == 5 && leido.Delitos.Count == 5 && leido.Victimas.Count == 5, "El lector real de la API abre las tres pestañas del Excel de " + nombre);
+        Verificar(leido.Carpetas.All(f => f.Columnas.ContainsKey("no_banci") == actualizar), "La carga omite folios y la actualización conserva los originales");
+        Verificar(leido.Victimas.All(f => !f.Columnas.Keys.Any(c => c.Contains("vicfem"))), "Los Excel entregados no contienen columnas de feminicidio");
+    }
+}
 Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {

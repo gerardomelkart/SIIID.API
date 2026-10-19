@@ -641,7 +641,7 @@ public sealed partial class BanciMensualService
 
     // Las columnas SQL salen de listas del modelo, nunca de encabezados del usuario.
     private static readonly string[] ColumnasDelito = ["id_delito", "dto", "moda_dto", "forma_acc", "fha_de_hchos", "hra_de_hchos", "emto_com_dto", "grdo_cons", "clasf_de_dto", "nom_ent_hchos", "id_ent_hchos", "nom_mun_hchos", "id_mun_hchos", "nom_loc_hchos", "id_loc_hchos", "nom_col_hchos", "id_col_hchos", "cp", "coord_x", "coord_y", "dom_hchos"];
-    private static readonly string[] ColumnasVictima = ["id_vicf", "id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional", "nombre_vicfem", "primer_apellido_vicfem", "segundo_apellido_vicfem", "curp_vicfem", .. Complementos];
+    private static readonly string[] ColumnasVictima = ["id_vicf", "id_tv", "id_tpm", "sexo", "genero", "pob", "disc", "fha_nac", "edad", "nacional", .. Complementos];
     private static DateTime? Fecha(ArchivoFila fila, string campo)
     {
         var valor = Valor(fila, campo);

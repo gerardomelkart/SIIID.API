@@ -55,8 +55,7 @@ internal static class BanciMensualSql
         ORDER BY ci.identificador_carpeta_fiscalia,d.identificador_delito_fiscalia;
         SELECT ci.identificador_carpeta_fiscalia AS id_ci,d.identificador_delito_fiscalia AS id_delito,
             v.identificador_victima_fiscalia AS id_vicf,tv.clave AS id_tv,tvm.clave AS id_tpm,s.clave AS sexo,g.clave AS genero,
-            p.clave AS pob,di.clave AS disc,CONVERT(varchar(10),v.fecha_nacimiento,23) AS fha_nac,v.edad,n.clave AS nacional,
-            v.nombre_vicfem,v.primer_apellido_vicfem AS [1apellido_vicfem],v.segundo_apellido_vicfem AS [2apellido_vicfem],v.curp_vicfem
+            p.clave AS pob,di.clave AS disc,CONVERT(varchar(10),v.fecha_nacimiento,23) AS fha_nac,v.edad,n.clave AS nacional
         FROM dbo.victima v JOIN dbo.delito d ON d.id_delito=v.id_delito AND d.activo=1
         JOIN dbo.carpeta_investigacion ci ON ci.id_carpeta_investigacion=d.id_carpeta_investigacion AND ci.activo=1
         JOIN dbo.carga c ON c.id_carga=ci.id_carga AND c.activo=1

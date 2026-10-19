@@ -14,8 +14,8 @@ public sealed partial class BanciMensualService
         using var db = factory.CrearConexion();
         var op = await ObtenerAsync(db, referencia);
         await AccesoAsync(usuario, op.Entidad);
-        if(op.Estado is not ("PENDIENTE_APROBACION" or "CONFIRMADO" or "CONFIRMADO_ACTUALIZACION"))
-            throw new InvalidOperationException("El acuse está disponible después de confirmar el envío.");
+        if(op.Estado is not ("VALIDADO" or "PENDIENTE_APROBACION" or "CONFIRMADO" or "CONFIRMADO_ACTUALIZACION"))
+            throw new InvalidOperationException("El acuse está disponible después de validar la información.");
         var libro = await DetalleAsync(usuario, referencia);
         var fecha = await db.QuerySingleAsync<DateTime>("SELECT COALESCE(fecha_aprobacion,fecha_confirmacion,fecha_validacion) FROM dbo.banci_carga WHERE id_banci_carga=@Id;", op);
         var catalogos = new Dictionary<string, Dictionary<string, string>>();
@@ -63,7 +63,7 @@ public sealed partial class BanciMensualService
                     text.DefaultTextStyle(t => t.FontSize(8.5f));
                     text.Span("El presente acuse de recepción hace constar que la información BANCI reportada por la ");
                     text.Span($"Fiscalía General del Estado de {op.EntidadNombre}").Bold();
-                    text.Span(confirmado ? " ha sido integrada satisfactoriamente mediante la plataforma web, el día " : " ha sido enviada a revisión administrativa mediante la plataforma web, el día ");
+                    text.Span(confirmado ? " ha sido integrada satisfactoriamente mediante la plataforma web, el día " : op.Estado == "VALIDADO" ? " ha sido validada y está pendiente de confirmar su envío en la plataforma web, el día " : " ha sido enviada a revisión administrativa mediante la plataforma web, el día ");
                     text.Span(fecha.ToString("dd 'de' MMMM 'de' yyyy", cultura)).Bold();
                     text.Span(" a las "); text.Span(fecha.ToString("HH:mm:ss", cultura)).Bold();
                     text.Span(" horas (Tiempo del centro de México).");
@@ -71,7 +71,7 @@ public sealed partial class BanciMensualService
                 col.Item().Text($"Mes de corte estadístico: {new DateTime(op.Anio, op.Mes, 1).ToString("MMMM 'de' yyyy", cultura)}").FontSize(8.5f);
                 col.Item().Text($"Referencia: {op.Referencia} · Usuario: {op.NombreUsuario} · Estado: {op.Estado.Replace('_', ' ')}");
                 if(!confirmado)
-                    col.Item().Text("Pendiente de aprobación administrativa. Los folios de carpetas nuevas se asignan al aprobar; este documento no acredita su integración definitiva.").Bold();
+                    col.Item().Text(op.Estado == "VALIDADO" ? "Informe previo: confirme o descarte el envío. Los folios nuevos se asignan al aprobar; este documento no acredita su envío ni su integración definitiva." : "Pendiente de aprobación administrativa. Los folios de carpetas nuevas se asignan al aprobar; este documento no acredita su integración definitiva.").Bold();
                 col.Item().Table(tabla =>
                 {
                     tabla.ColumnsDefinition(cols => { cols.RelativeColumn(4); cols.RelativeColumn(2); });

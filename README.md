@@ -76,3 +76,13 @@ Los motivos se consultan directamente en los catálogos existentes, con la misma
   El envío pendiente se distingue del confirmado; los folios nuevos se asignan al aprobar.
 
 Validar los flujos contra la BD de desarrollo/QA antes de publicar en producción.
+
+
+### Flujo mensual BANCI
+
+Carga mensual y Actualización mensual ofrecen un selector Manual/Masiva y conservan sus permisos.
+La descarga de plantilla oculta su bloque y desplaza al siguiente paso; validar desplaza al resultado.
+El informe previo y el acuse final se muestran en el visor de PDF con Aceptar/Rechazar/Cerrar,
+sin descarga automática. Los reportes permiten abrir ese mismo visor.
+Las plantillas y formularios BANCI no incluyen las columnas heredadas de feminicidio.
+Estos ajustes no modifican objetos de BD ni el flujo de Consolidado, Federal o Semanal.
