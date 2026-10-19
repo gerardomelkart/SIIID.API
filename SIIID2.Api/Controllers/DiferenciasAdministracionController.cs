@@ -58,7 +58,7 @@ public sealed class DiferenciasAdministracionController : ControllerBase
         {
             var diferencias = await consultar(usuario);
             if(!diferencias.EsValido) return BadRequest(new { mensaje = diferencias.Mensaje });
-            return File(DiferenciasExcel.Crear(diferencias), DiferenciasExcel.Mime, $"Diferencias_{modulo}.xlsx");
+            return File(DiferenciasExcel.Crear(diferencias, modulo), DiferenciasExcel.Mime, $"Diferencias_{modulo}.xlsx");
         }
         catch(SqlException ex) when(ex.Number == -2)
         {

@@ -462,7 +462,10 @@ using(var exportado = DiferenciasExcel.Crear(diferenciasExcel))
 {
     archivoTemporal = ((FileStream)exportado).Name;
     using(var documentoValidar = DocumentFormat.OpenXml.Packaging.SpreadsheetDocument.Open(exportado, false))
-        Verificar(!new DocumentFormat.OpenXml.Validation.OpenXmlValidator().Validate(documentoValidar).Any(), "El Excel generado cumple el formato Open XML");
+    {
+        var erroresFormato = new DocumentFormat.OpenXml.Validation.OpenXmlValidator().Validate(documentoValidar).Take(5).ToList();
+        Verificar(erroresFormato.Count == 0, "El Excel generado cumple el formato Open XML: " + string.Join("; ", erroresFormato.Select(e => e.Description + " " + e.Path?.XPath)));
+    }
     exportado.Position = 0;
     using var excel = new ClosedXML.Excel.XLWorkbook(exportado);
     Verificar(excel.Worksheets.Count == 3, "El Excel incluye Carpetas, Delitos y Víctimas");
@@ -485,6 +488,28 @@ var controladorExportacion = typeof(SIIID2.Api.Controllers.DiferenciasAdministra
 Verificar(controladorExportacion.GetCustomAttributes<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>().Any(a => a.Roles == "SUPER_USUARIO"), "La descarga completa requiere aprobación administrativa de superusuario");
 foreach(var (accion, politica) in new[] { ("Mensual", "MODULO_MENSUAL"), ("Federal", "MODULO_FEDERAL"), ("Semanal", "MODULO_SEMANAL"), ("Banci", "MODULO_BANCI") })
     Verificar(controladorExportacion.GetMethod(accion)!.GetCustomAttributes<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>().Any(a => a.Policy == politica), "La descarga exige también acceso al módulo " + accion);
+// Plantillas vacías generadas y colores propios para cada módulo.
+foreach(var (modulo, color) in new[] { ("mensual", "691C32"), ("federal", "1F4E79"), ("semanal", "235B4E") })
+foreach(var (tipo, columnas) in new[] { ("carpetas", 5), ("delitos", 22), ("victimas", 16) })
+{
+    var plantilla = PlantillasExcel.Crear(modulo, tipo, new CarpetasValidator(), new DelitosValidator(), new VictimasValidator(reglas));
+    using var contenido = new MemoryStream(plantilla);
+    using var excelPlantilla = new ClosedXML.Excel.XLWorkbook(contenido);
+    var hoja = excelPlantilla.Worksheet(1);
+    Verificar(hoja.LastRowUsed()!.RowNumber() == 1 && hoja.LastColumnUsed()!.ColumnNumber() == columnas, "Plantilla " + modulo + "/" + tipo + " vacía, solo encabezados oficiales");
+    Verificar(hoja.Cell(1, 1).Style.Fill.BackgroundColor.Color.ToArgb() == System.Drawing.Color.FromArgb(Convert.ToInt32("FF" + color, 16)).ToArgb(), "La plantilla usa el color del módulo " + modulo);
+    Verificar(hoja.SheetView.SplitRow == 1 && hoja.Cell(2, 1).Style.NumberFormat.Format == "@", "Plantilla con encabezado inmovilizado y campos de texto sin perder ceros iniciales");
+}
+diferenciasExcel.DetalleLimitado = false;
+foreach(var (modulo, color) in new[] { ("mensual", "691C32"), ("federal", "1F4E79"), ("semanal", "235B4E"), ("banci", "6F2C91") })
+{
+    using var archivoColor = DiferenciasExcel.Crear(diferenciasExcel, modulo);
+    using var excelColor = new ClosedXML.Excel.XLWorkbook(archivoColor);
+    var hoja = excelColor.Worksheet("Victimas");
+    Verificar(hoja.LastColumnUsed()!.ColumnNumber() == 6 && !hoja.Row(1).CellsUsed().Any(c => c.GetString() == "Parte"), "El Excel de " + modulo + " elimina la columna Parte");
+    Verificar(hoja.Cell(1, 1).Style.Fill.BackgroundColor.Color.ToArgb() == System.Drawing.Color.FromArgb(Convert.ToInt32("FF" + color, 16)).ToArgb(), "Las diferencias tienen el color del módulo " + modulo);
+    Verificar(hoja.Cell(1, 1).Style.Font.Bold && hoja.Cell(1, 1).Style.Font.FontColor.Color.ToArgb() == System.Drawing.Color.White.ToArgb(), "Encabezado de diferencias legible, en blanco y negrita");
+}
 var salidaDiferencias = Environment.GetEnvironmentVariable("DIFERENCIAS_EXCEL_VOLUMEN");
 if(!string.IsNullOrEmpty(salidaDiferencias))
 {

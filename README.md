@@ -92,6 +92,12 @@ Estos ajustes no modifican objetos de BD ni el flujo de Consolidado, Federal o S
 
 En Aprobación administrativa de Mensual, Federal, Semanal y BANCI se ofrece **Descargar todas las diferencias en Excel**. La muestra de pantalla permanece limitada a 100 registros por sección en los tres primeros módulos; la descarga consulta el detalle completo de forma independiente, incluso si no se pudo cargar la muestra.
 
-La API exige rol SUPER_USUARIO y acceso al módulo correspondiente. El archivo contiene Carpetas, Delitos y Víctimas con movimiento, identificador, campo y valores anterior/propuesto, filtros y encabezados inmovilizados. Los textos extensos continúan en filas con número de parte, y las hojas se dividen al alcanzar el límite de filas de Excel. Se genera en un archivo temporal eliminado al terminar la descarga, sin enviar el detalle completo al navegador como JSON ni renderizarlo en tablas.
+La API exige rol SUPER_USUARIO y acceso al módulo correspondiente. El archivo contiene Carpetas, Delitos y Víctimas con movimiento, identificador, campo y valores anterior/propuesto, filtros y encabezados inmovilizados. Los textos extensos continúan en filas marcadas como continuación, sin una columna Parte, y las hojas se dividen al alcanzar el límite de filas de Excel. Se genera en un archivo temporal eliminado al terminar la descarga, sin enviar el detalle completo al navegador como JSON ni renderizarlo en tablas.
 
 Publicar API y frontend de forma coordinada. No requiere scripts ni cambios en la estructura de la base de datos.
+
+### Plantillas y colores por módulo
+
+Las plantillas vacías de Mensual (guinda), Federal (azul) y Semanal (verde) se generan desde la API con sus encabezados oficiales, formato de texto y primera fila inmovilizada. Carga y Actualización solicitan el mismo generador; ya no dependen de archivos XLSX estáticos del frontend. BANCI conserva su plantilla morada precargada con información del periodo.
+
+La exportación administrativa de diferencias usa el color del módulo en el Excel y el botón. Durante su generación y descarga se bloquea la interacción con un aviso de que puede tardar varios minutos cuando existen muchas modificaciones; se desbloquea tanto al terminar como ante un error.
