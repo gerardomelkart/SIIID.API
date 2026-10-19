@@ -125,3 +125,9 @@ La bandeja de aprobación sigue la presentación del mensual con búsqueda, orde
 La revisión presenta totales completos y muestras de hasta 100 registros/cambios; la descarga administrativa existente conserva todas las diferencias y su bloqueo durante la generación. Permite consultar el informe previo y descargar el original masivo con su nombre recibido. Las capturas manuales no ofrecen archivo original. Aprobar solicita confirmación; rechazar requiere un motivo de al menos cinco caracteres. La resolución bloquea la interacción hasta terminar y actualiza la bandeja al completarse.
 
 Los nuevos endpoints de pendientes y revisión exigen SUPER_USUARIO y acceso administrativo BANCI. Publicar API y frontend juntos; no se requieren scripts ni cambios de estructura de base de datos.
+
+### Configuración de permisos BANCI
+
+La configuración de BANCI usa el mismo diseño que el consolidado: controles globales de carga y actualización, resumen por entidad, búsqueda, ordenamiento, paginación, Excel y panel de permisos individuales. Los estados globales se calculan desde las cuentas activas; los administradores generales quedan fuera de la gestión operativa y los usuarios CONSULTA no pueden cargar ni actualizar. Los cambios individuales utilizan el endpoint exclusivo de permisos BANCI, sin editar perfiles ni permisos de otros módulos.
+
+Las reglas de validación y las cargas de cortes anteriores se administran únicamente en Configuración del sistema. Se retira el endpoint duplicado PUT /api/banci/mensual/configuracion; las reglas existentes siguen aplicándose en la carga y actualización. No requiere cambios en base de datos. Publicar API y frontend juntos.

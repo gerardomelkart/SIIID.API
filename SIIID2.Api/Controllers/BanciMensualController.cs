@@ -93,9 +93,6 @@ public sealed class BanciMensualController(BanciMensualService servicio, ILogger
         var archivo = await servicio.OriginalAsync(id, referencia);
         return File(archivo.Bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", archivo.Nombre);
     });
-    [Authorize(Roles = "SUPER_USUARIO")]
-    [HttpPut("configuracion")]
-    public Task<IActionResult> Configuracion(BanciConfiguracionCambio cambio) => Ejecutar(async id => Ok(await servicio.CambiarConfiguracionAsync(id, cambio)));
     private async Task<IActionResult> Ejecutar(Func<int, Task<IActionResult>> accion)
     {
         if(!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id))

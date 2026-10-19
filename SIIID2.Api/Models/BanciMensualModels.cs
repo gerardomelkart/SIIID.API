@@ -44,14 +44,6 @@ public sealed class BanciDecision
     public string Motivo { get; set; } = "";
 }
 
-public sealed class BanciConfiguracionCambio
-{
-    public string Clave { get; set; } = "";
-    public bool Habilitado { get; set; }
-    public long Version { get; set; }
-    public string Motivo { get; set; } = "";
-}
-
 public sealed record BanciCambioVista(string Carpeta, string Delito, string Victima, string Campo, string? Anterior, string? Nuevo);
 
 public sealed class BanciPeriodo
