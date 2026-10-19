@@ -543,6 +543,8 @@ var cargasReporte = BanciMensualService.PrepararReporteCargas([
 Verificar(cargasReporte.Select(f => f.Entidad).SequenceEqual([1, 2, 9]), "Ranking BANCI por primera carga exitosa y entidades sin carga al final");
 Verificar(cargasReporte.Select(f => f.Ranking).SequenceEqual(new int?[] { 1, 2, null }), "Entidades sin carga exitosa no reciben ranking");
 Verificar(cargasReporte[1].Intentos == 3 && cargasReporte[1].FechaCarga?.Kind == DateTimeKind.Utc && cargasReporte[0].FechaAprobacion?.Kind == DateTimeKind.Utc, "Reporte BANCI conserva intentos y entrega fechas UTC");
+var rutaOriginalBanci = BanciMensualService.RutaRelativaOriginal(Guid.Empty, @"C:\fakepath\Mi archivo BANCI.xlsx");
+Verificar(Path.GetFileName(rutaOriginalBanci) == "Mi archivo BANCI.xlsx" && Path.GetDirectoryName(rutaOriginalBanci) == Guid.Empty.ToString("N"), "Original BANCI conserva nombre recibido y separa cada envío en una carpeta");
 Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {

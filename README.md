@@ -110,8 +110,10 @@ Los originales corresponden únicamente a cargas y actualizaciones masivas. La c
 
 ### Reporte de cargas y archivos originales BANCI
 
-El reporte de cargas sigue el esquema mensual por corte: entidades activas (incluidas las que no tienen carga), intentos manuales y masivos, último estado, fechas y ranking por primera carga enviada correctamente. Una resolución rechazada no se presenta como fecha de aprobación.
+El reporte de cargas sigue el esquema mensual por corte: entidades con carga en pantalla y todas las entidades activas en la exportación Excel (incluidas las que no tienen carga), intentos manuales y masivos, último estado, fechas y ranking por primera carga enviada correctamente. Una resolución rechazada no se presenta como fecha de aprobación.
 
 Archivos originales muestra el último archivo masivo recibido por entidad entre todos los periodos, con nombre original, tamaño y descarga íntegra XLSX o ZIP. Excluye capturas manuales y conserva los archivos anteriores almacenados. Ambos reportes requieren SUPER_USUARIO y ofrecen búsqueda, ordenamiento, paginación y exportación de la tabla.
 
 Publicar API y frontend juntos. No requiere cambios de base de datos.
+
+Los nuevos originales masivos BANCI se guardan con el nombre recibido dentro de una carpeta por envío, sin regenerar el XLSX. Se mantiene la lectura de archivos anteriores almacenados como GUID.xlsx. No requiere migración ni scripts.

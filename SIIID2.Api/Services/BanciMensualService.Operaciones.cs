@@ -145,7 +145,7 @@ public sealed partial class BanciMensualService
         if(original.Length > 50 * 1024 * 1024)
             throw new InvalidOperationException("El archivo supera 50 MB.");
         var referencia = Guid.NewGuid();
-        var ruta = RutaOriginal(referencia);
+        var ruta = RutaOriginal(referencia, nombre);
         if(!manual) Directory.CreateDirectory(Path.GetDirectoryName(ruta)!);
         db.Open();
         using var tx = db.BeginTransaction(IsolationLevel.Serializable);
@@ -200,8 +200,8 @@ public sealed partial class BanciMensualService
             if(!manual) await db.ExecuteAsync("INSERT dbo.banci_carga_archivo(id_banci_carga,nombre_original,ruta_relativa,huella_sha256,longitud_bytes) VALUES(@id,@nombre,@ruta,@huella,@longitud);", new
             {
                 id,
-                nombre = Path.GetFileName(nombre),
-                ruta = referencia.ToString("N") + ".xlsx",
+                nombre = NombreOriginal(nombre),
+                ruta = RutaRelativaOriginal(referencia, nombre),
                 huella = Convert.ToHexString(SHA256.HashData(original)),
                 longitud = original.LongLength
             }, tx);
@@ -330,6 +330,9 @@ public sealed partial class BanciMensualService
         return errores;
     }
 
+    private static string NombreOriginal(string nombre) => Path.GetFileName(nombre.Replace('\\', '/'));
+    public static string RutaRelativaOriginal(Guid referencia, string nombre) => Path.Combine(referencia.ToString("N"), NombreOriginal(nombre));
+    private string RutaOriginal(Guid referencia, string nombre) => Path.Combine(ambiente.ContentRootPath, "ArchivosOriginalesBanci", RutaRelativaOriginal(referencia, nombre));
     private string RutaOriginal(Guid referencia) => Path.Combine(ambiente.ContentRootPath, "ArchivosOriginalesBanci", referencia.ToString("N") + ".xlsx");
     private static (string Tabla, List<ArchivoFila> Filas)[] Grupos(BanciLibro libro) => [("carpeta", libro.Carpetas), ("delito", libro.Delitos), ("victima", libro.Victimas)];
     private static Task BitacoraAsync(IDbConnection db,
@@ -433,7 +436,8 @@ public sealed partial class BanciMensualService
         {
             op.Id
         });
-        var ruta = RutaOriginal(referencia);
+        var ruta = RutaOriginal(referencia, nombre);
+        if(!File.Exists(ruta)) ruta = RutaOriginal(referencia);
         if(!File.Exists(ruta))
             throw new KeyNotFoundException("El archivo original no está disponible en este ambiente.");
         return (await File.ReadAllBytesAsync(ruta), nombre);
