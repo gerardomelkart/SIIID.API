@@ -545,6 +545,16 @@ Verificar(cargasReporte.Select(f => f.Ranking).SequenceEqual(new int?[] { 1, 2, 
 Verificar(cargasReporte[1].Intentos == 3 && cargasReporte[1].FechaCarga?.Kind == DateTimeKind.Utc && cargasReporte[0].FechaAprobacion?.Kind == DateTimeKind.Utc, "Reporte BANCI conserva intentos y entrega fechas UTC");
 var rutaOriginalBanci = BanciMensualService.RutaRelativaOriginal(Guid.Empty, @"C:\fakepath\Mi archivo BANCI.xlsx");
 Verificar(Path.GetFileName(rutaOriginalBanci) == "Mi archivo BANCI.xlsx" && Path.GetDirectoryName(rutaOriginalBanci) == Guid.Empty.ToString("N"), "Original BANCI conserva nombre recibido y separa cada envío en una carpeta");
+var libroRevision = new BanciLibro
+{
+    Manual = true, Anio = 2025, Mes = 9,
+    Victimas = Enumerable.Range(1, 150).Select(i => new ArchivoFila { NumeroFila = i }).ToList(),
+    Cambios = Enumerable.Range(1, 250).Select(i => new BanciCambioVista("ci", "del", "vic", "campo" + i, "antes", "despues")).ToList()
+};
+var revisionBanci = BanciMensualService.PrepararRevisionAdministracion(libroRevision);
+Verificar(revisionBanci.TotalVictimas == 150 && revisionBanci.TotalCambios == 250 && revisionBanci.VictimasConCambios == 1, "Revisión administrativa BANCI conserva los totales completos y cuenta víctimas distintas");
+Verificar(revisionBanci.Libro.Victimas.Count == 100 && revisionBanci.Libro.Cambios.Count == 100 && revisionBanci.LimiteMuestra == 100, "Revisión BANCI limita registros y cambios enviados al navegador");
+Verificar(libroRevision.Cambios.Count == 250 && libroRevision.Victimas.Count == 150 && revisionBanci.Libro.Manual && revisionBanci.Libro.Anio == 2025, "La muestra de revisión no altera datos originales ni modalidad o corte");
 Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {

@@ -117,3 +117,11 @@ Archivos originales muestra el último archivo masivo recibido por entidad entre
 Publicar API y frontend juntos. No requiere cambios de base de datos.
 
 Los nuevos originales masivos BANCI se guardan con el nombre recibido dentro de una carpeta por envío, sin regenerar el XLSX. Se mantiene la lectura de archivos anteriores almacenados como GUID.xlsx. No requiere migración ni scripts.
+
+### Aprobación administrativa BANCI
+
+La bandeja de aprobación sigue la presentación del mensual con búsqueda, ordenamiento, paginación y revisión por envío, incluidos pendientes de años anteriores. Muestra entidad, corte, modalidad manual/masiva, remitente, fecha y totales de carpetas, delitos y víctimas.
+
+La revisión presenta totales completos y muestras de hasta 100 registros/cambios; la descarga administrativa existente conserva todas las diferencias y su bloqueo durante la generación. Permite consultar el informe previo y descargar el original masivo con su nombre recibido. Las capturas manuales no ofrecen archivo original. Aprobar solicita confirmación; rechazar requiere un motivo de al menos cinco caracteres. La resolución bloquea la interacción hasta terminar y actualiza la bandeja al completarse.
+
+Los nuevos endpoints de pendientes y revisión exigen SUPER_USUARIO y acceso administrativo BANCI. Publicar API y frontend juntos; no se requieren scripts ni cambios de estructura de base de datos.

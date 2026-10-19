@@ -25,3 +25,14 @@ public sealed class BanciArchivoOriginal
     public long TamanioBytes { get; set; }
     public string Sha256 { get; set; } = "";
 }
+
+public sealed class BanciRevisionAdministracion
+{
+    public int TotalCarpetas { get; set; }
+    public int TotalDelitos { get; set; }
+    public int TotalVictimas { get; set; }
+    public int TotalCambios { get; set; }
+    public int VictimasConCambios { get; set; }
+    public int LimiteMuestra { get; set; }
+    public BanciLibro Libro { get; set; } = new();
+}

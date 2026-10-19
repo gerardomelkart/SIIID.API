@@ -32,6 +32,10 @@ public sealed class BanciOperacion
     public bool Manual { get; set; }
     public bool TieneOriginal { get; set; }
     public DateTime? FechaEnvio { get; set; }
+    public string? NombreOriginal { get; set; }
+    public int TotalCarpetas { get; set; }
+    public int TotalDelitos { get; set; }
+    public int TotalVictimas { get; set; }
 }
 
 public sealed class BanciDecision
