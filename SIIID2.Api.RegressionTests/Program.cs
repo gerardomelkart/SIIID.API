@@ -265,6 +265,38 @@ Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e 
 propuestaBanci = LibroPrueba();
 propuestaBanci.Victimas[0].Columnas["id_tv"] = "16";
 Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e => e.Campo == "id_tv"), "Conservar el tipo de víctima del consolidado");
+// Consolidado y BANCI almacenan las coordenadas con escalas decimales distintas.
+foreach(var actualizacion in new[] { false, true })
+foreach(var manual in new[] { false, true })
+{
+    var origenCoordenadas = LibroPrueba();
+    var propuestaCoordenadas = LibroPrueba();
+    propuestaCoordenadas.Actualizacion = actualizacion;
+    propuestaCoordenadas.Manual = manual;
+    origenCoordenadas.Delitos[0].Columnas["coord_x"] = "-99.1360000000";
+    origenCoordenadas.Delitos[0].Columnas["coord_y"] = "19.4340000000";
+    propuestaCoordenadas.Delitos[0].Columnas["coord_x"] = "-99.136000";
+    propuestaCoordenadas.Delitos[0].Columnas["coord_y"] = "19.434000";
+    Verificar(BanciMensualService.CompararOrigen(origenCoordenadas, propuestaCoordenadas).Count == 0,
+        $"Coordenadas equivalentes con seis y diez decimales: actualización={actualizacion}, manual={manual}");
+    Verificar(BanciMensualService.CompararOrigen(propuestaCoordenadas, origenCoordenadas).Count == 0,
+        "La equivalencia de coordenadas funciona en ambos sentidos");
+    foreach(var diferente in new[] { "-99.1360000001", "-99.136000000000000000000000000001", "", "-99,136000", "no numérico" })
+    {
+        propuestaCoordenadas.Delitos[0].Columnas["coord_x"] = diferente;
+        Verificar(BanciMensualService.CompararOrigen(origenCoordenadas, propuestaCoordenadas).Any(e => e.Campo == "coord_x"),
+            "No se aceptan coordenadas distintas o inválidas, sin tolerancias ni redondeo");
+    }
+    propuestaCoordenadas.Delitos[0].Columnas["coord_x"] = "-99.136000";
+    propuestaCoordenadas.Delitos[0].Columnas["coord_y"] = "19.4340000001";
+    Verificar(BanciMensualService.CompararOrigen(origenCoordenadas, propuestaCoordenadas).Any(e => e.Campo == "coord_y"),
+        "La latitud también permanece protegida ante cambios reales");
+    propuestaCoordenadas.Delitos[0].Columnas["coord_y"] = "19.434000";
+    origenCoordenadas.Delitos[0].Columnas["dto"] = "1.00";
+    propuestaCoordenadas.Delitos[0].Columnas["dto"] = "1.0";
+    Verificar(BanciMensualService.CompararOrigen(origenCoordenadas, propuestaCoordenadas).Any(e => e.Campo == "dto"),
+        "La normalización numérica se limita a las dos coordenadas, no a otros datos protegidos");
+}
 // Las cargas adicionales excluyen lo aprobado sin romper las relaciones del libro.
 var adicionales = new BanciLibro
 {

@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using Dapper;
 using SIIID2.Api.Data;
@@ -456,7 +457,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
                 }
 
                 foreach(var par in fila.Columnas.Where(p => nombre != "victimas" || !Editables(propuesta.Actualizacion).Contains(p.Key)))
-                    if((par.Value ?? "").Trim() != Valor(coincidencias[0], par.Key))
+                    if(!CoincideDatoProtegido(nombre, par.Key, (par.Value ?? "").Trim(), Valor(coincidencias[0], par.Key)))
                         errores.Add(Error(nombre, coincidencias[0], par.Key, $"El dato protegido debe coincidir con el origen: {par.Value}."));
             }
 
@@ -466,6 +467,27 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         }
 
         return errores;
+    }
+
+    private static bool CoincideDatoProtegido(string hoja, string campo, string original, string propuesta)
+    {
+        if(original == propuesta) return true;
+        if(hoja != "delitos" || campo is not ("coord_x" or "coord_y")) return false;
+        var coordenada = NormalizarCoordenada(original);
+        return coordenada != null && coordenada == NormalizarCoordenada(propuesta);
+    }
+
+    private static string? NormalizarCoordenada(string valor)
+    {
+        // Comparación decimal exacta: elimina solo ceros de formato, sin redondear ni usar tolerancias.
+        if(!Regex.IsMatch(valor, @"^[+-]?[0-9]+(?:\.[0-9]+)?$")) return null;
+        var negativa = valor.StartsWith('-');
+        var partes = valor.TrimStart('+', '-').Split('.');
+        var entero = partes[0].TrimStart('0');
+        if(entero == "") entero = "0";
+        var fraccion = partes.Length == 2 ? partes[1].TrimEnd('0') : "";
+        return (negativa && (entero != "0" || fraccion != "") ? "-" : "")
+            + entero + (fraccion == "" ? "" : "." + fraccion);
     }
 
     private static CargaValidacionError Error(string hoja, ArchivoFila fila, string campo, string mensaje) => new()
