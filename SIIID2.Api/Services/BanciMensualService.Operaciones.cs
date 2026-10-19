@@ -146,12 +146,12 @@ public sealed partial class BanciMensualService
             throw new InvalidOperationException("El archivo supera 50 MB.");
         var referencia = Guid.NewGuid();
         var ruta = RutaOriginal(referencia);
-        Directory.CreateDirectory(Path.GetDirectoryName(ruta)!);
+        if(!manual) Directory.CreateDirectory(Path.GetDirectoryName(ruta)!);
         db.Open();
         using var tx = db.BeginTransaction(IsolationLevel.Serializable);
         try
         {
-            await File.WriteAllBytesAsync(ruta, original);
+            if(!manual) await File.WriteAllBytesAsync(ruta, original);
             var bloqueo = await db.ExecuteScalarAsync<int>("DECLARE @r int; EXEC @r=sys.sp_getapplock @Resource=@recurso,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000; SELECT @r;", new
             {
                 recurso = $"BANCI:{libro.Entidad}:{libro.Anio}:{libro.Mes}"
@@ -197,7 +197,7 @@ public sealed partial class BanciMensualService
                         fila = fila.NumeroFila,
                         json = Serializar(fila)
                     }, tx);
-            await db.ExecuteAsync("INSERT dbo.banci_carga_archivo(id_banci_carga,nombre_original,ruta_relativa,huella_sha256,longitud_bytes) VALUES(@id,@nombre,@ruta,@huella,@longitud);", new
+            if(!manual) await db.ExecuteAsync("INSERT dbo.banci_carga_archivo(id_banci_carga,nombre_original,ruta_relativa,huella_sha256,longitud_bytes) VALUES(@id,@nombre,@ruta,@huella,@longitud);", new
             {
                 id,
                 nombre = Path.GetFileName(nombre),
@@ -221,7 +221,7 @@ public sealed partial class BanciMensualService
         catch
         {
             tx.Rollback();
-            File.Delete(ruta);
+            if(!manual) File.Delete(ruta);
             throw;
         }
     }
@@ -370,14 +370,16 @@ public sealed partial class BanciMensualService
         if(anio < 1900 || anio > FechaRangoValidator.Hoy().Year)
             throw new InvalidOperationException("Año inválido.");
         using var db = factory.CrearConexion();
-        var filas = (await db.QueryAsync<BanciOperacion>("SELECT Id,Referencia,Entidad,EntidadNombre,Mes,Anio,Tipo,Estado,Usuario,NombreUsuario,Fecha,Motivo FROM (" + BanciMensualSql.Operaciones + ") b WHERE b.Anio=@anio AND(@admin=1 OR b.Entidad=@entidad) AND(@pendientes=0 OR b.Estado='PENDIENTE_APROBACION') ORDER BY b.Fecha DESC;", new
+        var filas = (await db.QueryAsync<BanciOperacion>("SELECT Id,Referencia,Entidad,EntidadNombre,Mes,Anio,Tipo,Estado,Usuario,NombreUsuario,Fecha,Motivo,Manual,TieneOriginal,FechaEnvio FROM (" + BanciMensualSql.Operaciones + ") b WHERE b.Anio=@anio AND(@admin=1 OR b.Entidad=@entidad) AND(@pendientes=0 OR b.Estado='PENDIENTE_APROBACION') AND(@originales=0 OR (b.Manual=0 AND b.TieneOriginal=1)) AND(@envios=0 OR b.Estado IN('PENDIENTE_APROBACION','CONFIRMADO','CONFIRMADO_ACTUALIZACION','RECHAZADO_ADMIN')) ORDER BY COALESCE(b.FechaEnvio,b.Fecha) DESC;", new
         {
             anio,
             admin = AlcanceNacional(acceso),
             entidad = acceso.IdEntidadFederativa,
+            originales = reporte == "originales",
+            envios = reporte == "envios",
             pendientes = reporte == "pendientes"
         })).ToList();
-        return filas.Select(f => new { f.Id, f.Referencia, f.Entidad, f.EntidadNombre, f.Mes, f.Anio, f.Tipo, f.Estado, f.NombreUsuario, Fecha = DateTime.SpecifyKind(f.Fecha, DateTimeKind.Utc), f.Motivo });
+        return filas.Select(f => new { f.Id, f.Referencia, f.Entidad, f.EntidadNombre, f.Mes, f.Anio, f.Tipo, f.Estado, f.NombreUsuario, Fecha = DateTime.SpecifyKind(f.FechaEnvio ?? f.Fecha, DateTimeKind.Utc), f.Motivo, f.Manual, TieneOriginal = !f.Manual && f.TieneOriginal });
     }
 
     public async Task<BanciLibro> DetalleAsync(int usuario, Guid referencia)
@@ -422,9 +424,11 @@ public sealed partial class BanciMensualService
         }, tx) ?? throw new KeyNotFoundException("El envío no existe.");
     public async Task<(byte[] Bytes, string Nombre)> OriginalAsync(int usuario, Guid referencia)
     {
-        await AccesoAsync(usuario, null, "ADMIN");
         using var db = factory.CrearConexion();
         var op = await ObtenerAsync(db, referencia);
+        await AccesoAsync(usuario, op.Entidad);
+        if(op.Manual || !op.TieneOriginal)
+            throw new InvalidOperationException("Los archivos originales están disponibles únicamente para cargas y actualizaciones masivas.");
         var nombre = await db.QuerySingleAsync<string>("SELECT nombre_original FROM dbo.banci_carga_archivo WHERE id_banci_carga=@Id;", new
         {
             op.Id

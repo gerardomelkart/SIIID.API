@@ -27,7 +27,7 @@ public sealed class BanciMensualController(BanciMensualService servicio, ILogger
     });
     [HttpPost("validar/manual")]
     [RequestSizeLimit(60 * 1024 * 1024)]
-    public Task<IActionResult> ValidarManual(BanciLibro libro) => Ejecutar(async id => Ok(await servicio.ValidarAsync(id, libro, servicio.Excel(libro), "Captura_manual.xlsx", manual: true)));
+    public Task<IActionResult> ValidarManual(BanciLibro libro) => Ejecutar(async id => Ok(await servicio.ValidarAsync(id, libro, [], "", manual: true)));
     [HttpPost("validar/archivo")]
     [RequestSizeLimit(60 * 1024 * 1024)]
     public Task<IActionResult> ValidarArchivo([FromForm] IFormFile archivo,
@@ -41,6 +41,11 @@ public sealed class BanciMensualController(BanciMensualService servicio, ILogger
         await archivo.CopyToAsync(stream);
         return Ok(await servicio.ValidarAsync(id, libro, stream.ToArray(), archivo.FileName));
     });
+    [HttpGet("envios/periodos")]
+    public Task<IActionResult> PeriodosEnvios() => Ejecutar(async id => Ok(await servicio.PeriodosEnviosAsync(id)));
+    [HttpGet("envios/acuses")]
+    public Task<IActionResult> AcusesEnvios(int anio, int mes) => Ejecutar(async id =>
+        File(await servicio.AcusesEnviosAsync(id, anio, mes), "application/zip", $"BANCI_acuses_{anio}{mes:D2}.zip"));
     [HttpGet("envios")]
     public Task<IActionResult> Envios(int anio) => Ejecutar(async id => Ok(await servicio.ListarAsync(id, anio, "envios")));
     [Authorize(Roles = "SUPER_USUARIO")]
@@ -64,7 +69,6 @@ public sealed class BanciMensualController(BanciMensualService servicio, ILogger
     [HttpPost("envios/{referencia:guid}/resolver")]
     public Task<IActionResult> Resolver(Guid referencia,
         BanciDecision decision) => Ejecutar(async id => Ok(await servicio.ResolverAsync(id, referencia, decision, true)));
-    [Authorize(Roles = "SUPER_USUARIO")]
     [HttpGet("envios/{referencia:guid}/original")]
     public Task<IActionResult> Original(Guid referencia) => Ejecutar(async id =>
     {

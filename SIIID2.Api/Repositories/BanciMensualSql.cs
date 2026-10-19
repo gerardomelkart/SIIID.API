@@ -75,7 +75,13 @@ internal static class BanciMensualSql
         SELECT b.id_banci_carga AS Id,b.codigo_referencia AS Referencia,b.id_entidad_federativa AS Entidad,
             b.mes_corte AS Mes,b.anio_corte AS Anio,b.tipo_carga AS Tipo,b.estado AS Estado,
             b.id_usuario_carga AS Usuario,u.usuario AS NombreUsuario,ef.nombre AS EntidadNombre,
-            b.snapshot_origen AS Snapshot,b.huella_origen AS Huella,b.fecha_validacion AS Fecha,b.motivo_resolucion AS Motivo
+            b.snapshot_origen AS Snapshot,b.huella_origen AS Huella,b.fecha_validacion AS Fecha,b.motivo_resolucion AS Motivo,
+            b.fecha_confirmacion AS FechaEnvio,
+            CONVERT(bit,CASE WHEN JSON_VALUE(b.snapshot_origen,'$.manual')='true' THEN 1
+                WHEN JSON_VALUE(b.snapshot_origen,'$.manual')='false' THEN 0
+                WHEN EXISTS(SELECT 1 FROM dbo.banci_carga_archivo a WHERE a.id_banci_carga=b.id_banci_carga AND a.nombre_original='Captura_manual.xlsx') THEN 1 ELSE 0 END) AS Manual,
+            CONVERT(bit,CASE WHEN JSON_VALUE(b.snapshot_origen,'$.manual')='true' THEN 0
+                WHEN EXISTS(SELECT 1 FROM dbo.banci_carga_archivo a WHERE a.id_banci_carga=b.id_banci_carga AND (JSON_VALUE(b.snapshot_origen,'$.manual')='false' OR a.nombre_original<>'Captura_manual.xlsx')) THEN 1 ELSE 0 END) AS TieneOriginal
         FROM dbo.banci_carga b JOIN dbo.usuario u ON u.id_usuario=b.id_usuario_carga
         JOIN dbo.catalogo_entidad_federativa ef ON ef.id_entidad_federativa=b.id_entidad_federativa
         """;

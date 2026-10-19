@@ -29,6 +29,9 @@ public sealed class BanciOperacion
     public string? Huella { get; set; }
     public DateTime Fecha { get; set; }
     public string? Motivo { get; set; }
+    public bool Manual { get; set; }
+    public bool TieneOriginal { get; set; }
+    public DateTime? FechaEnvio { get; set; }
 }
 
 public sealed class BanciDecision
@@ -46,3 +49,9 @@ public sealed class BanciConfiguracionCambio
 }
 
 public sealed record BanciCambioVista(string Carpeta, string Delito, string Victima, string Campo, string? Anterior, string? Nuevo);
+
+public sealed class BanciPeriodo
+{
+    public int Anio { get; set; }
+    public int Mes { get; set; }
+}

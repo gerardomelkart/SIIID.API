@@ -101,3 +101,9 @@ Publicar API y frontend de forma coordinada. No requiere scripts ni cambios en l
 Las plantillas vacías de Mensual (guinda), Federal (azul) y Semanal (verde) se generan desde la API con sus encabezados oficiales, formato de texto y primera fila inmovilizada. Carga y Actualización solicitan el mismo generador; ya no dependen de archivos XLSX estáticos del frontend. BANCI conserva su plantilla morada precargada con información del periodo.
 
 La exportación administrativa de diferencias usa el color del módulo en el Excel y el botón. Durante su generación y descarga se bloquea la interacción con un aviso de que puede tardar varios minutos cuando existen muchas modificaciones; se desbloquea tanto al terminar como ante un error.
+
+### Consulta de envíos BANCI y originales masivos
+
+BANCI utiliza una consulta de envíos independiente con el mismo esquema visual del informe mensual: cortes disponibles, búsqueda, ordenamiento, paginación, estados legibles, exportación de la tabla, vista PDF y ZIP de acuses del corte. Muestra los envíos remitidos o resueltos administrativamente; las validaciones sin enviar no forman parte del historial de envíos. El alcance de entidad y los permisos se verifican en la API.
+
+Los originales corresponden únicamente a cargas y actualizaciones masivas. La captura manual mantiene su snapshot y datos propuestos para revisión y acuse, pero no genera ni almacena un XLSX artificial. Los originales manuales anteriores se excluyen del listado y se bloquea su descarga, sin eliminar registros ni ejecutar scripts de limpieza. Las operaciones masivas conservan exactamente el archivo recibido.
