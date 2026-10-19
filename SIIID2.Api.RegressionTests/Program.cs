@@ -411,7 +411,15 @@ var pdfAcuse = BanciMensualService.GenerarAcuse(operacionAcuse, acuseLibro, new 
 Verificar(System.Text.Encoding.ASCII.GetString(pdfAcuse, 0, 5) == "%PDF-", "Se genera el acuse PDF confirmado con datos y folios BANCI");
 // La ruta opcional permite revisar texto y paginación durante la verificación local.
 var salidaAcuse = Environment.GetEnvironmentVariable("BANCI_ACUSE_PRUEBA");
-if(!string.IsNullOrEmpty(salidaAcuse)) File.WriteAllBytes(salidaAcuse, pdfAcuse);
+if(!string.IsNullOrEmpty(salidaAcuse))
+{
+    File.WriteAllBytes(salidaAcuse, pdfAcuse);
+    acuseLibro.Actualizacion = true;
+    acuseLibro.Cambios.Add(new BanciCambioVista("CI-1", "D-1", "V-1", "obs", "Antes", "MARCADOR_CAMBIO_NO_VISIBLE"));
+    File.WriteAllBytes(Path.ChangeExtension(salidaAcuse, "actualizacion.pdf"),
+        BanciMensualService.GenerarAcuse(operacionAcuse, acuseLibro, DateTime.UtcNow, catalogosAcuse, webRootAcuse));
+    acuseLibro.Actualizacion = false;
+}
 operacionAcuse.Estado = "PENDIENTE_APROBACION";
 Verificar(BanciMensualService.GenerarAcuse(operacionAcuse, acuseLibro, DateTime.UtcNow, catalogosAcuse, webRootAcuse).Length > 1000, "El acuse pendiente se distingue del confirmado");
 var acuseLargo = LibroPrueba();

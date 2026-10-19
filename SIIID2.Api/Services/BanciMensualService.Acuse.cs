@@ -121,12 +121,6 @@ public sealed partial class BanciMensualService
                             tabla.Cell().Element(CeldaAcuseBanci).Text(valor);
                     }
                 });
-                if(libro.Actualizacion && libro.Cambios.Count > 0)
-                {
-                    col.Item().Text("Resumen de cambios reportados").Bold();
-                    foreach(var cambio in libro.Cambios)
-                        col.Item().Text($"Carpeta {cambio.Carpeta} · Delito {cambio.Delito} · Víctima {cambio.Victima} · {cambio.Campo}: {cambio.Anterior ?? "(vacío)"} → {cambio.Nuevo ?? "(vacío)"}");
-                }
             });
             pagina.Footer().Element(c => AcusePdfService.ConstruirPiePaginaInstitucional(c, webRootPath));
         })).WithMetadata(new DocumentMetadata { Title = "Acuse de información BANCI", Author = "Centro Nacional de Información" }).GeneratePdf();
