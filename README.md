@@ -107,3 +107,11 @@ La exportación administrativa de diferencias usa el color del módulo en el Exc
 BANCI utiliza una consulta de envíos independiente con el mismo esquema visual del informe mensual: cortes disponibles, búsqueda, ordenamiento, paginación, estados legibles, exportación de la tabla, vista PDF y ZIP de acuses del corte. Muestra los envíos remitidos o resueltos administrativamente; las validaciones sin enviar no forman parte del historial de envíos. El alcance de entidad y los permisos se verifican en la API.
 
 Los originales corresponden únicamente a cargas y actualizaciones masivas. La captura manual mantiene su snapshot y datos propuestos para revisión y acuse, pero no genera ni almacena un XLSX artificial. Los originales manuales anteriores se excluyen del listado y se bloquea su descarga, sin eliminar registros ni ejecutar scripts de limpieza. Las operaciones masivas conservan exactamente el archivo recibido.
+
+### Reporte de cargas y archivos originales BANCI
+
+El reporte de cargas sigue el esquema mensual por corte: entidades activas (incluidas las que no tienen carga), intentos manuales y masivos, último estado, fechas y ranking por primera carga enviada correctamente. Una resolución rechazada no se presenta como fecha de aprobación.
+
+Archivos originales muestra el último archivo masivo recibido por entidad entre todos los periodos, con nombre original, tamaño y descarga íntegra XLSX o ZIP. Excluye capturas manuales y conserva los archivos anteriores almacenados. Ambos reportes requieren SUPER_USUARIO y ofrecen búsqueda, ordenamiento, paginación y exportación de la tabla.
+
+Publicar API y frontend juntos. No requiere cambios de base de datos.

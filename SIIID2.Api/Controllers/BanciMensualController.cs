@@ -41,6 +41,18 @@ public sealed class BanciMensualController(BanciMensualService servicio, ILogger
         await archivo.CopyToAsync(stream);
         return Ok(await servicio.ValidarAsync(id, libro, stream.ToArray(), archivo.FileName));
     });
+    [Authorize(Roles = "SUPER_USUARIO")]
+    [HttpGet("reportes/cargas/periodos")]
+    public Task<IActionResult> PeriodosCargas() => Ejecutar(async id => Ok(await servicio.PeriodosCargasAsync(id)));
+    [Authorize(Roles = "SUPER_USUARIO")]
+    [HttpGet("reportes/cargas")]
+    public Task<IActionResult> ReporteCargas(int anio, int mes) => Ejecutar(async id => Ok(await servicio.ReporteCargasAsync(id, anio, mes)));
+    [Authorize(Roles = "SUPER_USUARIO")]
+    [HttpGet("reportes/originales")]
+    public Task<IActionResult> UltimosOriginales() => Ejecutar(async id => Ok(await servicio.UltimosOriginalesAsync(id)));
+    [Authorize(Roles = "SUPER_USUARIO")]
+    [HttpGet("reportes/originales/{referencia:guid}/zip")]
+    public Task<IActionResult> OriginalZip(Guid referencia) => Ejecutar(async id => File(await servicio.OriginalZipAsync(id, referencia), "application/zip", "BANCI_original.zip"));
     [HttpGet("envios/periodos")]
     public Task<IActionResult> PeriodosEnvios() => Ejecutar(async id => Ok(await servicio.PeriodosEnviosAsync(id)));
     [HttpGet("envios/acuses")]

@@ -534,6 +534,15 @@ if(!string.IsNullOrEmpty(salidaDiferencias))
     }
     Verificar(filasVolumen == 1_200_000 && hojasVictimas.Count == 2, "La exportación de 60 mil registros conserva 1.2 millones de cambios y continúa en otra hoja al alcanzar el límite de Excel");
 }
+var corteReporte = new DateTime(2026, 9, 1);
+var cargasReporte = BanciMensualService.PrepararReporteCargas([
+    new() { Entidad = 9, Estado = "SIN_CARGA", Ranking = 99 },
+    new() { Entidad = 2, Intentos = 3, FechaCargaExitosa = corteReporte.AddHours(1), FechaCarga = corteReporte.AddHours(2) },
+    new() { Entidad = 1, Intentos = 1, FechaCargaExitosa = corteReporte, FechaAprobacion = corteReporte.AddHours(3) }
+]).ToList();
+Verificar(cargasReporte.Select(f => f.Entidad).SequenceEqual([1, 2, 9]), "Ranking BANCI por primera carga exitosa y entidades sin carga al final");
+Verificar(cargasReporte.Select(f => f.Ranking).SequenceEqual(new int?[] { 1, 2, null }), "Entidades sin carga exitosa no reciben ranking");
+Verificar(cargasReporte[1].Intentos == 3 && cargasReporte[1].FechaCarga?.Kind == DateTimeKind.Utc && cargasReporte[0].FechaAprobacion?.Kind == DateTimeKind.Utc, "Reporte BANCI conserva intentos y entrega fechas UTC");
 Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {
