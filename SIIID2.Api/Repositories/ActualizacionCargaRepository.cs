@@ -6,12 +6,15 @@ using SIIID2.Api.Data;
 using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
+
 public class ActualizacionCargaRepository : IActualizacionCargaRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
-    public ActualizacionCargaRepository(IDbConnectionFactory dbConnectionFactory)
+    private readonly BanciMensualService _banci;
+    public ActualizacionCargaRepository(IDbConnectionFactory dbConnectionFactory, BanciMensualService banci)
     {
         _dbConnectionFactory = dbConnectionFactory;
+        _banci = banci;
     }
 
     public async Task<long> GuardarIntentoActualizacionAsync(int idUsuarioCarga,
@@ -27,7 +30,8 @@ public class ActualizacionCargaRepository : IActualizacionCargaRepository
         List<CargaValidacionError> advertencias,
         List<ArchivoFila> filasCarpetas,
         List<ArchivoFila> filasDelitos,
-        List<ArchivoFila> filasVictimas)
+        List<ArchivoFila> filasVictimas,
+        BanciCrucePreparado? cruceBanci = null)
     {
         // Guarda la actualización igual que una carga:
         // registro en carga + staging de carpetas/delitos/víctimas.
@@ -43,12 +47,14 @@ public class ActualizacionCargaRepository : IActualizacionCargaRepository
             await GuardarTmpVictimasAsync(connection, transaction, idCarga, filasVictimas);
             await CargaAuditoriaSql.GuardarAdvertenciasAsync(connection, transaction, idCarga, advertencias);
             await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, idCarga, estadoAnterior: null, estadoNuevo: estado, idUsuario: idUsuarioCarga, comentario: estado == "VALIDADO_PENDIENTE_ACTUALIZACION" ? "Actualización validada y pendiente de decisión del usuario." : "Intento de actualización registrado con errores de validación.");
+            await _banci.GuardarCruceAsync(connection, transaction, idCarga, idUsuarioCarga, cruceBanci);
             await transaction.CommitAsync();
             return idCarga;
         }
         catch
         {
             await transaction.RollbackAsync();
+            _banci.EliminarOriginalCruce(cruceBanci);
             throw;
         }
     }
@@ -421,16 +427,28 @@ GROUP BY tipo
 OPTION (RECOMPILE);
     ";
         using var connection = _dbConnectionFactory.CrearConexion();
-        var resultados = await connection.QueryAsync<(string Archivo, string Tipo, int Total)>(sql, new { IdCargaActualizacion = idCargaActualizacion });
-        var resumen = new List<CargaValidacionResumenItem>();
-        foreach (var item in resultados)
+        var resultados = await connection.QueryAsync<(string Archivo, string Tipo, int Total)>(sql, new
         {
-            resumen.Add(new CargaValidacionResumenItem { Archivo = item.Archivo, Codigo = $"ACTUALIZACION_{item.Archivo.ToUpperInvariant()}_{item.Tipo}", Descripcion = item.Tipo switch            {
-                "NUEVO" => $"Registros nuevos en {item.Archivo}.",
-                "MODIFICADO" => $"Registros modificados en {item.Archivo}.",
-                "ELIMINADO" => $"Registros eliminados en {item.Archivo}.",
-                "SIN_CAMBIOS" => $"Registros sin cambios en {item.Archivo}.",
-                _ => $"Registros {item.Tipo} en {item.Archivo}."}, TotalRegistros = item.Total, EsError = false });
+            IdCargaActualizacion = idCargaActualizacion
+        });
+        var resumen = new List<CargaValidacionResumenItem>();
+        foreach(var item in resultados)
+        {
+            resumen.Add(new CargaValidacionResumenItem
+            {
+                Archivo = item.Archivo,
+                Codigo = $"ACTUALIZACION_{item.Archivo.ToUpperInvariant()}_{item.Tipo}",
+                Descripcion = item.Tipo switch
+                {
+                    "NUEVO" => $"Registros nuevos en {item.Archivo}.",
+                    "MODIFICADO" => $"Registros modificados en {item.Archivo}.",
+                    "ELIMINADO" => $"Registros eliminados en {item.Archivo}.",
+                    "SIN_CAMBIOS" => $"Registros sin cambios en {item.Archivo}.",
+                    _ => $"Registros {item.Tipo} en {item.Archivo}."
+                },
+                TotalRegistros = item.Total,
+                EsError = false
+            });
         }
 
         return resumen;
@@ -487,7 +505,20 @@ OPTION (RECOMPILE);
                 1
             );
         ";
-        var idCarga = await connection.ExecuteScalarAsync<long>(sql, new { IdUsuarioCarga = idUsuarioCarga, IdEntidadFederativa = idEntidadFederativa, CodigoReferencia = codigoReferencia, TipoCarga = tipoCarga, MesCorte = mesCorte, AnioCorte = anioCorte, TotalCarpetas = totalCarpetas, TotalDelitos = totalDelitos, TotalVictimas = totalVictimas, Estado = estado, MensajeError = mensajeError }, transaction);
+        var idCarga = await connection.ExecuteScalarAsync<long>(sql, new
+        {
+            IdUsuarioCarga = idUsuarioCarga,
+            IdEntidadFederativa = idEntidadFederativa,
+            CodigoReferencia = codigoReferencia,
+            TipoCarga = tipoCarga,
+            MesCorte = mesCorte,
+            AnioCorte = anioCorte,
+            TotalCarpetas = totalCarpetas,
+            TotalDelitos = totalDelitos,
+            TotalVictimas = totalVictimas,
+            Estado = estado,
+            MensajeError = mensajeError
+        }, transaction);
         return idCarga;
     }
 
@@ -508,7 +539,7 @@ OPTION (RECOMPILE);
         tabla.Columns.Add("rmen_de_hchos", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-        foreach (var fila in filasCarpetas)
+        foreach(var fila in filasCarpetas)
         {
             tabla.Rows.Add(idCarga, fila.NumeroFila, ObtenerValor(fila, "id_ci"), ObtenerValor(fila, "ntra_ci"), ObtenerValor(fila, "fha_de_ini"), ObtenerValor(fila, "hra_de_ini"), ObtenerValor(fila, "rmen_de_hchos"), "PENDIENTE", true);
         }
@@ -563,7 +594,7 @@ OPTION (RECOMPILE);
         tabla.Columns.Add("dom_hchos", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-        foreach (var fila in filasDelitos)
+        foreach(var fila in filasDelitos)
         {
             tabla.Rows.Add(idCarga, fila.NumeroFila, ObtenerValor(fila, "id_ci"), ObtenerValor(fila, "id_delito"), ObtenerValor(fila, "dto"), ObtenerValor(fila, "moda_dto"), ObtenerValor(fila, "forma_acc"), ObtenerValor(fila, "fha_de_hchos"), ObtenerValor(fila, "hra_de_hchos"), ObtenerValor(fila, "emto_com_dto"), ObtenerValor(fila, "grdo_cons"), ObtenerValor(fila, "clasf_de_dto"), ObtenerValor(fila, "id_ent_hchos"), ObtenerValor(fila, "id_mun_hchos"), ObtenerValor(fila, "id_loc_hchos"), ObtenerValor(fila, "nom_loc_hchos"), ObtenerValor(fila, "id_col_hchos"), ObtenerValor(fila, "nom_col_hchos"), ObtenerValor(fila, "cp"), ObtenerValor(fila, "coord_x"), ObtenerValor(fila, "coord_y"), ObtenerValor(fila, "dom_hchos"), "PENDIENTE", true);
         }
@@ -629,7 +660,7 @@ OPTION (RECOMPILE);
         tabla.Columns.Add("curp_vicfem", typeof(string));
         tabla.Columns.Add("estado", typeof(string));
         tabla.Columns.Add("activo", typeof(bool));
-        foreach (var fila in filasVictimas)
+        foreach(var fila in filasVictimas)
         {
             tabla.Rows.Add(idCarga, fila.NumeroFila, ObtenerValor(fila, "id_ci"), ObtenerValor(fila, "id_delito"), ObtenerValor(fila, "id_vicf"), ObtenerValor(fila, "id_tv"), ObtenerValor(fila, "id_tpm"), ObtenerValor(fila, "sexo"), ObtenerValor(fila, "genero"), ObtenerValor(fila, "pob"), ObtenerValor(fila, "disc"), ObtenerValor(fila, "fha_nac"), ObtenerValor(fila, "edad"), ObtenerValor(fila, "nacional"), ObtenerValor(fila, "nombre_vicfem"), ObtenerValor(fila, "1apellido_vicfem"), ObtenerValor(fila, "2apellido_vicfem"), ObtenerValor(fila, "curp_vicfem"), "PENDIENTE", true);
         }

@@ -1,6 +1,7 @@
 ﻿using SIIID2.Api.Models;
 
 namespace SIIID2.Api.Repositories;
+
 public interface IActualizacionCargaRepository
 {
     // Guarda el intento completo de actualización.
@@ -18,7 +19,8 @@ public interface IActualizacionCargaRepository
         List<CargaValidacionError> advertencias,
         List<ArchivoFila> filasCarpetas,
         List<ArchivoFila> filasDelitos,
-        List<ArchivoFila> filasVictimas);
+        List<ArchivoFila> filasVictimas,
+        BanciCrucePreparado? cruceBanci = null);
     // Obtiene el resumen de diferencias de una actualización validada.
     // Se usa en la respuesta de validación antes de confirmar.
     Task<List<CargaValidacionResumenItem>> ObtenerResumenDiferenciasActualizacionAsync(long idCargaActualizacion);

@@ -569,6 +569,70 @@ Verificar(corteBloqueadoBanci, "Un envío pendiente bloquea toda actualización 
 BanciMensualService.ValidarDisponibilidadActualizacion(true, false);
 BanciMensualService.ValidarDisponibilidadActualizacion(false, true);
 Verificar(true, "Sin pendientes se permite actualizar y la carga inicial mantiene su control por carpeta");
+// Reclasificación aprobada por víctima, independiente del delito compartido y reversible.
+ArchivoFila FilaCruce(params (string Campo,string Valor)[] datos) => new() { NumeroFila=2,Columnas=datos.ToDictionary(p=>p.Campo,p=>(string?)p.Valor,StringComparer.OrdinalIgnoreCase) };
+BanciLibro LibroCruce() => new() { Entidad=9,Mes=5,Anio=2026,
+    Carpetas=[FilaCruce(("id_ci","ci"),("ntra_ci","Fiscalía/0001"),("no_banci","BANCI/09/2026/000001"))],
+    Delitos=[FilaCruce(("id_ci","ci"),("id_delito","d1"),("clasf_de_dto","D1"))],
+    Victimas=[FilaCruce(("id_ci","ci"),("id_delito","d1"),("id_vicf","v1"),("nomb","Persona")),FilaCruce(("id_ci","ci"),("id_delito","d1"),("id_vicf","v2"))] };
+BanciLibro CopiaCruce(BanciLibro libro) => System.Text.Json.JsonSerializer.Deserialize<BanciLibro>(System.Text.Json.JsonSerializer.Serialize(libro))!;
+var clasesCruce=new HashSet<string>{"D1","D2"};
+var familiasCruce=new HashSet<string>{"D1","D2","FamiliaD"};
+var padresCruce=new Dictionary<string,string>{{"H1","H"},{"D1","FamiliaD"},{"D2","FamiliaD"}};
+BanciCrucePreparado CompararPruebaCruce(BanciLibro banco,BanciLibro mensual) => BanciMensualService.CompararCruce(banco,mensual,clasesCruce,"2","1",familiasCruce,padresCruce);
+var bancoCruce=LibroCruce();
+var motivosReclasificacion=new HashSet<(string,string)> { ("1","H"),("2","motivo-no-delito") };
+var bancoSinMotivo=LibroCruce(); bancoSinMotivo.Victimas[0].Columnas["localizado_o_no_localizado"]="localizado";bancoSinMotivo.Victimas[0].Columnas["constitutiva_delito"]="2";
+Verificar(BanciMensualService.ValidarClasificacionReclasificacion(bancoSinMotivo,"localizado",motivosReclasificacion).Count==1,"No delito siempre exige motivo, incluso si se omiten validaciones de contenido");
+bancoSinMotivo.Victimas[0].Columnas["motivo_desaparicion"]="motivo-no-delito";
+Verificar(BanciMensualService.ValidarClasificacionReclasificacion(bancoSinMotivo,"localizado",motivosReclasificacion).Count==0,"La clasificación acepta el motivo de su condición");
+Verificar(BanciMensualService.ValidarClasificacionReclasificacion(LibroCruce(),"localizado",motivosReclasificacion).Count==0,"La validación de reclasificación no impone campos de contenido a víctimas sin clasificación");
+
+Verificar(!BanciMensualService.EsReclasificada(bancoCruce.Victimas[0],"2","1",familiasCruce),"No localizada sin clasificación conserva desaparición vigente");
+bancoCruce.Victimas[0].Columnas["constitutiva_delito"]="2";
+bancoCruce.Victimas[0].Columnas["motivo_desaparicion"]="motivo-no-delito";
+Verificar(BanciMensualService.EsReclasificada(bancoCruce.Victimas[0],"2","1",familiasCruce),"No delito se reclasifica por víctima");
+Verificar(!BanciMensualService.EsReclasificada(bancoCruce.Victimas[1],"2","1",familiasCruce),"Reclasificar una víctima no afecta a otra del mismo delito");
+var mesCruce=LibroCruce(); mesCruce.Victimas.RemoveAt(0);
+var parcialCruce=CompararPruebaCruce(bancoCruce,mesCruce);
+Verificar(parcialCruce.Errores.Count==0 && parcialCruce.Propuesta!.Victimas.Count==2,"No delito aprobado permite retirar solo esa víctima del Consolidado y conserva ambas en BANCI");
+Verificar(CompararPruebaCruce(bancoCruce,LibroCruce()).Errores.Count>0,"Una reclasificación aprobada no puede seguir como desaparición en el Consolidado");
+var omitidaCruce=LibroCruce(); omitidaCruce.Victimas.RemoveAt(1);
+Verificar(CompararPruebaCruce(bancoCruce,omitidaCruce).Errores.Count>0,"No se permite omitir otra víctima que sigue vigente");
+var modificadaCruce=LibroCruce(); modificadaCruce.Victimas[1].Columnas["id_vicf"]="otro-id";
+Verificar(CompararPruebaCruce(LibroCruce(),modificadaCruce).Errores.Count>0,"Cambiar identificadores de víctimas vigentes bloquea el cruce");
+var sinCarpetaCruce=new BanciLibro { Entidad=9,Mes=5,Anio=2026 };
+Verificar(CompararPruebaCruce(LibroCruce(),sinCarpetaCruce).Errores.Count==2,"Eliminar la carpeta no evita comprobar sus desapariciones vigentes");
+foreach(var v in bancoCruce.Victimas) { v.Columnas["constitutiva_delito"]="2";v.Columnas["motivo_desaparicion"]="motivo"; }
+Verificar(CompararPruebaCruce(bancoCruce,sinCarpetaCruce).Errores.Count==0,"Una carpeta completamente reclasificada deja de ser exigible sin borrarse en BANCI");
+var bancoOtroDelito=LibroCruce(); bancoOtroDelito.Victimas[0].Columnas["constitutiva_delito"]="1";bancoOtroDelito.Victimas[0].Columnas["motivo_desaparicion"]="H";
+var mesOtroDelito=LibroCruce(); mesOtroDelito.Victimas[0].Columnas["id_delito"]="d2"; mesOtroDelito.Delitos.Add(FilaCruce(("id_ci","ci"),("id_delito","d2"),("clasf_de_dto","H1")));
+Verificar(CompararPruebaCruce(bancoOtroDelito,mesOtroDelito).Errores.Count==0,"Reclasificación por víctima puede reflejarse en otro delito inequívoco conservando la otra desaparición");
+mesOtroDelito.Delitos[1].Columnas["clasf_de_dto"]="X1";
+Verificar(CompararPruebaCruce(bancoOtroDelito,mesOtroDelito).Errores.Count>0,"Otro delito debe coincidir con el motivo aprobado, no basta que deje de ser desaparición");
+mesOtroDelito.Delitos[1].Columnas["clasf_de_dto"]="H1"; mesOtroDelito.Victimas.Add(CopiaCruce(mesOtroDelito).Victimas[0]);
+Verificar(CompararPruebaCruce(bancoOtroDelito,mesOtroDelito).Errores.Count>0,"Víctimas ambiguas no se emparejan por nombre ni por posición");
+bancoOtroDelito.Victimas[0].Columnas["motivo_desaparicion"]="D2";
+Verificar(!BanciMensualService.EsReclasificada(bancoOtroDelito.Victimas[0],"2","1",familiasCruce),"Cambiar a otra desaparición conserva la vigencia");
+bancoOtroDelito.Victimas[0].Columnas["motivo_desaparicion"]="FamiliaD";
+Verificar(!BanciMensualService.EsReclasificada(bancoOtroDelito.Victimas[0],"2","1",familiasCruce),"Catálogo de delito padre de desaparición no se considera reclasificación");
+bancoOtroDelito.Victimas[0].Columnas["constitutiva_delito"]="";bancoOtroDelito.Victimas[0].Columnas["motivo_desaparicion"]="";
+Verificar(CompararPruebaCruce(bancoOtroDelito,LibroCruce()).Errores.Count==0,"Revertir en BANCI permite volver a reportar la desaparición");
+var nuevosMes=LibroCruce(); nuevosMes.Victimas.Add(FilaCruce(("id_ci","ci"),("id_delito","d1"),("id_vicf","v3")));
+var nuevosCruce=CompararPruebaCruce(LibroCruce(),nuevosMes);
+Verificar(nuevosCruce.Errores.Count==0 && nuevosCruce.Nuevas!.Victimas.Count==1 && nuevosCruce.Nuevas.Victimas[0].Columnas["id_vicf"]=="v3","Solicitar complementos solo de víctimas nuevas incluso dentro de una carpeta existente");
+Verificar(nuevosCruce.Nuevas!.Carpetas.Count==1 && nuevosCruce.Nuevas.Delitos.Count==1 && nuevosCruce.Propuesta!.Victimas.Count==3,"Plantilla de nuevas víctimas conserva relaciones sin duplicar las existentes");
+Verificar(nuevosCruce.Propuesta!.Carpetas[0].Columnas["no_banci"]=="BANCI/09/2026/000001","Cruce conserva folio estable de la carpeta existente");
+var bancoIdentidad=LibroCruce();bancoIdentidad.Victimas[0].Columnas["fub"]="FUB_EXISTENTE";
+var mesIdentidad=LibroCruce();mesIdentidad.Victimas[0].Columnas["edad"]="30";
+var copiaBancoIdentidad=System.Text.Json.JsonSerializer.Serialize(bancoIdentidad);
+var cruceIdentidad=CompararPruebaCruce(bancoIdentidad,mesIdentidad);
+Verificar(cruceIdentidad.Propuesta!.Victimas[0].Columnas["edad"]=="30" && cruceIdentidad.Propuesta.Victimas[0].Columnas["fub"]=="FUB_EXISTENTE","Actualización de origen conserva complementos aprobados");
+Verificar(System.Text.Json.JsonSerializer.Serialize(bancoIdentidad)==copiaBancoIdentidad,"Comparar no modifica el snapshot aprobado ni su huella");
+var bancoVolumenCruce=LibroCruce(); bancoVolumenCruce.Victimas=Enumerable.Range(1,5000).Select(i=>FilaCruce(("id_ci","ci"),("id_delito","d1"),("id_vicf",i.ToString()))).ToList();
+var volumenCruce=CompararPruebaCruce(bancoVolumenCruce,CopiaCruce(bancoVolumenCruce));
+Verificar(volumenCruce.Errores.Count==0 && volumenCruce.Propuesta!.Victimas.Count==5000 && volumenCruce.Nuevas!.Victimas.Count==0,"Cruce de 5000 víctimas mantiene todos los registros sin pedir complementos repetidos");
+
 Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {

@@ -4,21 +4,25 @@ using ClosedXML.Excel;
 using System.IO.Compression;
 
 namespace SIIID2.Api.Services;
+
 public class AdministracionCargasService : IAdministracionCargasService
 {
     private readonly IAdministracionCargasRepository _administracionRepository;
     private readonly IUsuarioRepository _usuarioRepository;
     private readonly ICargaRepository _cargaRepository;
     private readonly IActualizacionRepository _actualizacionRepository;
+    private readonly BanciMensualService _banci;
     public AdministracionCargasService(IAdministracionCargasRepository administracionRepository,
         IUsuarioRepository usuarioRepository,
         ICargaRepository cargaRepository,
-        IActualizacionRepository actualizacionRepository)
+        IActualizacionRepository actualizacionRepository,
+        BanciMensualService banci)
     {
         _administracionRepository = administracionRepository;
         _usuarioRepository = usuarioRepository;
         _cargaRepository = cargaRepository;
         _actualizacionRepository = actualizacionRepository;
+        _banci = banci;
     }
 
     public async Task<List<CargaPendienteAdministracionItem>> ObtenerPendientesAsync(int idUsuario)
@@ -30,7 +34,10 @@ public class AdministracionCargasService : IAdministracionCargasService
     public async Task<CargaPendienteAdministracionDetalle?> ObtenerDetalleAsync(int idUsuario, string codigoReferencia)
     {
         await ValidarSuperUsuarioAsync(idUsuario);
-        return await _administracionRepository.ObtenerDetalleAsync(codigoReferencia);
+        var detalle = await _administracionRepository.ObtenerDetalleAsync(codigoReferencia);
+        if(detalle?.TipoCarga == "ACTUALIZACION")
+            detalle.CruceBanci = await _banci.ResumenCruceAsync(detalle.IdCarga);
+        return detalle;
     }
 
     public async Task<ConfirmarCargaResponse> AprobarAsync(int idUsuario, string codigoReferencia)
@@ -55,7 +62,8 @@ public class AdministracionCargasService : IAdministracionCargasService
                 EsValido = false,
                 CodigoReferencia = codigoReferencia,
                 Estado = carga.Estado,
-                Mensaje = $"La carga ya fue resuelta o no esta pendiente de aprobacion. Estado actual: {carga.Estado}."};
+                Mensaje = $"La carga ya fue resuelta o no esta pendiente de aprobacion. Estado actual: {carga.Estado}."
+            };
         }
 
         if(string.Equals(carga.TipoCarga, "CARGA_INICIAL", StringComparison.OrdinalIgnoreCase))
@@ -65,7 +73,11 @@ public class AdministracionCargasService : IAdministracionCargasService
 
         if(string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
         {
-            return await _actualizacionRepository.AprobarActualizacionPendienteAsync(codigoReferencia, idUsuario);
+            try
+            {
+                return await _actualizacionRepository.AprobarActualizacionPendienteAsync(codigoReferencia, idUsuario);
+            }
+            catch(InvalidOperationException ex) { return new() { EsValido = false, CodigoReferencia = codigoReferencia, Estado = "CRUCE_BANCI_NO_VALIDO", Mensaje = ex.Message }; }
         }
 
         return new ConfirmarCargaResponse
@@ -111,7 +123,8 @@ public class AdministracionCargasService : IAdministracionCargasService
                 EsValido = false,
                 CodigoReferencia = codigoReferencia,
                 Estado = carga.Estado,
-                Mensaje = $"La carga ya fue resuelta o no esta pendiente de aprobacion. Estado actual: {carga.Estado}."};
+                Mensaje = $"La carga ya fue resuelta o no esta pendiente de aprobacion. Estado actual: {carga.Estado}."
+            };
         }
 
         if(string.Equals(carga.TipoCarga, "CARGA_INICIAL", StringComparison.OrdinalIgnoreCase))
@@ -121,7 +134,11 @@ public class AdministracionCargasService : IAdministracionCargasService
 
         if(string.Equals(carga.TipoCarga, "ACTUALIZACION", StringComparison.OrdinalIgnoreCase))
         {
-            return await _actualizacionRepository.RechazarActualizacionPendienteAsync(codigoReferencia, idUsuario, motivoLimpio);
+            try
+            {
+                return await _actualizacionRepository.RechazarActualizacionPendienteAsync(codigoReferencia, idUsuario, motivoLimpio);
+            }
+            catch(InvalidOperationException ex) { return new() { EsValido = false, CodigoReferencia = codigoReferencia, Estado = "CRUCE_BANCI_NO_VALIDO", Mensaje = ex.Message }; }
         }
 
         return new ConfirmarCargaResponse
@@ -172,7 +189,7 @@ public class AdministracionCargasService : IAdministracionCargasService
         var delitos = await _administracionRepository.ObtenerDelitosPendientesAsync(detalle.IdCarga);
         var victimas = await _administracionRepository.ObtenerVictimasPendientesAsync(detalle.IdCarga);
         using var zipStream = new MemoryStream();
-        using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
+        using(var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
         {
             AgregarExcelAlZip(archive, "carpetas.xlsx", "carpetas", carpetas);
             AgregarExcelAlZip(archive, "delitos.xlsx", "delitos", delitos);
@@ -184,7 +201,8 @@ public class AdministracionCargasService : IAdministracionCargasService
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = $"ARCHIVOS_REVISION_{entidad}_{mes}_{detalle.AnioCorte}.zip"};
+            NombreArchivo = $"ARCHIVOS_REVISION_{entidad}_{mes}_{detalle.AnioCorte}.zip"
+        };
     }
 
     private static void AgregarExcelAlZip(ZipArchive archive,
@@ -230,7 +248,8 @@ public class AdministracionCargasService : IAdministracionCargasService
 
     private static string ObtenerNombreMes(int mes)
     {
-        return mes switch        {
+        return mes switch
+        {
             1 => "ENERO",
             2 => "FEBRERO",
             3 => "MARZO",
@@ -243,7 +262,8 @@ public class AdministracionCargasService : IAdministracionCargasService
             10 => "OCTUBRE",
             11 => "NOVIEMBRE",
             12 => "DICIEMBRE",
-            _ => $"MES_{mes}"};
+            _ => $"MES_{mes}"
+        };
     }
 
     private static string NormalizarNombreArchivo(string valor)
@@ -285,13 +305,13 @@ public class AdministracionCargasService : IAdministracionCargasService
                 'N'
             }
         };
-        foreach (var reemplazo in reemplazos)
+        foreach(var reemplazo in reemplazos)
         {
             valor = valor.Replace(reemplazo.Key, reemplazo.Value);
         }
 
         var caracteres = valor.Select(caracter => char.IsLetterOrDigit(caracter) ? caracter : '_').ToArray();
-        valor = new string (caracteres);
+        valor = new string(caracteres);
         while(valor.Contains("__"))
         {
             valor = valor.Replace("__", "_");

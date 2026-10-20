@@ -199,7 +199,7 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
             }, tx));
             foreach(var fila in libro.Delitos.Concat(libro.Victimas))
             {
-                foreach(var campo in fila.Columnas.Keys.Where(c => c.StartsWith("id_banci_") || c.EndsWith("_consolidado") || c == "activo").ToArray())
+                foreach(var campo in fila.Columnas.Keys.Where(c => c.StartsWith("id_banci_") || c.EndsWith("_consolidado") || c is "activo" or "reclasificada").ToArray())
                     fila.Columnas.Remove(campo);
                 foreach(var campo in fila.Columnas.Keys.ToArray())
                     if((campo.StartsWith("fha_")
@@ -223,7 +223,12 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         using var db = factory.CrearConexion();
         if(actualizacion)
         {
-            var pendiente = await db.ExecuteScalarAsync<bool>("SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.banci_carga WHERE id_entidad_federativa=@entidad AND mes_corte=@mes AND anio_corte=@anio AND estado='PENDIENTE_APROBACION') THEN 1 ELSE 0 END);", new { entidad, mes, anio });
+            var pendiente = await db.ExecuteScalarAsync<bool>("SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.banci_carga WHERE id_entidad_federativa=@entidad AND mes_corte=@mes AND anio_corte=@anio AND (estado='PENDIENTE_APROBACION' OR (estado='VALIDADO' AND EXISTS(SELECT 1 FROM dbo.banci_operacion_vinculada ov JOIN dbo.carga c ON c.id_carga=ov.id_carga_consolidado WHERE ov.id_banci_carga=dbo.banci_carga.id_banci_carga AND c.estado='VALIDADO_PENDIENTE_ACTUALIZACION' AND (c.fecha_expiracion IS NULL OR c.fecha_expiracion>=SYSDATETIME()))))) THEN 1 ELSE 0 END);", new
+            {
+                entidad,
+                mes,
+                anio
+            });
             ValidarDisponibilidadActualizacion(actualizacion, pendiente);
         }
         var libro = await OrigenAsync(db, entidad, mes, anio, actualizacion);
@@ -252,7 +257,13 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
                 WHERE c.id_entidad_federativa=@Entidad AND c.mes_corte=@Mes AND c.anio_corte=@Anio
                   AND c.tipo_carga='CARGA' AND c.estado='PENDIENTE_APROBACION'
                   AND (@excluirCarga IS NULL OR c.id_banci_carga<>@excluirCarga);
-                """, new { libro.Entidad, libro.Mes, libro.Anio, excluirCarga }, tx));
+                """, new
+            {
+                libro.Entidad,
+                libro.Mes,
+                libro.Anio,
+                excluirCarga
+            }, tx));
         FiltrarNuevas(libro, registradas);
     }
 
@@ -270,7 +281,8 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         foreach(var fila in libro.Victimas)
         {
             PrecargarIdentidad(fila);
-            foreach(var campo in CamposFeminicidio) fila.Columnas.Remove(campo);
+            foreach(var campo in CamposFeminicidio)
+                fila.Columnas.Remove(campo);
             foreach(var campo in Complementos)
                 fila.Columnas.TryAdd(campo, null);
             if(Valor(fila, "localizado_o_no_localizado") == "")
@@ -308,15 +320,17 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
 
     private static async Task<List<BanciLibro>> PropuestasEnRevisionAsync(IDbConnection db, BanciLibro libro)
     {
-        var operaciones = await db.QueryAsync<BanciOperacion>(BanciMensualSql.Operaciones + " WHERE b.id_entidad_federativa=@Entidad AND b.mes_corte=@Mes AND b.anio_corte=@Anio AND b.estado='PENDIENTE_APROBACION';", libro);
+        var operaciones = await db.QueryAsync<BanciOperacion>(BanciMensualSql.Operaciones + " WHERE b.id_entidad_federativa=@Entidad AND b.mes_corte=@Mes AND b.anio_corte=@Anio AND (b.estado='PENDIENTE_APROBACION' OR (b.estado='VALIDADO' AND EXISTS(SELECT 1 FROM dbo.banci_operacion_vinculada ov JOIN dbo.carga c ON c.id_carga=ov.id_carga_consolidado WHERE ov.id_banci_carga=b.id_banci_carga AND c.estado='VALIDADO_PENDIENTE_ACTUALIZACION' AND (c.fecha_expiracion IS NULL OR c.fecha_expiracion>=SYSDATETIME()))));", libro);
         var pendientes = new List<BanciLibro>();
-        foreach(var operacion in operaciones) pendientes.Add(await PropuestaAsync(db, operacion));
+        foreach(var operacion in operaciones)
+            pendientes.Add(await PropuestaAsync(db, operacion));
         return pendientes;
     }
 
     public static void ValidarDisponibilidadActualizacion(bool actualizacion, bool hayEnvioPendiente)
     {
-        if(actualizacion && hayEnvioPendiente) throw new BanciEnvioPendienteException();
+        if(actualizacion && hayEnvioPendiente)
+            throw new BanciEnvioPendienteException();
     }
 
     public static bool SeSuperponen(BanciLibro primero, BanciLibro segundo)
@@ -489,8 +503,10 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
 
     private static bool CoincideDatoProtegido(string hoja, string campo, string original, string propuesta)
     {
-        if(original == propuesta) return true;
-        if(hoja != "delitos" || campo is not ("coord_x" or "coord_y")) return false;
+        if(original == propuesta)
+            return true;
+        if(hoja != "delitos" || campo is not ("coord_x" or "coord_y"))
+            return false;
         var coordenada = NormalizarCoordenada(original);
         return coordenada != null && coordenada == NormalizarCoordenada(propuesta);
     }
@@ -498,11 +514,13 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
     private static string? NormalizarCoordenada(string valor)
     {
         // Comparación decimal exacta: elimina solo ceros de formato, sin redondear ni usar tolerancias.
-        if(!Regex.IsMatch(valor, @"^[+-]?[0-9]+(?:\.[0-9]+)?$")) return null;
+        if(!Regex.IsMatch(valor, @"^[+-]?[0-9]+(?:\.[0-9]+)?$"))
+            return null;
         var negativa = valor.StartsWith('-');
         var partes = valor.TrimStart('+', '-').Split('.');
         var entero = partes[0].TrimStart('0');
-        if(entero == "") entero = "0";
+        if(entero == "")
+            entero = "0";
         var fraccion = partes.Length == 2 ? partes[1].TrimEnd('0') : "";
         return (negativa && (entero != "0" || fraccion != "") ? "-" : "")
             + entero + (fraccion == "" ? "" : "." + fraccion);

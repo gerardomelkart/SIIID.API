@@ -13,12 +13,14 @@ public sealed partial class BanciMensualService
 {
     public async Task<object> ValidarAsync(int usuario, BanciLibro libro, byte[] original, string nombre, bool manual = false)
     {
-        if(manual || libro.Manual) throw new InvalidOperationException("BANCI mensual solo admite cargas y actualizaciones masivas mediante archivo Excel.");
+        if(manual || libro.Manual)
+            throw new InvalidOperationException("BANCI mensual solo admite cargas y actualizaciones masivas mediante archivo Excel.");
         await AccesoAsync(usuario, libro.Entidad, libro.Actualizacion ? "ACTUALIZACION" : "CARGA");
         libro.Manual = manual;
         using(var consultaPendientes = factory.CrearConexion())
             foreach(var pendiente in await PropuestasEnRevisionAsync(consultaPendientes, libro))
-                if(libro.Actualizacion || SeSuperponen(libro, pendiente)) throw new BanciEnvioPendienteException();
+                if(libro.Actualizacion || SeSuperponen(libro, pendiente))
+                    throw new BanciEnvioPendienteException();
         var origen = await PrecargaAsync(usuario, libro.Entidad, libro.Mes, libro.Anio, libro.Actualizacion, manual);
         var tieneOrigen = origen.Carpetas.Count > 0;
         origen = SeleccionarOrigen(origen, libro);
@@ -80,6 +82,8 @@ public sealed partial class BanciMensualService
 
         NormalizarLocalizacion(libro, reglas.Clave("banci_catalogo_localizacion", "NO_LOCALIZADO"));
         errores.AddRange(await ValidarPersistenciaAsync(libro));
+        // Clasificación y motivos son integridad del flujo incluso con validaciones de contenido desactivadas.
+        errores.AddRange(await ValidarClasificacionReclasificacionAsync(libro));
         errores.AddRange(integridad.Validar(libro.Carpetas, libro.Delitos, libro.Victimas));
         if(libro.Carpetas.Count == 0 || libro.Delitos.Count == 0 || libro.Victimas.Count == 0)
             errores.Add(Error("general", new ArchivoFila(), "registros", "Debe incluir las carpetas, delitos y víctimas del corte."));
@@ -101,26 +105,7 @@ public sealed partial class BanciMensualService
             if(coordenadas.Advertencia != null)
                 advertencias.Add(coordenadas.Advertencia);
             advertencias.AddRange(delitosValidator.ValidarAdvertencias(libro.Delitos, configuracion.Activa("BANCI", "COORDENADAS_FORMATO_RANGO"), configuracion.Activa("BANCI", "COORDENADAS_SIN_INFORMACION"), configuracion.Activa("BANCI", "COORDENADAS_CONCENTRACION")));
-            if(errores.Count == 0 && configuracion.Activa("BANCI", "RENAPO"))
-            {
-                var grupos = libro.Victimas.Where(f => Valor(f, "curp") != "").GroupBy(f => Valor(f, "curp")).ToArray();
-                foreach(var lote in grupos.Chunk(4))
-                {
-                    var resultados = await Task.WhenAll(lote.Select(async g => new { Grupo = g, Resultado = await renapo.ConsultarAsync(g.Key) }));
-                    foreach(var consulta in resultados)
-                    {
-                        if(consulta.Resultado.Estado == EstadoConsultaRenapo.Encontrada)
-                            continue;
-                        if(consulta.Resultado.Estado == EstadoConsultaRenapo.NoDisponible)
-                            advertencias.Add(Error("victimas", consulta.Grupo.First(), "curp", "RENAPO no está disponible. La CURP solo pudo validarse localmente."));
-                        else
-                            errores.Add(Error("victimas", consulta.Grupo.First(), "curp", "RENAPO no validó la CURP. Revise el dato y la disponibilidad del servicio."));
-                    }
-
-                    if(advertencias.Count > 0)
-                        break;
-                }
-            }
+            await ValidarRenapoBanciAsync(libro, errores, advertencias);
         }
 
         using var db = factory.CrearConexion();
@@ -150,22 +135,30 @@ public sealed partial class BanciMensualService
             throw new InvalidOperationException("El archivo supera 50 MB.");
         var referencia = Guid.NewGuid();
         var ruta = RutaOriginal(referencia, nombre);
-        if(!manual) Directory.CreateDirectory(Path.GetDirectoryName(ruta)!);
+        if(!manual)
+            Directory.CreateDirectory(Path.GetDirectoryName(ruta)!);
         db.Open();
         using var tx = db.BeginTransaction(IsolationLevel.Serializable);
         try
         {
-            if(!manual) await File.WriteAllBytesAsync(ruta, original);
+            if(!manual)
+                await File.WriteAllBytesAsync(ruta, original);
             var bloqueo = await db.ExecuteScalarAsync<int>("DECLARE @r int; EXEC @r=sys.sp_getapplock @Resource=@recurso,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000; SELECT @r;", new
             {
                 recurso = $"BANCI:{libro.Entidad}:{libro.Anio}:{libro.Mes}"
             }, tx);
             if(bloqueo < 0)
                 throw new InvalidOperationException("El corte está siendo procesado. Intente nuevamente.");
+            await LiberarCrucesVencidosAsync(db, tx, libro);
             var pendientes = (await db.QueryAsync<BanciOperacion>(BanciMensualSql.Operaciones + " WHERE b.id_entidad_federativa=@Entidad AND b.mes_corte=@Mes AND b.anio_corte=@Anio AND b.estado IN('VALIDADO','PENDIENTE_APROBACION');", libro, tx)).ToList();
             ValidarDisponibilidadActualizacion(libro.Actualizacion, pendientes.Any(p => p.Estado == "PENDIENTE_APROBACION"));
             foreach(var pendiente in pendientes)
             {
+                if(await db.ExecuteScalarAsync<bool>("SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.banci_operacion_vinculada WHERE id_banci_carga=@Id) THEN 1 ELSE 0 END);", new
+                {
+                    pendiente.Id
+                }, tx))
+                    throw new InvalidOperationException("Existe una actualización del Consolidado vinculada a BANCI. Resuélvala antes de enviar otra operación BANCI.");
                 var contenido = await PropuestaAsync(db, pendiente, tx);
                 contenido.Manual = (JsonSerializer.Deserialize<BanciLibro>(pendiente.Snapshot ?? "{}", Json) ?? new BanciLibro()).Manual;
                 if(!SeSuperponen(libro, contenido))
@@ -202,14 +195,15 @@ public sealed partial class BanciMensualService
                         fila = fila.NumeroFila,
                         json = Serializar(fila)
                     }, tx);
-            if(!manual) await db.ExecuteAsync("INSERT dbo.banci_carga_archivo(id_banci_carga,nombre_original,ruta_relativa,huella_sha256,longitud_bytes) VALUES(@id,@nombre,@ruta,@huella,@longitud);", new
-            {
-                id,
-                nombre = NombreOriginal(nombre),
-                ruta = RutaRelativaOriginal(referencia, nombre),
-                huella = Convert.ToHexString(SHA256.HashData(original)),
-                longitud = original.LongLength
-            }, tx);
+            if(!manual)
+                await db.ExecuteAsync("INSERT dbo.banci_carga_archivo(id_banci_carga,nombre_original,ruta_relativa,huella_sha256,longitud_bytes) VALUES(@id,@nombre,@ruta,@huella,@longitud);", new
+                {
+                    id,
+                    nombre = NombreOriginal(nombre),
+                    ruta = RutaRelativaOriginal(referencia, nombre),
+                    huella = Convert.ToHexString(SHA256.HashData(original)),
+                    longitud = original.LongLength
+                }, tx);
             await BitacoraAsync(db, tx, id, usuario, null, "VALIDADO", "Validación de carga BANCI.");
             tx.Commit();
             return new
@@ -226,7 +220,8 @@ public sealed partial class BanciMensualService
         catch
         {
             tx.Rollback();
-            if(!manual) File.Delete(ruta);
+            if(!manual)
+                File.Delete(ruta);
             throw;
         }
     }
@@ -442,7 +437,8 @@ public sealed partial class BanciMensualService
             op.Id
         });
         var ruta = RutaOriginal(referencia, nombre);
-        if(!File.Exists(ruta)) ruta = RutaOriginal(referencia);
+        if(!File.Exists(ruta))
+            ruta = RutaOriginal(referencia);
         if(!File.Exists(ruta))
             throw new KeyNotFoundException("El archivo original no está disponible en este ambiente.");
         return (await File.ReadAllBytesAsync(ruta), nombre);
@@ -457,6 +453,12 @@ public sealed partial class BanciMensualService
         {
             var op = await ObtenerAsync(db, referencia, tx);
             var acceso = await AccesoAsync(usuario, op.Entidad, administrativa ? "ADMIN" : op.Tipo);
+            if(await db.ExecuteScalarAsync<bool>("SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.banci_operacion_vinculada WHERE id_banci_carga=@Id) THEN 1 ELSE 0 END);", new
+            {
+                op.Id
+            }, tx))
+                throw new InvalidOperationException("Este envío se resuelve junto con su actualización del Consolidado, desde la aprobación del módulo mensual.");
+
             if(!administrativa && op.Usuario != usuario)
                 throw new UnauthorizedAccessException("Solo el remitente puede confirmar este envío.");
             var esperado = administrativa ? "PENDIENTE_APROBACION" : "VALIDADO";
@@ -468,8 +470,12 @@ public sealed partial class BanciMensualService
                 throw new InvalidOperationException("El motivo supera 2000 caracteres.");
             if(!administrativa && decision.Aceptar && op.Tipo == "ACTUALIZACION")
             {
-                var bloqueoCorte = await db.ExecuteScalarAsync<int>("DECLARE @r int; EXEC @r=sys.sp_getapplock @Resource=@recurso,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000; SELECT @r;", new { recurso = $"BANCI:{op.Entidad}:{op.Anio}:{op.Mes}" }, tx);
-                if(bloqueoCorte < 0) throw new InvalidOperationException("El corte está siendo procesado. Intente nuevamente.");
+                var bloqueoCorte = await db.ExecuteScalarAsync<int>("DECLARE @r int; EXEC @r=sys.sp_getapplock @Resource=@recurso,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000; SELECT @r;", new
+                {
+                    recurso = $"BANCI:{op.Entidad}:{op.Anio}:{op.Mes}"
+                }, tx);
+                if(bloqueoCorte < 0)
+                    throw new InvalidOperationException("El corte está siendo procesado. Intente nuevamente.");
                 var otroPendiente = await db.ExecuteScalarAsync<bool>("SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.banci_carga WHERE id_entidad_federativa=@Entidad AND mes_corte=@Mes AND anio_corte=@Anio AND estado='PENDIENTE_APROBACION' AND id_banci_carga<>@Id) THEN 1 ELSE 0 END);", op, tx);
                 ValidarDisponibilidadActualizacion(true, otroPendiente);
             }
@@ -500,6 +506,7 @@ public sealed partial class BanciMensualService
                     await IntegrarCargaAsync(db, tx, op, propuesta, usuario);
                 else
                     await IntegrarActualizacionAsync(db, tx, op, propuesta, usuario);
+                await RegistrarReclasificacionesAsync(db, tx, op, propuesta, usuario);
                 estado = op.Tipo == "CARGA" ? "CONFIRMADO" : "CONFIRMADO_ACTUALIZACION";
             }
 
@@ -526,7 +533,7 @@ public sealed partial class BanciMensualService
         }
     }
 
-    private static async Task IntegrarCargaAsync(IDbConnection db, IDbTransaction tx, BanciOperacion op, BanciLibro libro, int usuario)
+    private static async Task IntegrarCargaAsync(IDbConnection db, IDbTransaction tx, BanciOperacion op, BanciLibro libro, int usuario, bool cruce = false)
     {
         foreach(var carpeta in libro.Carpetas)
         {
@@ -545,7 +552,7 @@ public sealed partial class BanciMensualService
             if(existentes.Length > 0 && (libro.Manual || existentes.Length != 1
                 || existentes[0].Mes != op.Mes || existentes[0].Anio != op.Anio
                 || !string.Equals(existentes[0].Ci, Valor(carpeta, "id_ci"), StringComparison.OrdinalIgnoreCase)
-                || !string.Equals(existentes[0].Ntra, Valor(carpeta, "ntra_ci"), StringComparison.OrdinalIgnoreCase)))
+                || !cruce && !string.Equals(existentes[0].Ntra, Valor(carpeta, "ntra_ci"), StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("La carpeta ya está registrada en BANCI con otro identificador o periodo. Actualice la plantilla.");
             long id;
             if(existentes.Length == 1)

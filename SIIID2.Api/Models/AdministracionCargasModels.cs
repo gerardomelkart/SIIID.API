@@ -1,42 +1,98 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
 namespace SIIID2.Api.Models;
+
 public class CargaPendienteAdministracionItem
 {
-    public long IdCarga { get; set; }
+    public long IdCarga
+    {
+        get; set;
+    }
     public string CodigoReferencia { get; set; } = string.Empty;
     public string TipoCarga { get; set; } = string.Empty;
-    public int? IdEntidadFederativa { get; set; }
+    public int? IdEntidadFederativa
+    {
+        get; set;
+    }
     public string EntidadFederativa { get; set; } = string.Empty;
-    public int MesCorte { get; set; }
-    public int AnioCorte { get; set; }
-    public DateTime FechaValidacion { get; set; }
-    public int IdUsuarioCarga { get; set; }
+    public int MesCorte
+    {
+        get; set;
+    }
+    public int AnioCorte
+    {
+        get; set;
+    }
+    public DateTime FechaValidacion
+    {
+        get; set;
+    }
+    public int IdUsuarioCarga
+    {
+        get; set;
+    }
     public string UsuarioCarga { get; set; } = string.Empty;
     public string NombreUsuarioCarga { get; set; } = string.Empty;
-    public int TotalCarpetas { get; set; }
-    public int TotalDelitos { get; set; }
-    public int TotalVictimas { get; set; }
-    public int TotalAdvertencias { get; set; }
+    public int TotalCarpetas
+    {
+        get; set;
+    }
+    public int TotalDelitos
+    {
+        get; set;
+    }
+    public int TotalVictimas
+    {
+        get; set;
+    }
+    public int TotalAdvertencias
+    {
+        get; set;
+    }
 }
 
 public class CargaAdvertenciaAdministracionItem
 {
-    public long IdCargaAdvertencia { get; set; }
+    public long IdCargaAdvertencia
+    {
+        get; set;
+    }
     public string Codigo { get; set; } = string.Empty;
     public string Archivo { get; set; } = string.Empty;
-    public int? NumeroFila { get; set; }
-    public string? Columna { get; set; }
-    public string? Campo { get; set; }
-    public string? Valor { get; set; }
+    public int? NumeroFila
+    {
+        get; set;
+    }
+    public string? Columna
+    {
+        get; set;
+    }
+    public string? Campo
+    {
+        get; set;
+    }
+    public string? Valor
+    {
+        get; set;
+    }
     public string DescripcionResumen { get; set; } = string.Empty;
     public string Mensaje { get; set; } = string.Empty;
-    public bool AceptadaUsuario { get; set; }
-    public DateTime? FechaAceptacion { get; set; }
+    public bool AceptadaUsuario
+    {
+        get; set;
+    }
+    public DateTime? FechaAceptacion
+    {
+        get; set;
+    }
 }
 
 public class CargaPendienteAdministracionDetalle : CargaPendienteAdministracionItem
 {
+    public BanciCruceResumen? CruceBanci
+    {
+        get; set;
+    }
     public List<CargaAdvertenciaAdministracionItem> Advertencias { get; set; } = [];
 }
 

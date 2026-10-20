@@ -3,6 +3,14 @@
 // Si Errores está vacío, la carga se considera válida.
 public class CargaValidacionResponse
 {
+    public BanciComplementosSolicitud? ComplementosBanci
+    {
+        get; set;
+    }
+    public bool CruceBanci
+    {
+        get; set;
+    }
     // La validación es correcta si no hay errores.
     public bool EsValido => Errores.Count == 0;
     // Código generado para identificar este intento de carga.

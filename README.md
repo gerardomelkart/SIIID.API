@@ -51,7 +51,7 @@ Usar cuatro espacios y llaves en una línea independiente. Las firmas y condicio
 
 Se recuperó el diseño institucional original y se conectaron carga/actualización masiva y manual, informes, originales, aprobación administrativa y configuración al modelo mensual. Requiere el script `desarrollo/12_banci_mensual_operacion.sql` de SIIID2BD después del bloque 1.
 
-Guía coordinada y prueba de QA: `SIIID2BD/documentacion/banci_operacion_mensual.md`. Conservar `ArchivosOriginalesBanci` al publicar API. El nuevo cruce del consolidado y las reclasificaciones permanecen en el bloque 5, desactivado.
+Guía coordinada y prueba de QA: `SIIID2BD/documentacion/banci_operacion_mensual.md`. Conservar `ArchivosOriginalesBanci` al publicar API. El nuevo cruce y la reclasificación por víctima se describen en `SIIID2BD/documentacion/banci_reclasificacion_cruce.md`; requieren el script incremental 14.
 
 
 ### Ajustes BANCI: carga de pendientes, captura manual y acuse
@@ -145,3 +145,9 @@ La precarga y la plantilla de actualización se bloquean por completo cuando exi
 En captura manual y masiva, tanto de carga como de actualización, ese conflicto retira la información editable y el archivo seleccionado. Los demás errores conservan el trabajo y desplazan la vista al mensaje después de renderizarlo. Publicar API y frontend juntos. No requiere cambios de estructura de base de datos.
 
 El bloqueo de actualización es por entidad y corte completo y se verifica antes de precargar, al validar y al confirmar el envío dentro de la transacción. No permite actualizar otras víctimas del mismo periodo mientras exista una aprobación pendiente. La carga inicial conserva su control por carpetas.
+
+### Reclasificación por víctima y cruce mensual
+
+BANCI mensual opera solo mediante archivos masivos. Sus campos existentes de localización permiten reclasificar o revertir cada víctima; el efecto comienza al aprobar. Al actualizar un corte del Consolidado que ya tiene BANCI, se exige concordancia con las reclasificaciones aprobadas y se solicitan complementos de nuevas desapariciones, incluso dentro de una carpeta existente. Staging, integración, rechazo y estados de ambos módulos se resuelven conjuntamente desde Mensual. Federal y Semanal quedan fuera.
+
+Publicar BD/API/Front coordinados: ejecutar `SIIID2BD/desarrollo/14_banci_reclasificacion_cruce.sql` y seguir `SIIID2BD/documentacion/banci_reclasificacion_cruce.md`. El SQL no se ejecutó en el servidor desde este entorno; completar su prueba de integración en QA. Conservar los directorios de originales.

@@ -17,6 +17,7 @@ namespace SIIID2.Api.Services;
 public class ActualizacionArchivosService : IActualizacionArchivosService
 {
     private readonly SistemaConfiguracionService _config;
+    private readonly BanciMensualService _banci;
     private readonly IArchivoReader _archivoReader;
     private readonly CarpetasValidator _carpetasValidator;
     private readonly DelitosValidator _delitosValidator;
@@ -40,6 +41,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     // Tamaño máximo permitido por archivo: 50 MB.
     private const long TamanioMaximoBytes = 50 * 1024 * 1024;
     public ActualizacionArchivosService(SistemaConfiguracionService config,
+        BanciMensualService banci,
         IArchivoReader archivoReader,
         CarpetasValidator carpetasValidator,
         DelitosValidator delitosValidator,
@@ -56,6 +58,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         IUltimosArchivosEntidadService ultimosArchivosEntidadService)
     {
         _config = config;
+        _banci = banci;
         _archivoReader = archivoReader;
         _carpetasValidator = carpetasValidator;
         _delitosValidator = delitosValidator;
@@ -156,9 +159,9 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             return response;
         }
 
-        var listaArchivos = archivos.ToList();
+        var listaArchivos = archivos.Where(a => a.Name != "complementosBanci").ToList();
         // Validamos tamaño y extensión de cada archivo.
-        foreach (var archivo in listaArchivos)
+        foreach(var archivo in listaArchivos)
         {
             ValidarArchivoBase(archivo, response.Errores);
         }
@@ -310,6 +313,55 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             response.Advertencias.AddRange(_cargaIntegridadValidator.ValidarAdvertencias(filasDelitos, filasVictimas));
         }
 
+        BanciCrucePreparado? cruceBanci = null;
+        if(response.Errores.Count == 0)
+        {
+            try
+            {
+                cruceBanci = await _banci.PrepararCruceAsync(idUsuarioCarga, new BanciLibro
+                {
+                    Entidad = idEntidadFederativaCarga!.Value,
+                    Mes = mesCorte!.Value,
+                    Anio = anioCorte!.Value,
+                    Carpetas = filasCarpetas,
+                    Delitos = filasDelitos,
+                    Victimas = filasVictimas
+                }, form.Files.GetFile("complementosBanci"));
+            }
+            catch(Exception ex) when(ex is InvalidOperationException or InvalidDataException or ArgumentException or UnauthorizedAccessException)
+            {
+                response.Errores.Add(new()
+                {
+                    Archivo = "general",
+                    Campo = "banci",
+                    Codigo = "BANCI_CRUCE",
+                    DescripcionResumen = "Cruce BANCI",
+                    Mensaje = ex.Message
+                });
+                FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+                return response;
+            }
+            response.Errores.AddRange(cruceBanci.Errores);
+            response.Advertencias.AddRange(cruceBanci.Advertencias);
+            response.CruceBanci = cruceBanci.Origen != null;
+            if(cruceBanci.RequiereComplementos)
+            {
+                response.ComplementosBanci = new()
+                {
+                    Victimas = cruceBanci.Nuevas!.Victimas.Count,
+                    PlantillaBase64 = Convert.ToBase64String(_banci.Excel(cruceBanci.Nuevas))
+                };
+                response.Mensaje = "Hay nuevas desapariciones. Complete y adjunte la plantilla BANCI antes de validar la actualización completa.";
+                return response;
+            }
+            // No crea staging de ninguno de los módulos si el cruce no coincide.
+            if(cruceBanci.Errores.Count > 0)
+            {
+                FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+                return response;
+            }
+        }
+
         // Construimos resumen y mensaje final.
         FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
         // Estos errores bloquean el intento de actualización.
@@ -345,7 +397,24 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Solo se llega aquí si:
         // - no hay error bloqueante de periodo sin carga confirmada
         // - no hay actualización pendiente existente
-        var idCargaActualizacion = await _actualizacionCargaRepository.GuardarIntentoActualizacionAsync(idUsuarioCarga, idEntidadFederativaCarga, response.CodigoReferencia, mesCorte ?? 0, anioCorte ?? 0, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count, estadoCarga, mensajeError, response.Advertencias, filasCarpetas, filasDelitos, filasVictimas);
+        long idCargaActualizacion;
+        try
+        {
+            idCargaActualizacion = await _actualizacionCargaRepository.GuardarIntentoActualizacionAsync(idUsuarioCarga, idEntidadFederativaCarga, response.CodigoReferencia, mesCorte ?? 0, anioCorte ?? 0, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count, estadoCarga, mensajeError, response.Advertencias, filasCarpetas, filasDelitos, filasVictimas, cruceBanci);
+        }
+        catch(InvalidOperationException ex)
+        {
+            response.Errores.Add(new()
+            {
+                Archivo = "general",
+                Campo = "banci",
+                Codigo = "BANCI_CRUCE",
+                DescripcionResumen = "Cruce BANCI",
+                Mensaje = ex.Message
+            });
+            FinalizarRespuesta(response, filasCarpetas.Count, filasDelitos.Count, filasVictimas.Count);
+            return response;
+        }
         if(idEntidadFederativaCarga.HasValue && mesCorte.HasValue && anioCorte.HasValue)
         {
             await _ultimosArchivosEntidadService.GuardarAsync(idEntidadFederativaCarga.Value, response.CodigoReferencia, "ACTUALIZACION", mesCorte.Value, anioCorte.Value, archivoCarpetas!, archivoDelitos!, archivoVictimas!);
@@ -455,7 +524,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Corte: mayo 2026
         // Información esperada en el Excel: abril 2026.
         var periodoInformacion = ObtenerPeriodoInformacionDesdeCorte(mesCorte, anioCorte);
-        foreach (var fila in filasCarpetas)
+        foreach(var fila in filasCarpetas)
         {
             fila.Columnas.TryGetValue("fha_de_ini", out var valorFecha);
             // Si viene vacío, lo reporta CarpetasValidator.
@@ -505,7 +574,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         // Para SUPER_USUARIO, se obtiene desde el archivo de delitos.
         // La actualización solo puede corresponder a una entidad.
         var entidades = new HashSet<int>();
-        foreach (var fila in filasDelitos)
+        foreach(var fila in filasDelitos)
         {
             fila.Columnas.TryGetValue("id_ent_hchos", out var valorEntidad);
             if(string.IsNullOrWhiteSpace(valorEntidad))
@@ -647,7 +716,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
         }
 
         // Usuario normal solo puede actualizar delitos de su entidad.
-        foreach (var fila in filasDelitos)
+        foreach(var fila in filasDelitos)
         {
             fila.Columnas.TryGetValue("id_ent_hchos", out var valorEntidad);
             // Si viene vacío, lo reporta DelitosValidator.
@@ -782,7 +851,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     {
         texto = texto.ToLowerInvariant().Normalize(NormalizationForm.FormD);
         var builder = new StringBuilder();
-        foreach (var caracter in texto)
+        foreach(var caracter in texto)
         {
             var categoria = CharUnicodeInfo.GetUnicodeCategory(caracter);
             if(categoria != UnicodeCategory.NonSpacingMark)
@@ -900,9 +969,10 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     private static void AplicarResumenMovimientos(ActualizacionDiferenciasResponse response,
         IEnumerable<CargaValidacionResumenItem> resumen)
     {
-        foreach (var item in resumen)
+        foreach(var item in resumen)
         {
-            ActualizacionDiferenciasResumen? destino = item.Archivo.Trim().ToLowerInvariant() switch            {
+            ActualizacionDiferenciasResumen? destino = item.Archivo.Trim().ToLowerInvariant() switch
+            {
                 "carpetas" => response.ResumenCarpetas,
                 "delitos" => response.ResumenDelitos,
                 "victimas" => response.ResumenVictimas,
@@ -947,7 +1017,11 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             };
         }
 
-        return await _actualizacionRepository.ConfirmarActualizacionAsync(request.CodigoReferencia, request.Aceptar, idUsuarioConfirmacion);
+        try
+        {
+            return await _actualizacionRepository.ConfirmarActualizacionAsync(request.CodigoReferencia, request.Aceptar, idUsuarioConfirmacion);
+        }
+        catch(InvalidOperationException ex) { return new() { EsValido = false, CodigoReferencia = request.CodigoReferencia, Estado = "CRUCE_BANCI_NO_VALIDO", Mensaje = ex.Message }; }
     }
 
     public async Task<ActualizacionPeriodoResponse> ConsultarPeriodoActualizacionAsync(int mesCorte,
@@ -1065,7 +1139,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 IdEntidadFederativa = idEntidadConsulta.Value,
                 MesCorte = mesCorte,
                 AnioCorte = anioCorte,
-                Mensaje = $"No existe una carga inicial confirmada para el periodo {mesCorte:00}/{anioCorte}. No se puede realizar actualización."};
+                Mensaje = $"No existe una carga inicial confirmada para el periodo {mesCorte:00}/{anioCorte}. No se puede realizar actualización."
+            };
         }
 
         var actualizacionPendiente = await _cargaRepository.ObtenerCodigoActualizacionPendienteAsync(idEntidadConsulta.Value, mesCorte, anioCorte);
@@ -1083,7 +1158,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
                 IdEntidadFederativa = idEntidadConsulta.Value,
                 MesCorte = mesCorte,
                 AnioCorte = anioCorte,
-                Mensaje = enRevisionAdministrativa ? $"La actualización del periodo {mesCorte:00}/{anioCorte} se encuentra en revisión administrativa. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}." : $"Ya existe una actualización pendiente para el periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}."};
+                Mensaje = enRevisionAdministrativa ? $"La actualización del periodo {mesCorte:00}/{anioCorte} se encuentra en revisión administrativa. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}." : $"Ya existe una actualización pendiente para el periodo {mesCorte:00}/{anioCorte}. Código de referencia pendiente: {actualizacionPendiente.CodigoReferencia}."
+            };
         }
 
         return new ActualizacionPeriodoResponse
@@ -1096,7 +1172,8 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
             IdEntidadFederativa = idEntidadConsulta.Value,
             MesCorte = mesCorte,
             AnioCorte = anioCorte,
-            Mensaje = $"Existe carga inicial confirmada para el periodo {mesCorte:00}/{anioCorte}. Puede continuar con la actualización."};
+            Mensaje = $"Existe carga inicial confirmada para el periodo {mesCorte:00}/{anioCorte}. Puede continuar con la actualización."
+        };
     }
 
     public async Task<List<ActualizacionAnioDisponibleItem>> ObtenerPeriodosDisponiblesActualizacionAsync(int idUsuarioConsulta,
@@ -1149,7 +1226,7 @@ public class ActualizacionArchivosService : IActualizacionArchivosService
     {
         var encabezados = await _archivoReader.LeerEncabezadosAsync(archivo);
         var columnasArchivo = encabezados.Where(x => !string.IsNullOrWhiteSpace(x)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var columna in columnasObligatorias)
+        foreach(var columna in columnasObligatorias)
         {
             if(columnasArchivo.Contains(columna))
             {

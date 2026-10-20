@@ -12,28 +12,54 @@ public partial class ActualizacionRepository : IActualizacionRepository
 {
     private class ActualizacionConfirmacionInfo
     {
-        public long IdCarga { get; set; }
+        public long IdCarga
+        {
+            get; set;
+        }
         public string CodigoReferencia { get; set; } = string.Empty;
         public string Estado { get; set; } = string.Empty;
-        public DateTime? FechaExpiracion { get; set; }
-        public int? IdEntidadFederativaCarga { get; set; }
-        public int? IdEntidadFederativaUsuario { get; set; }
-        public bool EsSuperUsuario { get; set; }
-        public bool HabilitaModificacion { get; set; }
-        public int IdUsuarioCarga { get; set; }
+        public DateTime? FechaExpiracion
+        {
+            get; set;
+        }
+        public int? IdEntidadFederativaCarga
+        {
+            get; set;
+        }
+        public int? IdEntidadFederativaUsuario
+        {
+            get; set;
+        }
+        public bool EsSuperUsuario
+        {
+            get; set;
+        }
+        public bool HabilitaModificacion
+        {
+            get; set;
+        }
+        public int IdUsuarioCarga
+        {
+            get; set;
+        }
     }
 
     private class DuplicadoActivoValidacion
     {
         public string Seccion { get; set; } = string.Empty;
-        public int TotalGruposDuplicados { get; set; }
+        public int TotalGruposDuplicados
+        {
+            get; set;
+        }
     }
 
     private readonly IDbConnectionFactory _dbConnectionFactory;
+    private readonly BanciMensualService _banci;
     private readonly ILogger<ActualizacionRepository> _logger;
-    public ActualizacionRepository(IDbConnectionFactory dbConnectionFactory, ILogger<ActualizacionRepository> logger)
+    public ActualizacionRepository(IDbConnectionFactory dbConnectionFactory, ILogger<ActualizacionRepository> logger, BanciMensualService banci)
     {
         _dbConnectionFactory = dbConnectionFactory;
+        _banci = banci;
         _logger = logger;
     }
 
@@ -83,6 +109,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
 
             if(carga.FechaExpiracion.HasValue && carga.FechaExpiracion.Value < DateTime.Now)
             {
+                await _banci.ResolverCruceAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion, "EXPIRADO_ACTUALIZACION");
                 await ActualizarActualizacionExpiradaAsync(connection, transaction, carga.IdCarga);
                 await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: carga.Estado, estadoNuevo: "EXPIRADO_ACTUALIZACION", idUsuario: null, comentario: "La actualizacion expiro antes de que el usuario tomara una decision.");
                 await transaction.CommitAsync();
@@ -124,6 +151,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
 
             if(!aceptar)
             {
+                await _banci.ResolverCruceAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion, "RECHAZADO_USUARIO");
                 await RechazarActualizacionAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
                 await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: carga.Estado, estadoNuevo: "RECHAZADO_VALIDACION_ACTUALIZACION", idUsuario: idUsuarioConfirmacion, comentario: "La actualizacion fue rechazada por el usuario despues de revisar el acuse previo, las diferencias y las validaciones.");
                 await transaction.CommitAsync();
@@ -139,6 +167,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
             await CargaAuditoriaSql.MarcarAdvertenciasAceptadasAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion);
             if(!carga.EsSuperUsuario)
             {
+                await _banci.ResolverCruceAsync(connection, transaction, carga.IdCarga, idUsuarioConfirmacion, "PENDIENTE_APROBACION");
                 await EnviarActualizacionAprobacionAsync(connection, transaction, carga.IdCarga);
                 await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: carga.Estado, estadoNuevo: "PENDIENTE_APROBACION", idUsuario: idUsuarioConfirmacion, comentario: "El enlace estatal acepto la actualizacion y la envio a revision administrativa.");
                 await transaction.CommitAsync();
@@ -200,7 +229,11 @@ public partial class ActualizacionRepository : IActualizacionRepository
               AND c.tipo_carga = 'ACTUALIZACION'
               AND c.activo = 1;
         ";
-        return await connection.QueryFirstOrDefaultAsync<ActualizacionConfirmacionInfo>(sql, new { CodigoReferencia = codigoReferencia, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
+        return await connection.QueryFirstOrDefaultAsync<ActualizacionConfirmacionInfo>(sql, new
+        {
+            CodigoReferencia = codigoReferencia,
+            IdUsuarioConfirmacion = idUsuarioConfirmacion
+        }, transaction);
     }
 
     public async Task<ConfirmarCargaResponse> AprobarActualizacionPendienteAsync(string codigoReferencia, int idUsuarioAprobacion)
@@ -321,6 +354,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
                 };
             }
 
+            await _banci.ResolverCruceAsync(connection, transaction, carga.IdCarga, idUsuarioRechazo, "RECHAZADO_ADMIN", motivo);
             await RechazarActualizacionAdministracionAsync(connection, transaction, carga.IdCarga, idUsuarioRechazo, motivo);
             await CargaAuditoriaSql.RegistrarCambioEstadoAsync(connection, transaction, carga.IdCarga, estadoAnterior: "PENDIENTE_APROBACION", estadoNuevo: "RECHAZADO_ADMIN", idUsuario: idUsuarioRechazo, comentario: motivo);
             await transaction.CommitAsync();
@@ -367,7 +401,11 @@ public partial class ActualizacionRepository : IActualizacionRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
-        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
+        await connection.ExecuteAsync(sql, new
+        {
+            IdCarga = idCarga,
+            IdUsuarioConfirmacion = idUsuarioConfirmacion
+        }, transaction);
     }
 
     private async Task ActualizarActualizacionExpiradaAsync(SqlConnection connection, SqlTransaction transaction, long idCarga)
@@ -393,7 +431,10 @@ public partial class ActualizacionRepository : IActualizacionRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
-        await connection.ExecuteAsync(sql, new { IdCarga = idCarga }, transaction);
+        await connection.ExecuteAsync(sql, new
+        {
+            IdCarga = idCarga
+        }, transaction);
     }
 
     private static async Task RechazarActualizacionAdministracionAsync(SqlConnection connection,
@@ -428,7 +469,12 @@ public partial class ActualizacionRepository : IActualizacionRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
-        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioRechazo = idUsuarioRechazo, Motivo = motivo }, transaction);
+        await connection.ExecuteAsync(sql, new
+        {
+            IdCarga = idCarga,
+            IdUsuarioRechazo = idUsuarioRechazo,
+            Motivo = motivo
+        }, transaction);
     }
 
     private async Task ValidarDuplicadosActivosPeriodoAsync(SqlConnection connection, SqlTransaction transaction, long idCargaActualizacion)
@@ -527,7 +573,10 @@ public partial class ActualizacionRepository : IActualizacionRepository
             COUNT(1) AS TotalGruposDuplicados
         FROM duplicados_victimas;
     ";
-        var duplicados = (await connection.QueryAsync<DuplicadoActivoValidacion>(sql, new { IdCargaActualizacion = idCargaActualizacion }, transaction)).Where(x => x.TotalGruposDuplicados > 0).ToList();
+        var duplicados = (await connection.QueryAsync<DuplicadoActivoValidacion>(sql, new
+        {
+            IdCargaActualizacion = idCargaActualizacion
+        }, transaction)).Where(x => x.TotalGruposDuplicados > 0).ToList();
         if(duplicados.Count == 0)
         {
             return;
@@ -544,6 +593,7 @@ public partial class ActualizacionRepository : IActualizacionRepository
         long idCargaActualizacion,
         int idUsuarioConfirmacion)
     {
+        await _banci.ResolverCruceAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion, "CONFIRMADO_ACTUALIZACION");
         var relojTotal = Stopwatch.StartNew();
         await EjecutarPasoActualizacionAsync("InsertarHistoricoCarpetasModificadas", idCargaActualizacion, () => InsertarHistoricoCarpetasModificadasAsync(connection, transaction, idCargaActualizacion, idUsuarioConfirmacion));
         await EjecutarPasoActualizacionAsync("ActualizarCarpetasModificadas", idCargaActualizacion, () => ActualizarCarpetasModificadasAsync(connection, transaction, idCargaActualizacion));
@@ -610,7 +660,11 @@ public partial class ActualizacionRepository : IActualizacionRepository
             fecha_procesamiento = SYSDATETIME()
         WHERE id_carga = @IdCarga;
     ";
-        await connection.ExecuteAsync(sql, new { IdCarga = idCarga, IdUsuarioConfirmacion = idUsuarioConfirmacion }, transaction);
+        await connection.ExecuteAsync(sql, new
+        {
+            IdCarga = idCarga,
+            IdUsuarioConfirmacion = idUsuarioConfirmacion
+        }, transaction);
     }
 
     private static async Task EnviarActualizacionAprobacionAsync(SqlConnection connection, SqlTransaction transaction, long idCarga)
@@ -637,6 +691,9 @@ public partial class ActualizacionRepository : IActualizacionRepository
             fecha_procesamiento = NULL
         WHERE id_carga = @IdCarga;
     ";
-        await connection.ExecuteAsync(sql, new { IdCarga = idCarga }, transaction);
+        await connection.ExecuteAsync(sql, new
+        {
+            IdCarga = idCarga
+        }, transaction);
     }
 }
