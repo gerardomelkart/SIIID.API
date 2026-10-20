@@ -18,16 +18,13 @@ public sealed class BanciMensualController(BanciMensualService servicio, ILogger
     public Task<IActionResult> Precarga(int entidad,
         int mes,
         int anio,
-        bool actualizacion = false, bool manual = false) => Ejecutar(async id => Ok(await servicio.PrecargaAsync(id, entidad, mes, anio, actualizacion, manual)));
+        bool actualizacion = false) => Ejecutar(async id => Ok(await servicio.PrecargaAsync(id, entidad, mes, anio, actualizacion)));
     [HttpGet("plantilla")]
-    public Task<IActionResult> Plantilla(int entidad, int mes, int anio, bool actualizacion = false, bool manual = false) => Ejecutar(async id =>
+    public Task<IActionResult> Plantilla(int entidad, int mes, int anio, bool actualizacion = false) => Ejecutar(async id =>
     {
-        var libro = await servicio.PrecargaAsync(id, entidad, mes, anio, actualizacion, manual);
+        var libro = await servicio.PrecargaAsync(id, entidad, mes, anio, actualizacion);
         return File(servicio.Excel(libro), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"BANCI_{anio}{mes:D2}_{entidad:D2}.xlsx");
     });
-    [HttpPost("validar/manual")]
-    [RequestSizeLimit(60 * 1024 * 1024)]
-    public Task<IActionResult> ValidarManual(BanciLibro libro) => Ejecutar(async id => Ok(await servicio.ValidarAsync(id, libro, [], "", manual: true)));
     [HttpPost("validar/archivo")]
     [RequestSizeLimit(60 * 1024 * 1024)]
     public Task<IActionResult> ValidarArchivo([FromForm] IFormFile archivo,

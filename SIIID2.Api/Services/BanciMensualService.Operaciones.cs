@@ -13,6 +13,7 @@ public sealed partial class BanciMensualService
 {
     public async Task<object> ValidarAsync(int usuario, BanciLibro libro, byte[] original, string nombre, bool manual = false)
     {
+        if(manual || libro.Manual) throw new InvalidOperationException("BANCI mensual solo admite cargas y actualizaciones masivas mediante archivo Excel.");
         await AccesoAsync(usuario, libro.Entidad, libro.Actualizacion ? "ACTUALIZACION" : "CARGA");
         libro.Manual = manual;
         using(var consultaPendientes = factory.CrearConexion())

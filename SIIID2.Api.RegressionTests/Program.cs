@@ -12,6 +12,10 @@ void Verificar(bool condicion, string caso)
     pruebas++;
 }
 
+Verificar(!typeof(SIIID2.Api.Controllers.BanciMensualController).GetMethods().Any(m =>
+    m.GetCustomAttributes<Microsoft.AspNetCore.Mvc.HttpPostAttribute>().Any(a => a.Template == "validar/manual")),
+    "BANCI mensual no publica validación manual");
+
 var reglas = new ReglasSimuladas();
 var fisica = new ArchivoFila
 {
