@@ -224,6 +224,13 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         var libro = await OrigenAsync(db, entidad, mes, anio, actualizacion);
         if(actualizacion && libro.Carpetas.Count == 0)
             throw new InvalidOperationException("El corte no tiene carga BANCI aprobada.");
+        if(actualizacion)
+        {
+            var pendientes = await PropuestasEnRevisionAsync(db, libro);
+            var total = libro.Victimas.Count;
+            ExcluirVictimasEnRevision(libro, pendientes);
+            if(total > 0 && libro.Victimas.Count == 0) throw new BanciEnvioPendienteException();
+        }
         var tieneOrigenConsolidado = libro.Carpetas.Count > 0;
         if(!actualizacion)
             await ExcluirCarpetasRegistradasAsync(db, libro, incluirEnRevision: true);
@@ -299,6 +306,25 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
             Delitos = origen.Delitos.Where(f => propuesta.Actualizacion ? delitos.Contains(Llave(f, 2)) : carpetas.Contains(Llave(f, 1))).ToList(),
             Victimas = origen.Victimas.Where(f => propuesta.Actualizacion ? victimas.Contains(Llave(f, 3)) : carpetas.Contains(Llave(f, 1))).ToList()
         };
+    }
+
+    private static async Task<List<BanciLibro>> PropuestasEnRevisionAsync(IDbConnection db, BanciLibro libro)
+    {
+        var operaciones = await db.QueryAsync<BanciOperacion>(BanciMensualSql.Operaciones + " WHERE b.id_entidad_federativa=@Entidad AND b.mes_corte=@Mes AND b.anio_corte=@Anio AND b.estado='PENDIENTE_APROBACION';", libro);
+        var pendientes = new List<BanciLibro>();
+        foreach(var operacion in operaciones) pendientes.Add(await PropuestaAsync(db, operacion));
+        return pendientes;
+    }
+
+    public static void ExcluirVictimasEnRevision(BanciLibro libro, IEnumerable<BanciLibro> pendientes)
+    {
+        var bloqueadas = pendientes.SelectMany(p => p.Victimas).Select(f => Llave(f, 3)).ToHashSet();
+        if(!libro.Victimas.Any(f => bloqueadas.Contains(Llave(f, 3)))) return;
+        libro.Victimas.RemoveAll(f => bloqueadas.Contains(Llave(f, 3)));
+        var delitos = libro.Victimas.Select(f => Llave(f, 2)).ToHashSet();
+        var carpetas = libro.Victimas.Select(f => Llave(f, 1)).ToHashSet();
+        libro.Delitos.RemoveAll(f => !delitos.Contains(Llave(f, 2)));
+        libro.Carpetas.RemoveAll(f => !carpetas.Contains(Llave(f, 1)));
     }
 
     public static bool SeSuperponen(BanciLibro primero, BanciLibro segundo)

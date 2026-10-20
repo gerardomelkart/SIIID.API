@@ -119,6 +119,10 @@ public sealed class BanciMensualController(BanciMensualService servicio, ILogger
                 mensaje = ex.Message
             });
         }
+        catch(BanciEnvioPendienteException ex)
+        {
+            return Conflict(new { codigo = "BANCI_ENVIO_PENDIENTE", mensaje = ex.Message });
+        }
         catch(InvalidOperationException ex)
         {
             return BadRequest(new

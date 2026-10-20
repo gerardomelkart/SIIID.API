@@ -51,3 +51,5 @@ public sealed class BanciPeriodo
     public int Anio { get; set; }
     public int Mes { get; set; }
 }
+
+public sealed class BanciEnvioPendienteException() : InvalidOperationException("Existe un envío pendiente que incluye estos registros. Consulte su estado antes de enviarlos nuevamente.");

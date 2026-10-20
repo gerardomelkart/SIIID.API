@@ -137,3 +137,9 @@ Las reglas de validación y las cargas de cortes anteriores se administran únic
 BANCI consulta los rechazos propios al entrar y cada minuto, con el mismo aviso y acceso a envíos del consolidado. Registra su consulta una sola vez en la bitácora BANCI existente, sin tablas ni columnas adicionales. El inicio incorpora el recordatorio compartido de carga pendiente, calculado sobre carpetas del corte anterior todavía no aprobadas ni enviadas a revisión.
 
 La revisión administrativa desplaza la resolución al borde inferior visible tras renderizar. La muestra de diferencias contiene su desplazamiento sin superponer descargas o resolución. La consulta de envíos amplía el selector de corte y distribuye acciones y botones con separación y ajuste al ancho disponible. Los cambios de estilo se limitan a BANCI.
+
+### Bloqueo previo por envíos BANCI pendientes
+
+La precarga y la plantilla de actualización excluyen las víctimas incluidas en envíos pendientes de aprobación; si no quedan registros disponibles se devuelve BANCI_ENVIO_PENDIENTE (HTTP 409). La carga mantiene la exclusión de carpetas ya enviadas o aprobadas. La validación vuelve a comprobar superposición antes de procesar el contenido, además del control transaccional existente.
+
+En captura manual y masiva, tanto de carga como de actualización, ese conflicto retira la información editable y el archivo seleccionado. Los demás errores conservan el trabajo y desplazan la vista al mensaje después de renderizarlo. Publicar API y frontend juntos. No requiere cambios de estructura de base de datos.

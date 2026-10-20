@@ -15,6 +15,9 @@ public sealed partial class BanciMensualService
     {
         await AccesoAsync(usuario, libro.Entidad, libro.Actualizacion ? "ACTUALIZACION" : "CARGA");
         libro.Manual = manual;
+        using(var consultaPendientes = factory.CrearConexion())
+            foreach(var pendiente in await PropuestasEnRevisionAsync(consultaPendientes, libro))
+                if(SeSuperponen(libro, pendiente)) throw new BanciEnvioPendienteException();
         var origen = await PrecargaAsync(usuario, libro.Entidad, libro.Mes, libro.Anio, libro.Actualizacion, manual);
         var tieneOrigen = origen.Carpetas.Count > 0;
         origen = SeleccionarOrigen(origen, libro);
@@ -166,7 +169,7 @@ public sealed partial class BanciMensualService
                 if(!SeSuperponen(libro, contenido))
                     continue;
                 if(pendiente.Estado == "PENDIENTE_APROBACION" || pendiente.Usuario != usuario)
-                    throw new InvalidOperationException("Existe un envío pendiente que incluye estos registros. Consulte su estado antes de enviarlos nuevamente.");
+                    throw new BanciEnvioPendienteException();
                 await db.ExecuteAsync("UPDATE dbo.banci_carga SET estado='RECHAZADO_USUARIO',motivo_resolucion=N'Sustituido por una nueva validación del remitente.' WHERE id_banci_carga=@Id;", pendiente, tx);
                 await BitacoraAsync(db, tx, pendiente.Id, usuario, pendiente.Estado, "RECHAZADO_USUARIO", "Sustituido por una nueva validación del remitente.");
             }

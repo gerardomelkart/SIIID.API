@@ -558,6 +558,12 @@ Verificar(libroRevision.Cambios.Count == 250 && libroRevision.Victimas.Count == 
 Verificar(!BanciMensualService.PrepararRecordatorio(0, 2026, 9).HayPendiente, "BANCI no avisa de carga pendiente cuando no quedan carpetas por remitir");
 var avisoBanci = BanciMensualService.PrepararRecordatorio(2, 2026, 9);
 Verificar(avisoBanci.HayPendiente && avisoBanci.Periodo == "septiembre de 2026" && avisoBanci.Mensaje.Contains("2 carpeta"), "BANCI recuerda el corte y las carpetas aún pendientes de carga");
+ArchivoFila VictimaPendienteBanci(string victima) => new() { Columnas = new() { ["id_ci"] = "ci", ["id_delito"] = "del", ["id_vicf"] = victima } };
+var disponiblesBanci = new BanciLibro { Actualizacion = true, Victimas = [VictimaPendienteBanci("uno"), VictimaPendienteBanci("dos")] };
+BanciMensualService.ExcluirVictimasEnRevision(disponiblesBanci, [new() { Actualizacion = true, Victimas = [VictimaPendienteBanci("uno")] }]);
+Verificar(disponiblesBanci.Victimas.Count == 1 && disponiblesBanci.Victimas[0].Columnas["id_vicf"] == "dos", "La precarga de actualización BANCI conserva únicamente víctimas sin envío pendiente");
+BanciMensualService.ExcluirVictimasEnRevision(disponiblesBanci, [new() { Actualizacion = true, Victimas = [VictimaPendienteBanci("dos")] }]);
+Verificar(disponiblesBanci.Victimas.Count == 0, "Si todos los registros están en revisión no se expone captura ni plantilla de actualización");
 Console.WriteLine($"{pruebas} verificaciones aprobadas.");
 sealed class ReglasSimuladas : ICatalogoReglasRepository
 {
