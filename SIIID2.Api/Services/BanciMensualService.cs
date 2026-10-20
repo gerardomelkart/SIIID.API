@@ -479,12 +479,21 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
         )
         {
             var indice = despues.GroupBy(f => Llave(f, nivel)).ToDictionary(g => g.Key, g => g.ToList());
+            string Identificadores(ArchivoFila f) => string.Join(", ", new[] { "id_ci", "id_delito", "id_vicf" }
+                .Take(nivel).Select(campo => $"{campo}={Valor(f, campo)}"));
             foreach(var fila in antes)
             {
                 var key = Llave(fila, nivel);
-                if(!indice.TryGetValue(key, out var coincidencias) || coincidencias.Count != 1)
+                if(!indice.TryGetValue(key, out var coincidencias))
                 {
-                    errores.Add(Error(nombre, fila, "identificadores", "Falta el registro de origen o se repitieron sus identificadores."));
+                    errores.Add(Error(nombre, new ArchivoFila { Columnas = fila.Columnas }, "identificadores",
+                        $"El archivo no incluye el registro requerido: {Identificadores(fila)}. Pudo eliminarse o cambiar alguno de sus identificadores. Descargue nuevamente la plantilla del mes seleccionado, conserve todos sus registros e identificadores y modifique únicamente los campos permitidos."));
+                    continue;
+                }
+                if(coincidencias.Count != 1)
+                {
+                    errores.Add(Error(nombre, coincidencias[0], "identificadores",
+                        $"El registro {Identificadores(fila)} aparece {coincidencias.Count} veces en las filas {string.Join(", ", coincidencias.Select(f => f.NumeroFila))} del archivo cargado. Conserve una sola fila con esta combinación de identificadores."));
                     continue;
                 }
 
@@ -495,7 +504,8 @@ public sealed partial class BanciMensualService(IDbConnectionFactory factory,
 
             var claves = antes.Select(f => Llave(f, nivel)).ToHashSet();
             foreach(var fila in despues.Where(f => !claves.Contains(Llave(f, nivel))))
-                errores.Add(Error(nombre, fila, "identificadores", "El registro no pertenece al origen de este corte."));
+                errores.Add(Error(nombre, fila, "identificadores",
+                    $"El registro {Identificadores(fila)} no corresponde a la plantilla del mes seleccionado. Compruebe la entidad, el mes y el año; conserve los identificadores originales y no agregue registros a esta plantilla."));
         }
 
         return errores;

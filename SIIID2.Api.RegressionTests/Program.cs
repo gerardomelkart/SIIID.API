@@ -260,12 +260,15 @@ Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e 
 propuestaBanci = LibroPrueba();
 propuestaBanci.Victimas.Clear();
 Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e => e.Archivo == "victimas"), "Bloquear omisión de víctima");
+var faltanteBanci = BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Single(e => e.Archivo == "victimas");
+Verificar(faltanteBanci.Fila == null && faltanteBanci.Mensaje.Contains("id_vicf=") && faltanteBanci.Mensaje.Contains("no incluye"), "Faltante identifica la víctima sin atribuir una fila del origen al archivo cargado");
 propuestaBanci = LibroPrueba();
 propuestaBanci.Victimas[0].Columnas["id_vicf"] = "OTRA";
 Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Count == 2, "Detectar cambio de identidad como faltante y extra");
 propuestaBanci = LibroPrueba();
 propuestaBanci.Delitos.Add(propuestaBanci.Delitos[0]);
 Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e => e.Archivo == "delitos"), "Bloquear duplicados aunque se conserven todos los originales");
+Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Single(e => e.Archivo == "delitos").Mensaje.Contains("aparece 2 veces"), "Duplicado explica la causa sin confundirla con un registro faltante");
 propuestaBanci = LibroPrueba();
 propuestaBanci.Victimas[0].Columnas["id_tv"] = "16";
 Verificar(BanciMensualService.CompararOrigen(origenBanci, propuestaBanci).Any(e => e.Campo == "id_tv"), "Conservar el tipo de víctima del consolidado");
