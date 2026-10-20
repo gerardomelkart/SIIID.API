@@ -140,6 +140,8 @@ La revisión administrativa desplaza la resolución al borde inferior visible tr
 
 ### Bloqueo previo por envíos BANCI pendientes
 
-La precarga y la plantilla de actualización excluyen las víctimas incluidas en envíos pendientes de aprobación; si no quedan registros disponibles se devuelve BANCI_ENVIO_PENDIENTE (HTTP 409). La carga mantiene la exclusión de carpetas ya enviadas o aprobadas. La validación vuelve a comprobar superposición antes de procesar el contenido, además del control transaccional existente.
+La precarga y la plantilla de actualización se bloquean por completo cuando existe cualquier envío pendiente de aprobación para la misma entidad y corte, con BANCI_ENVIO_PENDIENTE (HTTP 409). La carga mantiene la exclusión de carpetas ya enviadas o aprobadas. La validación vuelve a comprobar superposición antes de procesar el contenido, además del control transaccional existente.
 
 En captura manual y masiva, tanto de carga como de actualización, ese conflicto retira la información editable y el archivo seleccionado. Los demás errores conservan el trabajo y desplazan la vista al mensaje después de renderizarlo. Publicar API y frontend juntos. No requiere cambios de estructura de base de datos.
+
+El bloqueo de actualización es por entidad y corte completo y se verifica antes de precargar, al validar y al confirmar el envío dentro de la transacción. No permite actualizar otras víctimas del mismo periodo mientras exista una aprobación pendiente. La carga inicial conserva su control por carpetas.

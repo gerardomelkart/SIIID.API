@@ -17,7 +17,7 @@ public sealed partial class BanciMensualService
         libro.Manual = manual;
         using(var consultaPendientes = factory.CrearConexion())
             foreach(var pendiente in await PropuestasEnRevisionAsync(consultaPendientes, libro))
-                if(SeSuperponen(libro, pendiente)) throw new BanciEnvioPendienteException();
+                if(libro.Actualizacion || SeSuperponen(libro, pendiente)) throw new BanciEnvioPendienteException();
         var origen = await PrecargaAsync(usuario, libro.Entidad, libro.Mes, libro.Anio, libro.Actualizacion, manual);
         var tieneOrigen = origen.Carpetas.Count > 0;
         origen = SeleccionarOrigen(origen, libro);
@@ -162,6 +162,7 @@ public sealed partial class BanciMensualService
             if(bloqueo < 0)
                 throw new InvalidOperationException("El corte está siendo procesado. Intente nuevamente.");
             var pendientes = (await db.QueryAsync<BanciOperacion>(BanciMensualSql.Operaciones + " WHERE b.id_entidad_federativa=@Entidad AND b.mes_corte=@Mes AND b.anio_corte=@Anio AND b.estado IN('VALIDADO','PENDIENTE_APROBACION');", libro, tx)).ToList();
+            ValidarDisponibilidadActualizacion(libro.Actualizacion, pendientes.Any(p => p.Estado == "PENDIENTE_APROBACION"));
             foreach(var pendiente in pendientes)
             {
                 var contenido = await PropuestaAsync(db, pendiente, tx);
@@ -464,6 +465,13 @@ public sealed partial class BanciMensualService
                 throw new InvalidOperationException("Indique el motivo del rechazo.");
             if(decision.Motivo.Length > 2000)
                 throw new InvalidOperationException("El motivo supera 2000 caracteres.");
+            if(!administrativa && decision.Aceptar && op.Tipo == "ACTUALIZACION")
+            {
+                var bloqueoCorte = await db.ExecuteScalarAsync<int>("DECLARE @r int; EXEC @r=sys.sp_getapplock @Resource=@recurso,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000; SELECT @r;", new { recurso = $"BANCI:{op.Entidad}:{op.Anio}:{op.Mes}" }, tx);
+                if(bloqueoCorte < 0) throw new InvalidOperationException("El corte está siendo procesado. Intente nuevamente.");
+                var otroPendiente = await db.ExecuteScalarAsync<bool>("SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.banci_carga WHERE id_entidad_federativa=@Entidad AND mes_corte=@Mes AND anio_corte=@Anio AND estado='PENDIENTE_APROBACION' AND id_banci_carga<>@Id) THEN 1 ELSE 0 END);", op, tx);
+                ValidarDisponibilidadActualizacion(true, otroPendiente);
+            }
             var estado = decision.Aceptar ? "PENDIENTE_APROBACION" : administrativa ? "RECHAZADO_ADMIN" : "RECHAZADO_USUARIO";
             // Igual que mensual: el enlace envía a revisión; el superusuario integra directamente.
             if(decision.Aceptar && (administrativa || acceso.Rol == "SUPER_USUARIO"))

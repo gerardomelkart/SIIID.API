@@ -52,4 +52,4 @@ public sealed class BanciPeriodo
     public int Mes { get; set; }
 }
 
-public sealed class BanciEnvioPendienteException() : InvalidOperationException("Existe un envío pendiente que incluye estos registros. Consulte su estado antes de enviarlos nuevamente.");
+public sealed class BanciEnvioPendienteException() : InvalidOperationException("Existe un envío pendiente de aprobación para este corte. Consulte su estado antes de continuar.");
