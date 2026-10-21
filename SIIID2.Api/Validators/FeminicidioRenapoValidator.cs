@@ -34,6 +34,8 @@ public sealed class FeminicidioRenapoValidator
         if(feminicidios.Count == 0)
             return (errores, advertencias);
         var victimas = filasVictimas.Select(fila => new { Fila = fila, Llave = CrearLlave(Valor(fila, "id_ci"), Valor(fila, "id_delito")), Nacionalidad = Valor(fila, "nacional")?.Trim(), Curp = Valor(fila, "curp_vicfem")?.Trim().ToUpperInvariant() }).Where(x => feminicidios.Contains(x.Llave) && EsMexicana(x.Nacionalidad) && !string.IsNullOrWhiteSpace(x.Curp)).ToList();
+        if(modulo == "MENSUAL")
+            victimas.RemoveAll(x => FeminicidioVictimaValidator.EsCurpNoDisponible(x.Curp));
         if(victimas.Count == 0)
             return (errores, advertencias);
         var grupos = victimas.GroupBy(x => x.Curp!, StringComparer.OrdinalIgnoreCase).Select(grupo => new { Curp = grupo.Key, Filas = grupo.Select(x => x.Fila).ToList() }).ToList();

@@ -90,6 +90,25 @@ foreach(var (modulo, clasificacion) in new[]
     };
     var validacionFem = await new FeminicidioVictimaValidator(reglas).ValidarAsync([delitoFem], [victimaFem], modulo);
     Verificar(validacionFem.Errores.Count > 0 || validacionFem.Advertencias.Count > 0, "Regla local de feminicidio con claves nuevas: " + modulo);
+    foreach(var marcador in new[] { "999", "N/A", " n/a " })
+    {
+        var pruebaSinCurp = new ArchivoFila { NumeroFila = 8, Columnas = new(victimaFem.Columnas) };
+        pruebaSinCurp.Columnas["curp_vicfem"] = marcador;
+        pruebaSinCurp.Columnas["nombre_vicfem"] = "PRUEBA";
+        pruebaSinCurp.Columnas["1apellido_vicfem"] = "FICTICIA";
+        pruebaSinCurp.Columnas["2apellido_vicfem"] = "FICTICIA";
+        var resultadoMarcador = await new FeminicidioVictimaValidator(reglas).ValidarAsync([delitoFem], [pruebaSinCurp], modulo);
+        Verificar(modulo == "MENSUAL"
+            ? resultadoMarcador.Errores.Count == 0 && resultadoMarcador.Advertencias.Any(a => a.Codigo == "FEMINICIDIO_MEXICANA_SIN_CURP_ADVERTENCIA" && a.Fila == 8 && a.Mensaje.Contains("administrativo"))
+            : resultadoMarcador.Errores.Any(e => e.Codigo == "FEMINICIDIO_CURP_FORMATO_INVALIDO"), "Marcador sin CURP respeta alcance mensual y permite decisión: " + modulo + " " + marcador);
+        pruebaSinCurp.Columnas["nacional"] = "174";
+        var extranjera = await new FeminicidioVictimaValidator(reglas).ValidarAsync([delitoFem], [pruebaSinCurp], modulo);
+        Verificar(extranjera.Errores.Count == 0 && extranjera.Advertencias.Count == 0, "Extranjera no recibe aviso de mexicana sin CURP: " + modulo + " " + marcador);
+        pruebaSinCurp.Columnas["nacional"] = "173";
+        pruebaSinCurp.Columnas["curp_vicfem"] = "";
+        var vacia = await new FeminicidioVictimaValidator(reglas).ValidarAsync([delitoFem], [pruebaSinCurp], modulo);
+        Verificar(vacia.Errores.Any(e => e.Codigo == "FEMINICIDIO_MEXICANA_CURP_OBLIGATORIO"), "CURP vacía conserva obligatoriedad: " + modulo);
+    }
     delitoFem.Columnas["grdo_cons"] = "22";
     validacionFem = await new FeminicidioVictimaValidator(reglas).ValidarAsync([delitoFem], [victimaFem], modulo);
     Verificar(validacionFem.Errores.Count == 0 && validacionFem.Advertencias.Count == 0, "Tentativa conserva alcance opcional: " + modulo);

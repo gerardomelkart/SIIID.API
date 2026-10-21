@@ -73,7 +73,22 @@ public class FeminicidioVictimaValidator(ICatalogoReglasRepository reglas)
                 // CURP obligatorio.
                 // Nombre y ambos apellidos opcionales, pero generan
                 // una sola advertencia agregada si falta alguno.
-                if(string.IsNullOrWhiteSpace(curp))
+                if(modulo == "MENSUAL" && EsCurpNoDisponible(curp))
+                {
+                    advertencias.Add(new CargaValidacionError
+                    {
+                        Archivo = "victimas",
+                        Fila = fila.NumeroFila,
+                        Columna = "curp_vicfem",
+                        Campo = "curp_vicfem",
+                        Valor = curp,
+                        Codigo = "FEMINICIDIO_MEXICANA_SIN_CURP_ADVERTENCIA",
+                        DescripcionResumen = "Persona mexicana registrada sin CURP",
+                        Mensaje = "¿Está seguro de que desea registrar a una persona mexicana sin CURP? Este registro será observado a nivel administrativo.",
+                        TotalRegistrosAfectados = 1
+                    });
+                }
+                else if(string.IsNullOrWhiteSpace(curp))
                     mexicanasSinCurp++;
                 else if(!CurpFormatoValidator.EsFormatoValido(curp.Trim().ToUpperInvariant()))
                 {
@@ -177,6 +192,10 @@ public class FeminicidioVictimaValidator(ICatalogoReglasRepository reglas)
 
         return (errores, advertencias);
     }
+
+    public static bool EsCurpNoDisponible(string? curp) =>
+        string.Equals(curp?.Trim(), "999", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(curp?.Trim(), "N/A", StringComparison.OrdinalIgnoreCase);
 
     private bool EsFeminicidioConsumado(ArchivoFila fila, string modulo)
     {
