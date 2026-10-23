@@ -13,10 +13,10 @@ public partial class FederalEnviosService : IFederalEnviosService
     private readonly IMemoryCache _cache;
     private readonly ILogger<FederalEnviosService> _logger;
     public FederalEnviosService(IFederalEnviosRepository federalEnviosRepository,
-        IFederalCargaRepository federalCargaRepository,
-        IFederalAcusePdfService acusePdfService,
-        IMemoryCache cache,
-        ILogger<FederalEnviosService> logger)
+                                IFederalCargaRepository federalCargaRepository,
+                                IFederalAcusePdfService acusePdfService,
+                                IMemoryCache cache,
+                                ILogger<FederalEnviosService> logger)
     {
         _federalEnviosRepository = federalEnviosRepository;
         _federalCargaRepository = federalCargaRepository;
@@ -29,7 +29,9 @@ public partial class FederalEnviosService : IFederalEnviosService
     {
         var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
         if(usuario == null)
-            return[];
+        {
+            return [];
+        }
         return await _federalEnviosRepository.ObtenerPeriodosAsync();
     }
 
@@ -37,7 +39,9 @@ public partial class FederalEnviosService : IFederalEnviosService
     {
         var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
         if(usuario == null)
-            return[];
+        {
+            return [];
+        }
         return await _federalEnviosRepository.ObtenerEnviosAsync(mesCorte, anioCorte);
     }
 
@@ -45,13 +49,23 @@ public partial class FederalEnviosService : IFederalEnviosService
     {
         var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
         if(usuario == null)
-            throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal.");
+        {
+            throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal."); 
+        }
         if(!usuario.EsSuperUsuario)
+        {
             throw new UnauthorizedAccessException("Solo un SUPER_USUARIO puede consultar el reporte de cargas.");
+        }
+
         if(mesCorte.HasValue && (mesCorte.Value < 1 || mesCorte.Value > 12))
-            return[];
+        {
+            return [];
+        }
+
         if(anioCorte.HasValue && (anioCorte.Value < 2000 || anioCorte.Value > 2100))
-            return[];
+        {
+            return [];
+        }  
         return await _federalEnviosRepository.ObtenerReporteCargasAsync(mesCorte, anioCorte);
     }
 
@@ -59,13 +73,21 @@ public partial class FederalEnviosService : IFederalEnviosService
     {
         var usuario = await _federalCargaRepository.ObtenerUsuarioCargaAsync(idUsuarioConsulta);
         if(usuario == null)
+        {
             throw new UnauthorizedAccessException("El usuario no tiene acceso activo al módulo Federal.");
+        }
         var codigo = (codigoReferencia ?? string.Empty).Trim();
         if(string.IsNullOrWhiteSpace(codigo))
+        {
             throw new InvalidOperationException("Debe indicar el código de referencia.");
+        }
         var carga = await _federalEnviosRepository.ObtenerCargaParaArchivosAsync(codigo);
+
         if(carga == null)
+        {
             throw new KeyNotFoundException("No se encontró el envío Federal solicitado.");
+        }
+            
         var esConfirmada = string.Equals(carga.Estado, "CONFIRMADO", StringComparison.OrdinalIgnoreCase) || string.Equals(carga.Estado, "CONFIRMADO_ACTUALIZACION", StringComparison.OrdinalIgnoreCase);
         List<IDictionary<string, object?>> carpetas;
         List<IDictionary<string, object?>> delitos;
@@ -79,14 +101,20 @@ public partial class FederalEnviosService : IFederalEnviosService
         else
         {
             if(!carga.TieneStagingDisponible)
+            {
                 throw new InvalidOperationException("El envío Federal ya no conserva archivos temporales disponibles.");
+            }
+       
             carpetas = await _federalEnviosRepository.ObtenerCarpetasStagingAsync(carga.IdCarga);
             delitos = await _federalEnviosRepository.ObtenerDelitosStagingAsync(carga.IdCarga);
             victimas = await _federalEnviosRepository.ObtenerVictimasStagingAsync(carga.IdCarga);
         }
 
         if(carpetas.Count == 0 && delitos.Count == 0 && victimas.Count == 0)
+        {
             throw new InvalidOperationException("No existen registros disponibles para reconstruir los archivos del envío Federal.");
+        }
+            
         using var zipStream = new MemoryStream();
         using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
         {
@@ -98,7 +126,8 @@ public partial class FederalEnviosService : IFederalEnviosService
         return new InformeArchivoZipResponse
         {
             Archivo = zipStream.ToArray(),
-            NombreArchivo = $"ARCHIVOS_FEDERAL_{carga.MesCorte:00}_{carga.AnioCorte}_{codigo}.zip"};
+            NombreArchivo = $"ARCHIVOS_FEDERAL_{carga.MesCorte:00}_{carga.AnioCorte}_{codigo}.zip"
+        };
     }
 
     public async Task<InformeArchivoZipResponse> GenerarZipAcusesAsync(int idUsuarioConsulta, int? mesCorte, int anioCorte)
